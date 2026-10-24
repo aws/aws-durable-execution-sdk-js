@@ -2,6 +2,12 @@
 // turns the POST into a GET without the job, and a 2xx for that GET counted
 // as accepted, so the job never started. A followed redirect to another host
 // also received the auth token. So a redirect fails the delivery at once.
+//
+// The server sets the Location header. A query in the Location can hold a
+// secret, for example a presigned signature. The step failure is
+// checkpointed. So the message names the path, and the status of a 3xx
+// answer. It omits the Location, and the URL that a followed redirect
+// reached.
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { MicrovmRequestRejectedError, sendJob } from "../request";
@@ -20,12 +26,12 @@ const send = (fetchImpl: typeof fetch, endpoint: string, path: string) =>
     log: jest.fn(),
   });
 
-const rejection = (path: string, status: number, location?: string): string =>
-  `The MicroVM answered the job at ${path} with HTTP ${status}, a redirect${location === undefined ? "" : ` to ${location}`}. The operation does not follow redirects, so set the path that the route serves.`;
+const rejection = (path: string, status: number): string =>
+  `The MicroVM answered the job at ${path} with HTTP ${status}, a redirect. The operation does not follow redirects, so set the path that the route serves.`;
 
 describe("sendJob and redirects", () => {
   it.each([301, 302, 303, 307, 308])(
-    "rejects HTTP %i at once and names the Location",
+    "rejects HTTP %i at once and names only the path and the status",
     async (status) => {
       const endpoint = new FakeEndpoint();
       endpoint.responses = [
@@ -39,7 +45,7 @@ describe("sendJob and redirects", () => {
       expect(error).toBeInstanceOf(MicrovmRequestRejectedError);
       expect(error).toMatchObject({
         status,
-        message: rejection("/job", status, "/job/"),
+        message: rejection("/job", status),
       });
       expect(endpoint.requests).toHaveLength(1);
       expect(endpoint.requests[0].redirect).toBe("manual");
@@ -65,25 +71,44 @@ describe("sendJob and redirects", () => {
     },
   );
 
+  it("names only the status for HTTP 302 with an empty Location", async () => {
+    // An empty Location names no target. So it counts as no Location.
+    const endpoint = new FakeEndpoint();
+    endpoint.responses = [
+      new Response(null, { status: 302, headers: { location: "" } }),
+    ];
+
+    const error = await send(endpoint.fetch, "mvm-1.example", "/job").catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(MicrovmRequestRejectedError);
+    expect(error).toMatchObject({
+      status: 302,
+      message: "The MicroVM answered the job at /job with HTTP 302",
+    });
+    expect(endpoint.requests).toHaveLength(1);
+  });
+
   it.each([
-    ["a query and a fragment", "/job/?X-Amz-Signature=secret#top", "/job/"],
-    ["a long path", `/${"a".repeat(300)}`, `/${"a".repeat(199)}...`],
-    ["only a query", "?X-Amz-Signature=secret", undefined],
-  ])(
-    "drops the query and cuts a long Location: %s",
-    async (_label, location, shown) => {
-      const endpoint = new FakeEndpoint();
-      endpoint.responses = [
-        new Response(null, { status: 307, headers: { location } }),
-      ];
+    ["a path with a query", "/elsewhere/?token=secret#top"],
+    ["only a query", "?token=secret"],
+    ["another host", "https://other.example/elsewhere?token=secret"],
+  ])("omits the Location from the message: %s", async (_label, location) => {
+    const endpoint = new FakeEndpoint();
+    endpoint.responses = [
+      new Response(null, { status: 307, headers: { location } }),
+    ];
 
-      const error = await send(endpoint.fetch, "mvm-1.example", "/job").catch(
-        (e: unknown) => e,
-      );
+    const error = await send(endpoint.fetch, "mvm-1.example", "/job").catch(
+      (e: unknown) => e,
+    );
 
-      expect((error as Error).message).toBe(rejection("/job", 307, shown));
-    },
-  );
+    const message = (error as Error).message;
+    expect(message).toBe(rejection("/job", 307));
+    expect(message).not.toContain("secret");
+    expect(message).not.toContain("elsewhere");
+  });
 
   describe("with the real fetch", () => {
     let server: Server;
@@ -96,7 +121,7 @@ describe("sendJob and redirects", () => {
         request.resume();
         request.on("end", () =>
           request.url === "/moved"
-            ? response.writeHead(302, { location: "/job?sig=secret" }).end()
+            ? response.writeHead(302, { location: "/job?token=secret" }).end()
             : response.writeHead(200).end(),
         );
       });
@@ -118,7 +143,8 @@ describe("sendJob and redirects", () => {
       const error = await send(fetch, base, "/moved").catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(MicrovmRequestRejectedError);
-      expect((error as Error).message).toBe(rejection("/moved", 302, "/job"));
+      expect((error as Error).message).toBe(rejection("/moved", 302));
+      expect((error as Error).message).not.toContain("token=secret");
       expect(received).toEqual(["POST /moved"]);
     });
 
@@ -133,9 +159,12 @@ describe("sendJob and redirects", () => {
       expect(error).toBeInstanceOf(MicrovmRequestRejectedError);
       expect(error).toMatchObject({
         status: 200,
-        message: `The MicroVM answered the job at /moved with a redirect to ${base}/job, and the fetch function followed it. The operation does not follow redirects, so set the path that the route serves, and make the fetch function honor init.redirect.`,
+        message:
+          "The MicroVM answered the job at /moved with a redirect, and the fetch function followed it. The operation does not follow redirects, so set the path that the route serves, and make the fetch function honor init.redirect.",
       });
-      expect(received).toEqual(["POST /moved", "GET /job?sig=secret"]);
+      expect((error as Error).message).not.toContain(base);
+      expect((error as Error).message).not.toContain("token=secret");
+      expect(received).toEqual(["POST /moved", "GET /job?token=secret"]);
     });
   });
 });

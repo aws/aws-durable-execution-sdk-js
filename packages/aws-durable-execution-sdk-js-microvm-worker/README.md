@@ -92,7 +92,7 @@ A session's run hook payload can set `autoSuspendIdleSeconds`. The session sets 
 
 The worker counts only jobs. It cannot see background processes, or inbound traffic that is not a job. A session with such work leaves `autoSuspendOnIdle` off, and the payload then has no `autoSuspendIdleSeconds`.
 
-A second delivery of a job is answered like the first and ignored, while the job runs and after it ended. The durable function can deliver the same job again: it retries a delivery whose response it did not receive, and its request step runs again on replay when its result was not checkpointed. The worker remembers the callback IDs of the last 1,000 finished jobs. So a job runs once, unless more than 1,000 other jobs ended in between, or the worker process restarted.
+A second delivery of a job is answered like the first and ignored, while the job runs and after it ended. The durable function can deliver the same job again: it retries a delivery whose response it did not receive, and its request step runs again on replay when its result was not checkpointed. The worker remembers the callback IDs of the last 1,000 finished jobs. When a job ends and the worker already holds 1,000 IDs, it removes the oldest one. So a job runs once, unless at least 1,000 other jobs ended in between, or the worker process restarted.
 
 It creates a Lambda client for each job, after the job arrives, not at image build. A client created before the snapshot would share build-time state across every MicroVM, and a client kept across jobs would keep connections that a suspend of the MicroVM can leave dead. So each job's first heartbeat pays for the credential fetch and the connection setup within its call timeout, which is a third of the interval: a ninth of the heartbeat timeout with the default interval. A heartbeat timeout under about 15 seconds can therefore lose the first heartbeat. The quick retry usually covers it. The worker destroys each job's default client when the job ends, and never destroys a client from `createClient`.
 
@@ -140,7 +140,7 @@ Each rule states what happens if a handler breaks it. The rules for the durable 
    - The worker drops a log line whose logger throws, or whose promise rejects.
    - So the worker's warnings and errors, such as a failed `SuspendMicrovm` call, are lost, and no other record of them exists.
 4. Make side effects safe to repeat.
-   - The worker runs a job once per callback ID in one MicroVM. A second delivery is ignored, unless more than 1,000 other jobs ended in between or the process restarted. See [What the worker does](#what-the-worker-does).
+   - The worker runs a job once per callback ID in one MicroVM. A second delivery is ignored, unless at least 1,000 other jobs ended in between or the process restarted. See [What the worker does](#what-the-worker-does).
    - Code in the durable function can send the same work again, for example in a new session after a failed one. That job has a new callback ID, and it can reach another MicroVM.
    - So the worker runs the work again.
 
