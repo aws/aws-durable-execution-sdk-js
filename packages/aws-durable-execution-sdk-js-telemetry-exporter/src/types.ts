@@ -127,12 +127,14 @@ export interface TelemetryExporter {
   /**
    * Maximum serialized record size, in bytes, this exporter will emit. When a
    * record's JSON exceeds this, the plugin truncates a per-exporter copy before
-   * calling {@link TelemetryExporter.export | export} (best-effort): it drops
+   * calling {@link TelemetryExporter.export | export} (best-effort): it first
+   * removes every error `cause` (setting `droppedCauses: true`), then drops
    * operation `result` fields oldest-first, then whole operations oldest-first,
    * then — only as a last resort — execution `input` and `output`. It sets
    * `truncated: true` on the emitted record, marks each operation whose result
-   * was dropped with its own `truncated: true`, and adds the `droppedOperations`
-   * count and `droppedInput` / `droppedOutput` flags. Prefer `content.input` /
+   * was dropped with its own `truncated: true`, and adds the `droppedCauses`
+   * flag, the `droppedOperations` count and `droppedInput` / `droppedOutput`
+   * flags. Prefer `content.input` /
    * `content.output` transforms to bound `input`/`output` before it comes to
    * that; identity/timeline fields are never dropped.
    *
@@ -227,6 +229,25 @@ export interface DurableExecutionTelemetryConfig {
 }
 
 /**
+ * An error as written in a record: the execution-level `error`, every
+ * `operations[].error`, and every `operationsByName.<name>.error`.
+ *
+ * Keys are written in the order `name`, `message`, `cause`. `name` and
+ * `message` are the error's own values, capped at 8,192 code points (a longer
+ * value is cut and followed by `…`); error names are not aligned across SDK
+ * languages. `cause` is present only when the error has one (`Error.cause`, or
+ * the cause the SDK built when it rebuilt the error from a checkpoint), has the
+ * same shape, and is cut after 16 levels or at a cause already written.
+ *
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface ErrorRecord {
+  name: string;
+  message: string;
+  cause?: ErrorRecord;
+}
+
+/**
  * A single operation within an execution (step, wait, invoke, callback, or context).
  * @experimental This interface is experimental and may change in future releases.
  */
@@ -241,10 +262,7 @@ export interface OperationRecord {
   endTime?: string;
   durationMs?: number;
   attempt?: number;
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
   /**
    * The operation's result. Omitted by default; included only when a matching
    * `content.operations.overrides` entry supplies a `result` transform.
@@ -299,10 +317,7 @@ export interface OperationSummary {
   /** Result — only present when this name occurs exactly once (and opted results in). */
   result?: OperationResult;
   /** Error — only present when this name occurs exactly once (and it failed, errors included). */
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
 }
 
 /**
@@ -318,6 +333,13 @@ export interface DurableExecutionTelemetryRecord {
    * removed, or changes meaning/type) so consumers can detect and adapt.
    */
   schemaVersion: "1.0";
+  /**
+   * When the record was built. Strictly increases across the records of one
+   * invocation: if two records are built in the same millisecond, the later one
+   * is 1 ms after the earlier one. Exporters key on `executionArn` + `emittedAt`
+   * (the SQS FIFO deduplication id, the default DynamoDB sort key), so equal
+   * values would drop or overwrite a record.
+   */
   emittedAt: string;
   executionArn: string;
   executionName?: string;
@@ -331,10 +353,7 @@ export interface DurableExecutionTelemetryRecord {
   durationMs?: number;
   input?: ExecutionInput;
   output?: ExecutionOutput;
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
   operations: OperationRecord[];
   /**
    * `true` when the size limiter dropped data to fit the exporter's
@@ -342,6 +361,12 @@ export interface DurableExecutionTelemetryRecord {
    * record is always distinguishable from a complete one ("cut, not missing").
    */
   truncated?: boolean;
+  /**
+   * `true` when the size limiter removed every error `cause` (from the
+   * execution `error` and every operation error). It is the first thing the
+   * limiter drops; each error keeps its own `name` and `message`.
+   */
+  droppedCauses?: boolean;
   /** Number of whole operations dropped by the size limiter. */
   droppedOperations?: number;
   /**

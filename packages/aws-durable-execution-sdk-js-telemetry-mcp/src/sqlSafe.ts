@@ -97,7 +97,7 @@ export function validateStatus(status: string): KnownStatus {
  * interpolate; a non-matching value is REJECTED rather than escaped.
  */
 const ISO_TIMESTAMP =
-  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
 /**
  * Validate a `since`/`until` bound as an ISO-8601 date or date-time. Returns the
@@ -112,6 +112,95 @@ export function validateTimestamp(label: string, value: string): string {
     `Invalid ${label} "${value}". Expected an ISO-8601 date or date-time, ` +
       `e.g. 2024-01-31 or 2024-01-31T12:34:56Z.`,
   );
+}
+
+/**
+ * The parts of an ISO-8601 bound that {@link ISO_TIMESTAMP} accepted. A date
+ * alone has no time parts; a value with no offset has no zone.
+ */
+const ISO_PARTS =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * Validate a `since`/`until` bound, then rewrite it in the one format every SDK
+ * writes record timestamps in: UTC, exactly 3 fraction digits, a literal `Z`
+ * (`2024-01-31T12:34:56.000Z`, the output of `Date.prototype.toISOString()`).
+ *
+ * The rewrite is needed because some destinations compare these values as text
+ * (DynamoDB, CloudWatch Logs Insights). Text order equals time order only when
+ * both sides have the same width and the same zone. So a bound such as
+ * `2024-01-31T12:34:56Z` or `2024-01-31T05:34:56-07:00` is rewritten to the
+ * stored form before it is compared.
+ *
+ * Rules, in order:
+ * 1. The value must match {@link ISO_TIMESTAMP} and name a real calendar date
+ *    and time. `Date.parse` rolls an impossible date forward (`2026-02-30`
+ *    becomes `2026-03-02`), so the day, hour, minute and second are checked
+ *    first, and an impossible value throws.
+ * 2. A value with no offset is read as UTC, because every record timestamp is
+ *    UTC. A date alone means midnight UTC.
+ * 3. `precision: "exact"` keeps every fraction digit the caller gave (at least
+ *    3). Use it for typed time columns (Athena `timestamp`, PostgreSQL and
+ *    Redshift `timestamptz`, OpenSearch `date`). They compare instants, not
+ *    text, and an existing table can hold values finer than a millisecond, so
+ *    the bound must not move.
+ * 4. `precision: "millisecond"` gives exactly 3 fraction digits. Use it where
+ *    the comparison is on text (DynamoDB, Logs Insights), because text order
+ *    equals time order only at one fixed width. A bound with finer digits is
+ *    rounded without changing which millisecond-precision records it selects.
+ *    A lower bound (`round: "up"`) moves up to the next millisecond, so a
+ *    record stored before the requested instant stays excluded. An upper bound
+ *    (`round: "down"`) is cut to its millisecond, so a record stored at or
+ *    before the requested instant stays included.
+ *
+ * The output contains only digits, `-`, `:`, `.`, `T` and `Z`, so it is safe to
+ * interpolate.
+ */
+export function normalizeTimestamp(
+  label: string,
+  value: string,
+  round: "up" | "down",
+  precision: "millisecond" | "exact",
+): string {
+  const validated = validateTimestamp(label, value);
+  const parts = ISO_PARTS.exec(validated);
+  const invalid = (): Error =>
+    new Error(
+      `Invalid ${label} "${value}". It matches the ISO-8601 shape but is not ` +
+        `a real date or time.`,
+    );
+  if (!parts) throw invalid();
+  const [, y, mo, d, h = "00", mi = "00", sec = "00", frac = "", zone] = parts;
+  const year = Number(y);
+  const month = Number(mo);
+  const day = Number(d);
+  // Day 0 of the next month is the last day of this month, leap years included.
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth ||
+    Number(h) > 23 ||
+    Number(mi) > 59 ||
+    Number(sec) > 59
+  ) {
+    throw invalid();
+  }
+
+  const millis = (frac + "000").slice(0, 3);
+  const finer = /[1-9]/.test(frac.slice(3));
+  // `+0700` is valid ISO-8601 but Date.parse rejects it; insert the colon.
+  const offset = (zone ?? "Z").replace(/^([+-]\d{2})(\d{2})$/, "$1:$2");
+  const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${sec}.${millis}${offset}`);
+  if (Number.isNaN(ms)) throw invalid();
+  if (precision === "exact") {
+    // An offset moves whole minutes, so the digits past the millisecond are
+    // the same in UTC. Trailing zeros carry no information and are dropped.
+    const extra = frac.slice(3).replace(/0+$/, "");
+    return new Date(ms).toISOString().replace("Z", `${extra}Z`);
+  }
+  return new Date(round === "up" && finer ? ms + 1 : ms).toISOString();
 }
 
 /**

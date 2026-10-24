@@ -604,13 +604,15 @@ describe("retries of a failed AWS call with a request ID", () => {
     });
   });
 
-  it("gives a custom retry strategy the AWS SDK error itself, with its class and retry fields", async () => {
+  it("gives a custom retry strategy the AWS SDK error itself, with its class, its retry fields, and its original message", async () => {
     const client = new FakeMicrovmsClient();
     const errors = throttled(true);
     client.tokenResponses = errors;
     const seen: unknown[] = [];
+    const seenMessages: string[] = [];
     const retryStrategy: RetryStrategy = (error, attemptCount) => {
       seen.push(error);
+      seenMessages.push(error.message);
       return { shouldRetry: attemptCount < 2, delay: { seconds: 1 } };
     };
     const { runner, caught } = runCatching(
@@ -624,6 +626,9 @@ describe("retries of a failed AWS call with a request ID", () => {
 
     // The launch succeeded, so the strategy saw only the two token errors.
     expect(seen).toHaveLength(2);
+    // The strategy decided on the AWS SDK message. After it returned, each
+    // error has the message with its request ID again.
+    expect(seenMessages).toEqual(["slow down", "slow down"]);
     seen.forEach((error, i) => {
       expect(error).toBeInstanceOf(ThrottlingException);
       expect(error).toMatchObject({

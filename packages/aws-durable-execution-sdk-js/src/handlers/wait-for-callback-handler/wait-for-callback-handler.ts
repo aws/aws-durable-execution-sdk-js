@@ -20,6 +20,9 @@ import {
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
 import type { InternalDurableContext } from "../../types/internal-context";
+import { OperationType } from "../../types/wire";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 
 /**
  * The child context is always a `DurableContextImpl`, which implements
@@ -32,6 +35,7 @@ type WaitForCallbackChildContext<Logger extends DurableLogger> =
 
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
+  checkpoint: Checkpoint,
   peekStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
@@ -199,17 +203,30 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { result, stepId } = await phase1Promise;
 
-      // Always deserialize the result since it's a string
-      return (await safeDeserialize(
-        config?.serdes ??
-          (getDefaultCallbackDeserializer
-            ? getDefaultCallbackDeserializer()
-            : createPassThroughSerdes()),
-        result,
+      // Always deserialize the result since it's a string. The child context
+      // counts as EXECUTING meanwhile, so the invocation cannot suspend before
+      // the caller's next line runs.
+      return (await completeAfter(
+        checkpoint,
         stepId,
-        name,
-        context.terminationManager,
-        context.durableExecutionArn,
+        () =>
+          safeDeserialize(
+            config?.serdes ??
+              (getDefaultCallbackDeserializer
+                ? getDefaultCallbackDeserializer()
+                : createPassThroughSerdes()),
+            result,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          ),
+        {
+          stepId,
+          name,
+          type: OperationType.CONTEXT,
+          subType: OperationSubType.WAIT_FOR_CALLBACK,
+        },
       ))!;
     });
   };

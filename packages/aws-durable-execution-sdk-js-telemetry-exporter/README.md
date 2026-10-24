@@ -13,7 +13,7 @@ Every time your durable function runs, Durable Execution Telemetry builds a **cu
 - **Timing** — start/end time, total duration
 - **Input/Output** — the event and result of the execution
 - **Operations** — every step, wait, invoke, and callback with individual timing and status
-- **Errors** — error name and message when the execution fails
+- **Errors** — error name, message, and cause chain when the execution or an operation fails (see [Error names and causes](#error-names-and-causes))
 
 ## Record Schema (`DurableExecutionTelemetryRecord`)
 
@@ -23,7 +23,7 @@ Every emitted record has this shape:
 interface DurableExecutionTelemetryRecord {
   recordType: "DurableExecutionTelemetry"; // Fixed discriminator — use to filter telemetry records
   schemaVersion: "1.0";
-  emittedAt: string; // ISO-8601 timestamp of emission
+  emittedAt: string; // ISO-8601 timestamp of emission; strictly increases within one invocation
 
   // Execution identity
   executionArn: string; // Full ARN including execution/invocation IDs
@@ -35,24 +35,21 @@ interface DurableExecutionTelemetryRecord {
 
   // Execution state
   status: "RUNNING" | "SUCCEEDED" | "FAILED"; // suspends (waits/timers) surface as RUNNING
-  startTime: string; // ISO-8601
-  endTime?: string; // ISO-8601 (absent while running)
+  startTime: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format (absent while running)
   durationMs?: number; // Total duration (absent while running)
 
   // Payload
   input?: unknown; // Execution input (the event)
   output?: unknown; // Execution result (on success)
-  error?: {
-    // Error details (on failure)
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord; // Error details (on failure)
 
   // Operations (steps, waits, invokes, callbacks)
   operations: OperationRecord[];
 
   // Truncation markers — present only when the size limiter dropped data
   truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
+  droppedCauses?: boolean; // true if every error `cause` was removed (dropped first)
   droppedOperations?: number; // count of whole operations dropped
   droppedInput?: boolean; // true if execution input was dropped (last resort)
   droppedOutput?: boolean; // true if execution output was dropped (last resort)
@@ -65,18 +62,156 @@ interface OperationRecord {
   subType?: string; // Additional categorization
   parentId?: string; // Parent operation ID (for child contexts)
   status: string; // STARTED | SUCCEEDED | FAILED | PENDING | CANCELLED
-  startTime?: string; // ISO-8601
-  endTime?: string; // ISO-8601
+  startTime?: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format
   durationMs?: number; // Operation duration
   attempt?: number; // Retry attempt count
-  error?: {
-    // Per-operation error
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord; // Per-operation error
   truncated?: boolean; // true if the size limiter dropped this operation's result
 }
+
+interface ErrorRecord {
+  name: string; // The error's own name (err.name), capped at 8,192 code points + "…"
+  message: string; // The error's message, capped at 8,192 code points + "…"
+  cause?: ErrorRecord; // Present only when the error has a cause
+}
 ```
+
+## Timestamps
+
+Every timestamp in a record (`emittedAt`, `startTime`, `endTime`, and each
+operation's `startTime` and `endTime`) has one format in every SDK:
+`YYYY-MM-DDTHH:MM:SS.sssZ`. It is UTC, it has exactly 3 fraction digits, and it
+ends with a literal `Z`, for example `2026-10-23T18:42:40.243Z`. This is the
+output of `Date.prototype.toISOString()`.
+
+DynamoDB, CloudWatch Logs Insights, and other text columns compare these values
+as text. Text order equals time order only when every value has the same width
+and zone. So the format is fixed, and a value is never shortened to drop a zero
+fraction.
+
+Destinations with a time type store the value in it. Aurora and Redshift write
+`TIMESTAMPTZ` columns, OpenSearch maps the fields as `date`, and the bundled
+Athena table declares them as `timestamp`.
+
+## Error names and causes
+
+Every error in a record — the execution `error`, each `operations[].error`, and
+each `operationsByName.<name>.error` — has this shape, with the keys in this
+order:
+
+```json
+"error": {
+  "name": "StepError",
+  "message": "card declined",
+  "cause": { "name": "PaymentError", "message": "card declined" }
+}
+```
+
+- `name` is the error's own `name`. The exporter does not rewrite, shorten, or
+  unwrap it, apart from the length cap below.
+- `message` is the error's own `message`.
+- Every `name` and `message`, on the error and on each cause, is capped at
+  8,192 Unicode code points: a longer value keeps its first 8,192 code points
+  followed by `…`. Code points are counted, not UTF-16 code units, so a cut
+  never splits a surrogate pair (an emoji counts as one), and the cut point is
+  the same as in the Python and Java exporters. The cap is applied once, when
+  the error is written.
+- The error's own `name` and `message` are read like a cause's: a value that
+  is not a string is converted to a string, a missing `name` is `"Error"`, and
+  a missing `message` is `""`. If reading either throws (a throwing getter, a
+  revoked proxy), the error is written as `{ "name": "Error", "message": "" }`,
+  its cause chain is still written, and the record is kept.
+- `cause` is present only when there is a cause (`undefined` and `null` mean
+  none), and has the same shape, recursively.
+- The chain is cut after 16 cause levels below the error, and stops at a cause
+  already written, so a cycle cannot loop.
+- A cause that is not an error object (a thrown string, say) is written as
+  `{ "name": "Error", "message": String(cause) }`. A cause `name` or `message`
+  that is not a string is converted to a string, and a missing `name` is
+  written as `"Error"`. Reading a cause never throws: if reading one fails (a
+  throwing getter, a revoked proxy), the chain ends there and the record is
+  kept. `AggregateError.errors` is not written.
+
+**Which errors carry a cause in JS:**
+
+- Operation errors (`operations[].error` and `operationsByName.<name>.error`)
+  are the errors the SDK rebuilds from the checkpoint. Their `cause` is the
+  cause the SDK built from the checkpointed error.
+- The execution `error` is the error the handler threw. Its `cause` follows
+  `Error.cause`. When the handler lets a step failure propagate, that error is
+  the SDK's `StepError`, which the SDK also rebuilds from the checkpoint.
+
+**A step error keeps one level of cause.** The SDK checkpoints a failed step as
+the thrown error's type, message, and data, and rebuilds the `StepError` from
+that checkpoint. So the rebuilt `StepError`'s `cause` is the thrown error
+without the thrown error's own `cause`. For example, a step that throws
+`new Error("fraud service unavailable", { cause: new Error("connection reset by peer") })`
+is written as:
+
+```json
+"error": {
+  "name": "StepError",
+  "message": "fraud service unavailable",
+  "cause": { "name": "Error", "message": "fraud service unavailable" }
+}
+```
+
+"connection reset by peer" is not in the record. The handler's own `catch` sees
+the same chain, because it receives the rebuilt `StepError`. If the root cause
+matters, put it in the message of the error the step throws. Java checkpoints
+the whole exception, so its execution `error` keeps the cause's message, with
+the name `Throwable`; its operation errors have no `cause`. Python records have
+no `cause`.
+
+**Causes may repeat the wrapper.** The chain is written exactly as the SDK
+provides it; levels that repeat the level above are not skipped. SDK wrapper
+errors copy their cause's message, so a level often repeats the one above, for
+example `CallbackTimeoutError → CallbackTimeoutError`, or
+`ChildContextError → StepError → StepError` with the same message at each
+level. A failed step shows the thrown type, for example
+`StepError → PaymentError`.
+
+**Cause messages are written unredacted.** Every cause `message` (and the
+string form of a non-error cause) is written as-is, subject only to the cap.
+`content.operations.includeErrors: false` removes operation errors together
+with their causes, but it does not cover the execution `error`, which keeps its
+`cause` chain. If cause messages can contain sensitive data, do not put it in
+error messages, or avoid exporters whose destination should not hold it.
+
+**Size limit.** When a record is over an exporter's `maxRecordSizeBytes`, the
+first thing the limiter removes is every `cause`, and it sets
+`droppedCauses: true` (see [Record size & truncation](#record-size--truncation)).
+
+**Athena / Glue.** The Glue table in this package's CDK stack (`cdk/stack.ts`)
+types `error` as
+`struct<name:string,message:string>`. The JSON SerDe ignores unknown keys, so
+records with `cause` still load, but `cause` cannot be queried through that
+table (Hive structs cannot be recursive). Query `cause` from the raw JSON, or
+add the levels you need to the table definition. The table keeps the case of
+keys inside `input` and `output`, so read a payload field with its exact key:
+`json_extract_scalar(input, '$.claimId')`.
+
+**Error names differ across SDKs.** The Python and Java exporters write the same
+shape; whether a cause is present differs by SDK. Each SDK reports its own type
+names, so the same failure can have a
+different `name` in each language. For example, a step that throws
+`PaymentError` can be reported as `StepError` in JS,
+`aws_durable_execution_sdk_python.exceptions.StepError` or `PaymentError` in
+Python, and `StepFailedException` or `PaymentError` in Java. Query `name` per
+SDK, or query on `message` and the `cause` chain:
+
+```
+# CloudWatch Logs Insights (CloudWatchLogsExporter)
+filter recordType = "DurableExecutionTelemetry" and status = "FAILED"
+| fields @timestamp, executionArn, error.name, error.message, error.cause.name, error.cause.message
+```
+
+For a failed durable invoke, the cause `name` is the invoked function's error
+type (for example `PaymentError`), as in the Python and Java SDKs. The
+top-level `name` stays `InvokeError` for the error `context.invoke` throws, and
+`StepError` for an operation error rebuilt from a checkpoint with an unknown
+remote type.
 
 ### Example Record
 
@@ -394,11 +529,15 @@ serialized JSON exceeds it, the plugin truncates a **per-exporter copy**
 (best-effort) before sending — the same record can go out full to one exporter
 and trimmed to another.
 
-Drop order, until the record fits:
+Drop order, until the record fits (one pass):
 
-1. operation `result` fields, **oldest operation first**;
-2. whole operations, **oldest first**;
-3. as a last resort (once every operation is gone), execution `input`, then
+1. every error `cause` — on the execution `error` and on every operation error
+   (and so in `operationsByName`, which is derived from the operations). Each
+   error keeps its `name` and `message`, and the record gets
+   `droppedCauses: true`. No step cuts individual cause levels;
+2. operation `result` fields, **oldest operation first**;
+3. whole operations, **oldest first**;
+4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
@@ -406,7 +545,7 @@ only after all operations are gone — so prefer `content.input` /
 `content.output` transforms to bound them earlier (those run before truncation).
 When anything is dropped, the emitted record carries `truncated: true`; each
 operation whose result was dropped is itself marked `truncated: true`, and
-`droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
+`droppedCauses`, `droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
 applicable — so a trimmed record is always distinguishable from a complete one
 ("cut, not missing").
 
@@ -871,6 +1010,20 @@ When `createExampleFunction` and `autoInvoke` are both enabled, the stack create
 
 After deployment, data starts flowing automatically to all enabled destinations.
 
+#### Aurora Engine Version Check
+
+When Aurora is enabled, every CDK command first asks RDS (`DescribeDBEngineVersions`) whether
+`destinations.aurora.engineVersion` can run this stack's Serverless v2 cluster in the target
+region. An unsupported version then fails in seconds, before CloudFormation creates anything.
+The error lists the versions RDS offers. For a stack that is already deployed, set the cluster's
+current version: a different version upgrades the cluster in place.
+
+- The check needs AWS credentials and the `rds:DescribeDBEngineVersions` permission at synth time.
+  If the call fails (no credentials, no network, permission denied), the app prints a warning and
+  continues, and an unsupported version fails at deploy time instead.
+- To skip the check, pass `-c skipEngineVersionCheck=true`. Use it with `cdk destroy` when RDS
+  has retired the version the stack was deployed with.
+
 #### Aurora Table Auto-Creation
 
 When Aurora is enabled, the stack deploys a custom resource that creates the `durable_execution_telemetry` table automatically via the RDS Data API. No manual SQL needed.
@@ -880,6 +1033,9 @@ When Aurora is enabled, the stack deploys a custom resource that creates the `du
 ```bash
 npx cdk destroy
 ```
+
+If RDS has retired the configured Aurora `engineVersion` since the deploy, the engine version
+check stops the command. Skip it with `npx cdk destroy -c skipEngineVersionCheck=true`.
 
 This removes all created resources (tables, clusters, functions, rules). Resources use `RemovalPolicy.DESTROY` by default for clean teardown.
 
@@ -1224,7 +1380,7 @@ const telemetry = durableExecutionTelemetry({
     new SQSExporter({
       queueUrl:
         "https://sqs.us-east-1.amazonaws.com/123456789012/telemetry-queue.fifo",
-      messageGroupId: undefined, // optional (default: executionArn)
+      messageGroupId: undefined, // optional (default: executionArn); "" is treated as omitted
       region: "us-east-1", // optional
       operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
@@ -1232,7 +1388,7 @@ const telemetry = durableExecutionTelemetry({
 });
 ```
 
-**FIFO support:** Auto-detected from `.fifo` URL suffix. Dedup ID = `executionArn:emittedAt`. Message attributes include `status` and `functionName` for SQS message filtering.
+**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`); dedup ID = `executionArn:emittedAt`. SQS limits both ids to 128 characters, and most execution ARNs are longer, so an id over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters). Ids of 128 characters or fewer are sent unchanged. The Python and Java exporters use the same rule, so the same input string gives the same id. The message body always carries the full `executionArn`. An empty `messageGroupId` is treated as omitted, as in the Python exporter: a standard queue sends no group id, and a FIFO queue groups by `executionArn`. Message attributes include `status` and `functionName` for SQS message filtering.
 
 **IAM required:** `sqs:SendMessage` on the queue.
 
