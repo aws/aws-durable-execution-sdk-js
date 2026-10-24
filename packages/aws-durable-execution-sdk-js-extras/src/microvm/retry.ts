@@ -4,11 +4,15 @@ import type { RetryDecision } from "@aws/durable-execution-sdk-js";
  * Error names that a later attempt can succeed after.
  *
  * `ConflictException` is included because TerminateMicrovm returns it while
- * the MicroVM is in a state transition. A reused client token with different
- * parameters is not in this set: RunMicrovm rejects it with
- * `ValidationException`, and a retry with the same parameters fails the same
- * way. The launch step always sends the same parameters for one token, so
- * that case does not occur.
+ * the MicroVM is in a state transition.
+ *
+ * Under `$LATEST`, a deploy between two attempts of the launch step can
+ * change the parameters. The next attempt then sends the same client token
+ * with different parameters. RunMicrovm rejects such a reuse with
+ * `ValidationException`. That answer is what this comment states, not a
+ * measured result of the service. A later attempt sends the same parameters
+ * again. So the later attempt fails the same way. So `ValidationException`
+ * is not in this set.
  *
  * `TooManyRequestsException` and `ServiceException` have no retryable trait
  * in the service model. So the AWS SDK sets no `$retryable` on them, and they
