@@ -103,7 +103,9 @@ export async function assertAuroraEngineVersionAvailable(
     const rejected = status !== undefined && status >= 400 && status < 500;
     console.warn(
       `Could not check destinations.aurora.engineVersion "${version}" against RDS (${reason}). ` +
-        (rejected ? `The check needs the ${PERMISSION} permission. ` : "") +
+        (rejected
+          ? `RDS rejected the call; the check needs valid credentials with the ${PERMISSION} permission. `
+          : "") +
         `An unsupported version fails at deploy time.`,
     );
     return;

@@ -177,7 +177,7 @@ describe("assertAuroraEngineVersionAvailable", () => {
       ).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          "needs the rds:DescribeDBEngineVersions permission",
+          "needs valid credentials with the rds:DescribeDBEngineVersions permission",
         ),
       );
     });
