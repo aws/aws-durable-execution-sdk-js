@@ -12,6 +12,7 @@ import {
   type OperationScope,
   terminate,
   validateBaseConfig,
+  validateJobInput,
   validateRequest,
 } from "./shared";
 import { inStage, microvmErrorMapper } from "./errors";
@@ -69,14 +70,16 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * @param name - The child context name. It also prefixes the inner
  * operation names.
  * @param input - The job input. It must be JSON-serializable, and it must be
- * the same on every replay. Its size selects the delivery.
+ * the same on every replay. Its size selects the delivery. Its JSON form
+ * must have at most {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  * @param config - The MicroVM, delivery, and callback configuration.
  * @returns The value that the MicroVM passed to
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
  * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
  * `request` is invalid.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
- * or `request.retryWindow` is not between 1 second and 10 minutes.
+ * `request.retryWindow` is not between 1 second and 10 minutes, or the JSON
+ * form of `input` has more than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.
  * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
  * or the route rejects the job. Its subclass `MicrovmNotRunningError` means
@@ -101,6 +104,7 @@ export function microvm<TOutput = unknown, TInput = unknown>(
     if (config.request !== undefined) {
       validateRequest(name, config.request);
     }
+    validateJobInput(name, input);
     scope = createScope(context, name, config);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));

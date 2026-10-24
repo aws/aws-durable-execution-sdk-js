@@ -153,7 +153,7 @@ try {
 
 The class is the same on the first run and on every replay, so code that branches on it stays deterministic. Other errors keep their own types:
 
-- An invalid config throws `TypeError` or `RangeError` before any durable operation.
+- An invalid config throws `TypeError` or `RangeError` before any durable operation. So does an input over `MAX_JOB_INPUT_BYTES`, with `RangeError`.
 - An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`.
 - An SDK error from a durable operation that the handler ran keeps its type. This covers every type that the SDK rebuilds as its own class: `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackTimeoutError`, `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `WaitForConditionError`, and `PromiseCombinatorError`.
 - A failed terminate is logged, not thrown.
@@ -165,6 +165,7 @@ A `MicrovmError` that leaves your own `runInChildContext` reaches the next calle
 - The MicroVM gets the `INTERNET_EGRESS` connector. It needs egress to reach the Lambda callback APIs. For ingress, it gets `NO_INGRESS` with `run` hook delivery and `ALL_INGRESS` with HTTP delivery. If you set `ingressNetworkConnectors`, allow ingress whenever an input can exceed the `run` hook limit.
 - The operation sets no idle policy. The idle policy counts only inbound endpoint traffic. A job receives none after its delivery, so an idle policy would suspend the MicroVM during the job.
 - `timeout` must be between 1 second and 8 hours, because a MicroVM lives at most 8 hours. The MicroVM's `maximumDurationInSeconds` is `timeout` plus 5 minutes, capped at 8 hours.
+- A job input can have at most `MAX_JOB_INPUT_BYTES` bytes as UTF-8 JSON: 6,283,264 bytes, 6 MiB minus 8 KiB. The worker accepts a job body of at most 6 MiB. The body adds less than 3 KiB of fields to the input. `microvm` and `vm.invoke` reject a larger input with a `RangeError` before any durable operation starts. The limit applies to both deliveries. See [Job inputs](#job-inputs).
 - `heartbeatTimeout` starts when the callback is created, before the launch. So it must cover the launch, with its retries, and the boot. A throttled launch can take several minutes. With a shorter heartbeat timeout, the operation fails with `MicrovmTimeoutError` before the MicroVM sends its first heartbeat.
 - The request step needs at least 11 seconds left in the invocation when it starts. It keeps a 10-second reserve before the invocation times out, and it starts a call only with at least 1 second left before the reserve. The launch step can run earlier in the same invocation, so the function timeout must cover it too. A function timeout of `retryWindow` plus 11 seconds, 71 seconds by default, leaves the first retry tier about its whole window. With less than 11 seconds left, every attempt fails with `MicrovmEndpointUnavailableError`, and the message of the final `MicrovmDeliveryError` names the function timeout. The Lambda default timeout is 3 seconds. With it, `microvm` runs small jobs in the `run` hook and fails every job that goes over HTTP: a job too large for the hook, a job with `request.path`, and every `microvmSession` job.
 
@@ -360,12 +361,14 @@ The operations retry network and service failures. They launch and terminate the
 1. Pass an input whose JSON form is the value that the job needs.
    - The operation sends `JSON.stringify(input)`. The worker passes the parsed JSON to the handler.
    - So `NaN` and `Infinity` arrive as `null`, a `Date` arrives as a string, and a property whose value is `undefined` is missing.
-   - A value that `JSON.stringify` cannot serialize, such as a `BigInt`, fails the call before the job reaches the MicroVM.
-2. Keep the job body under 6 MiB. Pass larger data by reference, for example as an S3 key.
-   - The body is the input as UTF-8 JSON, plus the callback ID and a few other fields.
+   - A value that `JSON.stringify` cannot serialize, such as a `BigInt`, fails the call with a `TypeError` before any durable operation starts.
+2. Keep the input's JSON form within `MAX_JOB_INPUT_BYTES` (6,283,264 bytes, 6 MiB minus 8 KiB). Pass larger data by reference, for example as an S3 key.
+   - The job body is the input as UTF-8 JSON, plus the callback ID and a few other fields.
    - The worker refuses a job body over 6 MiB (6,291,456 bytes), and does not run the job.
-   - The request step does not check the size before it sends the body.
-   - So the job fails with `MicrovmDeliveryError`, after the MicroVM has launched.
+   - The other fields take less than 3 KiB. So an input within the limit always fits in the body.
+   - `microvm` and `vm.invoke` measure the input in UTF-8 bytes of `JSON.stringify(input)`. So "é" counts 2 bytes, and "😀" counts 4.
+   - `microvm` and `vm.invoke` reject a larger input with a `RangeError` before any durable operation starts.
+   - So an oversized `microvm` input launches no MicroVM. An oversized `vm.invoke` input sends no request.
 3. If you set `ingressNetworkConnectors`, allow ingress for every job that goes over HTTP.
    - A `microvm` job goes over HTTP when its `run` hook payload exceeds 4,096 code points, or when it sets `request.path`. Every `microvmSession` job goes over HTTP.
    - The operation passes your connectors to `RunMicrovm` as they are.
