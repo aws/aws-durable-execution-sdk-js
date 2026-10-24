@@ -234,16 +234,26 @@ const results = await context.parallel(
 
 ### Early completion
 
-A `map()` or `parallel()` completes early when its completion rule is met before every item has finished. The default rule is fail-fast, which completes the batch at the first failure. `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage` and `shouldComplete` set other rules.
+A `map()` or `parallel()` completes early when its completion rule is met before every item has finished. With no `completionConfig`, the rule is fail-fast: the first failure completes the batch. `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage` and `shouldComplete` set other rules. Setting any of them replaces fail-fast.
 
-The batch decides when an item's result reaches it. Items still running at that moment are abandoned:
+The batch checks its rule each time an item's result reaches it. Once the rule is met, the remaining items are abandoned:
 
-- The batch reports them as `STARTED` and does not count them in `successCount` or `failureCount`.
-- The batch does not wait for them. Once the batch's context finishes, their checkpoints are no longer recorded.
+- An item that is running is reported as `STARTED`. It is not counted in `successCount` or `failureCount`.
+- An item that had not started, because of `maxConcurrency`, does not appear in `all`.
+- The batch does not wait for abandoned items and does not stop them. A step that is running keeps running, and its side effects happen. Once the batch's context finishes, the item's checkpoints are dropped. So the step's result is not recorded, and the item stops at its next checkpoint.
 
-An abandoned item can still finish just before the batch's own checkpoint is written. Its child context can then show `SUCCEEDED` or `FAILED` in the execution history while the `BatchResult` reports it as `STARTED`. This can happen even when the item finished in the same moment as the item that completed the batch. The `BatchResult` is the authoritative outcome. Replay returns the same completed items and the same `completionReason`.
+An abandoned item can record its outcome before the batch's context finishes. This includes an item that recorded its outcome before the item that completed the batch, but whose result reached the batch later. The execution history then shows its child context as `SUCCEEDED` or `FAILED`, while the `BatchResult` reports it as `STARTED`. With `NestingType.FLAT`, the item has no child context, and the history shows its steps instead.
 
-So do not rely on an abandoned item's result. If you need the result of every item that finishes, do not configure an early-completion rule: set `toleratedFailurePercentage: 100` to run every item and inspect `failed()` afterwards.
+The handler receives only the `BatchResult`. Replay returns the same completed items and the same `completionReason`. Replay can omit the `STARTED` items, so `started()`, `startedCount` and `totalCount` can differ after replay. So base decisions on the completed items, and do not reconcile the `BatchResult` with the execution history.
+
+To get the result of every item, use a rule that cannot complete early. Set `toleratedFailurePercentage: 100`, and leave `minSuccessful` and `shouldComplete` unset. The batch then waits for every item. Failed items appear in `failed()`. The call does not throw, so call `throwIfError()` if a failure must stop the handler:
+
+```typescript
+const results = await context.map("process-all", items, processItem, {
+  completionConfig: { toleratedFailurePercentage: 100 },
+});
+const failures = results.failed(); // every failed item, with its error
+```
 
 ### Promise Combinators
 

@@ -44,11 +44,14 @@ export enum BatchItemStatus {
    * only and not guaranteed to survive suspend/resume reconstruction — see
    * {@link BatchResult.started}.
    *
-   * The batch decides when an item's result reaches it. An item whose result
-   * had not reached the batch at that moment is STARTED, even if it finished
-   * in the same moment. Its child context can still show SUCCEEDED or FAILED
-   * in the execution history, because it can finish before the batch's own
-   * checkpoint is written. The BatchResult is the authoritative outcome.
+   * The batch checks its completion rule each time an item's result reaches
+   * it. Once the rule is met, an item whose result has not reached the batch
+   * is STARTED. This includes an item that recorded its outcome before the
+   * item that completed the batch. Its child context can still show SUCCEEDED
+   * or FAILED in the execution history, because it can record its outcome
+   * before the batch's context finishes. An abandoned item's code keeps
+   * running until its next checkpoint, which is dropped. The handler receives
+   * only the BatchResult.
    */
   STARTED = "STARTED",
 }
