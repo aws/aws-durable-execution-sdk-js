@@ -485,4 +485,34 @@ describe("microvmSession", () => {
       expect(execution.getOperations()).toHaveLength(0);
     },
   );
+
+  it("rejects an undefined executionRoleArn with a TypeError before any durable operation", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            sessionConfig(client, endpoint, {
+              executionRoleArn: undefined as unknown as string,
+            }),
+            async () => "x",
+          ).catch((error: unknown) => ({
+            typeError: error instanceof TypeError,
+            message: (error as Error).message,
+          })),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toEqual({
+      typeError: true,
+      message: 'MicroVM "pipeline": executionRoleArn is required',
+    });
+    expect(execution.getOperations()).toHaveLength(0);
+    expect(client.runInputs).toHaveLength(0);
+  });
 });

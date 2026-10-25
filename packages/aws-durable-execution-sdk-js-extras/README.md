@@ -154,6 +154,7 @@ try {
 The class is the same on the first run and on every replay, so code that branches on it stays deterministic. Other errors keep their own types:
 
 - An invalid config throws `TypeError` or `RangeError` before any durable operation.
+- A missing `executionRoleArn` throws `TypeError` before any durable operation. `RunMicrovm` accepts a launch without a role. The MicroVM then cannot call the durable callback APIs, so it cannot report the job result.
 - An empty `imageIdentifier` or `executionRoleArn` is not checked before the launch. `RunMicrovm` rejects it with `ValidationException`, which is not retried. So the operation fails with `MicrovmLaunchError`.
 - An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`.
 - An SDK error from a durable operation that the handler ran keeps its type. This covers every type that the SDK rebuilds as its own class: `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackTimeoutError`, `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `WaitForConditionError`, and `PromiseCombinatorError`.

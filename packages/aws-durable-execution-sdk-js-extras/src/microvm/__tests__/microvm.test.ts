@@ -312,6 +312,37 @@ describe("microvm", () => {
     expect(client.runInputs).toHaveLength(0);
   });
 
+  it.each<[string, unknown]>([
+    ["undefined", undefined],
+    ["null", null],
+    ["a number", 42],
+  ])(
+    "rejects an executionRoleArn that is %s with a TypeError before any durable operation",
+    async (_label, executionRoleArn) => {
+      const client = new FakeMicrovmsClient();
+      const handler = withDurableExecution(
+        async (event: unknown, context: DurableContext) =>
+          microvm(context, "build", event, {
+            ...baseConfig(client),
+            executionRoleArn: executionRoleArn as string,
+          }).catch((error: unknown) => ({
+            typeError: error instanceof TypeError,
+            message: (error as Error).message,
+          })),
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getResult()).toEqual({
+        typeError: true,
+        message: 'MicroVM "build": executionRoleArn is required',
+      });
+      expect(execution.getOperations()).toHaveLength(0);
+      expect(client.runInputs).toHaveLength(0);
+    },
+  );
+
   it("sends a job too large for the run hook over HTTP to the default job path", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();

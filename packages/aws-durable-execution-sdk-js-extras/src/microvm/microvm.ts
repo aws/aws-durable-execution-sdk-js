@@ -73,7 +73,8 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * @param config - The MicroVM, delivery, and callback configuration.
  * @returns The value that the MicroVM passed to
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
- * @throws \{TypeError\} When `name` or `request` is invalid.
+ * @throws \{TypeError\} When `name` or `request` is invalid, or
+ * `executionRoleArn` is missing.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * or `request.retryWindow` is not between 1 second and 10 minutes.
  * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.

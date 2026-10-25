@@ -220,10 +220,19 @@ function decideOnOriginalMessage(strategy: RetryStrategy): RetryStrategy {
 /**
  * Validates the fields that both operations share.
  *
- * `imageIdentifier` and `executionRoleArn` are not checked here. RunMicrovm
- * rejects an empty value with `ValidationException`. The default retry
- * strategy does not retry it. So the operation fails with
- * `MicrovmLaunchError` after one launch attempt.
+ * RunMicrovm accepts a launch without `executionRoleArn`. The MicroVM then
+ * has no role. The MicroVM reports the job result through the durable
+ * callback APIs, and those calls need the role. So a MicroVM without a role
+ * cannot complete the job. So this function throws a `TypeError` when
+ * `executionRoleArn` is not a string.
+ *
+ * The RunMicrovm model requires `imageIdentifier`. So RunMicrovm rejects a
+ * launch without it, and this function does not check it.
+ *
+ * RunMicrovm rejects an empty `imageIdentifier` or `executionRoleArn` with
+ * `ValidationException`. So this function does not check for an empty
+ * string. The default retry strategy does not retry the exception. So the
+ * operation fails with `MicrovmLaunchError` after one launch attempt.
  *
  * @returns The timeout in seconds.
  */
@@ -233,6 +242,9 @@ export function validateBaseConfig(
 ): number {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("a MicroVM operation requires a non-empty name");
+  }
+  if (typeof config?.executionRoleArn !== "string") {
+    throw new TypeError(`MicroVM "${name}": executionRoleArn is required`);
   }
   return validateTimeout(name, "timeout", config.timeout);
 }

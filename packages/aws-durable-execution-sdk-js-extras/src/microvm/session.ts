@@ -98,7 +98,8 @@ import type {
  * fails the session with a `TypeError`, wrapped in `ChildContextError`, and
  * the terminate step still ends the MicroVM.
  * @returns The handler's return value.
- * @throws \{TypeError\} When `name` is invalid.
+ * @throws \{TypeError\} When `name` is invalid, or `executionRoleArn` is
+ * missing.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * or `autoSuspendIdleTime` is shorter than 10 seconds or longer than
  * `timeout`.
