@@ -37,6 +37,10 @@
     "./sqs": {
       "types": "./src/exporters/sqs.d.ts",
       "default": "./src/exporters/sqs.js"
+    },
+    "./firehose": {
+      "types": "./src/exporters/firehose.d.ts",
+      "default": "./src/exporters/firehose.js"
     }
   },
   "files": [
