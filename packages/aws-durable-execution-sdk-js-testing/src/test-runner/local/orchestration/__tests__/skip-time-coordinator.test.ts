@@ -344,6 +344,10 @@ describe("SkipTimeCoordinator", () => {
     await new Promise((resolve) =>
       setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
     );
+    // The hold timer queues the next pass with realSetImmediate. If the event loop was
+    // delayed past both timers, this timeout resolves in the same timers phase, before that
+    // pass runs. So wait for one check phase before asserting.
+    await new Promise((resolve) => realSetImmediate(resolve));
 
     expect(child.applyDeadline).toHaveBeenCalledWith(1000);
     expect(other.applyDeadline).toHaveBeenCalledWith(2000);
