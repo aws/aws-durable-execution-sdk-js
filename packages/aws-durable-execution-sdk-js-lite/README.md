@@ -1384,6 +1384,38 @@ from the package owner.
    packages/aws-durable-execution-sdk-js-lite` from the repository root. Both must pass.
 5. Commit titles use the scope `sdk-lite`, for example `feat(sdk-lite): add wait`.
 
+#### 1.9 Repeated review findings mean a redesign
+
+A review finding is a change request or a blocking issue from a reviewer, a person or an
+agent. A round is one review of a revision, followed by the contributor's changes.
+
+1. A correct and simple change usually passes review after one round of fixes.
+2. Sometimes a reviewer finds new problems in the code that fixed the previous findings.
+   Each fix then adds a case, a condition or a special path.
+3. This pattern has a few common causes:
+   - the feature itself is wrong;
+   - the implementation is wrong or too complex;
+   - the change fixes a symptom instead of the cause.
+4. More fixes on the same design add complexity and break rule 1.1.
+5. So the trigger is this: the contributor addressed every finding of a round, and the
+   next review finds new blocking issues. At the trigger, the contributor stops fixing.
+6. The contributor then returns to the design phase:
+   1. State the problem again in one or two sentences, without the current solution.
+   2. Find the cause. Ask why the problem happens until the answer is a fact about the
+      system, not about the code that the change added.
+   3. List the review findings of all rounds. Check whether one cause explains several
+      of them.
+   4. Consider simpler options, including not adding the feature, or a best practice in
+      the README instead of code (rule 1.2).
+   5. Write the chosen design and the reason in the review, and get the reviewer's
+      agreement before writing new code.
+7. The new design may keep parts of the old code. It may also replace the change
+   completely. A smaller change that solves the cause is better than a larger change
+   that passes review.
+8. This rule applies to people and to AI agents. An agent that hits the trigger in step
+   5 stops, reports the findings of all rounds and its analysis of the cause, and waits
+   for a decision before it continues.
+
 ### 2. Design
 
 #### 2.1 Files
