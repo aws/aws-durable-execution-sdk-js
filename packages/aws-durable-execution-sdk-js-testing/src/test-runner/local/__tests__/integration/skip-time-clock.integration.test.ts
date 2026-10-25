@@ -544,6 +544,46 @@ describe("skip-time clock", () => {
     expectDuration(end - start, HOUR_MS);
   });
 
+  it("keeps skipping time after applying an end of a child stuck past its hold", async () => {
+    // The abandoned child runs a step that never settles beside its own 1 h wait. Applying
+    // that wait's end queues an invocation behind the stuck one, so the child never calls
+    // advance() again. The caller's later 2 h wait must still skip time.
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel(
+          "abandon",
+          [
+            async (child) => child.wait("short", { seconds: 1 }),
+            async (child) => child.invoke("child", "stuckWaitingChild", {}),
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        const start = await context.step("start", async () => Date.now());
+        await context.wait("caller wait", { seconds: 2 * HOUR_SECONDS });
+        const end = await context.step("end", async () => Date.now());
+        return { start, end };
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerDurableFunction(
+      "stuckWaitingChild",
+      withDurableExecution(async (_event: unknown, context: DurableContext) => {
+        await context.parallel("stuck", [
+          async (child) =>
+            child.step("never settles", () => new Promise(() => undefined)),
+          async (child) => child.wait("child wait", { seconds: HOUR_SECONDS }),
+        ]);
+        return "child";
+      }),
+    );
+
+    const { start, end } = await runner
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(end - start, 2 * HOUR_MS);
+  });
+
   describe("with a durable invoked function whose step never settles", () => {
     // The invoked function runs in its own runner. Its step never settles, so that runner
     // has an invocation running for as long as the test environment lasts.
