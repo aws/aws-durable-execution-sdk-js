@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildRecord } from "../src/index.js";
+import { applyOperationsFormat } from "../src/operations-by-name.js";
 import { createSQSExporter } from "../src/exporters/sqs.js";
 import {
   ARN,
@@ -113,6 +114,23 @@ test("FIFO ids over 128 characters become their SHA-256 hex digests", async () =
     messageGroupId: "a".repeat(129),
   });
   assert.match(over.MessageGroupId, /^[0-9a-f]{64}$/);
+});
+
+test('operationsFormat "by-name" and "both" set the message body', async () => {
+  for (const format of ["by-name", "both"]) {
+    const input = await sentInput({
+      queueUrl: STANDARD,
+      operationsFormat: format,
+    });
+    assert.equal(
+      input.MessageBody,
+      JSON.stringify(applyOperationsFormat(record, format)),
+    );
+    assert.equal(
+      JSON.parse(input.MessageBody).operationsByName.charge.status,
+      "SUCCEEDED",
+    );
+  }
 });
 
 test("the built-in client sends a signed AWS JSON 1.0 request to SQS", async (t) => {

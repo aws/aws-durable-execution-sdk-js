@@ -80,3 +80,22 @@ export function withOperationsByName(record) {
   const { operations, ...rest } = record;
   return { ...rest, operationsByName: buildOperationsByName(operations) };
 }
+
+// A port of applyOperationsFormat from the full SDK. The SQS, Firehose and EventBridge
+// exporters render their body with it:
+// 1. "by-name": the record with operations replaced by operationsByName.
+// 2. "both": the record with operationsByName added after its last field.
+// 3. "array" or any other value: the record unchanged.
+export function applyOperationsFormat(record, format) {
+  switch (format) {
+    case "by-name":
+      return withOperationsByName(record);
+    case "both":
+      return {
+        ...record,
+        operationsByName: buildOperationsByName(record.operations),
+      };
+    default:
+      return record;
+  }
+}

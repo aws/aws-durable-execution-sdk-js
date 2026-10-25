@@ -1,4 +1,5 @@
 import { createAwsClient } from "../aws.js";
+import { applyOperationsFormat } from "../operations-by-name.js";
 
 // Publishes each record as one event, as in the full SDK's EventBridgeExporter. Rules
 // match the event on its source and detail-type. So the detail-type is the record status.
@@ -11,6 +12,8 @@ export function createEventBridgeExporter({
   client = createAwsClient({ service: "events", region, endpoint }),
   // EventBridge limits a PutEvents entry to 256 KB. The full SDK uses 256_000.
   maxRecordBytes = 256_000,
+  // "array", "by-name" or "both", as in the full SDK. See applyOperationsFormat.
+  operationsFormat = "array",
 } = {}) {
   return {
     maxRecordBytes,
@@ -28,7 +31,9 @@ export function createEventBridgeExporter({
               EventBusName: eventBusName,
               Source: source,
               DetailType: record.status,
-              Detail: JSON.stringify(record),
+              Detail: JSON.stringify(
+                applyOperationsFormat(record, operationsFormat),
+              ),
               // AWS JSON 1.1 sends a timestamp as epoch seconds.
               Time: Date.parse(record.emittedAt) / 1000,
             },

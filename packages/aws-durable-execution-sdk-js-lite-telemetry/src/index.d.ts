@@ -84,6 +84,14 @@ export interface DurableExecutionTelemetryRecord {
   droppedOperations?: number;
 }
 
+/**
+ * How the SQS, Firehose and EventBridge exporters write the operations of a record:
+ * - "array": the operations array, unchanged.
+ * - "by-name": operationsByName, a summary per operation name, instead of operations.
+ * - "both": operations and operationsByName.
+ */
+export type OperationsFormat = "array" | "by-name" | "both";
+
 /** A destination for records. */
 export interface TelemetryExporter {
   /** Sends one record. A rejection loses the record. The plugin logs one warning. */

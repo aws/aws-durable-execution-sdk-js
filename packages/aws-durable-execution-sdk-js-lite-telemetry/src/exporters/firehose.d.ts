@@ -1,4 +1,8 @@
-import type { AwsClient, TelemetryExporter } from "../index.js";
+import type {
+  AwsClient,
+  OperationsFormat,
+  TelemetryExporter,
+} from "../index.js";
 
 export interface FirehoseExporterConfig {
   /** The delivery stream. It must exist and have the source "Direct PUT". */
@@ -11,6 +15,8 @@ export interface FirehoseExporterConfig {
   client?: AwsClient;
   /** The record JSON in bytes, without the trailing newline. Default 1_000_000. */
   maxRecordBytes?: number;
+  /** How the data holds the operations. See OperationsFormat. Default "array". */
+  operationsFormat?: OperationsFormat;
 }
 
 /** Sends each record as one line of newline-delimited JSON with PutRecord. */

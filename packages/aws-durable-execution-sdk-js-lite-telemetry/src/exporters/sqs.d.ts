@@ -1,4 +1,8 @@
-import type { AwsClient, TelemetryExporter } from "../index.js";
+import type {
+  AwsClient,
+  OperationsFormat,
+  TelemetryExporter,
+} from "../index.js";
 
 export interface SQSExporterConfig {
   /** The queue URL. A URL that ends with ".fifo" is a FIFO queue. */
@@ -13,9 +17,11 @@ export interface SQSExporterConfig {
   client?: AwsClient;
   /** Default 256_000. */
   maxRecordBytes?: number;
+  /** How the message body holds the operations. See OperationsFormat. Default "array". */
+  operationsFormat?: OperationsFormat;
 }
 
-/** Sends each record as one SQS message. The body is the record as JSON. */
+/** Sends each record as one SQS message. The body is the record as JSON, in operationsFormat. */
 export function createSQSExporter(
   config: SQSExporterConfig,
 ): TelemetryExporter & { maxRecordBytes: number };

@@ -1,4 +1,8 @@
-import type { AwsClient, TelemetryExporter } from "../index.js";
+import type {
+  AwsClient,
+  OperationsFormat,
+  TelemetryExporter,
+} from "../index.js";
 
 export interface EventBridgeExporterConfig {
   /** The event bus name or ARN. Default "default". */
@@ -13,11 +17,13 @@ export interface EventBridgeExporterConfig {
   client?: AwsClient;
   /** Default 256_000. */
   maxRecordBytes?: number;
+  /** How the detail holds the operations. See OperationsFormat. Default "array". */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
  * Publishes each record as one event: the detail-type is the record status, the detail
- * is the record. Rejects when PutEvents reports a failed entry.
+ * is the record in operationsFormat. Rejects when PutEvents reports a failed entry.
  */
 export function createEventBridgeExporter(
   config?: EventBridgeExporterConfig,

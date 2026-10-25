@@ -12,6 +12,7 @@ import {
   buildRecord,
   createTelemetryPlugin,
   type DurableExecutionTelemetryRecord,
+  type OperationsFormat,
   type TelemetryExporter,
 } from "../src/index.js";
 import {
@@ -39,6 +40,8 @@ const client: AwsClient = {
   send: async ({ path, headers, body }) => ({ path, headers, body }),
 };
 
+const format: OperationsFormat = "both";
+
 const plugin = createTelemetryPlugin({
   exporters: [
     custom,
@@ -57,9 +60,14 @@ const plugin = createTelemetryPlugin({
     createS3Exporter({ bucket: "b", partitioning: "function-name", client }),
     createSQSExporter({
       queueUrl: "https://sqs.us-east-1.amazonaws.com/1/q.fifo",
+      operationsFormat: "by-name",
     }),
-    createFirehoseExporter({ deliveryStreamName: "s", maxRecordBytes: 1000 }),
-    createEventBridgeExporter(),
+    createFirehoseExporter({
+      deliveryStreamName: "s",
+      maxRecordBytes: 1000,
+      operationsFormat: format,
+    }),
+    createEventBridgeExporter({ operationsFormat: "array" }),
     createRedshiftExporter({
       workgroupName: "w",
       database: "d",

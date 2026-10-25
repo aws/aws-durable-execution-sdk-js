@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildRecord } from "../src/index.js";
+import { applyOperationsFormat } from "../src/operations-by-name.js";
 import { createEventBridgeExporter } from "../src/exporters/eventbridge.js";
 import {
   ARN,
@@ -57,6 +58,19 @@ test("one PutEvents call publishes the record with the status as detail-type", a
   assert.deepEqual(detail, JSON.parse(JSON.stringify(record)));
   assert.equal(detail.operations[0].name, "charge");
   assert.equal(detail.operationsByName, undefined);
+});
+
+test('operationsFormat "by-name" and "both" set the detail', async () => {
+  for (const format of ["by-name", "both"]) {
+    const client = fakeClient(ok);
+    await createEventBridgeExporter({
+      client,
+      operationsFormat: format,
+    }).export(record);
+    const { Detail } = client.requests[0].json.Entries[0];
+    assert.equal(Detail, JSON.stringify(applyOperationsFormat(record, format)));
+    assert.equal(JSON.parse(Detail).operationsByName.charge.status, "FAILED");
+  }
 });
 
 test("eventBusName, source and maxRecordBytes options are used", async () => {

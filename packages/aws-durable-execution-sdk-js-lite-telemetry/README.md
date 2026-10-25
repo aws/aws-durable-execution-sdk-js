@@ -148,6 +148,24 @@ the record as an ISO 8601 string in UTC with milliseconds, for example
 `buildRecord(args)` builds a record from wire records. The plugin uses it. It is
 exported for tests and custom exporters.
 
+## Operations format
+
+The SQS, Firehose and EventBridge exporters have the option `operationsFormat`. It sets
+how the sent JSON holds the operations, as in the full SDK:
+
+- `"array"` (default): the record unchanged, with the `operations` array.
+- `"by-name"`: `operationsByName` instead of `operations`. `operationsByName` maps each
+  operation name to a summary. [CloudWatch Logs](#cloudwatch-logs) describes the summary.
+- `"both"`: the `operations` array, and `operationsByName` added as the last field.
+
+Any other value sends the record unchanged. The CloudWatch Logs and DynamoDB exporters
+always send the `"by-name"` form. The other exporters always send the `"array"` form.
+
+The plugin measures the record with the `operations` array, before the exporter adds
+`operationsByName`. With `"both"`, the sent JSON is larger than the measured record. So
+with `"both"`, set `maxRecordBytes` below the destination's limit, with room for one
+summary per operation name. See [Record size](#record-size).
+
 ## Exporters
 
 ### CloudWatch Logs
@@ -405,7 +423,7 @@ Limits:
 
 ### SQS
 
-`createSQSExporter({ queueUrl, messageGroupId, region, endpoint, client, maxRecordBytes })`
+`createSQSExporter({ queueUrl, messageGroupId, region, endpoint, client, maxRecordBytes, operationsFormat })`
 sends each record as one message to a queue.
 
 - `queueUrl`: the queue. It must exist. A URL that ends with `.fifo` is a FIFO queue.
@@ -418,13 +436,14 @@ sends each record as one message to a queue.
   See [AWS requests](#aws-requests). With `client`, the exporter ignores `region` and
   `endpoint`.
 - `maxRecordBytes` (default `256_000`): SQS limits a message to 256 KiB.
+- `operationsFormat` (default `"array"`): how the message body holds the operations.
+  See [Operations format](#operations-format).
 
 Each export runs one `SendMessage`. SQS uses the AWS JSON 1.0 protocol. So the call is
 `POST /` with the header `x-amz-target: AmazonSQS.SendMessage`.
 
-The message body is the record as JSON, with the `operations` array. This is the full
-SDK's default `"array"` format. Each message has two string attributes, `status` and
-`functionName`. A consumer can select messages by them without reading the body.
+The message body is the record as JSON, in the `operationsFormat`. Each message has two
+string attributes, `status` and `functionName`. A consumer can select messages by them without reading the body.
 
 A FIFO queue needs a group id and a deduplication id on each message:
 
@@ -456,7 +475,7 @@ A queue encrypted with a customer managed KMS key also needs `kms:GenerateDataKe
 
 ### Firehose
 
-`createFirehoseExporter({ deliveryStreamName, region, endpoint, client, maxRecordBytes })`
+`createFirehoseExporter({ deliveryStreamName, region, endpoint, client, maxRecordBytes, operationsFormat })`
 sends each record to an Amazon Data Firehose delivery stream. Firehose buffers the
 records and delivers them to the destination of the stream, for example Amazon S3.
 
@@ -471,13 +490,15 @@ records and delivers them to the destination of the stream, for example Amazon S
   the newline. Firehose limits the data of one record to 1,000 KiB before base64. The
   data is the JSON and one newline, so it is one byte larger than the measured record.
   So set `maxRecordBytes` to at most 1,023,999.
+- `operationsFormat` (default `"array"`): how the data holds the operations. See
+  [Operations format](#operations-format).
 
 Each export runs one `PutRecord`. Firehose uses the AWS JSON 1.1 protocol. So the call
 is `POST /` with the header `x-amz-target: Firehose_20150804.PutRecord`. The body is
 `{ DeliveryStreamName, Record: { Data } }`.
 
-`Data` is the record as JSON, followed by one newline, as UTF-8 bytes in base64. The
-record holds the `operations` array, as the full SDK's default `operationsFormat` does.
+`Data` is the record as JSON in the `operationsFormat`, followed by one newline, as UTF-8
+bytes in base64.
 Firehose concatenates the records of one buffer into one S3 object without a separator.
 The newline keeps the object readable as newline-delimited JSON. So Athena and other
 JSON Lines readers can query the object.
@@ -494,7 +515,7 @@ The function's execution role needs `firehose:PutRecord` on the delivery stream:
 
 ### EventBridge
 
-`createEventBridgeExporter({ eventBusName, source, region, endpoint, client, maxRecordBytes })`
+`createEventBridgeExporter({ eventBusName, source, region, endpoint, client, maxRecordBytes, operationsFormat })`
 publishes each record as one event. Rules on the bus then route the events, for example
 to SNS, SQS or Step Functions.
 
@@ -508,6 +529,8 @@ to SNS, SQS or Step Functions.
   See [AWS requests](#aws-requests). With `client`, the exporter ignores `region` and
   `endpoint`.
 - `maxRecordBytes` (default `256_000`): EventBridge limits a PutEvents entry to 256 KB.
+- `operationsFormat` (default `"array"`): how the detail holds the operations. See
+  [Operations format](#operations-format).
 
 Each export runs one `PutEvents` with one entry. EventBridge uses the AWS JSON 1.1
 protocol. So the call is `POST /` with the header `x-amz-target: AWSEvents.PutEvents`.
@@ -515,7 +538,7 @@ The entry has these fields:
 
 - `Source`: the `source` option.
 - `DetailType`: the record status: `"SUCCEEDED"`, `"FAILED"` or `"RUNNING"`.
-- `Detail`: the record as JSON, with the `operations` array.
+- `Detail`: the record as JSON, in the `operationsFormat`.
 - `Time`: the record's `emittedAt`.
 - `EventBusName`: the `eventBusName` option.
 
@@ -805,7 +828,9 @@ export it to that exporter and logs one warning.
 The plugin measures the record with the `operations` array. The CloudWatch Logs event
 and the DynamoDB item hold `operationsByName` instead. A summary has no `id` and no
 timestamps. So for the same operations, the event and the item are smaller than the
-measured record.
+measured record. With `operationsFormat: "both"`, the sent JSON holds both forms. So it
+is larger than the measured record. [Operations format](#operations-format) gives the
+setting for that case.
 
 ## Failures
 
@@ -879,15 +904,13 @@ record. So do not put secrets in error messages.
 - Every exporter names its size limit `maxRecordBytes`. The full SDK names it
   `maxRecordSizeBytes`. The S3 exporter names the key prefix `keyPrefix`. The full SDK
   names it `prefix`.
-- The SQS, Firehose and EventBridge exporters have no `operationsFormat` option. The
-  message, the data and the detail always hold the `operations` array, the full SDK's
-  default.
 - No export scheduler. The lite SDK creates one plugin per invocation, calls
   `onOperationChange` synchronously from `flush`, and calls `onInvocationEnd` once,
   after the last checkpoint response. So no hook can arrive after the end. The plugin
   only chains the exports of one invocation.
 - No `flush` on exporters, and no `render`. The plugin measures the record with the
-  `operations` array.
+  `operations` array. The full SDK measures the rendered record. So with
+  `operationsFormat: "both"`, set `maxRecordBytes` with room for `operationsByName`.
 - No `content` option: no input or output transforms, no operation overrides, no
   operation results. `includeInput` and `includeOutput` replace the input and output
   settings.
@@ -953,7 +976,7 @@ change any file here.
 src/index.js                    createTelemetryPlugin, sampling, export chain, timeout
 src/record.js                   buildRecord: wire records to the record format
 src/truncate.js                 fitRecord: the drop order of Record size
-src/operations-by-name.js       the operationsByName form for CloudWatch Logs and DynamoDB
+src/operations-by-name.js       the operationsByName form and applyOperationsFormat
 src/aws.js                      signRequest and createAwsClient: SigV4, S3 signing, credentials, retries
 src/exporters/cloudwatch-logs.js
 src/exporters/aurora.js

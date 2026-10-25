@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { createAwsClient } from "../aws.js";
+import { applyOperationsFormat } from "../operations-by-name.js";
 
 // SQS limits a FIFO MessageGroupId and MessageDeduplicationId to 128 characters. Most
 // execution ARNs are longer. So a longer id is replaced by the hex SHA-256 digest of its
@@ -19,6 +20,8 @@ export function createSQSExporter({
   client = createAwsClient({ service: "sqs", region, endpoint }),
   // SQS limits a message to 256 KiB. The full SDK uses 256_000.
   maxRecordBytes = 256_000,
+  // "array", "by-name" or "both", as in the full SDK. See applyOperationsFormat.
+  operationsFormat = "array",
 }) {
   // SQS requires both ids for a FIFO queue and rejects them for a standard queue. The
   // name of a FIFO queue ends with ".fifo".
@@ -30,7 +33,9 @@ export function createSQSExporter({
       // JSON.stringify leaves out undefined fields. So a standard queue sends no ids.
       const input = {
         QueueUrl: queueUrl,
-        MessageBody: JSON.stringify(record),
+        MessageBody: JSON.stringify(
+          applyOperationsFormat(record, operationsFormat),
+        ),
         // An empty messageGroupId counts as omitted, as in the full SDK.
         MessageGroupId: fifo
           ? fifoId(messageGroupId || record.executionArn)

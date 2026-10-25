@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildRecord } from "../src/index.js";
+import { applyOperationsFormat } from "../src/operations-by-name.js";
 import { createFirehoseExporter } from "../src/exporters/firehose.js";
 import {
   ARN,
@@ -58,6 +59,23 @@ test("PutRecord sends the record as one line of JSON in base64", async () => {
   assert.equal(parsed.input.city, "Zürich");
   assert.equal(parsed.operations[0].name, "charge");
   assert.equal(parsed.operationsByName, undefined);
+});
+
+test('operationsFormat "by-name" and "both" set the data', async () => {
+  for (const format of ["by-name", "both"]) {
+    const client = fakeClient();
+    await createFirehoseExporter({
+      deliveryStreamName: "s",
+      client,
+      operationsFormat: format,
+    }).export(record);
+    const data = decode(client.requests[0].json.Record.Data);
+    assert.equal(
+      data,
+      `${JSON.stringify(applyOperationsFormat(record, format))}\n`,
+    );
+    assert.equal(JSON.parse(data).operationsByName.charge.status, "SUCCEEDED");
+  }
 });
 
 test("maxRecordBytes can be set", () => {
