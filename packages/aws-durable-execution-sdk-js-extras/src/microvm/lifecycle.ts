@@ -32,6 +32,7 @@ export interface EnsureRunningOptions {
   /**
    * The remaining invocation time. `undefined`, as a value or as a result,
    * means the compute reports no deadline, and only `maxWaitMs` applies.
+   * A result that is not a finite number means the same.
    */
   remainingTimeMs?: () => number | undefined;
   log: (message: string, data: Record<string, unknown>) => void;
