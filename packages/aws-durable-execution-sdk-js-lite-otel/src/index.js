@@ -1,4 +1,3 @@
-import { context, trace } from "@opentelemetry/api";
 import { exportSpans } from "./export.js";
 import {
   attemptSpanId,
@@ -10,6 +9,7 @@ import {
   traceId as traceIdOf,
   workflowSpanId,
 } from "./ids.js";
+import { runWithSpanContext } from "./otel-context.js";
 import {
   buildSpan,
   plainResource,
@@ -141,14 +141,10 @@ export function createOtelPlugin({
     const parentOf = (parentId) =>
       parentId === undefined ? workflowId : operationSpanId(arn, parentId);
 
-    // context.with makes the span the active span while fn runs. So spans that user
-    // code creates become its children. Without a registered context manager,
-    // context.with only calls fn.
+    // The span is the active span while fn runs. So spans that user code creates become
+    // its children. Without a registered context manager, fn only runs.
     const runIn = (spanId, fn) =>
-      context.with(
-        trace.setSpanContext(context.active(), spanContext(traceId, spanId)),
-        fn,
-      );
+      runWithSpanContext(spanContext(traceId, spanId), fn);
 
     const attempt = ({ id, name, type, subType, attempt: n, fn }) => {
       const attemptStart = Date.now();

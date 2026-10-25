@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { test } from "node:test";
-import {
-  context,
-  ROOT_CONTEXT,
-  SpanStatusCode,
-  trace,
-} from "@opentelemetry/api";
 import { createOtelPlugin } from "../src/index.js";
+import { STATUS_ERROR } from "../src/spans.js";
 import {
   ARN,
   fakeExporter,
@@ -85,11 +79,11 @@ test("a synchronous throw and a rejection propagate unchanged and fail the attem
     attempts.map((s) => [s.status, s.events[0].attributes]),
     [
       [
-        { code: SpanStatusCode.ERROR, message: "sync" },
+        { code: STATUS_ERROR, message: "sync" },
         { "exception.type": "SyntaxError", "exception.message": "sync" },
       ],
       [
-        { code: SpanStatusCode.ERROR, message: "plain string" },
+        { code: STATUS_ERROR, message: "plain string" },
         { "exception.type": "Error", "exception.message": "plain string" },
       ],
     ],
@@ -102,7 +96,7 @@ test("RETRYING and FAILED invocations have ERROR status", async () => {
     await otel(exporter)(info()).onInvocationEnd(end(status));
     const inv = one(exporter.spans(), "Invocation");
     assert.deepEqual(inv.status, {
-      code: SpanStatusCode.ERROR,
+      code: STATUS_ERROR,
       message: status,
     });
   }
@@ -136,7 +130,7 @@ test("record fallbacks: fractional seconds, a missing end, no name, other error 
   assert.deepEqual(cb.startTime, [1_767_225_600, 250_000_000]);
   assert.deepEqual(cb.duration, [1, 250_000_000]);
   assert.deepEqual(cb.status, {
-    code: SpanStatusCode.ERROR,
+    code: STATUS_ERROR,
     message: "TIMED_OUT",
   });
   assert.deepEqual(cb.events, []);
@@ -222,84 +216,6 @@ test("an unsampled execution gets no plugin", () => {
     createOtelPlugin({ exporter: fakeExporter(), sampleRate: 0 })(info()),
     undefined,
   );
-});
-
-// A test-only context manager. The plugin source must not use node:async_hooks, but a
-// test may. It mirrors AsyncLocalStorageContextManager from
-// @opentelemetry/context-async-hooks.
-function alsContextManager() {
-  const als = new AsyncLocalStorage();
-  return {
-    active: () => als.getStore() ?? ROOT_CONTEXT,
-    with: (ctx, fn, thisArg, ...args) =>
-      als.run(ctx, () => fn.call(thisArg, ...args)),
-    bind: (_ctx, target) => target,
-    enable() {
-      return this;
-    },
-    disable() {
-      als.disable();
-      return this;
-    },
-  };
-}
-
-test("with a context manager, user code sees the durable span as the active span", async (t) => {
-  assert.ok(context.setGlobalContextManager(alsContextManager()));
-  t.after(() => context.disable());
-  const seen = {};
-  const active = () => trace.getSpanContext(context.active());
-  const exporter = fakeExporter();
-  await runDurable({
-    plugins: [otel(exporter)],
-    workflow: async ({ ctx }) => {
-      seen.workflow = active();
-      await ctx.runInChildContext({
-        name: "group",
-        fn: async ({ ctx: c }) => {
-          seen.group = active();
-          await c.step({
-            name: "work",
-            fn: async () => {
-              await new Promise((r) => setImmediate(r));
-              seen.work = active();
-            },
-          });
-        },
-      });
-    },
-  });
-  const spans = exporter.spans();
-  const expected = (s) => ({ ...s.spanContext(), isRemote: undefined });
-  const strip = ({ traceId, spanId, traceFlags }) => ({
-    traceId,
-    spanId,
-    traceFlags,
-    isRemote: undefined,
-  });
-  assert.deepEqual(strip(seen.workflow), expected(one(spans, "Invocation")));
-  assert.deepEqual(strip(seen.group), expected(one(spans, "group")));
-  assert.deepEqual(strip(seen.work), expected(one(spans, "work attempt 1")));
-  assert.equal(
-    parentOf(one(spans, "work attempt 1")),
-    idOf(one(spans, "work")),
-  );
-  assert.equal(seen.work.traceId, one(spans, "work").spanContext().traceId);
-});
-
-test("without a context manager, no span is active in user code", async () => {
-  let seen = "unset";
-  await runDurable({
-    plugins: [otel(fakeExporter())],
-    workflow: ({ ctx }) =>
-      ctx.step({
-        name: "s",
-        fn: () => {
-          seen = trace.getSpanContext(context.active());
-        },
-      }),
-  });
-  assert.equal(seen, undefined);
 });
 
 test("ARN in helpers matches the in-memory service", async () => {

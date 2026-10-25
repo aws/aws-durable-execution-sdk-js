@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
+import { SPAN_KIND_INTERNAL, STATUS_ERROR, STATUS_OK } from "../src/spans.js";
 import {
   byName,
   fakeExporter,
@@ -88,8 +88,8 @@ test("a wait that ends between invocations is emitted once, and no span twice", 
   assert.equal(new Set(ids).size, ids.length);
 
   const w1 = one(exporter.spans(), "w1");
-  assert.equal(w1.kind, SpanKind.INTERNAL);
-  assert.deepEqual(w1.status, { code: SpanStatusCode.OK });
+  assert.equal(w1.kind, SPAN_KIND_INTERNAL);
+  assert.deepEqual(w1.status, { code: STATUS_OK });
   assert.equal(w1.attributes["durable.operation.type"], "WAIT");
   assert.equal(w1.attributes["durable.operation.status"], "SUCCEEDED");
   assert.equal(
@@ -127,17 +127,17 @@ test("a retried step has two attempt spans under one step span", async () => {
   assert.notEqual(idOf(a1), idOf(a2));
   assert.equal(parentOf(a1), idOf(step));
   assert.equal(parentOf(a2), idOf(step));
-  assert.equal(a1.status.code, SpanStatusCode.ERROR);
+  assert.equal(a1.status.code, STATUS_ERROR);
   assert.equal(a1.status.message, "first try fails");
   assert.deepEqual(a1.events[0].attributes, {
     "exception.type": "TypeError",
     "exception.message": "first try fails",
   });
   assert.equal(a1.attributes["durable.attempt.number"], 1);
-  assert.equal(a2.status.code, SpanStatusCode.OK);
+  assert.equal(a2.status.code, STATUS_OK);
   assert.equal(a2.attributes["durable.attempt.number"], 2);
   assert.equal(step.attributes["durable.attempt.number"], 2);
-  assert.equal(step.status.code, SpanStatusCode.OK);
+  assert.equal(step.status.code, STATUS_OK);
 });
 
 test("a failed step has ERROR status and an exception event", async () => {
@@ -156,7 +156,7 @@ test("a failed step has ERROR status and an exception event", async () => {
   assert.equal(run.status, "FAILED");
   const step = one(exporter.spans(), "boom");
   assert.deepEqual(step.status, {
-    code: SpanStatusCode.ERROR,
+    code: STATUS_ERROR,
     message: "out of range",
   });
   assert.equal(step.events.length, 1);
@@ -168,7 +168,7 @@ test("a failed step has ERROR status and an exception event", async () => {
   });
 
   const workflow = one(exporter.spans(), "workflow");
-  assert.equal(workflow.status.code, SpanStatusCode.ERROR);
+  assert.equal(workflow.status.code, STATUS_ERROR);
   assert.equal(workflow.attributes["durable.execution.status"], "FAILED");
   assert.equal(workflow.events.length, 1);
 });
@@ -180,7 +180,7 @@ test("the workflow span is a root span in the final invocation only", async () =
   assert.equal(byName(first, "workflow").length, 0);
   const workflow = one(second, "workflow");
   assert.equal(workflow.parentSpanContext, undefined);
-  assert.deepEqual(workflow.status, { code: SpanStatusCode.OK });
+  assert.deepEqual(workflow.status, { code: STATUS_OK });
   assert.equal(workflow.attributes["durable.execution.status"], "SUCCEEDED");
   // The EXECUTION record's start, from the virtual clock.
   assert.deepEqual(workflow.startTime, [1_700_000_000, 0]);
@@ -217,7 +217,7 @@ test("every invocation emits one invocation span with its status", async () => {
   );
   for (const s of invocations) {
     assert.equal(parentOf(s), idOf(workflow));
-    assert.equal(s.status.code, SpanStatusCode.OK);
+    assert.equal(s.status.code, STATUS_OK);
   }
   assert.notEqual(idOf(invocations[0]), idOf(invocations[1]));
 });

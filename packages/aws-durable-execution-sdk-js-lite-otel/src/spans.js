@@ -1,5 +1,9 @@
-import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import { VERSION } from "./version.js";
+
+// The OTLP enum values of span kind INTERNAL and of status codes OK and ERROR.
+export const SPAN_KIND_INTERNAL = 0;
+export const STATUS_OK = 1;
+export const STATUS_ERROR = 2;
 
 // The plugin builds finished spans as plain objects with the fields of ReadableSpan from
 // @opentelemetry/sdk-trace-base 2.x. A SpanExporter reads only these fields. So the
@@ -62,7 +66,7 @@ export function buildSpan({
   const ctx = spanContext(traceId, spanId);
   return {
     name,
-    kind: SpanKind.INTERNAL,
+    kind: SPAN_KIND_INTERNAL,
     spanContext: () => ctx,
     parentSpanContext:
       parentSpanId === undefined
@@ -72,9 +76,9 @@ export function buildSpan({
     endTime: hrTime(end),
     duration: hrTime(end - startMs),
     status: ok
-      ? { code: SpanStatusCode.OK }
+      ? { code: STATUS_OK }
       : {
-          code: SpanStatusCode.ERROR,
+          code: STATUS_ERROR,
           message: error?.ErrorMessage ?? statusMessage,
         },
     attributes: defined(attributes),

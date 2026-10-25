@@ -1,13 +1,51 @@
-import type {
-  Attributes,
-  HrTime,
-  Link,
-  SpanContext,
-  SpanKind,
-  SpanStatus,
-} from "@opentelemetry/api";
 // A relative path, because the lite SDK is not linked into the workspace node_modules.
 import type { DurablePluginFactory } from "../../aws-durable-execution-sdk-js-lite/src/index.js";
+
+// The types below have the shapes of the same-named types of @opentelemetry/api 1.x. So a
+// SpanExporter and a Resource of the OpenTelemetry SDK 2.x are assignable to the
+// interfaces of this file, and the package needs no dependency on the API.
+
+/** [seconds, nanoseconds] since the epoch, or a duration. */
+export type HrTime = [number, number];
+
+export type AttributeValue =
+  | string
+  | number
+  | boolean
+  | Array<null | undefined | string>
+  | Array<null | undefined | number>
+  | Array<null | undefined | boolean>;
+
+export interface Attributes {
+  [attributeKey: string]: AttributeValue | undefined;
+}
+
+export interface TraceState {
+  set(key: string, value: string): TraceState;
+  unset(key: string): TraceState;
+  get(key: string): string | undefined;
+  serialize(): string;
+}
+
+export interface SpanContext {
+  traceId: string;
+  spanId: string;
+  isRemote?: boolean;
+  traceFlags: number;
+  traceState?: TraceState;
+}
+
+export interface Link {
+  context: SpanContext;
+  attributes?: Attributes;
+  droppedAttributesCount?: number;
+}
+
+/** code is 0 (UNSET), 1 (OK) or 2 (ERROR). */
+export interface SpanStatus {
+  code: number;
+  message?: string;
+}
 
 /**
  * The resource fields that OTLP serializers read. A Resource from
@@ -21,7 +59,8 @@ export interface OtelResource {
 /** A finished span with the fields of ReadableSpan from @opentelemetry/sdk-trace-base 2.x. */
 export interface OtelReadableSpan {
   readonly name: string;
-  readonly kind: SpanKind;
+  /** 0 is INTERNAL, the kind of every span of this plugin. */
+  readonly kind: number;
   readonly spanContext: () => SpanContext;
   readonly parentSpanContext?: SpanContext;
   readonly startTime: HrTime;

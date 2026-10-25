@@ -31,8 +31,7 @@ passes them to `exporter.export`, during the invocation and at its end (see
 
 ## Requirements
 
-- Node.js 22.12 or later.
-- `@opentelemetry/api` 1.9 or later. It is the only peer dependency.
+- Node.js 22.12 or later. The package has no dependencies.
 - A `SpanExporter`, for example `OTLPTraceExporter` from
   `@opentelemetry/exporter-trace-otlp-http` or `@opentelemetry/exporter-trace-otlp-proto`.
 
@@ -274,10 +273,9 @@ The plugin makes a durable span the active span while user code runs:
 - the operation span, while a child context's `fn` runs;
 - the invocation span, while the workflow function runs.
 
-It does this with `context.with` of `@opentelemetry/api`. This works only with a registered
-context manager. A context manager follows the active span across `await`. Register one
-once, for example `AsyncLocalStorageContextManager` from
-`@opentelemetry/context-async-hooks`:
+This works only with a context manager that you register with `@opentelemetry/api` 1.x.
+A context manager follows the active span across `await`. Register one once, for example
+`AsyncLocalStorageContextManager` from `@opentelemetry/context-async-hooks`:
 
 ```js
 import { context } from "@opentelemetry/api";
@@ -286,10 +284,23 @@ import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-ho
 context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
 ```
 
+The `register()` of a `NodeSDK` or a `NodeTracerProvider` registers one too.
+
+The plugin does not import `@opentelemetry/api`. It finds the context manager this way:
+
+1. Several copies of the API can be loaded in one process. So the API keeps one shared
+   registry on `globalThis`, under `Symbol.for("opentelemetry.js.api.1")`.
+2. `context.setGlobalContextManager` stores the context manager in that registry.
+3. The active span is the value of the context key
+   `Symbol.for("OpenTelemetry Context Key SPAN")`.
+4. So the plugin reads the context manager from the registry. It calls the manager's
+   `with` with a context that holds a non-recording span of the durable span's ids.
+5. So `trace.getActiveSpan()` in user code returns that span.
+
 Then spans that your code or an auto-instrumentation creates inside a step are children of
-the attempt span. Without a context manager, these spans do not nest under the durable
-spans. The plugin's own spans are still complete, because it sets every parent from the
-ids above. So a runtime without `AsyncLocalStorage`, for example LLRT, still gets every
+the attempt span. Without a registered context manager, these spans do not nest under the
+durable spans. The plugin's own spans are still complete, because it sets every parent from
+the ids above. So a runtime without `AsyncLocalStorage`, for example LLRT, still gets every
 durable span.
 
 ## Limitations
@@ -318,6 +329,10 @@ durable span.
 - The workflow span of a top-level execution links to a Lambda or upstream span that
   this plugin does not export.
 - Log lines do not carry the trace id or span id.
+- Nesting depends on the internal registry layout of `@opentelemetry/api` major version 1
+  (see [Context propagation](#context-propagation)). A future major version stores its
+  registry under another key. Then user spans silently stop nesting under the durable
+  spans. The durable spans are unaffected.
 
 ## Differences from @aws/durable-execution-sdk-js-otel
 
@@ -329,6 +344,8 @@ durable span.
   ignores `Sampled`. The full plugin can also join a W3C parent and reads the
   `Sampled` flag.
 - This plugin does not use `AsyncLocalStorage`. The full plugin does.
+- This plugin has no dependencies. The full plugin has peer dependencies, among them
+  `@opentelemetry/api`.
 - This plugin propagates to chained invokes with the lite SDK's `traceHeader` hook. It has
   no log correlation, no context extractors and no loading from a Lambda layer.
 - This plugin uses the same attribute names and the same status mapping.
@@ -339,10 +356,11 @@ This section is for people and AI agents who change this package. The rules of t
 SDK's [Contributing](../aws-durable-execution-sdk-js-lite/README.md#contributing) section
 apply, with these changes:
 
-1. `package.json` has one peer dependency, `@opentelemetry/api`. It has no `dependencies`,
-   no `devDependencies` and no `optionalDependencies`.
-2. `src` imports only relative paths, `node:` built-ins and `@opentelemetry/api`. It never
-   imports the lite SDK. `src/index.d.ts` imports the lite SDK's types by a relative path,
+1. `package.json` has no `dependencies`, no `peerDependencies`, no `devDependencies` and
+   no `optionalDependencies`.
+2. `src` imports only relative paths and `node:` built-ins. It never imports the lite SDK
+   or `@opentelemetry/api`. `src/index.d.ts` defines the OpenTelemetry types it needs, with
+   the shapes of the API's types. It imports the lite SDK's types by a relative path,
    because the lite SDK is not linked into the workspace `node_modules`.
 3. `src` does not import `node:async_hooks`. Tests may, to register a context manager.
 4. No per-invocation state at module level. Shared state lives in the closure of
@@ -364,6 +382,7 @@ src/index.js     createOtelPlugin: the factory and the hooks
 src/ids.js       deterministic ids and the sampling decision
 src/spans.js     span objects, time conversion, the default resource
 src/export.js    the export with a timeout
+src/otel-context.js  the active span, through the registry of @opentelemetry/api
 src/version.js   the instrumentation scope version
 src/index.d.ts   the public types
 ```

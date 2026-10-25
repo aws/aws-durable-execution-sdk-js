@@ -14,12 +14,13 @@ const srcFiles = readdirSync(join(root, "src")).filter((f) =>
   f.endsWith(".js"),
 );
 
-test("package.json has only the @opentelemetry/api peer dependency", () => {
-  assert.deepEqual(pkg.peerDependencies, { "@opentelemetry/api": "^1.9.0" });
+test("package.json has no dependency fields", () => {
   for (const key of [
     "dependencies",
-    "devDependencies",
+    "peerDependencies",
+    "peerDependenciesMeta",
     "optionalDependencies",
+    "devDependencies",
   ]) {
     assert.equal(key in pkg, false, `package.json has "${key}"`);
   }
@@ -27,21 +28,29 @@ test("package.json has only the @opentelemetry/api peer dependency", () => {
   assert.equal(pkg.version, VERSION);
 });
 
-test("src imports only relative paths, node: built-ins and @opentelemetry/api", () => {
+test("src imports only relative paths and node: built-ins", () => {
   const specs = srcFiles.flatMap((f) =>
-    [...read(`src/${f}`).matchAll(/\bfrom\s*["']([^"']+)["']/g)].map(
-      (m) => m[1],
-    ),
+    [
+      ...read(`src/${f}`).matchAll(
+        /\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g,
+      ),
+    ].map((m) => m[1]),
   );
   assert.ok(specs.includes("node:crypto"));
-  assert.ok(specs.includes("@opentelemetry/api"));
+  assert.ok(specs.includes("./otel-context.js"));
   const bad = specs.filter(
-    (s) =>
-      !s.startsWith("./") &&
-      !s.startsWith("node:") &&
-      s !== "@opentelemetry/api",
+    (s) => !s.startsWith("./") && !s.startsWith("node:"),
   );
   assert.deepEqual(bad, []);
+});
+
+test("src/index.d.ts imports only the lite SDK's types", () => {
+  const specs = [
+    ...read("src/index.d.ts").matchAll(/\bfrom\s*["']([^"']+)["']/g),
+  ].map((m) => m[1]);
+  assert.deepEqual(specs, [
+    "../../aws-durable-execution-sdk-js-lite/src/index.js",
+  ]);
 });
 
 test("src does not use async_hooks", () => {
