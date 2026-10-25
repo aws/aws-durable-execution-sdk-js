@@ -27,6 +27,7 @@ export function createOtelPlugin({
   serviceName,
   sampleRate = 1,
   exportTimeoutMs = 3000,
+  flushIntervalMs = 5000,
 }) {
   const res =
     resource ??
@@ -49,17 +50,66 @@ export function createOtelPlugin({
     const startMs = Date.now();
     const workflowId = workflowSpanId(arn);
     const invocationId = invocationSpanId(arn, requestId);
+    // emitted holds the Ids of the records whose operation span was already built.
     // A record that was terminal at the start was emitted by an earlier invocation.
     // The exception is a record in updatedOperationIds: the service ended it between
     // the invocations, for example a wait. No earlier invocation saw it end.
     const updated = new Set(info.updatedOperationIds);
-    const emittedBefore = new Set(
+    const emitted = new Set(
       info.operations
         .filter((r) => TERMINAL.has(r.Status) && !updated.has(r.Id))
         .map((r) => r.Id),
     );
     const first = info.operations.every((r) => r.Type === "EXECUTION");
-    const attemptSpans = [];
+
+    // Finished spans that no export has taken yet. A flush sends them during the
+    // invocation, like the BatchSpanProcessor of OpenTelemetry. So a crash or a timeout
+    // loses only the spans of the last interval.
+    let buffer = [];
+    let timer;
+    let lastExportMs = startMs;
+    let ended = false;
+    // Each export starts after the previous one settles. exportSpans never rejects. So
+    // the chain never rejects, and onInvocationEnd awaits every export.
+    let exports = Promise.resolve();
+    // The number of exports that have not settled yet.
+    let pending = 0;
+
+    const flush = () => {
+      timer = undefined;
+      const batch = buffer;
+      buffer = [];
+      lastExportMs = Date.now();
+      if (batch.length > 0) {
+        pending++;
+        exports = exports
+          .then(() => exportSpans(exporter, batch, exportTimeoutMs))
+          .then(() => {
+            pending--;
+          });
+      }
+    };
+
+    // A long step can run for minutes without a checkpoint response. So a timer sends
+    // the buffer, not only the next onOperationChange. The timer is unref'd, so it never
+    // keeps a process alive. After onInvocationEnd started, a span is dropped, because
+    // no hook would await its export.
+    const add = (span) => {
+      if (ended) return;
+      buffer.push(span);
+      if (flushIntervalMs > 0 && timer === undefined) {
+        timer = setTimeout(
+          flush,
+          Math.max(0, flushIntervalMs - (Date.now() - lastExportMs)),
+        );
+        timer.unref?.();
+      }
+    };
+
+    // An operation span is built once, when its record is terminal for the first time.
+    // Then emitted holds its Id. So no operation span is exported twice.
+    const isNew = (r) =>
+      r.Type !== "EXECUTION" && TERMINAL.has(r.Status) && !emitted.has(r.Id);
 
     // The parent of a record's span is the span of its ParentId. A record without
     // ParentId is a child of the workflow span.
@@ -80,7 +130,7 @@ export function createOtelPlugin({
       const spanId = attemptSpanId(arn, id, n);
       // ok is false when fn threw or its promise rejected. thrown is then the reason.
       const finish = (ok, thrown) =>
-        attemptSpans.push(
+        add(
           buildSpan({
             traceId,
             spanId,
@@ -126,6 +176,39 @@ export function createOtelPlugin({
       return out;
     };
 
+    // The handler returns only after this function settles. Without an earlier export
+    // that still runs, the final export starts at once and bounds itself. Else the final
+    // export starts only after the earlier exports. So the total wait is bounded too:
+    // 1. The deadline is exportTimeoutMs after the end of the invocation.
+    // 2. The final export gets the time left until the deadline. So once it starts, it
+    //    settles by the deadline, and its own timeout logs a failure.
+    // 3. If earlier exports still run at the deadline, the final export never starts.
+    //    Its spans are lost. One line is logged.
+    const finalExport = async (spans) => {
+      if (pending === 0) return exportSpans(exporter, spans, exportTimeoutMs);
+      const deadline = Date.now() + exportTimeoutMs;
+      let late;
+      let lateTimer;
+      const lateTimeout = new Promise((resolve) => {
+        lateTimer = setTimeout(() => {
+          late = true;
+          resolve();
+        }, exportTimeoutMs);
+      });
+      const done = exports.then(() => {
+        if (late) return;
+        clearTimeout(lateTimer);
+        return exportSpans(exporter, spans, Math.max(0, deadline - Date.now()));
+      });
+      await Promise.race([done, lateTimeout]);
+      if (late) {
+        // biome-ignore lint/suspicious/noConsole: deliberate -- a lost export must be visible, and Lambda sends console output to CloudWatch.
+        console.warn(
+          `durable-execution-sdk-js-lite-otel: trace export failed: timed out after ${exportTimeoutMs} ms`,
+        );
+      }
+    };
+
     const operationSpan = (r) =>
       buildSpan({
         traceId,
@@ -151,7 +234,20 @@ export function createOtelPlugin({
         resource: res,
       });
 
+    // Builds the span of every record that became terminal in this checkpoint response.
+    // With flushIntervalMs 0, the plugin has no onOperationChange. So every operation
+    // span is built at the end of the invocation.
+    const onOperationChange = ({ updated }) => {
+      for (const r of updated) {
+        if (!isNew(r)) continue;
+        emitted.add(r.Id);
+        add(operationSpan(r));
+      }
+    };
+
     return {
+      onOperationChange: flushIntervalMs > 0 ? onOperationChange : undefined,
+
       wrap(w) {
         if (w.kind === "attempt") return attempt(w);
         if (w.kind === "context")
@@ -161,15 +257,11 @@ export function createOtelPlugin({
 
       async onInvocationEnd({ status, error, operations }) {
         const endMs = Date.now();
-        const spans = operations
-          .filter(
-            (r) =>
-              r.Type !== "EXECUTION" &&
-              TERMINAL.has(r.Status) &&
-              !emittedBefore.has(r.Id),
-          )
-          .map(operationSpan);
-        spans.push(...attemptSpans);
+        ended = true;
+        clearTimeout(timer);
+        const spans = operations.filter(isNew).map(operationSpan);
+        spans.push(...buffer);
+        buffer = [];
         spans.push(
           buildSpan({
             traceId,
@@ -214,7 +306,7 @@ export function createOtelPlugin({
             }),
           );
         }
-        await exportSpans(exporter, spans, exportTimeoutMs);
+        await finalExport(spans);
       },
     };
   };

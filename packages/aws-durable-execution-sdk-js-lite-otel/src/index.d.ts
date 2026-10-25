@@ -46,7 +46,8 @@ export interface OtelReadableSpan {
 
 /**
  * An OpenTelemetry SpanExporter, for example OTLPTraceExporter. The plugin calls export
- * once per invocation, and forceFlush if it exists. It never calls shutdown.
+ * for each batch, and forceFlush after each successful export, if it exists. It calls
+ * export again only after the previous export settled. It never calls shutdown.
  */
 export interface OtelSpanExporter {
   /** resultCallback receives code 0 (SUCCESS) or 1 (FAILED). */
@@ -66,8 +67,17 @@ export interface OtelPluginConfig {
   serviceName?: string;
   /** The fraction of executions to trace, from 0 to 1. Default 1. */
   sampleRate?: number;
-  /** onInvocationEnd waits at most this many milliseconds for the export. Default 3000. */
+  /**
+   * Each export waits at most this many milliseconds. onInvocationEnd also waits at
+   * most this long for all exports. Default 3000.
+   */
   exportTimeoutMs?: number;
+  /**
+   * Finished operation and attempt spans are exported at most this many milliseconds
+   * after they end, during the invocation. 0 exports every span at the end of the
+   * invocation. Default 5000.
+   */
+  flushIntervalMs?: number;
 }
 
 /** Returns a plugin factory for withDurableExecution's config.plugins. */

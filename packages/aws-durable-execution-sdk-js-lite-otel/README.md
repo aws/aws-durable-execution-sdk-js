@@ -25,7 +25,8 @@ workflow span.
 
 The plugin creates no Tracer and no TracerProvider. It builds finished spans as plain
 objects with the fields of `ReadableSpan` from `@opentelemetry/sdk-trace-base` 2.x. Then it
-passes them to `exporter.export` at the end of each invocation.
+passes them to `exporter.export`, during the invocation and at its end (see
+[When spans are sent](#when-spans-are-sent)).
 
 ## Requirements
 
@@ -60,15 +61,19 @@ it from AWS Secrets Manager once, outside the handler, and create the exporter w
 `createOtelPlugin(config)` returns a plugin factory. `config` has these keys:
 
 - `exporter` (required): any OpenTelemetry `SpanExporter`. The plugin calls
-  `export(spans, resultCallback)` once per invocation. It calls `forceFlush()` after a
-  successful export, if the exporter has it. It never calls `shutdown()`.
+  `export(spans, resultCallback)` once per batch. It calls `export` again only after the
+  previous export settled. It calls `forceFlush()` after a successful export, if the
+  exporter has it. It never calls `shutdown()`.
 - `resource` (optional): the OpenTelemetry Resource of every span, for example from
   `resourceFromAttributes` of `@opentelemetry/resources` 2.x.
 - `serviceName` (optional): `service.name` of the default resource. Ignored when
   `resource` is set.
 - `sampleRate` (default 1): the fraction of executions to trace, from 0 to 1.
-- `exportTimeoutMs` (default 3000): the plugin waits at most this many milliseconds for the
-  export.
+- `exportTimeoutMs` (default 3000): each export waits at most this many milliseconds.
+  `onInvocationEnd` also waits at most this long for all exports.
+- `flushIntervalMs` (default 5000): finished operation and attempt spans are sent at most
+  this many milliseconds after they end, during the invocation. `0` sends every span at
+  the end of the invocation.
 
 The default resource has these attributes. An attribute without a value is omitted.
 
@@ -80,6 +85,32 @@ The default resource has these attributes. An attribute without a value is omitt
 The OTLP serializer of `@opentelemetry/otlp-transformer` reads only `attributes` and
 `schemaUrl` from a resource. The default resource also has the other members of the
 Resource interface. To add attributes, pass your own Resource.
+
+### When spans are sent
+
+1. A finished operation span or attempt span goes into a buffer of the invocation. A
+   timer sends the buffer at most `flushIntervalMs` after the previous export. So such a
+   span is sent during the invocation, at most `flushIntervalMs` after it ends.
+2. The invocation span and the workflow span are sent at the end of the invocation.
+   `onInvocationEnd` sends them with the rest of the buffer.
+3. So a backend can show a child before its parent. This happens within one invocation,
+   and across invocations. The trace is complete when the execution ends.
+4. A crash or a Lambda timeout skips `onInvocationEnd`. Then the spans that finished in
+   the last interval are lost, and the invocation span is lost. The spans of the earlier
+   intervals were already sent.
+5. Tail sampling in a collector decides per batch of spans. It can drop a parent that
+   arrives later than its children. So prefer `sampleRate`.
+
+The lite SDK recommends sending only in `onInvocationEnd`, because it awaits only that
+hook. The plugin sends earlier, and still follows the reason for that rule:
+
+1. `onInvocationEnd` awaits every export that started earlier. So no export runs when the
+   handler returns.
+2. The final export starts after the earlier exports. So `onInvocationEnd` waits at most
+   `exportTimeoutMs` in total. When earlier exports still run at that deadline, the final
+   batch is not sent, and the plugin logs one line with `console.warn`.
+3. The timer is unref'd, so it never keeps a process alive. `onInvocationEnd` clears it.
+   A span that ends after `onInvocationEnd` started is dropped.
 
 ### Sampling
 
@@ -113,8 +144,11 @@ Without a request id, the invocation span id is random.
 
 ### Which invocation emits what
 
-1. An operation span is built at the end of the invocation in which its record became
-   terminal. Terminal statuses are `SUCCEEDED`, `FAILED`, `TIMED_OUT`, `STOPPED` and
+1. An operation span is built in the invocation in which its record became terminal. The
+   plugin builds it in `onOperationChange`, when a checkpoint response returns the
+   terminal record. It builds the remaining ones from the final records in
+   `onInvocationEnd`. With `flushIntervalMs` 0, it builds all of them there. Terminal
+   statuses are `SUCCEEDED`, `FAILED`, `TIMED_OUT`, `STOPPED` and
    `CANCELLED`.
 2. A record that was terminal when the invocation started was emitted by an earlier
    invocation. So it is skipped.
@@ -178,17 +212,17 @@ durable span.
 
 ## Limitations
 
-- A sandbox can crash before `onInvocationEnd` runs. The spans of that invocation are then
-  lost.
+- A sandbox can crash or time out before `onInvocationEnd` runs. Then the spans of the
+  last `flushIntervalMs` and the invocation span are lost.
 - A failed export is not retried. The plugin logs one line with `console.warn`.
 - A FLAT map or parallel item has no record. So it has no span. Its operations are
   children of the map's span.
 - An abandoned operation, for example an item that still ran when a map completed early,
   never becomes terminal. So it has no span.
-- A long execution emits a child before its parent. Until the parent's invocation exports,
-  the backend shows a missing parent.
+- A child span is sent before its parent. Until the parent is sent, the backend shows a
+  missing parent. See [When spans are sent](#when-spans-are-sent).
 - Tail sampling in a collector decides per batch of spans. It can drop a parent that
-  arrives in a later invocation. Use `sampleRate` instead.
+  arrives in a later batch. Use `sampleRate` instead.
 - The real service can report an id in `updatedOperationIds` that an earlier invocation
   already emitted. The span is then sent twice with the same span id.
 - The trace is not linked to the AWS X-Ray trace of the Lambda invocation.
@@ -221,9 +255,9 @@ apply, with these changes:
 3. `src` does not import `node:async_hooks`. Tests may, to register a context manager.
 4. No per-invocation state at module level. Shared state lives in the closure of
    `createOtelPlugin`. Per-invocation state lives in the closure of one factory call.
-5. A telemetry failure must never fail the workflow. So `onInvocationEnd` catches and logs
-   every export failure, and waits at most `exportTimeoutMs`. This is the one safeguard
-   that the package adds. Other misuse is documented, not checked.
+5. A telemetry failure must never fail the workflow. So every export catches and logs its
+   failure, and `onInvocationEnd` waits at most `exportTimeoutMs` in total. This is the
+   one safeguard that the package adds. Other misuse is documented, not checked.
 6. Tests use `runDurable` from the lite SDK's testing module, by a relative path.
 7. Before a commit, run `npm test` in this folder and `npx biome check
    packages/aws-durable-execution-sdk-js-lite-otel` from the repository root. Both must
