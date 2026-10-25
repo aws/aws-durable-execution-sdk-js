@@ -411,7 +411,9 @@ change any file here.
    review round finds new blocking problems after the previous findings were addressed
    (rule 1.9). Prefer simplifying existing logic to adding logic (rule 1.10). Reviewers
    push back on a change that breaks a rule instead of asking for code changes
-   (rule 1.11).
+   (rule 1.11). Rules 1.12 to 1.16 apply too: a design note before code, a failing test
+   for every branch, a failing test before a bug fix, marked assumptions and listed
+   decisions.
 2. The package has no dependencies of any kind: no `dependencies`, no
    `devDependencies`, no `peerDependencies` and no `optionalDependencies`.
 3. `src` imports only relative paths and `node:` built-ins. It does not import

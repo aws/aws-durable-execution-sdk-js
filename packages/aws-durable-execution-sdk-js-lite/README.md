@@ -1447,6 +1447,70 @@ agent. A round is one review of a revision, followed by the contributor's change
    exception names the rule and the reason in the review, and the package owner
    decides.
 
+#### 1.12 Design note before code
+
+1. A review finds a wrong approach only after the code exists. Rewriting code costs more
+   than rewriting a note. Rule 1.9 handles a wrong approach after review. This rule
+   prevents one before review.
+2. So a new feature, a new option or a change to the public API starts with a design
+   note. A bug fix that changes the public API needs one too.
+3. The note states, in this order:
+   1. the problem, in one or two sentences, without a solution;
+   2. the cause;
+   3. the options considered, including a simplification of existing logic (rule 1.10)
+      and a best practice instead of code (rule 1.2);
+   4. the chosen option and the reason;
+   5. what the change removes, if anything.
+4. The package owner agrees to the note before anyone writes the code. The note goes in
+   the issue or in the change description.
+
+#### 1.13 Every branch has a test that fails without it
+
+1. Rule 1.8 requires a test for every behavior. Line coverage does not prove it: a test
+   can run a branch whose result changes no assertion.
+2. So for each condition and each branch in a change, some test must fail when the
+   branch is removed or inverted.
+3. The reviewer asks of each condition: which test fails if this is deleted? A branch
+   without an answer is removed, or it gets a test.
+4. Defensive code for a case that cannot happen has no such test. So it is removed
+   (rule 1.2).
+
+#### 1.14 A bug fix starts with a failing test
+
+1. A test that reproduces the bug proves the bug exists, and it proves that the fix
+   removes it.
+2. So a bug fix first adds a test that fails on the current code. The fix then makes it
+   pass. The change description shows the test failing before the fix, or the commit
+   order shows it.
+3. The description names the root cause, not only the symptom. The fix changes the code
+   at the cause. Example: the invocation event sends timestamps as epoch milliseconds.
+   The fix converts them once, when the SDK loads the event. It does not change each
+   reader of a timestamp.
+4. A change that edits the expectation of an existing test lists the edited test and the
+   reason in its description.
+
+#### 1.15 Unverified assumptions are marked
+
+1. A change often depends on behavior outside this package: the service, Lambda, the
+   Node.js runtime or another library.
+2. An assumption about that behavior can be wrong. Two bugs in this package came from
+   such assumptions: the format of the event's timestamps, and the contents of
+   `UpdatedOperationIds` after an invocation timeout.
+3. So every assumption that a change depends on cites its evidence: a live test, a
+   document or a test against the real component.
+4. An assumption without evidence is marked "unverified" in the change description. The
+   reviewer decides whether a live check is needed before approval.
+
+#### 1.16 Decisions outside the task are listed
+
+1. A task or a design note never covers every detail. So the contributor makes some
+   decisions alone, a person or an agent.
+2. A decision that is hidden in the code cannot be reviewed.
+3. So the change description lists every decision that the task or the design note did
+   not cover, one line each, with the reason. Examples: a default value, an error
+   message, a changed edge case, a skipped test.
+4. The package owner accepts or rejects each listed decision.
+
 ### 2. Design
 
 #### 2.1 Files

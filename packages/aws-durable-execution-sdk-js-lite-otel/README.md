@@ -399,8 +399,10 @@ This section is for people and AI agents who change this package. The rules of t
 SDK's [Contributing](../aws-durable-execution-sdk-js-lite/README.md#contributing) section
 apply, including rule 1.9: return to the design phase when a review round finds new
 blocking problems after the previous findings were addressed; rule 1.10: prefer
-simplifying existing logic to adding logic; and rule 1.11: reviewers push back on a change
-that breaks a rule instead of asking for code changes. The rules below add to them
+simplifying existing logic to adding logic; rule 1.11: reviewers push back on a change
+that breaks a rule instead of asking for code changes; and rules 1.12 to 1.16: a design
+note before code, a failing test for every branch, a failing test before a bug fix,
+marked assumptions and listed decisions. The rules below add to them
 or replace them for this package:
 
 1. `package.json` has no `dependencies`, no `peerDependencies`, no `devDependencies` and
