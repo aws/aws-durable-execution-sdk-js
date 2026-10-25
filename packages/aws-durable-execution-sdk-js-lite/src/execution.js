@@ -47,7 +47,8 @@ export function sizeBound(u) {
         len(e?.ErrorMessage) +
         len(e?.ErrorData) +
         len(invoke?.FunctionName) +
-        len(invoke?.TenantId))
+        len(invoke?.TenantId) +
+        len(invoke?.XAmznTraceId))
   );
 }
 
@@ -67,8 +68,8 @@ function isDue(op) {
 }
 
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
-// onOperationChange and wrap are the plugins' hooks (README 2.12). Each is undefined
-// when no plugin has the hook.
+// onOperationChange, wrap and traceHeader are the plugins' hooks (README 2.12). Each is
+// undefined when no plugin has the hook.
 export function createExecution({
   client,
   arn,
@@ -76,6 +77,7 @@ export function createExecution({
   operations,
   onOperationChange,
   wrap,
+  traceHeader,
 }) {
   const state = new Map(operations.map((op) => [op.Id, op]));
   let pending = []; // { update, resolve }
@@ -223,6 +225,8 @@ export function createExecution({
     terminated,
     // The composed wrap of the plugins, or undefined (README 2.12).
     wrap,
+    // The composed traceHeader of the plugins, or undefined (README 2.12).
+    traceHeader,
     // A new array of the stored records, for the plugins.
     snapshot: () => [...state.values()],
     get: (id) => state.get(id),

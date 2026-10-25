@@ -560,3 +560,153 @@ test("the event's epoch milliseconds reach plugins as epoch seconds", async () =
   // The event's own objects are not changed.
   assert.equal(step.StartTimestamp, 1_792_914_400_873);
 });
+
+// A workflow with one invoke at the root and one inside a child context.
+const invokeWorkflow = async ({ ctx }) => {
+  const a = await ctx.invoke({ name: "top", functionName: "callee", input: 1 });
+  const b = await ctx.runInChildContext({
+    name: "child",
+    fn: ({ ctx: c }) => c.invoke({ functionName: "callee", input: 2 }),
+  });
+  return [a, b];
+};
+
+test("traceHeader is called once per new invoke START, and never on replay", async () => {
+  const calls = [];
+  const received = [];
+  const run = await runDurable({
+    functions: {
+      callee: ({ input, traceHeader }) => {
+        received.push([input, traceHeader]);
+        return input * 10;
+      },
+    },
+    plugins: [
+      ({ requestId }) => ({
+        traceHeader: (info) => {
+          calls.push({ requestId, ...info });
+          return `header-${info.id}`;
+        },
+      }),
+    ],
+    workflow: invokeWorkflow,
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.deepEqual(run.result, [10, 20]);
+  // Each invoke suspends the invocation. So 3 invocations run, and each later one
+  // replays the earlier invokes without calling the hook.
+  assert.equal(run.invocations, 3);
+  const top = run.getOperation("top");
+  const child = run.getOperation("child");
+  const inner = run.operations.find(
+    (op) => op.Type === "CHAINED_INVOKE" && op.ParentId === child.Id,
+  );
+  assert.deepEqual(calls, [
+    {
+      requestId: "request-1",
+      id: top.Id,
+      parentId: undefined,
+      name: "top",
+      functionName: "callee",
+    },
+    {
+      requestId: "request-2",
+      id: inner.Id,
+      parentId: child.Id,
+      name: undefined,
+      functionName: "callee",
+    },
+  ]);
+  assert.deepEqual(received, [
+    [1, `header-${top.Id}`],
+    [2, `header-${inner.Id}`],
+  ]);
+});
+
+test("traceHeader's value is sent as ChainedInvokeOptions.XAmznTraceId", async () => {
+  const client = createFakeClient({ operations: [executionOp()] });
+  const handler = withDurableExecution(
+    async ({ ctx }) => ctx.invoke({ functionName: "f", tenantId: "t" }),
+    { client, plugins: [() => ({ traceHeader: () => "Root=1-a-b" })] },
+  );
+  assert.deepEqual(await handler(event(), {}), { Status: "PENDING" });
+  const [start] = client.checkpoints.flatMap((r) => r.Updates);
+  assert.deepEqual(start.ChainedInvokeOptions, {
+    FunctionName: "f",
+    TenantId: "t",
+    XAmznTraceId: "Root=1-a-b",
+  });
+});
+
+test("the first plugin that returns a non-empty traceHeader wins", async () => {
+  const log = [];
+  const plugin = (tag, value) => () => ({
+    traceHeader: () => {
+      log.push(tag);
+      return value;
+    },
+  });
+  const received = [];
+  await runDurable({
+    functions: { f: ({ traceHeader }) => received.push(traceHeader) },
+    plugins: [
+      plugin("a", undefined),
+      () => ({ wrap: ({ fn }) => fn() }),
+      plugin("b", ""),
+      plugin("c", "from-c"),
+      plugin("d", "from-d"),
+    ],
+    workflow: async ({ ctx }) => ctx.invoke({ functionName: "f" }),
+  });
+  assert.deepEqual(log, ["a", "b", "c"]);
+  assert.deepEqual(received, ["from-c"]);
+});
+
+test("without a traceHeader value, the START has no XAmznTraceId", async () => {
+  for (const plugins of [
+    [() => ({ wrap: ({ fn }) => fn() })],
+    [() => ({ traceHeader: () => undefined })],
+  ]) {
+    const client = createFakeClient({ operations: [executionOp()] });
+    const handler = withDurableExecution(
+      async ({ ctx }) => ctx.invoke({ functionName: "f" }),
+      { client, plugins },
+    );
+    await handler(event(), {});
+    const [start] = client.checkpoints.flatMap((r) => r.Updates);
+    assert.deepEqual(start.ChainedInvokeOptions, { FunctionName: "f" });
+  }
+});
+
+test("a throw from traceHeader rejects the invoke and sends no START", async () => {
+  const boom = new TypeError("header failed");
+  const client = createFakeClient({ operations: [executionOp()] });
+  let caught;
+  const handler = withDurableExecution(
+    async ({ ctx }) => {
+      const p = ctx.invoke({ functionName: "f" });
+      caught = await p.catch((e) => e);
+      throw caught;
+    },
+    {
+      client,
+      plugins: [
+        () => ({
+          traceHeader: () => {
+            throw boom;
+          },
+        }),
+      ],
+    },
+  );
+  const output = await handler(event(), {});
+  assert.equal(caught, boom);
+  assert.equal(output.Status, "FAILED");
+  assert.equal(output.Error.ErrorType, "TypeError");
+  assert.equal(
+    client.checkpoints
+      .flatMap((r) => r.Updates)
+      .some((u) => u.Type === "CHAINED_INVOKE"),
+    false,
+  );
+});

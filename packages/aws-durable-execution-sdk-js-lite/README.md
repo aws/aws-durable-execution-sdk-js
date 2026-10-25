@@ -208,6 +208,9 @@ the result type: `ctx.invoke<Receipt>({ ... })`. If the invoked function fails, 
 is stopped, the promise rejects with a `DurableOperationError`. Its `errorType` is the invoked
 function's `ErrorType`.
 
+A plugin can set the invoked function's trace header (see
+[Trace header of an invoke](#trace-header-of-an-invoke)).
+
 ```js
 const receipt = await ctx.invoke({
   name: "charge",
@@ -548,7 +551,7 @@ array of factories.
   `[]`.
 - `lambdaContext`: the Lambda context.
 
-A plugin object has three optional hooks:
+A plugin object has four optional hooks:
 
 - `onOperationChange({ updated, operations })`: the SDK calls it after it stored the
   records of a checkpoint response. It calls it only when the response returned at least
@@ -567,6 +570,8 @@ A plugin object has three optional hooks:
 - `onInvocationEnd({ status, result, error, operations })`: the SDK calls it once, after
   it saved the last checkpoint and stored its records. The handler returns or throws
   after it. The SDK awaits the hooks of all plugins in parallel.
+- `traceHeader({ id, parentId, name, functionName })`: returns the trace header for a
+  `ctx.invoke`, or `undefined`. See [Trace header of an invoke](#trace-header-of-an-invoke).
 
 For `"context"` and `"attempt"`, the fields describe the operation's record:
 
@@ -595,6 +600,8 @@ The SDK does not isolate errors from hooks (rule 1.2). No hook error is ignored:
 3. A throw or a rejection from `onInvocationEnd` makes the handler throw.
 4. A throw from `wrap` fails the code it wraps, like a throw from `fn`. For an attempt,
    the retry strategy then decides.
+5. A throw from `traceHeader` rejects the promise of that `ctx.invoke`. The SDK then sends
+   no START. If the workflow does not catch the error, the execution fails with it.
 
 The records use the wire format of the Lambda API: `Id`, `ParentId`, `Type`, `SubType`,
 `Name`, `Status`, `StartTimestamp`, `EndTimestamp`, `StepDetails` and the other details.
@@ -636,6 +643,28 @@ export const handler = withDurableExecution(workflow, { plugins: [timing] });
 
 `wrap` above is async. So it returns a promise even when `fn` returns a plain value. The
 SDK awaits what `wrap` returns, for every kind. So an async `wrap` is correct.
+
+#### Trace header of an invoke
+
+A `CHAINED_INVOKE` START can carry `ChainedInvokeOptions.XAmznTraceId`. The service gives
+that value to the invoked function as its Lambda trace header. The invoked function reads
+it from `lambdaContext.xRayTraceId` and from `process.env._X_AMZN_TRACE_ID`. So a tracing
+plugin can put the invoked execution into the caller's trace.
+
+1. The SDK calls `traceHeader` when `ctx.invoke` builds its START update. That is once per
+   invoke, in the invocation that starts it. A replay finds the record, so it never calls
+   the hook.
+2. The SDK calls the hook synchronously, after `payloadSerdes` and before the checkpoint.
+3. The argument describes the `CHAINED_INVOKE` operation. `id` and `parentId` are the
+   record's `Id` and `ParentId`. `name` and `functionName` are the values passed to
+   `ctx.invoke`.
+4. The SDK calls the plugins in array order. The first one that returns a non-empty string
+   wins. The SDK calls no later plugin.
+5. The SDK puts that string into `ChainedInvokeOptions.XAmznTraceId` unchanged. It does
+   not check the format. The format is the X-Ray header, for example
+   `Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1`.
+6. Without a string, the START has no `XAmznTraceId`. The service then gives the invoked
+   function the caller execution's own trace header.
 
 ### createRetryStrategy(config)
 
@@ -723,8 +752,9 @@ Options:
   the callback open. The callback that `waitForCallback` creates has no name, so `name` is
   `undefined` for it.
 - `functions` (optional): an object that maps a `functionName` to a local function for
-  `ctx.invoke`. The function receives `{ input }`. `input` is the parsed input, or `null`
-  without input. Its return value is the invoke result.
+  `ctx.invoke`. The function receives `{ input, traceHeader }`. `input` is the parsed
+  input, or `null` without input. `traceHeader` is the `XAmznTraceId` that a plugin's
+  `traceHeader` hook set, else `undefined`. Its return value is the invoke result.
   A thrown error fails the invoke with `ErrorType` set to the error's `name`.
 - `maxInvocations` (default 100): `runDurable` throws after this many invocations.
 - `plugins` (optional): plugin factories, as in `withDurableExecution`. Each simulated
@@ -1184,12 +1214,16 @@ export const handler = withDurableExecution(workflow, {
 - Times are whole seconds (`seconds`, `timeoutSeconds`). The `Duration` object does not
   exist.
 - One error class exists: `DurableOperationError`. Use `errorType` to tell errors apart.
-- Plugins have a factory and three hooks: `onOperationChange`, `wrap` and
-  `onInvocationEnd`. No hook marks the start or the end of an operation or of an attempt.
-  The SDK does not isolate hook errors. It awaits only `onInvocationEnd`. Hooks receive
-  wire records, not `OperationInfo` objects. No OpenTelemetry hooks beyond these, no
-  `enrichLogContext`, no propagation metadata, no plugins loaded from the environment,
-  and no custom loggers. The logger writes to `console`.
+- Plugins have a factory and four hooks: `onOperationChange`, `wrap`,
+  `onInvocationEnd` and `traceHeader`. No hook marks the start or the end of an operation
+  or of an attempt. The SDK does not isolate hook errors. It awaits only
+  `onInvocationEnd`. Hooks receive wire records, not `OperationInfo` objects. No
+  OpenTelemetry hooks beyond these, no `enrichLogContext`, no plugins loaded from the
+  environment, and no custom loggers. The logger writes to `console`.
+- Propagation to an invoke is one hook, `traceHeader`, that returns the X-Ray header
+  string. The full SDK's propagation metadata hook returns an object
+  `{ xAmznTraceId }`. The lite SDK calls the hook only when it sends the START. It takes
+  the first plugin's string.
 - Serdes functions receive one object: `serialize({ value, entityId, durableExecutionArn })`
   and `deserialize({ data, entityId, durableExecutionArn })`. They can return a value or a
   promise.
@@ -1300,10 +1334,12 @@ section and the full SDK disagree, this section wins inside this package.
 These features of the full SDK are not in the lite SDK. Do not add them without a decision
 from the package owner.
 
-- Plugins beyond the factory and the three hooks of section 2.12: OpenTelemetry hooks
-  beyond these, `enrichLogContext`, propagation metadata, plugins loaded from environment
-  variables, and isolation of hook errors. The package owner decided to add the plugin
-  interface of section 2.12 only.
+- Plugins beyond the factory and the four hooks of section 2.12: OpenTelemetry hooks
+  beyond these, `enrichLogContext`, propagation metadata beyond `traceHeader`, plugins
+  loaded from environment variables, and isolation of hook errors. The package owner
+  decided to add the plugin interface of section 2.12 only. The package owner added
+  `traceHeader` later, so that a tracing plugin can join an invoked execution to the
+  caller's trace.
 - External or custom loggers.
 - `configureSerdes` and any default serdes for a context. The package owner decided to
   add per-operation serdes only (section 2.11). The `serdes` option for a whole
@@ -1750,15 +1786,15 @@ Each can return a value or a promise. The option names follow the full SDK:
 #### 2.12 Plugins
 
 A plugin factory is a function that `withDurableExecution` receives in `config.plugins`.
-It returns a plugin object with up to three hooks. [Plugins](#plugins) documents the API.
+It returns a plugin object with up to four hooks. [Plugins](#plugins) documents the API.
 
 The no-plugin path:
 
 1. `withDurableExecution` calls `createPlugins` (`plugins.js`) only when
    `plugins?.length` is above 0.
 2. `createPlugins` returns one function per hook, or `undefined` when no plugin has the
-   hook. `createExecution` receives `onOperationChange` and `wrap`. `execution.wrap`
-   exposes the composed `wrap`.
+   hook. `createExecution` receives `onOperationChange`, `wrap` and `traceHeader`.
+   `execution.wrap` and `execution.traceHeader` expose the composed hooks.
 3. Each call point checks one variable. Without the hook, it calls the user code directly.
    The closure for `fn` and the wrap argument exist only in the branch with the hook. So
    an operation without plugins allocates nothing more than before.
@@ -1785,7 +1821,13 @@ The call points:
    step. `waitStrategy` and `retryStrategy` are not wrapped.
 6. `wrapInfo` in `plugins.js` builds the argument. It takes `Id` and `ParentId` from
    `ctx._base`, so they equal the record's fields.
-7. `onInvocationEnd`: `withDurableExecution`, after `run` resolves or rejects. `run`
+7. `traceHeader`: `runInvoke` in `operations/invoke.js`, in the branch without a record,
+   after `payloadSerdes` and before `ctx._checkpoint`. The composed hook returns the first
+   truthy value of the plugins in array order. `runInvoke` is async, so a throw rejects
+   the invoke's promise, and no START is sent. `sizeBound` counts `XAmznTraceId` at 6
+   bytes per UTF-16 unit, like the other developer strings, because the SDK does not
+   check the string.
+8. `onInvocationEnd`: `withDurableExecution`, after `run` resolves or rejects. `run`
    resolves after `drain`, and after the large-result checkpoint (2.3 step 7). `flush`
    stores the records before it resolves the updates' promises. So the snapshot holds the
    final records. A rejection of `run` gives `"RETRYING"`, and the handler throws the

@@ -13,6 +13,8 @@
 // The thrown error keeps the callee's ErrorType. The full SDK loses it.
 // payloadSerdes makes the START Payload from input. resultSerdes reads the callee's
 // Result. The callee's result always comes from the record, so every run deserializes.
+// The traceHeader plugin hook sets ChainedInvokeOptions.XAmznTraceId (README 2.12). The
+// SDK calls it only when it builds the START. So a replay never calls it.
 
 import { fromErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
@@ -38,14 +40,24 @@ async function runInvoke(
     const payload = payloadSerdes
       ? await serialize(ctx, payloadSerdes, input, rawId)
       : JSON.stringify(input);
+    const base = ctx._base(rawId, meta);
+    // Without the hook, the optional call evaluates no argument, so it makes no object.
+    // A throw rejects this invoke's promise before the START is sent.
+    const header = ctx._execution.traceHeader?.({
+      id: base.Id,
+      parentId: base.ParentId,
+      name,
+      functionName,
+    });
     await ctx._checkpoint({
-      ...ctx._base(rawId, meta),
+      ...base,
       Action: "START",
       ...(payload !== undefined && { Payload: payload }),
       ...(payloadSerdes && { [CUSTOM_PAYLOAD]: true }),
       ChainedInvokeOptions: {
         FunctionName: functionName,
         ...(tenantId !== undefined && { TenantId: tenantId }),
+        ...(header && { XAmznTraceId: header }),
       },
     });
     record = ctx._lookup(rawId);

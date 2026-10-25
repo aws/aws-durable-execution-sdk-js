@@ -589,6 +589,17 @@ export type PluginInvocationEndInfo<R = unknown> =
       operations: readonly OperationRecord[];
     };
 
+/** The argument of traceHeader: the CHAINED_INVOKE operation that starts. */
+export interface PluginTraceHeaderInfo {
+  /** Equals the record's Id. */
+  id: string;
+  /** Equals the record's ParentId. Undefined at the root. */
+  parentId: string | undefined;
+  name: string | undefined;
+  /** The functionName passed to ctx.invoke. */
+  functionName: string;
+}
+
 /**
  * The hooks of one invocation. Every hook is optional. A throw from a hook is not
  * caught: it fails the operation or the invocation.
@@ -606,6 +617,13 @@ export interface DurablePlugin<R = unknown> {
    * throws. Awaited. A rejection makes the handler throw.
    */
   onInvocationEnd?(info: PluginInvocationEndInfo<R>): void | Promise<void>;
+  /**
+   * Called synchronously when ctx.invoke sends its START, never on replay. The first
+   * plugin that returns a non-empty string sets ChainedInvokeOptions.XAmznTraceId, and
+   * the later plugins are not called. The invoked function receives the value as its
+   * Lambda trace header. A throw rejects the ctx.invoke promise.
+   */
+  traceHeader?(info: PluginTraceHeaderInfo): string | undefined;
 }
 
 /**

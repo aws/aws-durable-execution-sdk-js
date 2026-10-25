@@ -9,6 +9,7 @@ export function createPlugins(factories, info) {
   const changes = plugins.filter((p) => p.onOperationChange);
   const wraps = plugins.filter((p) => p.wrap);
   const ends = plugins.filter((p) => p.onInvocationEnd);
+  const headers = plugins.filter((p) => p.traceHeader);
   return {
     onOperationChange:
       changes.length === 0
@@ -25,6 +26,18 @@ export function createPlugins(factories, info) {
             (inner, p) => (w) => p.wrap({ ...w, fn: () => inner(w) }),
             (w) => w.fn(),
           ),
+    // The first plugin that returns a non-empty string sets the invoke's trace header.
+    // The later plugins are not called.
+    traceHeader:
+      headers.length === 0
+        ? undefined
+        : (info) => {
+            for (const p of headers) {
+              const header = p.traceHeader(info);
+              if (header) return header;
+            }
+            return undefined;
+          },
     // The hooks run in parallel. A rejection makes the handler throw (README 1.2).
     onInvocationEnd: async (end) => {
       await Promise.all(ends.map((p) => p.onInvocationEnd(end)));

@@ -49,10 +49,13 @@ export type OnCallback = (args: {
   | { error: ErrorObject }
   | Promise<undefined | { result: string } | { error: ErrorObject }>;
 
-/** Functions that ctx.invoke can call, by function name. */
+/**
+ * Functions that ctx.invoke can call, by function name. traceHeader is the
+ * ChainedInvokeOptions.XAmznTraceId of the START, set by a plugin's traceHeader hook.
+ */
 export type InvokeFunctions = Record<
   string,
-  (args: { input: unknown }) => unknown
+  (args: { input: unknown; traceHeader: string | undefined }) => unknown
 >;
 
 export interface InMemoryServiceOptions {

@@ -142,7 +142,7 @@ test("sizeBound is never below the real JSON size of an update", () => {
         TimeoutSeconds: Number.MAX_SAFE_INTEGER,
         HeartbeatTimeoutSeconds: Number.MAX_SAFE_INTEGER,
       },
-      ChainedInvokeOptions: { FunctionName: s, TenantId: s },
+      ChainedInvokeOptions: { FunctionName: s, TenantId: s, XAmznTraceId: s },
     });
     updates.push({ Id: "0123456789abcdef", Type: "WAIT", Action: "START" });
   }

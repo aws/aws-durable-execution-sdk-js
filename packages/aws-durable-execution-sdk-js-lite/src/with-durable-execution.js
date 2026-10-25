@@ -39,6 +39,7 @@ export function withDurableExecution(handler, { client, plugins } = {}) {
       operations,
       onOperationChange: hooks?.onOperationChange,
       wrap: hooks?.wrap,
+      traceHeader: hooks?.traceHeader,
     });
     const ctx = createContext({ execution });
     if (!hooks) {

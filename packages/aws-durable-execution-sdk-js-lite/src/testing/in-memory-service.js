@@ -142,7 +142,12 @@ export function createInMemoryService({
                 name: "ResourceNotFoundException",
               });
             }
-            return fn({ input: JSON.parse(u.Payload ?? "null") });
+            // The service gives XAmznTraceId to the invoked function as its trace
+            // header. The local function receives it as traceHeader.
+            return fn({
+              input: JSON.parse(u.Payload ?? "null"),
+              traceHeader: u.ChainedInvokeOptions?.XAmznTraceId,
+            });
           })
           .then(
             (value) => [op, "SUCCEEDED", { Result: JSON.stringify(value) }],
