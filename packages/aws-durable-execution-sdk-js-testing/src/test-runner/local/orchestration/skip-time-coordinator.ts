@@ -1,6 +1,6 @@
 import { Clock } from "@sinonjs/fake-timers";
 import { defaultLogger } from "../../../logger";
-import { realSetTimeout } from "../real-timers/real-timers";
+import { realSetImmediate, realSetTimeout } from "../real-timers/real-timers";
 
 /**
  * How long, in real time, the clock waits for a running non-durable invoked function.
@@ -54,6 +54,9 @@ export interface SkipTimeParticipant {
   /**
    * Completes the operations that end by `deadlineMs`, and starts the invocation they
    * release. Called after the fake clock has reached `deadlineMs`.
+   *
+   * Afterwards, {@link earliestDeadline} must not return `deadlineMs`. The coordinator
+   * schedules another pass after each applied end only while this holds.
    */
   applyDeadline(deadlineMs: number): void;
   /**
@@ -107,6 +110,8 @@ export class SkipTimeCoordinator {
   private startingInvoke: InvokeHandoff | undefined;
   /** Whether an invoke from a caller that no one waits for is being started. */
   private startingDetachedInvoke = false;
+  /** Whether {@link scheduleAdvance} has a pass pending. */
+  private advanceScheduled = false;
   /**
    * Every invoked function's runner that is still a participant. Each one stops the clock
    * only for {@link DURABLE_INVOKE_HOLD_MS} of real time per invocation.
@@ -426,6 +431,36 @@ export class SkipTimeCoordinator {
     for (const participant of timed) {
       participant.onClockAdvanced();
     }
+
+    // A participant consumes the end it applies. See SkipTimeParticipant.applyDeadline. A
+    // participant that still reports the same end breaks that contract. Another pass would
+    // then apply that end again and schedule a further pass, without limit. So no pass is
+    // scheduled. The next advance then comes from the participants' own calls.
+    if (earliest.participant.earliestDeadline() === earliest.deadlineMs) {
+      return;
+    }
+
+    // The owner of the end usually becomes busy now. It calls advance() again once the
+    // invocation that the end queued has run. An invoked or detached owner can instead
+    // have an invocation running past its hold. That owner does not stop the clock. The
+    // queued invocation waits behind the running one, which may never settle. Then no
+    // participant calls advance() again, and every later end takes real time. So schedule
+    // one more pass. If a participant or an invoke stops the clock, that pass returns
+    // without moving it. Otherwise it applies the next end, which its owner consumes. So
+    // the passes stop once no end is left, or once something stops the clock.
+    this.scheduleAdvance();
+  }
+
+  /** Runs {@link advance} once, after the current turn of the event loop. */
+  private scheduleAdvance(): void {
+    if (this.advanceScheduled) {
+      return;
+    }
+    this.advanceScheduled = true;
+    realSetImmediate(() => {
+      this.advanceScheduled = false;
+      this.advance();
+    });
   }
 }
 
