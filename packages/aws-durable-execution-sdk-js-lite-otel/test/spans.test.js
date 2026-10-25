@@ -6,6 +6,7 @@ import {
   byName,
   fakeExporter,
   idOf,
+  info,
   one,
   otel,
   parentOf,
@@ -234,4 +235,49 @@ test("sampleRate 0 exports nothing, and sampleRate 1 exports every invocation", 
     plugins: [otel(all, { sampleRate: 1 })],
   });
   assert.equal(all.batches.length, 2);
+});
+
+test("after a timed-out invocation, steps in updatedOperationIds are not emitted again", async () => {
+  // After an invocation times out, the service lists every record that the invocation
+  // changed. The interval flush already sent the steps' spans. The wait ended between
+  // the invocations, so no invocation sent its span yet.
+  const exporter = fakeExporter();
+  const records = [
+    { Id: "exec", Type: "EXECUTION", Status: "STARTED", StartTimestamp: 100 },
+    {
+      Id: "s",
+      Type: "STEP",
+      Name: "s",
+      Status: "SUCCEEDED",
+      StartTimestamp: 101,
+      EndTimestamp: 102,
+    },
+    {
+      Id: "c",
+      Type: "CONTEXT",
+      Name: "c",
+      Status: "SUCCEEDED",
+      StartTimestamp: 101,
+      EndTimestamp: 103,
+    },
+    {
+      Id: "w",
+      Type: "WAIT",
+      Name: "w",
+      Status: "SUCCEEDED",
+      StartTimestamp: 103,
+      EndTimestamp: 104,
+    },
+  ];
+  const plugin = otel(exporter, { flushIntervalMs: 0 })(
+    info({ operations: records, updatedOperationIds: ["s", "c", "w"] }),
+  );
+  await plugin.onInvocationEnd({
+    status: "PENDING",
+    result: undefined,
+    error: undefined,
+    operations: records,
+  });
+  const names = exporter.spans().map((s) => s.name);
+  assert.deepEqual(names.sort(), ["Invocation", "w"]);
 });

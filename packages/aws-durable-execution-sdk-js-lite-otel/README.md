@@ -152,9 +152,15 @@ Without a request id, the invocation span id is random.
    `CANCELLED`.
 2. A record that was terminal when the invocation started was emitted by an earlier
    invocation. So it is skipped.
-3. The exception to rule 2 is a record in `updatedOperationIds`. The service ended it
-   between two invocations, for example a wait or a callback. No earlier invocation saw it
+3. The exception to rule 2 is a WAIT, CALLBACK or CHAINED_INVOKE record in
+   `updatedOperationIds`. The service ends these records. It can end one between two
+   invocations, for example when a wait's time passes. Then no earlier invocation saw it
    end. So the next invocation emits it.
+4. Only the SDK ends a STEP or CONTEXT record. So an earlier invocation always saw it end.
+   After an invocation times out, the service lists every record that invocation changed
+   in `updatedOperationIds`. The interval flush already sent most of those spans. So a
+   STEP or CONTEXT record in `updatedOperationIds` is still skipped. If an invocation
+   crashes, its spans that finished in the last interval are lost.
 4. The span's start and end are the record's `StartTimestamp` and `EndTimestamp`. Without
    `EndTimestamp`, the span ends at the end of the invocation.
 5. An attempt span is built when the attempt's `fn` settles. Its times are measured in the
@@ -223,8 +229,9 @@ durable span.
   missing parent. See [When spans are sent](#when-spans-are-sent).
 - Tail sampling in a collector decides per batch of spans. It can drop a parent that
   arrives in a later batch. Use `sampleRate` instead.
-- The real service can report an id in `updatedOperationIds` that an earlier invocation
-  already emitted. The span is then sent twice with the same span id.
+- The real service can list a wait, a callback or an invoke in `updatedOperationIds` after
+  an earlier invocation already emitted it. That happens after an invocation timeout. The
+  span is then sent twice with the same span id.
 - The trace is not linked to the AWS X-Ray trace of the Lambda invocation.
 - The trace context is not propagated to functions called with `ctx.invoke`.
 - Log lines do not carry the trace id or span id.

@@ -17,6 +17,9 @@ import {
   TERMINAL,
 } from "./spans.js";
 
+// The operation types whose records the service ends. The SDK ends STEP and CONTEXT.
+const SERVICE_ENDED = new Set(["WAIT", "CALLBACK", "CHAINED_INVOKE"]);
+
 // The exporter and the resource are shared by every invocation. They live in this
 // closure. The state of one invocation lives in the closure of one factory call. Lambda
 // Managed Instances can run several invocations in one process at the same time. So no
@@ -51,13 +54,21 @@ export function createOtelPlugin({
     const workflowId = workflowSpanId(arn);
     const invocationId = invocationSpanId(arn, requestId);
     // emitted holds the Ids of the records whose operation span was already built.
-    // A record that was terminal at the start was emitted by an earlier invocation.
-    // The exception is a record in updatedOperationIds: the service ended it between
-    // the invocations, for example a wait. No earlier invocation saw it end.
+    // 1. A record that was terminal at the start was emitted by an earlier invocation.
+    // 2. The exception is a wait, a callback or an invoke in updatedOperationIds. The
+    //    service ends these records, and it can end one between two invocations. Then no
+    //    earlier invocation saw it end.
+    // 3. Only the SDK ends a STEP or a CONTEXT record. So an earlier invocation saw it end.
+    //    After an invocation that timed out, the service lists every record that the
+    //    invocation changed in updatedOperationIds. The interval flush already sent most
+    //    of their spans. So a STEP or a CONTEXT in updatedOperationIds is not built again.
+    //    A span that finished in the last interval before a crash is lost.
     const updated = new Set(info.updatedOperationIds);
+    const endedByService = (r) =>
+      SERVICE_ENDED.has(r.Type) && updated.has(r.Id);
     const emitted = new Set(
       info.operations
-        .filter((r) => TERMINAL.has(r.Status) && !updated.has(r.Id))
+        .filter((r) => TERMINAL.has(r.Status) && !endedByService(r))
         .map((r) => r.Id),
     );
     const first = info.operations.every((r) => r.Type === "EXECUTION");
