@@ -499,6 +499,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
+  `runInChildContext` function, a `map` function, or a `parallel` branch that calls no durable
+  operation on its context, and tells the user to put the work in a step. A step retries the
+  work when it throws, and a child context does not. The rule follows the context into helper
+  functions declared in the same file. It reports nothing when the context reaches code it
+  cannot read, such as an imported function. The rule is not in `flat/recommended`, because
+  the code it reports still replays correctly.
+
 - `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
   interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry
   contains the durable execution metadata (`executionArn`, `requestId`, `tenantId`,

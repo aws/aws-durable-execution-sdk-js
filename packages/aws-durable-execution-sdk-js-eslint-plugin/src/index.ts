@@ -1,6 +1,7 @@
 import { noNestedDurableOperations } from "./rules/no-nested-durable-operations/no-nested-durable-operations";
 import { noNonDeterministicOutsideStep } from "./rules/no-non-deterministic-outside-step/no-non-deterministic-outside-step";
 import { noClosureInDurableOperations } from "./rules/no-closure-in-durable-operations/no-closure-in-durable-operations";
+import { requireDurableOperationInChildContext } from "./rules/require-durable-operation-in-child-context/require-durable-operation-in-child-context";
 
 // package.json sits outside this package's TypeScript rootDir, so it cannot be
 // imported as a module. Both dist/index.js and src/index.ts are one directory
@@ -15,6 +16,8 @@ const rules = {
   "no-nested-durable-operations": noNestedDurableOperations,
   "no-non-deterministic-outside-step": noNonDeterministicOutsideStep,
   "no-closure-in-durable-operations": noClosureInDurableOperations,
+  "require-durable-operation-in-child-context":
+    requireDurableOperationInChildContext,
 };
 
 /**
@@ -27,6 +30,12 @@ const rules = {
  */
 const NAMESPACE = "@aws/durable-functions";
 
+/**
+ * The recommended rules report code that breaks replay.
+ * `require-durable-operation-in-child-context` is left out, because the code it
+ * reports still replays correctly. Adding it here would also make the lint of
+ * existing projects fail after an upgrade.
+ */
 const recommendedRules = {
   [`${NAMESPACE}/no-nested-durable-operations`]: "error",
   [`${NAMESPACE}/no-non-deterministic-outside-step`]: "error",
@@ -68,7 +77,7 @@ interface DurableExecutionPlugin {
      * 10 removed eslintrc. Use `configs["flat/recommended"]`.
      */
     recommended: LegacyConfig;
-    /** All three rules as errors, with the plugin registered. */
+    /** The three replay rules as errors, with the plugin registered. */
     "flat/recommended": FlatConfig;
   };
 }

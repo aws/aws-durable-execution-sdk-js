@@ -378,10 +378,9 @@ export interface CompletionStatus {
  * Applied to each item of a batch, in that item's own child context.
  *
  * The body should perform at least one durable operation (`step`, `invoke`,
- * `wait`, a nested context, ...). A mapper that only computes buys nothing from
- * the surrounding context — the work is not checkpointed, so it re-runs on every
- * replay — and leaves the item with no record of its own. Put the computation in
- * a `step` instead. See `DurableContext.runInChildContext`.
+ * `wait`, a nested context, ...). A function that only computes is not retried
+ * when it throws, as a step is. Put the computation in a `step` instead. See
+ * `DurableContext.runInChildContext`.
  */
 export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
   context: DurableContext<Logger>,
