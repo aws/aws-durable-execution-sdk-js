@@ -369,10 +369,15 @@ export interface MicrovmSession {
    * context that the call runs in, as for {@link microvm}: the session's
    * child context, or a nested one, such as a `map` item's context. A durable
    * operation created in a parent context from inside a child context fails
-   * the execution. `invoke` checks `name` and `options` first, and then calls
-   * `context.runInChildContext`. So a `context` without that function makes
-   * `invoke` throw a `TypeError` itself, instead of returning a rejected
-   * promise. No job operation is created then.
+   * the execution. `invoke` checks `name`, `options`, and `input` first, and
+   * then calls `context.runInChildContext`. So a `context` without that
+   * function makes `invoke` throw a `TypeError` itself, instead of returning
+   * a rejected promise. No job operation is created then.
+   *
+   * The call encodes `input` with `JSON.stringify` once, when `invoke` is
+   * called. So a `toJSON` method runs once per call, and each replay calls
+   * `invoke` again. The call measures that JSON text, and the request sends
+   * exactly that text. The input must be the same on every replay.
    *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
@@ -385,8 +390,11 @@ export interface MicrovmSession {
    * removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
-   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid.
-   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range.
+   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid, or
+   * `JSON.stringify` cannot encode `input`.
+   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range,
+   * or the JSON form of `input` has more than {@link MAX_JOB_INPUT_BYTES}
+   * UTF-8 bytes.
    */
   invoke<TOutput = unknown, TInput = unknown>(
     context: DurableContext,

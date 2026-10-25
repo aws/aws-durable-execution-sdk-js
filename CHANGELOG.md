@@ -124,6 +124,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `suspendHookArrived`, `terminating`, `closed`, and `refusingJobs`. A log query that matched an
   old text must match the new message or the `outcome` field.
 
+- `microvm` and `vm.invoke` in `@aws/durable-execution-sdk-js-extras` now reject a job input
+  whose JSON form has more than `MAX_JOB_INPUT_BYTES` UTF-8 bytes: 6,283,264 bytes, 6 MiB minus
+  8 KiB. They reject it with a `RangeError`, before any durable operation starts. The worker
+  refuses a job body over 6 MiB. Before, the operation launched the MicroVM first. The request
+  step then failed with `MicrovmDeliveryError`. After a connection reset, both retry tiers
+  retried for minutes while the MicroVM was billed. A value that `JSON.stringify` cannot encode,
+  such as a `BigInt`, now also fails before any durable operation. It fails with a `TypeError`
+  whose message names the operation and whose `cause` is the error of `JSON.stringify`. An
+  execution that started on an earlier build, with an input in the last 8 KiB below the old
+  limit, fails at its next replay.
+
 ### Fixed
 
 - After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
