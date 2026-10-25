@@ -25,6 +25,10 @@
     "./aurora": {
       "types": "./src/exporters/aurora.d.ts",
       "default": "./src/exporters/aurora.js"
+    },
+    "./dynamodb": {
+      "types": "./src/exporters/dynamodb.d.ts",
+      "default": "./src/exporters/dynamodb.js"
     }
   },
   "files": [
