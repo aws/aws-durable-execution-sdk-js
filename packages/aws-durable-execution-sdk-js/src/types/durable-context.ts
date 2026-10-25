@@ -201,12 +201,13 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @param config - Optional configuration for serialization and sub-typing
    * @throws \{ChildContextError\} When the child context function fails
    *
-   * A child context is a container for durable operations: its body should
-   * perform at least one (`step`, `invoke`, `wait`, a nested context, ...).
-   * Wrapping plain computation in a context with nothing durable inside it buys
-   * nothing — the work is not checkpointed, so it re-runs on every replay — and
-   * leaves the context with no record of its own. Put the computation in a
-   * `step` instead.
+   * A child context groups durable operations, so its function should perform
+   * at least one (`step`, `invoke`, `wait`, a nested context, ...). The child
+   * context saves the function's result, so a replay returns it without
+   * calling the function again. Two exceptions apply. A function that throws
+   * is not retried, as a step is. A result larger than the checkpoint size
+   * limit makes the function run again on every replay. So put plain
+   * computation in a `step` instead.
    * @example
    * ```typescript
    * const result = await context.runInChildContext(
@@ -233,12 +234,13 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @param config - Optional configuration for serialization and sub-typing
    * @throws \{ChildContextError\} When the child context function fails
    *
-   * A child context is a container for durable operations: its body should
-   * perform at least one (`step`, `invoke`, `wait`, a nested context, ...).
-   * Wrapping plain computation in a context with nothing durable inside it buys
-   * nothing — the work is not checkpointed, so it re-runs on every replay — and
-   * leaves the context with no record of its own. Put the computation in a
-   * `step` instead.
+   * A child context groups durable operations, so its function should perform
+   * at least one (`step`, `invoke`, `wait`, a nested context, ...). The child
+   * context saves the function's result, so a replay returns it without
+   * calling the function again. Two exceptions apply. A function that throws
+   * is not retried, as a step is. A result larger than the checkpoint size
+   * limit makes the function run again on every replay. So put plain
+   * computation in a `step` instead.
    * @example
    * ```typescript
    * const result = await context.runInChildContext(
