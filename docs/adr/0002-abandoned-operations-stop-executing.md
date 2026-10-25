@@ -5,8 +5,11 @@ Status: proposed. Amends Rule 1 of [ADR 0001](./0001-operation-tracking-and-plug
 ## Definitions
 
 - A finished ancestor is a context whose step id the checkpoint manager has recorded with
-  `markAncestorFinished`. A `map` or `parallel` context becomes one when its function returns,
-  which can happen while some of its items still run.
+  `markAncestorFinished`. Every non-virtual child context becomes one when its function returns
+  or throws, and when a completed context is replayed. This includes a `map` or `parallel`
+  container and each of its NESTED items, and the child context of `waitForCallback`. A `map`
+  or `parallel` container can finish while some of its items still run. A plain
+  `runInChildContext` can finish while an operation it started without awaiting still runs.
 - A dropped checkpoint is a checkpoint request for a descendant of a finished ancestor.
   `CheckpointManager.checkpoint()` does not send it and returns a promise that never settles.
 - An abandoned operation is an operation whose dropped checkpoint its caller awaits. The caller
@@ -20,8 +23,9 @@ Status: proposed. Amends Rule 1 of [ADR 0001](./0001-operation-tracking-and-plug
 3. If that checkpoint is dropped, the result is never ready. So under Rule 1 the step stays
    `EXECUTING` for the rest of the invocation.
 4. The checkpoint manager does not suspend while any operation is `EXECUTING`.
-5. So after a `map` or `parallel` completes early, a `wait` or callback later in the handler
-   cannot suspend the invocation, while an abandoned step is parked. If the wait or callback
+5. So after a `map` or `parallel` completes early, or a child context returns while a step it
+   started still runs, a `wait` or callback later in the handler cannot suspend the invocation,
+   while the abandoned step is parked. If the wait or callback
    outlasts the remaining invocation time, the invocation runs until the Lambda timeout.
 
 Measured with the local runner on a `map` with `minSuccessful: 1`, whose other items finish their
@@ -66,7 +70,9 @@ or until it is abandoned as defined above.
 
 ## Enforcement
 
-- `src/utils/checkpoint/checkpoint-ancestor.test.ts` covers the release of a step, and that a
-  context `SUCCEED`, a context `FAIL` and a `START` stay `EXECUTING`.
+- `src/utils/checkpoint/checkpoint-ancestor.test.ts` covers the release of a step `SUCCEED`,
+  `FAIL` and `RETRY`, and of a waitForCondition `SUCCEED` and `RETRY`. It also covers that a
+  context `SUCCEED`, a context `FAIL` and a `START` stay `EXECUTING`. `AGENTS.md` lists these
+  cases among the tests that guard the invariants.
 - `map/early-completion-suspends` in the examples package checks that the wait suspends, locally
   and in cloud integration.

@@ -127,13 +127,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
-  fail to suspend the invocation. A step still running in an abandoned item tries to checkpoint
-  its result. The SDK drops that checkpoint, because the batch has completed. Before, the step
-  then stayed `EXECUTING` for the rest of the invocation, and an `EXECUTING` operation blocks
-  suspension. So the invocation could not suspend. A wait or callback longer than the remaining
-  invocation time then ran until the Lambda timeout. Now, when the SDK drops a step's
-  awaited result checkpoint, it marks that step completed. A child context is not affected,
-  because it does not wait for its checkpoint and stays running until it settles.
+  fail to suspend the invocation. The same held after any child context returned while a step
+  it started was still running. A step still running in an abandoned item tries to checkpoint
+  its result. The SDK drops that checkpoint, because its ancestor context has finished. Before,
+  the step then stayed `EXECUTING` for the rest of the invocation, and an `EXECUTING` operation
+  blocks suspension. So the invocation could not suspend. A wait or callback longer than the
+  remaining invocation time then ran until the Lambda timeout. Now, when the SDK drops the
+  awaited result checkpoint of a step or `waitForCondition`, it marks that operation completed.
+  A child context is not affected, because it does not wait for its checkpoint and stays running
+  until it settles. See ADR 0002.
 
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the

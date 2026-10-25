@@ -39,7 +39,11 @@ gives the reasons and the measurements.
 - `src/context/execution-context/execution-context.test.ts`: the cases named "reports the
   remaining time as Infinity" guard the deadline reading in rule 4. The rest of that file is
   ordinary unit tests.
+- `src/utils/checkpoint/checkpoint-ancestor.test.ts`: the cases that drop a checkpoint for a
+  finished ancestor guard the rule 1 exception
+  ([ADR 0002](../../docs/adr/0002-abandoned-operations-stop-executing.md)). The rest of that
+  file is ordinary unit tests.
 
 If a change makes one of these cases fail, the change breaks an invariant. Do not edit, skip or
-delete the case to make the change pass. To change an invariant, write a new ADR that supersedes
-ADR 0001 first, and get a maintainer's approval for it.
+delete the case to make the change pass. To change an invariant, write a new ADR that supersedes or
+amends ADR 0001 first, and get a maintainer's approval for it.
