@@ -497,6 +497,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
     with a token the service had already rejected. It now answers `PENDING`.
 
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` could suspend its
+  MicroVM during a job. The worker's own `SuspendMicrovm` client made up to 3 attempts. The
+  sequence:
+  1. An attempt suspended the MicroVM, and its answer was lost across the freeze.
+  2. The durable function resumed the MicroVM. The `resume` hook ended the worker's refusal, and
+     the next job started.
+  3. The client retried. The retry suspended the MicroVM with the job inside. Nothing resumed it,
+     so the job failed at its heartbeat timeout or its timeout.
+
+  `SuspendMicrovm` succeeds on a MicroVM that is already suspending or suspended. So a retry
+  gains nothing. The worker's own client now makes one attempt. The worker also aborts the call
+  when the `resume` hook arrives while the call runs. So a client from `createMicrovmsClient`
+  that retries sends no later attempt either. An aborted call is an unknown outcome. The
+  `resume` hook has already ended the refusal, so the worker starts no new one. With one attempt,
+  a throttle or a clock-skew error on the worker's own client now counts as refused for now. So
+  the worker accepts jobs again at once, and tries the call again after at least 30 seconds.
+  Before, the retried error counted as unknown, and the worker refused jobs for up to 30 seconds.
+
 ### Added
 
 - **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a

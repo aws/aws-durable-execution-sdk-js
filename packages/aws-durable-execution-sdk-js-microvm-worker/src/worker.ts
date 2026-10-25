@@ -256,10 +256,25 @@ export interface MicrovmWorkerOptions<TInput = unknown, TOutput = unknown> {
   createClient?: (region: string) => LambdaClient;
   /**
    * Creates the Lambda MicroVMs client that suspends this MicroVM when it is
-   * idle. Defaults to a client that uses the default credential chain.
-   * Called only when the session asks the worker to suspend when idle. The
-   * worker never destroys a client that this function returns; it destroys
-   * only the default clients it creates itself.
+   * idle. Defaults to a client that uses the default credential chain and
+   * makes one attempt per call. Called only when the session asks the worker
+   * to suspend when idle. The worker never destroys a client that this
+   * function returns; it destroys only the default clients it creates itself.
+   *
+   * Use a client with `maxAttempts: 1`. SuspendMicrovm succeeds on a
+   * MicroVM that is already suspending or suspended, so a retry gains
+   * nothing. A retry can also suspend the next job:
+   *
+   * 1. An attempt suspends the MicroVM, and its answer is lost across the
+   *    freeze.
+   * 2. The durable function resumes the MicroVM. The `resume` hook ends the
+   *    worker's refusal, and the next job starts.
+   * 3. The client then retries. The retry suspends the MicroVM with the job
+   *    inside, and nothing resumes it.
+   *
+   * So the worker aborts the call when the `resume` hook arrives while the
+   * call runs. The client then sends no later attempt. An attempt that the
+   * client sent before the abort can still reach the service.
    *
    * A client that retries must set `$metadata.attempts` on the error that it
    * throws, as the AWS SDK does. The worker counts an error without it as a
@@ -370,7 +385,9 @@ export interface MicrovmWorkerListener {
  *    after the call returned. The 30-second case covers an image without the
  *    `resume` hook. In both cases the idle time then starts again. At most
  *    one call runs at a time. So a `resume` hook or a job end during the call
- *    starts the idle time when the call ends, not at once.
+ *    starts the idle time when the call ends, not at once. A `resume` hook
+ *    during the call also aborts the call. So the client sends no later
+ *    attempt, which could suspend the MicroVM with the next job inside.
  * 6. A call that the service rejected on its first attempt, for example for a
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
@@ -391,24 +408,24 @@ export interface MicrovmWorkerListener {
  *    next idle time. That idle time lasts at least 30 seconds, unless a job
  *    or a `resume` hook starts the idle time again. A `resume` hook or a job
  *    that ends during the call does not shorten the wait, because the
- *    refused outcome arrives after it. With the default client, this item
- *    covers expired credentials and a signature error without clock skew.
- *    It covers a throttle, a clock-skew error, and HTTP 429 only from a
- *    client that does not retry, for example a client from
- *    `createMicrovmsClient` with `maxAttempts: 1`. A `suspend` hook whose
- *    refusal is still in effect when the call ends is the exception, as in
- *    item 6. Its refusal stays, and the idle time starts when it ends.
- * 8. A call whose outcome is unknown, such as a timeout, a conflict, or a
- *    server error, is handled like a successful call. The service may have
- *    suspended the MicroVM anyway. An error after the client retried an
- *    earlier attempt also counts as unknown, because the earlier attempt may
- *    have suspended the MicroVM. The default client retries a throttle and a
- *    clock-skew error itself. So with the default client, these errors
- *    usually end here. When the refusal ends, the idle time starts again, so
- *    the worker tries the call again. A `resume` hook during the call, or
- *    the end of a `suspend` hook's 30 seconds during the call, has already
- *    ended the refusal. The worker then accepts jobs at once, and tries the
- *    call again one idle time after the call and every job end.
+ *    refused outcome arrives after it. The default client makes one attempt.
+ *    So this item covers expired credentials, a signature error, a
+ *    clock-skew error, a throttle, and HTTP 429. A client from
+ *    `createMicrovmsClient` that retries reports a throttle or a clock-skew
+ *    error after a retried attempt, and item 8 then applies. A `suspend` hook
+ *    whose refusal is still in effect when the call ends is the exception,
+ *    as in item 6. Its refusal stays, and the idle time starts when it ends.
+ * 8. A call whose outcome is unknown, such as a timeout, an abort, a
+ *    conflict, a server error, or a dropped connection, is handled like a
+ *    successful call. The service may have suspended the MicroVM anyway. An
+ *    error after the client retried an earlier attempt also counts as
+ *    unknown, because the earlier attempt may have suspended the MicroVM.
+ *    When the refusal ends, the idle time starts again, so the worker tries
+ *    the call again. A `resume` hook during the call, or the end of a
+ *    `suspend` hook's 30 seconds during the call, has already ended the
+ *    refusal. The worker then accepts jobs at once, and tries the call again
+ *    one idle time after the call and every job end. This covers the call
+ *    that the `resume` hook aborted.
  * 9. The listener logs one warning for each failed call. The message names
  *    the outcome. The fields are, in order, `microvmId`, `error`,
  *    `outcome`, `suspendHookArrived`, `terminating`, `closed`, and
@@ -542,6 +559,9 @@ export function createMicrovmWorkerListener<
   // Set while the worker's own SuspendMicrovm call runs. At most one call
   // runs at a time.
   let suspendCallRunning = false;
+  // Aborts the running SuspendMicrovm call. The resume hook uses it. Set
+  // only while suspendCallRunning is set.
+  let suspendCallAbort: AbortController | undefined;
   // Set when the idle time could not start because a call was running, for
   // example after a resume hook during the call. The idle time then starts
   // when the call ends.
@@ -704,7 +724,11 @@ export function createMicrovmWorkerListener<
     try {
       const provided = options.createMicrovmsClient?.(region);
       ownsClient = provided === undefined;
-      client = provided ?? new LambdaMicrovmsClient({ region });
+      // SuspendMicrovm succeeds on a MicroVM that is already suspending or
+      // suspended. So a retry gains nothing. A retry can also arrive after
+      // the resume, when the next job runs, and suspend the MicroVM with that
+      // job inside. So the worker's own client makes one attempt.
+      client = provided ?? new LambdaMicrovmsClient({ region, maxAttempts: 1 });
     } catch (error) {
       // No call was made. So jobs can run again at once.
       logger.error("could not create the Lambda MicroVMs client", {
@@ -727,10 +751,21 @@ export function createMicrovmWorkerListener<
     // its own HTTP request event. So this count covers the time since the
     // idle time ended, as in the Python worker.
     const hooksBefore = suspendHooks;
+    // The resume hook aborts the call through this controller. A client from
+    // createMicrovmsClient can retry. After the resume, the next job can run.
+    // A retry then would suspend the MicroVM with that job inside. An aborted
+    // call sends no later attempt.
+    const resumed = new AbortController();
+    suspendCallAbort = resumed;
     try {
       await client.send(
         new SuspendMicrovmCommand({ microvmIdentifier: target }),
-        { abortSignal: AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS) },
+        {
+          abortSignal: AbortSignal.any([
+            AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS),
+            resumed.signal,
+          ]),
+        },
       );
     } catch (error) {
       const outcome = classifySuspendError(error);
@@ -740,6 +775,9 @@ export function createMicrovmWorkerListener<
         // attempt does not show whether the service suspended the MicroVM.
         // So the refusal continues, as after a successful call. A resume
         // hook that arrived during the call has already ended the refusal.
+        // That hook also aborted the call, and the abort error is unknown
+        // too. `suspending` is then false, unless a later suspend hook set
+        // it. So an aborted call starts no grace period of its own.
         if (suspending) {
           startGrace();
         }
@@ -775,6 +813,7 @@ export function createMicrovmWorkerListener<
       });
       return;
     } finally {
+      suspendCallAbort = undefined;
       // Each suspend creates its own client. Destroying it releases its
       // connections, as CallbackReporter does for its clients.
       if (ownsClient) {
@@ -848,6 +887,18 @@ export function createMicrovmWorkerListener<
         // The MicroVM runs again. So jobs can run again. A resume without
         // a job would otherwise leave the MicroVM running until the next
         // job ends.
+        if (suspendCallAbort && !suspendCallAbort.signal.aborted) {
+          // The worker's own call has not returned. The client could retry
+          // it after the next job starts, and freeze that job. So the worker
+          // aborts the call before it ends the refusal.
+          logger.info(
+            "stopping the suspend call: the MicroVM resumed during it",
+            { microvmId },
+          );
+          suspendCallAbort.abort(
+            new Error("the MicroVM resumed during the SuspendMicrovm call"),
+          );
+        }
         if (suspending) {
           endSuspending();
         } else {
@@ -1795,12 +1846,12 @@ const FAILED_SUSPEND_MESSAGES: Record<SuspendOutcome, string> = {
  * worker's `classify_suspend_error`.
  *
  * 1. A value that is not an `Error` is `unknown`.
- * 2. The client retries a 5xx, a throttle, a clock-skew error, and a network
- *    error, and reports only the last attempt's error. An earlier attempt
- *    may have suspended the MicroVM before its response was lost. So any
- *    error after more than one attempt is `unknown`. The worker's default
- *    client retries a throttle and a clock-skew error itself. So with the
- *    default client, these errors usually end here.
+ * 2. A client that retries a 5xx, a throttle, a clock-skew error, or a
+ *    network error reports only the last attempt's error. An earlier
+ *    attempt may have suspended the MicroVM before its response was lost.
+ *    So any error after more than one attempt is `unknown`. The worker's
+ *    default client makes one attempt. So only a client from
+ *    `createMicrovmsClient` that retries reaches this rule.
  * 3. A known rejection name is `rejected`. Missing credentials count as a
  *    rejection. A later call in the same MicroVM most likely finds no
  *    credentials either.
@@ -1809,15 +1860,16 @@ const FAILED_SUSPEND_MESSAGES: Record<SuspendOutcome, string> = {
  * 5. A name in `TRANSIENT_4XX_NAMES` is `refusedForNow`, whatever its
  *    status. The set covers expired credentials, clock-skew and signature
  *    errors, and throttles. The service answers them before it acts. Some
- *    services answer a throttle with HTTP 400. With the default client, a
- *    first attempt reaches this rule for expired credentials and for a
- *    signature error without clock skew. A throttle or a clock-skew error
- *    reaches it from a client that does not retry, for example a client
- *    from `createMicrovmsClient` with `maxAttempts: 1`.
+ *    services answer a throttle with HTTP 400. The default client makes one
+ *    attempt. So each of these errors from the default client reaches this
+ *    rule.
  * 6. HTTP 429 is `refusedForNow`.
  * 7. Any other 4xx except 408 and 409 is `rejected`.
- * 8. Any other error, such as a timeout, a dropped connection, a 408, or a
- *    server error, is `unknown`.
+ * 8. Any other error, such as a timeout, an abort, a dropped connection, a
+ *    408, or a server error, is `unknown`. The AWS SDK reports an abort as
+ *    an `AbortError` without an HTTP status. The `resume` hook aborts a
+ *    running call. That hook has already ended the refusal, so the outcome
+ *    starts no new one.
  *
  * Python checks missing credentials before the attempt count. This function
  * checks the attempt count first. The difference is defensive only. The SDK
