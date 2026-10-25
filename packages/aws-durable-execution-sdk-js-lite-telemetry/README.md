@@ -409,7 +409,9 @@ change any file here.
    modules, hand-written types, no build step (rule 1.4). No `node:async_hooks` and no
    module-level per-invocation state (rule 1.5). Return to the design phase when a
    review round finds new blocking problems after the previous findings were addressed
-   (rule 1.9).
+   (rule 1.9). Prefer simplifying existing logic to adding logic (rule 1.10). Reviewers
+   push back on a change that breaks a rule instead of asking for code changes
+   (rule 1.11).
 2. The package has no dependencies of any kind: no `dependencies`, no
    `devDependencies`, no `peerDependencies` and no `optionalDependencies`.
 3. `src` imports only relative paths and `node:` built-ins. It does not import

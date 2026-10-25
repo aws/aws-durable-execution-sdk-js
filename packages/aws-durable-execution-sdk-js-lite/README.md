@@ -1416,6 +1416,37 @@ agent. A round is one review of a revision, followed by the contributor's change
    5 stops, reports the findings of all rounds and its analysis of the cause, and waits
    for a decision before it continues.
 
+#### 1.10 Simplify before you add
+
+1. Every new condition, branch or option adds cases that a reader and the tests must
+   cover.
+2. A bug or a missing use case often exists because the existing logic is more complex
+   than the problem. A special case hides another case, or two paths do the same job
+   differently.
+3. So the first question for a bug fix or a feature is: can a simpler version of the
+   existing logic cover it?
+4. A change that fixes the bug or covers the use case and removes or merges logic is
+   preferred to a change that adds logic. This holds even when the simpler change
+   touches more lines.
+5. If the change must add logic, its description states which simpler options were
+   considered and why each one does not work.
+
+#### 1.11 Reviewers enforce these rules
+
+1. A reviewer, a person or an agent, checks every change against the rules of this
+   section, not only for correctness.
+2. A change can be correct and still break a rule. Examples: it adds a safeguard instead
+   of a best practice (rule 1.2), adds a dependency (rule 1.3), or adds logic where a
+   simplification works (rule 1.10).
+3. Change requests on such a change produce a better version of the wrong approach. So
+   for a change that breaks a rule, the reviewer does not ask for detailed code changes.
+4. Instead, the reviewer pushes back on the approach: the review names the rule, states
+   how the change breaks it, and asks the contributor to return to the design phase
+   (rule 1.9, step 6). A simpler direction can be suggested.
+5. The reviewer approves only a change that follows every rule. A reviewer who wants an
+   exception names the rule and the reason in the review, and the package owner
+   decides.
+
 ### 2. Design
 
 #### 2.1 Files
