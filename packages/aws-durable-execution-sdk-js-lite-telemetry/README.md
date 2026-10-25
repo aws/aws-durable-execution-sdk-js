@@ -407,13 +407,8 @@ change any file here.
    apply. The rules below add to them or replace them for this package. Keep the logic
    simple (rule 1.1). Write best practices instead of runtime checks (rule 1.2). Plain ES
    modules, hand-written types, no build step (rule 1.4). No `node:async_hooks` and no
-   module-level per-invocation state (rule 1.5). Return to the design phase when a
-   review round finds new blocking problems after the previous findings were addressed
-   (rule 1.9). Prefer simplifying existing logic to adding logic (rule 1.10). Reviewers
-   push back on a change that breaks a rule instead of asking for code changes
-   (rule 1.11). Rules 1.12 to 1.16 apply too: a design note before code, a failing test
-   for every branch, a failing test before a bug fix, marked assumptions and listed
-   decisions.
+   module-level per-invocation state (rule 1.5). The repository's
+   [rules for every change](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/CONTRIBUTING.md#rules-for-every-change) apply too.
 2. The package has no dependencies of any kind: no `dependencies`, no
    `devDependencies`, no `peerDependencies` and no `optionalDependencies`.
 3. `src` imports only relative paths and `node:` built-ins. It does not import
