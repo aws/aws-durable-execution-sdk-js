@@ -175,6 +175,22 @@ ruleTester.run(
           return ctx.step(async () => 1);
         });
       `),
+      // A parallel branch object whose effective func the rule cannot see:
+      // a later spread or computed key can override it, and an accessor
+      // returns a value the rule does not compute.
+      handler(`
+        await context.parallel([
+          { func: async () => 0, ...durableBranch },
+          { func: async () => 0, [key]: async (ctx) => ctx.step(async () => 1) },
+          { get func() { return async (ctx) => ctx.step(async () => 1); } },
+        ]);
+      `),
+      // A later func property overrides an earlier one.
+      handler(`
+        await context.parallel([
+          { func: async () => 0, func: async (ctx) => ctx.step(async () => 1) },
+        ]);
+      `),
       // A function declaration that the file reassigns is not followed.
       handler(
         "await context.runInChildContext(async (ctx) => helper(ctx));",
@@ -371,6 +387,28 @@ ruleTester.run(
         ),
         errors: [error("map")],
       },
+      // A spread before func does not override it.
+      {
+        code: handler(
+          "await context.parallel([{ ...base, func: async () => compute() }]);",
+        ),
+        errors: [error("parallel branch")],
+      },
+      // A child context nested in a function passed by name is recognized
+      // whether the function is declared before or after the handler.
+      ...[
+        [
+          "async function outer(c) { return c.map([1], async (inner) => inner.map([1], async () => 1)); }",
+          "withDurableExecution(async (_, ctx) => ctx.runInChildContext(outer));",
+        ],
+        [
+          "withDurableExecution(async (_, ctx) => ctx.runInChildContext(outer));",
+          "async function outer(c) { return c.map([1], async (inner) => inner.map([1], async () => 1)); }",
+        ],
+      ].map((lines) => ({
+        code: lines.join("\n"),
+        errors: [{ ...error("map"), column: 77 }],
+      })),
       // A branch list wrapped in as const, and a branch in method syntax.
       {
         code: handler(`

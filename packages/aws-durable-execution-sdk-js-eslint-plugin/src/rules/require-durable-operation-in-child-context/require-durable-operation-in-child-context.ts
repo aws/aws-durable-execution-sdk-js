@@ -147,10 +147,19 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
     let handlers = new Set<any>();
 
     /**
-     * Parameter variable -> whether it is a durable context. A variable being
-     * checked maps to false, so a check that reaches it again ends there.
+     * Parameter variable -> whether it is a durable context. Only final
+     * answers are stored. See `isDurableContext`.
      */
     const contextAnswers = new Map<any, boolean>();
+
+    /** The parameter variables whose context check has not finished. */
+    const contextChecks = new Set<any>();
+
+    /**
+     * True if the current context check reached a variable in
+     * `contextChecks`. Then its false answer is provisional.
+     */
+    let reachedUnfinishedCheck = false;
 
     function indexReferences(): Map<any, any> {
       const index = new Map<any, any>();
@@ -228,19 +237,36 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
         for (const element of branches?.elements ?? []) {
           const branch = unwrap(element);
           if (branch?.type === "ObjectExpression") {
-            const func = branch.properties.find(
-              (p: any) =>
-                p.type === "Property" &&
-                !p.computed &&
-                (p.key?.name === "func" || p.key?.value === "func"),
-            );
-            if (func) add(func.value, operation);
+            const func = effectiveFunc(branch);
+            if (func) add(func, operation);
           } else if (branch) {
             add(branch, operation);
           }
         }
       }
       return callbacks;
+    }
+
+    /**
+     * Returns the value of a branch object's `func` property, when the object
+     * shows which value the SDK reads.
+     *
+     * A later property overrides an earlier one with the same key. So the last
+     * `func` property is the one that counts. Three later shapes can still
+     * override it: a spread, a computed key, and another `func`. A spread and
+     * a computed key can hide a `func`, so the answer is null. An accessor
+     * such as `get func()` returns a value the rule does not compute, so the
+     * answer is also null.
+     */
+    function effectiveFunc(branch: any): any {
+      for (let i = branch.properties.length - 1; i >= 0; i--) {
+        const property = branch.properties[i];
+        if (property.type !== "Property" || property.computed) return null;
+        const key = property.key?.name ?? property.key?.value;
+        if (key !== "func") continue;
+        return property.kind === "init" ? property.value : null;
+      }
+      return null;
     }
 
     /**
@@ -279,9 +305,25 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
 
       const known = contextAnswers.get(variable);
       if (known !== undefined) return known;
-      contextAnswers.set(variable, false);
+      // A lookup that reaches a variable still being checked answers false for
+      // it. That false is provisional, because the outer check can still
+      // answer true. So an answer of false that depended on it is not cached.
+      // The next lookup checks the variable again, after the outer check has
+      // finished.
+      if (contextChecks.has(variable)) {
+        reachedUnfinishedCheck = true;
+        return false;
+      }
+
+      const outerReached = reachedUnfinishedCheck;
+      reachedUnfinishedCheck = false;
+      contextChecks.add(variable);
       const answer = checkDurableContext(variable);
-      contextAnswers.set(variable, answer);
+      contextChecks.delete(variable);
+      if (answer || !reachedUnfinishedCheck) {
+        contextAnswers.set(variable, answer);
+      }
+      reachedUnfinishedCheck ||= outerReached;
       return answer;
     }
 
