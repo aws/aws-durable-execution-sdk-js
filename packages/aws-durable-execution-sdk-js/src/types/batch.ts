@@ -52,9 +52,10 @@ export enum BatchItemStatus {
    * NestingType.FLAT its operations, can then show SUCCEEDED or FAILED in the
    * execution history.
    *
-   * An abandoned item's code keeps running until it awaits a checkpoint after
-   * the batch's context finishes. That checkpoint is dropped and never
-   * resolves. A step does not await its first checkpoint. So a step that the
+   * An abandoned item's code can keep running while the invocation is active,
+   * until it awaits a checkpoint after the batch's context finishes. That
+   * checkpoint is dropped and never resolves. Nothing waits for the item, so
+   * the invocation can end before its code finishes. A step does not await its first checkpoint. So a step that the
    * item starts after that point still runs its function, and the history has
    * no record of it. The handler receives only the BatchResult.
    */
