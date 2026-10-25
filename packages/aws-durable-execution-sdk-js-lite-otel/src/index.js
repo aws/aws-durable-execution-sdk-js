@@ -3,8 +3,10 @@ import { exportSpans } from "./export.js";
 import {
   attemptSpanId,
   invocationSpanId,
+  invokeTraceHeader,
   isSampled,
   operationSpanId,
+  parseTraceHeader,
   traceId as traceIdOf,
   workflowSpanId,
 } from "./ids.js";
@@ -45,8 +47,20 @@ export function createOtelPlugin({
     });
 
   return (info) => {
-    const { arn, requestId } = info;
-    const traceId = traceIdOf(arn);
+    const { arn, requestId, lambdaContext } = info;
+    // The trace id comes from the Root of the invocation's Lambda trace header:
+    // 1. Lambda Managed Instances run invocations of one process at the same time. So
+    //    _X_AMZN_TRACE_ID can belong to another invocation. lambdaContext.xRayTraceId
+    //    belongs to this one. So the plugin reads the environment only without it.
+    // 2. The service gives every invocation of one execution the same Root. So every
+    //    invocation computes the same trace id.
+    // 3. An execution started by ctx.invoke receives the caller's Root (traceHeader
+    //    below). So the caller and the invoked execution share one trace.
+    // Without a valid Root, the trace id is a hash of the ARN.
+    const header = parseTraceHeader(
+      lambdaContext?.xRayTraceId ?? process.env._X_AMZN_TRACE_ID,
+    );
+    const traceId = header?.traceId ?? traceIdOf(arn);
     // Not sampled: no plugin, so the SDK calls no hook in this invocation.
     if (!isSampled(traceId, sampleRate)) return undefined;
 
@@ -259,6 +273,11 @@ export function createOtelPlugin({
     return {
       onOperationChange: flushIntervalMs > 0 ? onOperationChange : undefined,
 
+      // The invoked execution receives this header. So its spans get this trace id,
+      // and its workflow span links to the span of the CHAINED_INVOKE operation.
+      traceHeader: ({ id }) =>
+        invokeTraceHeader(traceId, operationSpanId(arn, id)),
+
       wrap(w) {
         if (w.kind === "attempt") return attempt(w);
         if (w.kind === "context")
@@ -312,7 +331,9 @@ export function createOtelPlugin({
               attributes: {
                 "durable.execution.arn": arn,
                 "durable.execution.status": status,
+                "durable.trace.header_parent": header?.parent,
               },
+              links: invokerLink(traceId, header?.parent),
               resource: res,
             }),
           );
@@ -321,6 +342,28 @@ export function createOtelPlugin({
       },
     };
   };
+}
+
+// The header's Parent is a span id. The workflow span links to it. It does not use it as
+// its parent:
+// 1. A parent must be a span in the trace. Else the backend shows a broken tree.
+// 2. For an execution that ctx.invoke started, in PassThrough tracing, Parent is the
+//    caller's CHAINED_INVOKE span. That span exists.
+// 3. In Active tracing, Lambda replaces Parent in every invocation with a span of its
+//    own. The plugin never exports that span.
+// 4. For a top-level execution, Parent is a Lambda span or a span of the upstream caller.
+//    The plugin never exports these spans either.
+// 5. A link can point to a span that does not exist.
+// So the workflow span stays a root span, with a link to Parent. The final invocation
+// emits the workflow span, so the link uses that invocation's Parent.
+function invokerLink(traceId, parent) {
+  if (parent === undefined) return [];
+  return [
+    {
+      context: { traceId, spanId: parent, traceFlags: 1, isRemote: true },
+      attributes: { "durable.link": "invoker" },
+    },
+  ];
 }
 
 // The ARN has the form

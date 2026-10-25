@@ -7,7 +7,28 @@ import { createHash, randomBytes } from "node:crypto";
 const hash = (text, length) =>
   createHash("sha256").update(text).digest("hex").slice(0, length);
 
+// The trace id when the invocation has no valid trace header.
 export const traceId = (arn) => hash(arn, 32);
+
+// The X-Ray trace header has the form
+// Root=1-<8 hex>-<24 hex>;Parent=<16 hex>;Sampled=<0|1>, with more fields after it.
+// The 32 hex digits of Root are the OpenTelemetry trace id. Parent is a span id.
+const ROOT = /(?:^|;)\s*Root=1-([0-9a-f]{8})-([0-9a-f]{24})\s*(?:;|$)/;
+const PARENT = /(?:^|;)\s*Parent=([0-9a-f]{16})\s*(?:;|$)/;
+
+// Returns { traceId, parent } of a header with a valid Root, else undefined. parent is
+// undefined when the header has no valid Parent. Sampled is not read (README "Sampling").
+export function parseTraceHeader(header) {
+  const root = typeof header === "string" ? ROOT.exec(header) : null;
+  if (!root) return undefined;
+  return { traceId: root[1] + root[2], parent: PARENT.exec(header)?.[1] };
+}
+
+// The header that an invoked execution receives. Its Root is this trace. Its Parent is
+// the span of the CHAINED_INVOKE operation. The plugin exists only in a sampled
+// execution, so Sampled is 1.
+export const invokeTraceHeader = (traceId, parentSpanId) =>
+  `Root=1-${traceId.slice(0, 8)}-${traceId.slice(8)};Parent=${parentSpanId};Sampled=1`;
 
 export const workflowSpanId = (arn) => hash(`workflow:${arn}`, 16);
 
@@ -25,7 +46,8 @@ export const invocationSpanId = (arn, requestId) =>
     : hash(`${arn}:invocation:${requestId}`, 16);
 
 // Head sampling. The trace id is the same in every invocation, so every invocation makes
-// the same decision. The divisor is 2^32, so the ratio is below 1 and sampleRate 1 keeps
+// the same decision. An invoked execution shares the caller's trace id, so it makes the
+// caller's decision too. The divisor is 2^32, so the ratio is below 1 and sampleRate 1 keeps
 // every trace.
 export const isSampled = (id, sampleRate) =>
   Number.parseInt(id.slice(-8), 16) / 2 ** 32 < sampleRate;

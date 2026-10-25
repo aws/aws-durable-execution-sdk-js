@@ -54,6 +54,7 @@ export function buildSpan({
   statusMessage,
   error,
   attributes,
+  links = [],
   resource,
 }) {
   // The Lambda clock and the service clock can differ. A negative duration is invalid.
@@ -77,7 +78,7 @@ export function buildSpan({
           message: error?.ErrorMessage ?? statusMessage,
         },
     attributes: defined(attributes),
-    links: [],
+    links,
     events: error
       ? [
           {

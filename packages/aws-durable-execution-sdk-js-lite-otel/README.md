@@ -2,7 +2,8 @@
 
 An OpenTelemetry tracing plugin for
 [`@aws/durable-execution-sdk-js-lite`](../aws-durable-execution-sdk-js-lite/README.md).
-It sends one trace per durable execution to any OpenTelemetry `SpanExporter`.
+It sends the spans of each durable execution to any OpenTelemetry `SpanExporter`. An
+execution that `ctx.invoke` started joins the caller's trace.
 
 To change this package, read [Contributing](#contributing) first.
 
@@ -18,7 +19,7 @@ workflow span.
 
 | Span | Name | Parent |
 |---|---|---|
-| Workflow | the function name from the ARN, else `Workflow` | none (root) |
+| Workflow | the function name from the ARN, else `Workflow` | none (root); a link to the trace header's Parent |
 | Operation | the operation's name, else its type, for example `WAIT` | the enclosing child context, else the workflow span |
 | Attempt | `<name> attempt <n>`, one per step attempt and per `waitForCondition` check | the step's operation span |
 | Invocation | `Invocation` | the workflow span |
@@ -114,8 +115,10 @@ hook. The plugin sends earlier, and still follows the reason for that rule:
 
 ### Sampling
 
-The plugin decides from the trace id. The trace id is the same in every invocation of one
-execution. So every invocation makes the same decision, and a trace is complete or absent.
+The plugin decides from the trace id (see [Trace id](#trace-id)). The trace id is the
+same in every invocation of one execution. So every invocation makes the same decision,
+and a trace is complete or absent. An execution that `ctx.invoke` started has the
+caller's trace id. So with the same `sampleRate`, it makes the caller's decision.
 
 1. The plugin reads the last 8 hex digits of the trace id as a number.
 2. It divides the number by 2^32.
@@ -123,18 +126,54 @@ execution. So every invocation makes the same decision, and a trace is complete 
 4. For an execution that is not traced, the factory returns `undefined`. So the SDK calls
    no plugin hook.
 
+The plugin ignores the `Sampled` field of the trace header:
+
+1. In PassThrough tracing without an upstream decision, Lambda sets `Sampled=0`.
+2. That is the common case for a durable function. For example, `aws lambda invoke`
+   sends no trace header.
+3. So a plugin that obeyed `Sampled` would trace almost no execution.
+4. So only `sampleRate` decides.
+
 ## Span model
+
+### Trace id
+
+1. Lambda gives every invocation a trace header in the X-Ray format, for example
+   `Root=1-6a0b1c2d-0123456789abcdef01234567;Parent=89abcdef01234567;Sampled=1`. The
+   invocation reads it from `lambdaContext.xRayTraceId` and from
+   `process.env._X_AMZN_TRACE_ID`.
+2. Lambda Managed Instances run several invocations in one process at the same time. So
+   `_X_AMZN_TRACE_ID` can belong to another invocation. So the plugin reads
+   `lambdaContext.xRayTraceId`, and reads the environment variable only when
+   `lambdaContext.xRayTraceId` is absent.
+3. If the header has a valid `Root=1-<8 hex>-<24 hex>`, the trace id is those 32 hex
+   digits. Else the trace id is the SHA-256 of the ARN (see [Ids](#ids)). On Lambda,
+   every invocation has a header. So the ARN hash is used only outside Lambda, for
+   example in tests.
+4. The service gives every invocation of one execution the same Root. So every
+   invocation of the execution computes the same trace id.
+
+Because the trace id is the X-Ray Root:
+
+1. The execution's spans are in the same trace as the Lambda X-Ray segments of its
+   invocations.
+2. If the upstream caller was traced, for example API Gateway with X-Ray, Lambda keeps its
+   Root. So the execution's spans are in the upstream caller's trace.
+3. So two executions that one upstream request started share one trace. Each has its own
+   workflow span as a root.
+4. An execution that `ctx.invoke` started gets the caller's Root (see
+   [Propagation through ctx.invoke](#propagation-through-ctxinvoke)).
 
 ### Ids
 
 Every invocation of one execution computes the same id for the same span. So a span that
-one invocation emits can be the parent of a span that a later invocation emits. Each id is
-a prefix of the SHA-256 hex digest of a string. `arn` is the `DurableExecutionArn`.
+one invocation emits can be the parent of a span that a later invocation emits. Each span
+id is a prefix of the SHA-256 hex digest of a string. `arn` is the `DurableExecutionArn`.
 `operationId` is the record's `Id`.
 
 | Id | Hashed string | Length |
 |---|---|---|
-| trace id | `arn` | 32 |
+| trace id | the 32 hex digits of the trace header's `Root`; without a valid `Root`, `arn` | 32 |
 | workflow span id | `workflow:` + `arn` | 16 |
 | operation span id | `arn` + `:` + `operationId` | 16 |
 | attempt span id | `arn` + `:` + `operationId` + `:attempt:` + attempt number | 16 |
@@ -178,6 +217,7 @@ Without a request id, the invocation span id is random.
 | `durable.operation.status` | operation |
 | `durable.attempt.number` | attempt; operation of a `STEP` (`StepDetails.Attempt`) |
 | `durable.execution.status` | workflow |
+| `durable.trace.header_parent`: the `Parent` of the trace header, if valid | workflow |
 | `faas.invocation_id`, `durable.invocation.status`, `durable.invocation.first` | invocation |
 
 ### Status
@@ -189,6 +229,42 @@ Without a request id, the invocation span id is random.
 - An invocation span is `ERROR` when the invocation status is `FAILED` or `RETRYING`.
   Else it is `OK`.
 - The workflow span is `OK` for `SUCCEEDED` and `ERROR` for `FAILED`.
+
+## Propagation through ctx.invoke
+
+The lite SDK calls the plugin's `traceHeader` hook when `ctx.invoke` sends its START. The
+hook returns this header:
+
+```
+Root=1-<first 8 hex of the trace id>-<last 24 hex>;Parent=<span id of the CHAINED_INVOKE operation>;Sampled=1
+```
+
+1. The SDK sends it as `ChainedInvokeOptions.XAmznTraceId`.
+2. The service gives it to the invoked execution as its Lambda trace header, in every
+   invocation. Lambda appends a `Lineage` field.
+3. So the invoked execution's trace id is the caller's trace id. Both executions are in
+   one trace.
+4. `Sampled` is 1, because the plugin exists only in a traced execution. An untraced
+   caller has no plugin, so it sends no header. The service then gives the invoked
+   execution the caller's own header. Its Root gives the caller's trace id, so the
+   invoked execution is untraced too.
+
+The invoked execution's workflow span has a link to the header's `Parent`. The link has
+the attribute `durable.link` = `invoker`. The workflow span has no parent. The reasons:
+
+1. A parent must be a span in the trace. Else the backend shows a broken tree.
+2. In PassThrough tracing, Lambda keeps the `Parent` that the caller sent. So `Parent` is
+   the caller's CHAINED_INVOKE span. That span exists.
+3. In Active tracing, Lambda replaces `Parent` in every invocation with a span of its own.
+   This plugin never exports that span.
+4. A top-level execution has a `Parent` too: a Lambda span or a span of the upstream
+   caller. This plugin never exports these spans either.
+5. A link can point to a span that does not exist.
+6. So the workflow span stays a root span, and links to `Parent`.
+
+The final invocation emits the workflow span. So the link uses the `Parent` of that
+invocation's header. So a trace with one `ctx.invoke` has two root spans: the caller's
+workflow span and the invoked execution's workflow span.
 
 ## Context propagation
 
@@ -232,8 +308,15 @@ durable span.
 - The real service can list a wait, a callback or an invoke in `updatedOperationIds` after
   an earlier invocation already emitted it. That happens after an invocation timeout. The
   span is then sent twice with the same span id.
-- The trace is not linked to the AWS X-Ray trace of the Lambda invocation.
-- The trace context is not propagated to functions called with `ctx.invoke`.
+- The plugin does not export to X-Ray. It only uses the X-Ray Root as its trace id. The
+  Lambda X-Ray segments appear in the trace only if the function sends X-Ray data, for
+  example with Active tracing and an OpenTelemetry X-Ray integration. The durable spans
+  have no parent link to those segments.
+- In Active tracing, the invoked execution's workflow span links to a span that Lambda
+  generated, not to the caller's CHAINED_INVOKE span. Lambda replaces `Parent` in every
+  invocation. Both executions still share one trace id.
+- The workflow span of a top-level execution links to a Lambda or upstream span that
+  this plugin does not export.
 - Log lines do not carry the trace id or span id.
 
 ## Differences from @aws/durable-execution-sdk-js-otel
@@ -241,11 +324,13 @@ durable span.
 - This plugin has only the execution view. The full plugin also has an invocation view.
 - This plugin builds finished spans and calls the exporter directly. The full plugin uses
   a Tracer, a TracerProvider and a deterministic IdGenerator.
-- This plugin derives the trace id from the ARN only. The full plugin can join a
-  propagated parent trace or an X-Ray trace.
+- This plugin takes the trace id from the trace header's Root, else from the ARN. It
+  never uses the header's `Parent` as a parent. It links the workflow span to it. It
+  ignores `Sampled`. The full plugin can also join a W3C parent and reads the
+  `Sampled` flag.
 - This plugin does not use `AsyncLocalStorage`. The full plugin does.
-- This plugin has no propagation metadata for chained invokes, no log correlation, no
-  context extractors and no loading from a Lambda layer.
+- This plugin propagates to chained invokes with the lite SDK's `traceHeader` hook. It has
+  no log correlation, no context extractors and no loading from a Lambda layer.
 - This plugin uses the same attribute names and the same status mapping.
 
 ## Contributing
