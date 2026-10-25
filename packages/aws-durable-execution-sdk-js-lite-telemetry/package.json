@@ -65,6 +65,10 @@
     "./otel-logs": {
       "types": "./src/exporters/otel.d.ts",
       "default": "./src/exporters/otel.js"
+    },
+    "./opensearch": {
+      "types": "./src/exporters/opensearch.d.ts",
+      "default": "./src/exporters/opensearch.js"
     }
   },
   "files": [
