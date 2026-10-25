@@ -14,9 +14,30 @@ function checkTable(table) {
   return table;
 }
 
-// The schema of the full SDK's CDK stack (cdk/stack.ts). Viewers of that package read
-// this table.
-export function createTableSql(table = DEFAULT_TABLE) {
+// PostgreSQL: the schema of the full SDK's CDK stack (cdk/stack.ts). Viewers of that
+// package read this table.
+//
+// MySQL: the schema of the full SDK's README. The full SDK has no CDK stack for MySQL.
+// The time columns are VARCHAR(30), not DATETIME:
+// 1. Every record time has the fixed format YYYY-MM-DDTHH:MM:SS.sssZ.
+// 2. So text order equals time order, and the emitted_at guard can compare text.
+// 3. The exporter sends the strings unchanged, as the full SDK does.
+// 4. So a table created from the full SDK's README works with both exporters.
+// Any engine other than "mysql" gets the PostgreSQL schema.
+export function createTableSql(table = DEFAULT_TABLE, { engine } = {}) {
+  if (engine === "mysql") {
+    return `CREATE TABLE IF NOT EXISTS ${checkTable(table)} (
+  execution_arn VARCHAR(512) PRIMARY KEY,
+  execution_name VARCHAR(256),
+  function_name VARCHAR(128),
+  status VARCHAR(20),
+  start_time VARCHAR(30),
+  end_time VARCHAR(30),
+  duration_ms BIGINT,
+  record_json LONGTEXT,
+  emitted_at VARCHAR(30)
+)`;
+  }
   return `CREATE TABLE IF NOT EXISTS ${checkTable(table)} (
   execution_arn VARCHAR(512) PRIMARY KEY,
   execution_name VARCHAR(256),
@@ -50,6 +71,28 @@ ON CONFLICT (execution_arn) DO UPDATE SET
 WHERE ${table}.emitted_at <= EXCLUDED.emitted_at`;
 }
 
+// The MySQL version of the same upsert.
+// 1. ON DUPLICATE KEY UPDATE has no WHERE clause. So each assignment keeps the old value
+//    when the stored row is newer: col = IF(<stored> <= <new>, <new>, <stored>).
+// 2. MySQL evaluates the assignments from left to right. An assignment to emitted_at
+//    changes the value that the IF conditions after it read.
+// 3. So emitted_at is assigned last.
+// The row alias "excluded" names the new row, as EXCLUDED does in PostgreSQL. The full
+// SDK uses VALUES(col) instead. MySQL 8.0.20 deprecates VALUES(col). The row alias
+// exists since MySQL 8.0.19, and the Data API supports Aurora MySQL 3.07 and later
+// (MySQL 8.0 compatible).
+function mysqlUpsertSql(table) {
+  const keepNewer = (column) =>
+    `${column} = IF(${table}.emitted_at <= excluded.emitted_at, excluded.${column}, ${table}.${column})`;
+  return `INSERT INTO ${table}
+  (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
+VALUES
+  (:execution_arn, :execution_name, :function_name, :status, :start_time, :end_time, :duration_ms, :record_json, :emitted_at)
+AS excluded
+ON DUPLICATE KEY UPDATE
+  ${["status", "end_time", "duration_ms", "record_json", "emitted_at"].map(keepNewer).join(",\n  ")}`;
+}
+
 const text = (value) => (value ? { stringValue: value } : { isNull: true });
 
 export function createAuroraExporter({
@@ -57,13 +100,19 @@ export function createAuroraExporter({
   secretArn,
   database,
   table = DEFAULT_TABLE,
+  // "mysql" or "postgresql". Any other value, and no value, means PostgreSQL. The full
+  // SDK requires the option. The default keeps the callers from before the option
+  // working.
+  engine,
   region,
   endpoint,
   client = createAwsClient({ service: "rds-data", region, endpoint }),
   // The full SDK's value: a practical limit for one Data API statement.
   maxRecordBytes = 1_000_000,
 }) {
-  const sql = upsertSql(checkTable(table));
+  const sql = (engine === "mysql" ? mysqlUpsertSql : upsertSql)(
+    checkTable(table),
+  );
   return {
     maxRecordBytes,
     async export(record) {

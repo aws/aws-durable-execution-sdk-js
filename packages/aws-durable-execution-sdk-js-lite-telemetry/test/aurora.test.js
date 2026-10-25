@@ -188,3 +188,102 @@ test("the exporter can be created without a client", () => {
   });
   assert.equal(typeof exporter.export, "function");
 });
+
+const MYSQL_UPSERT = `INSERT INTO durable_execution_telemetry
+  (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
+VALUES
+  (:execution_arn, :execution_name, :function_name, :status, :start_time, :end_time, :duration_ms, :record_json, :emitted_at)
+AS excluded
+ON DUPLICATE KEY UPDATE
+  status = IF(durable_execution_telemetry.emitted_at <= excluded.emitted_at, excluded.status, durable_execution_telemetry.status),
+  end_time = IF(durable_execution_telemetry.emitted_at <= excluded.emitted_at, excluded.end_time, durable_execution_telemetry.end_time),
+  duration_ms = IF(durable_execution_telemetry.emitted_at <= excluded.emitted_at, excluded.duration_ms, durable_execution_telemetry.duration_ms),
+  record_json = IF(durable_execution_telemetry.emitted_at <= excluded.emitted_at, excluded.record_json, durable_execution_telemetry.record_json),
+  emitted_at = IF(durable_execution_telemetry.emitted_at <= excluded.emitted_at, excluded.emitted_at, durable_execution_telemetry.emitted_at)`;
+
+const sentSql = async (extra) => {
+  const client = fakeClient();
+  await createAuroraExporter(config(client, extra)).export(ended);
+  return client.requests[0].json;
+};
+
+test("engine mysql sends ON DUPLICATE KEY UPDATE with the emitted_at guard on every column", async () => {
+  const { sql } = await sentSql({ engine: "mysql" });
+  assert.equal(sql, MYSQL_UPSERT);
+});
+
+test("the mysql upsert assigns emitted_at last", async () => {
+  // MySQL evaluates the assignments from left to right. An earlier assignment to
+  // emitted_at would change the value that the later IF conditions read.
+  const { sql } = await sentSql({ engine: "mysql" });
+  const assigned = [...sql.matchAll(/^ {2}(\w+) = IF\(/gm)].map((m) => m[1]);
+  assert.deepEqual(assigned, [
+    "status",
+    "end_time",
+    "duration_ms",
+    "record_json",
+    "emitted_at",
+  ]);
+});
+
+test("engine mysql uses the custom table name in the guard", async () => {
+  const { sql } = await sentSql({ engine: "mysql", table: "runs" });
+  assert.equal(
+    sql,
+    MYSQL_UPSERT.replaceAll("durable_execution_telemetry", "runs"),
+  );
+});
+
+test("engine mysql sends the same parameters as postgresql, with the times unchanged", async () => {
+  const mysql = await sentSql({ engine: "mysql" });
+  const postgresql = await sentSql({});
+  assert.deepEqual(mysql.parameters, postgresql.parameters);
+  const emittedAt = mysql.parameters.find((p) => p.name === "emitted_at");
+  assert.deepEqual(emittedAt.value, {
+    stringValue: "2026-01-01T00:00:02.500Z",
+  });
+});
+
+test("engine postgresql and any other engine send the default PostgreSQL upsert", async () => {
+  const { sql } = await sentSql({});
+  assert.match(sql, /ON CONFLICT \(execution_arn\) DO UPDATE SET/);
+  assert.equal((await sentSql({ engine: "postgresql" })).sql, sql);
+  assert.equal((await sentSql({ engine: "MySQL" })).sql, sql);
+});
+
+test("createTableSql for mysql has the full SDK's MySQL schema", () => {
+  assert.equal(
+    createTableSql(undefined, { engine: "mysql" }),
+    `CREATE TABLE IF NOT EXISTS durable_execution_telemetry (
+  execution_arn VARCHAR(512) PRIMARY KEY,
+  execution_name VARCHAR(256),
+  function_name VARCHAR(128),
+  status VARCHAR(20),
+  start_time VARCHAR(30),
+  end_time VARCHAR(30),
+  duration_ms BIGINT,
+  record_json LONGTEXT,
+  emitted_at VARCHAR(30)
+)`,
+  );
+  assert.match(
+    createTableSql("runs", { engine: "mysql" }),
+    /^CREATE TABLE IF NOT EXISTS runs \(/,
+  );
+  assert.throws(
+    () => createTableSql("a-b", { engine: "mysql" }),
+    /Invalid table name "a-b"/,
+  );
+});
+
+test("createTableSql for postgresql or any other engine has the PostgreSQL schema", () => {
+  assert.equal(
+    createTableSql(undefined, { engine: "postgresql" }),
+    createTableSql(),
+  );
+  assert.equal(
+    createTableSql("runs", { engine: "oracle" }),
+    createTableSql("runs"),
+  );
+  assert.match(createTableSql(), /record_json JSONB/);
+});
