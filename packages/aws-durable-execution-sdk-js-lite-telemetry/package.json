@@ -49,6 +49,10 @@
     "./redshift": {
       "types": "./src/exporters/redshift.d.ts",
       "default": "./src/exporters/redshift.js"
+    },
+    "./lambda-log": {
+      "types": "./src/exporters/lambda-log.d.ts",
+      "default": "./src/exporters/lambda-log.js"
     }
   },
   "files": [
