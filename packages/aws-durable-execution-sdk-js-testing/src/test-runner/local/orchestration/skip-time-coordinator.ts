@@ -54,6 +54,9 @@ export interface SkipTimeParticipant {
   /**
    * Completes the operations that end by `deadlineMs`, and starts the invocation they
    * release. Called after the fake clock has reached `deadlineMs`.
+   *
+   * Afterwards, {@link earliestDeadline} must not return `deadlineMs`. The coordinator
+   * schedules another pass after each applied end only while this holds.
    */
   applyDeadline(deadlineMs: number): void;
   /**
@@ -429,20 +432,22 @@ export class SkipTimeCoordinator {
       participant.onClockAdvanced();
     }
 
-    // A participant consumes an end when it applies it. If the same end is still reported,
-    // another pass would apply it again and schedule yet another pass, forever. So stop
-    // here, and leave the next advance to the participant's own calls.
+    // A participant consumes the end it applies. See SkipTimeParticipant.applyDeadline. A
+    // participant that still reports the same end breaks that contract. Another pass would
+    // then apply that end again and schedule a further pass, without limit. So no pass is
+    // scheduled. The next advance then comes from the participants' own calls.
     if (earliest.participant.earliestDeadline() === earliest.deadlineMs) {
       return;
     }
 
-    // Applying an end usually makes its owner busy, and the owner calls advance() again
-    // once its invocation has run. But an invoked or detached owner whose running
-    // invocation has expired its hold does not stop the clock, and the invocation that the
-    // end queued may never run, behind a step that never settles. Then no participant
-    // would call advance() again, and every later end would take real time. So schedule
-    // one more pass. It is harmless when the owner does stop the clock: the pass returns
-    // at the busy check. Each pass applies one end, so the passes stop when no end is left.
+    // The owner of the end usually becomes busy now. It calls advance() again once the
+    // invocation that the end queued has run. An invoked or detached owner can instead
+    // have an invocation running past its hold. That owner does not stop the clock. The
+    // queued invocation waits behind the running one, which may never settle. Then no
+    // participant calls advance() again, and every later end takes real time. So schedule
+    // one more pass. If a participant or an invoke stops the clock, that pass returns
+    // without moving it. Otherwise it applies the next end, which its owner consumes. So
+    // the passes stop once no end is left, or once something stops the clock.
     this.scheduleAdvance();
   }
 

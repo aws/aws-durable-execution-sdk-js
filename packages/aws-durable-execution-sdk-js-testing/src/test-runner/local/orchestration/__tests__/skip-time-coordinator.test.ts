@@ -365,6 +365,32 @@ describe("SkipTimeCoordinator", () => {
     expect(stuck.applyDeadline).toHaveBeenCalledTimes(1);
   });
 
+  it("does not let a scheduled pass advance while the owner of the applied end is busy", async () => {
+    // A runner that was not invoked becomes busy when it applies an end, as the
+    // orchestrator does. It stops the clock until its invocation has run.
+    const owner = participant({ deadline: 1000 });
+    owner.applyDeadline.mockImplementation(() => {
+      owner.state.deadline = undefined;
+      owner.state.busy = true;
+    });
+    coordinator.register(owner);
+    const other = participant({ deadline: 2000 });
+    coordinator.register(other);
+
+    coordinator.advance();
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => realSetImmediate(resolve));
+    }
+
+    expect(Date.now()).toBe(1000);
+    expect(other.applyDeadline).not.toHaveBeenCalled();
+
+    owner.state.busy = false;
+    coordinator.advance();
+
+    expect(Date.now()).toBe(2000);
+  });
+
   it("forgets a detached child once it unregisters", () => {
     const caller = participant();
     coordinator.register(caller);
