@@ -148,6 +148,8 @@ describe("suspend and terminate hooks", () => {
   let microvms: FakeMicrovmsClient;
   let signals: Map<string, AbortSignal>;
   let releases: Map<string, () => void>;
+  /** The callback ID of each handler run, in start order. */
+  let started: string[];
 
   beforeEach(() => {
     // The requests go straight to the listener, so no socket timer runs.
@@ -159,6 +161,7 @@ describe("suspend and terminate hooks", () => {
     microvms = new FakeMicrovmsClient();
     signals = new Map();
     releases = new Map();
+    started = [];
   });
 
   afterEach(async () => {
@@ -183,6 +186,7 @@ describe("suspend and terminate hooks", () => {
     target = createMicrovmWorkerListener({
       handler: (_input, context) => {
         signals.set(context.callbackId, context.signal);
+        started.push(context.callbackId);
         return new Promise((resolve) => {
           releases.set(context.callbackId, () => resolve("done"));
         });
@@ -190,6 +194,7 @@ describe("suspend and terminate hooks", () => {
       routes: {
         "/job": (_input, context) => {
           signals.set(context.callbackId, context.signal);
+          started.push(context.callbackId);
           return new Promise((resolve) => {
             releases.set(context.callbackId, () => resolve("done"));
           });
@@ -442,6 +447,35 @@ describe("suspend and terminate hooks", () => {
 
       expect(await job(worker, "cb-1")).toBe(503);
       expect(signals.has("cb-1")).toBe(false);
+    });
+
+    it("answers a resend of a running or finished job with 202 after the hook, and starts nothing", async () => {
+      // A duplicate starts no job, so 202 is safe after the hook. A 503 would
+      // make the durable function retry the delivery against a MicroVM that
+      // is ending. The callback of each job already has its outcome, or the
+      // hook fails it.
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-done")).toBe(202);
+      await finishJob("cb-done");
+      expect(await job(worker, "cb-running")).toBe(202);
+      await hook(worker, "terminate");
+
+      expect(await job(worker, "cb-done")).toBe(202);
+      expect(await job(worker, "cb-running")).toBe(202);
+      expect(await job(worker, "cb-new")).toBe(503);
+      await advance(0);
+
+      expect(started).toEqual(["cb-done", "cb-running"]);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-done" },
+        {
+          kind: "failure",
+          callbackId: "cb-running",
+          errorType: "MicrovmTerminatedError",
+          message: "the MicroVM was terminated before the job finished",
+        },
+      ]);
     });
 
     it("never suspends after the hook", async () => {
@@ -792,6 +826,43 @@ describe("suspend and terminate hooks", () => {
 
       await hook(worker, "resume");
       expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("answers a resend of a finished job with 202 during the refusal, and does not run it again", async () => {
+      const warn = jest.fn();
+      const worker = start(warn);
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await finishJob("cb-1");
+      await hook(worker, "suspend");
+
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(503);
+      await advance(0);
+
+      expect(started).toEqual(["cb-1"]);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+      expect(warn).toHaveBeenCalledWith("duplicate job ignored", {
+        microvmId: "mvm-1",
+      });
+    });
+
+    it("answers a resend of a running job with 202 during the refusal, and does not start it again", async () => {
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await hook(worker, "suspend");
+
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual(["cb-1"]);
+
+      await finishJob("cb-1");
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
     });
 
     it("accepts jobs again 30 seconds after the hook without a resume", async () => {

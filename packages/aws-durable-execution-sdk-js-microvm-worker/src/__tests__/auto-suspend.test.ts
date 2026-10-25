@@ -407,6 +407,28 @@ describe("auto-suspend when idle", () => {
     expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
   });
 
+  it("answers a resend of a finished job with 202 while it suspends, and does not run it again", async () => {
+    // The durable function lost the 202 of a short job, and sends the job
+    // again after the job ended. A 503 would make it resume the MicroVM for
+    // nothing.
+    const microvms = new FakeMicrovmsClient();
+    const worker = start(microvms);
+
+    await runHook(worker, IDLE_SECONDS);
+    expect(await job(worker, "cb-1")).toBe(202);
+    await finishJob("cb-1");
+    await advance(IDLE_MS);
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+
+    expect(await job(worker, "cb-1")).toBe(202);
+    expect(await job(worker, "cb-2")).toBe(503);
+    await advance(0);
+    expect(started).toEqual(["cb-1"]);
+    // The duplicate starts no idle time and no second call.
+    await advance(IDLE_MS);
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+  });
+
   it("accepts jobs again 30 seconds after the call when no resume hook arrives", async () => {
     const microvms = new FakeMicrovmsClient();
     const worker = start(microvms);

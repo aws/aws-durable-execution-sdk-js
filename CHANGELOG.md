@@ -515,6 +515,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the worker accepts jobs again at once, and tries the call again after at least 30 seconds.
   Before, the retried error counted as unknown, and the worker refused jobs for up to 30 seconds.
 
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` answered a second delivery
+  of a known job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
+  durable function sends a job again when it lost the first 202, or when its request step runs
+  again on replay. After the 503, it resumed the MicroVM, sent the job again, and got 202. So the
+  MicroVM ran again for nothing. The worker now checks for a known callback ID before it refuses
+  a job. A second delivery of a job that runs or already ended gets HTTP 202 in every state, and
+  starts no job. A new job still gets HTTP 503 during the refusal. The `run` hook already checked
+  for a known job first.
+
 ### Added
 
 - **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
