@@ -152,6 +152,91 @@ describe("microvm job input size", () => {
     expect(client.runInputs).toHaveLength(0);
   });
 
+  it.each([
+    ["null", null, "null"],
+    ["undefined", undefined, "undefined"],
+    ["a string", "no encoding here", "no encoding here"],
+  ])(
+    "names the operation when toJSON throws %s, and keeps the thrown value as the cause",
+    async (_label, thrown, detail) => {
+      const client = new FakeMicrovmsClient();
+      const input = {
+        toJSON() {
+          throw thrown;
+        },
+      };
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: withDurableExecution(
+          async (_event: unknown, context: DurableContext) =>
+            microvm(context, "build", input, baseConfig(client)).then(
+              () => "no error",
+              (reason: unknown) => {
+                const error = reason as Error;
+                return {
+                  name: error.name,
+                  message: error.message,
+                  causeIsThrown: error.cause === thrown,
+                  hasCause: "cause" in error,
+                };
+              },
+            ),
+        ),
+      });
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toEqual({
+        name: "TypeError",
+        message: `MicroVM "build": the job input must be JSON-serializable: ${detail}`,
+        causeIsThrown: true,
+        hasCause: true,
+      });
+      expect(execution.getOperations()).toHaveLength(0);
+      expect(client.runInputs).toHaveLength(0);
+    },
+  );
+
+  it("names the operation for an invoke whose input's toJSON throws null", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const input = {
+      toJSON() {
+        throw null;
+      },
+    };
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            {
+              ...baseConfig(client),
+              timeout: { hours: 1 },
+              fetch: endpoint.fetch,
+            },
+            async (vm, ctx) =>
+              vm
+                .invoke<string>(ctx, "build", input, {
+                  timeout: { minutes: 10 },
+                })
+                .catch(
+                  (error: unknown) =>
+                    `${(error as Error).name}: ${(error as Error).message}`,
+                ),
+          ),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toBe(
+      'TypeError: MicroVM "build": the job input must be JSON-serializable: null',
+    );
+    expect(endpoint.requests).toHaveLength(0);
+  });
+
   it("accepts an undefined input, and sends a body without an input field", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();

@@ -121,6 +121,24 @@ export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
 const INPUT_MEMBER_PREFIX = '{"input":';
 
 /**
+ * Returns the text that names a value thrown during the input's encoding.
+ *
+ * 1. A `toJSON` method or a getter of the input can throw any value, such as
+ *    `null` or a string.
+ * 2. Reading `message` of `null` throws a new `TypeError`. That error would
+ *    replace the wrapper that names the operation.
+ * 3. So an `Error` gives its message, and any other value gives `String()`
+ *    of it. A value whose conversion throws gives a fixed text.
+ */
+function thrownDetail(error: unknown): string {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "a thrown value that cannot be converted to a string";
+  }
+}
+
+/**
  * Encodes a job input to JSON once, and rejects it when the JSON has more
  * than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  *
@@ -175,7 +193,7 @@ export function validateJobInput(
     json = JSON.stringify({ input });
   } catch (error) {
     throw new TypeError(
-      `MicroVM "${name}": the job input must be JSON-serializable: ${(error as Error).message}`,
+      `MicroVM "${name}": the job input must be JSON-serializable: ${thrownDetail(error)}`,
       { cause: error },
     );
   }
