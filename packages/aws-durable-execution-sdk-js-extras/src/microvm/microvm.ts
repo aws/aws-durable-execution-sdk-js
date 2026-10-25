@@ -7,13 +7,15 @@ import {
   createScope,
   deliverJob,
   fitsRunHook,
-  jobDocument,
+  jobDocumentJson,
   launch,
+  measuredJob,
   type OperationScope,
   terminate,
   validateBaseConfig,
   validateJobInput,
   validateRequest,
+  withJsonMember,
 } from "./shared";
 import { inStage, microvmErrorMapper } from "./errors";
 import { MicrovmOperationSubType } from "./subtypes";
@@ -70,8 +72,11 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * @param name - The child context name. It also prefixes the inner
  * operation names.
  * @param input - The job input. It must be JSON-serializable, and it must be
- * the same on every replay. Its size selects the delivery. Its JSON form
- * must have at most {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
+ * the same on every replay. The operation encodes it with `JSON.stringify`
+ * once, when `microvm` is called. So a `toJSON` method runs once per call,
+ * and each replay calls `microvm` again. The operation measures that JSON
+ * text, and every payload sends exactly that text. Its size selects the
+ * delivery. It must have at most {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  * @param config - The MicroVM, delivery, and callback configuration.
  * @returns The value that the MicroVM passed to
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
@@ -99,12 +104,13 @@ export function microvm<TOutput = unknown, TInput = unknown>(
 ): DurablePromise<TOutput> {
   let timeoutSeconds: number;
   let scope: OperationScope;
+  let inputJson: string | undefined;
   try {
     timeoutSeconds = validateBaseConfig(name, config);
     if (config.request !== undefined) {
       validateRequest(name, config.request);
     }
-    validateJobInput(name, input);
+    inputJson = validateJobInput(name, input);
     scope = createScope(context, name, config);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
@@ -121,7 +127,9 @@ export function microvm<TOutput = unknown, TInput = unknown>(
         config.timeout,
         config.heartbeatTimeout,
       );
-      const job = jobDocument(callbackId, input, config.heartbeatTimeout);
+      // The job holds the input's JSON text from validateJobInput. Every
+      // payload below sends that text. So `input` is encoded once per call.
+      const job = measuredJob(callbackId, inputJson, config.heartbeatTimeout);
 
       // The operation can deliver the job to the MicroVM in two ways:
       //
@@ -150,11 +158,14 @@ export function microvm<TOutput = unknown, TInput = unknown>(
       // is deterministic: the callback ID comes from the checkpoint on
       // replay, and the input must be the same on every replay. So every
       // replay picks the same delivery as the first attempt.
-      const withJob = JSON.stringify({
-        version: 1,
-        region: scope.region,
-        job,
-      } satisfies MicrovmRunHookPayload<TInput>);
+      const withJob = withJsonMember(
+        {
+          version: 1,
+          region: scope.region,
+        } satisfies MicrovmRunHookPayload,
+        "job",
+        jobDocumentJson(job),
+      );
       const overHttp = request?.path !== undefined || !fitsRunHook(withJob);
       // The worker rejects a run hook payload without `version` and
       // `region`. So the HTTP delivery still sends those two fields, and
@@ -163,7 +174,7 @@ export function microvm<TOutput = unknown, TInput = unknown>(
         ? JSON.stringify({
             version: 1,
             region: scope.region,
-          } satisfies MicrovmRunHookPayload<TInput>)
+          } satisfies MicrovmRunHookPayload)
         : withJob;
 
       const launched = await inStage(name, "launch", () =>

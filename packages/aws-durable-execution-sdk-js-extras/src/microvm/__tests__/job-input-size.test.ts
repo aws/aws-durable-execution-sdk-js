@@ -7,6 +7,7 @@ import {
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { MAX_JOB_INPUT_BYTES, microvm, microvmSession } from "..";
+import { validateJobInput, withJsonMember } from "../shared";
 import { baseConfig, FakeEndpoint, FakeMicrovmsClient } from "./fakes";
 
 beforeAll(() =>
@@ -254,6 +255,152 @@ describe("microvm job input size", () => {
   });
 });
 
+/**
+ * Returns an input whose `toJSON` returns "small" on its first call and a
+ * 7 MiB string on every later call. It records the number of calls.
+ *
+ * A check that encodes the input once and a body that encodes it again
+ * would see different values. The check would accept "small", and the body
+ * would carry 7 MiB. The worker refuses a body over 6 MiB.
+ */
+const statefulInput = () => {
+  const state = { calls: 0 };
+  const input = {
+    toJSON() {
+      state.calls += 1;
+      return state.calls === 1 ? "small" : "x".repeat(7 * 1024 * 1024);
+    },
+  };
+  return { input, state };
+};
+
+describe("job input encoded once", () => {
+  // Each invocation calls the handler again, and the handler creates a new
+  // input. So each state counts the `toJSON` calls of one call to the
+  // operation. The set of counts is {1} when every call encoded its input
+  // once, and empty when no call ran.
+  const callsPerCall = (states: { calls: number }[]): Set<number> =>
+    new Set(states.map((state) => state.calls));
+
+  it("microvm sends the measured form over HTTP, and calls toJSON once per call", async () => {
+    const states: { calls: number }[] = [];
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          const { input, state } = statefulInput();
+          states.push(state);
+          // `request.path` selects HTTP delivery. So the job goes in a body
+          // that the test can read.
+          return microvm(context, "build", input, {
+            ...baseConfig(client),
+            heartbeatTimeout: { hours: 1 },
+            request: { path: "/job" },
+            fetch: endpoint.fetch,
+          });
+        },
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(endpoint.requests).toHaveLength(1);
+    const body = endpoint.requests[0].body;
+    expect(body.input).toBe("small");
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(4096);
+    expect(callsPerCall(states)).toEqual(new Set([1]));
+  });
+
+  it("microvm sends the measured form in the run hook, and calls toJSON once per call", async () => {
+    const states: { calls: number }[] = [];
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          const { input, state } = statefulInput();
+          states.push(state);
+          return microvm(context, "build", input, {
+            ...baseConfig(client),
+            fetch: endpoint.fetch,
+          });
+        },
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.launch")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    // "small" fits in the run hook. So the launch carries the job, and the
+    // operation sends no HTTP request.
+    expect(client.runInputs).toHaveLength(1);
+    const payload = JSON.parse(client.runInputs[0].runHookPayload as string);
+    expect(payload.job.input).toBe("small");
+    expect(endpoint.requests).toHaveLength(0);
+    expect(callsPerCall(states)).toEqual(new Set([1]));
+  });
+
+  it("vm.invoke sends the measured form, and calls toJSON once per call", async () => {
+    const states: { calls: number }[] = [];
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            {
+              ...baseConfig(client),
+              timeout: { hours: 1 },
+              fetch: endpoint.fetch,
+            },
+            async (vm, ctx) => {
+              const { input, state } = statefulInput();
+              states.push(state);
+              return vm.invoke<string>(ctx, "build", input, {
+                timeout: { minutes: 10 },
+              });
+            },
+          ),
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toBe("done");
+    expect(endpoint.requests).toHaveLength(1);
+    const body = endpoint.requests[0].body;
+    expect(body.input).toBe("small");
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(4096);
+    expect(callsPerCall(states)).toEqual(new Set([1]));
+  });
+});
+
 describe("vm.invoke job input size", () => {
   const runSession = (
     client: FakeMicrovmsClient,
@@ -335,4 +482,35 @@ describe("vm.invoke job input size", () => {
       expect(endpoint.requests).toHaveLength(0);
     },
   );
+});
+
+describe("measured input text", () => {
+  // A Proxy can list an object's keys in any order. JSON.parse creates
+  // integer keys first. So a parse and a second encode would reorder these
+  // members. The body must hold the measured text as it is.
+  it("goes into the body unchanged, with the member order of the encode", () => {
+    const input = new Proxy({ b: 1, 1: 2 } as Record<string, number>, {
+      ownKeys: () => ["b", "1"],
+    });
+
+    const inputJson = validateJobInput("build", input);
+
+    expect(inputJson).toBe('{"b":1,"1":2}');
+    expect(withJsonMember({ callbackId: "id" }, "input", inputJson)).toBe(
+      '{"callbackId":"id","input":{"b":1,"1":2}}',
+    );
+  });
+
+  it("is undefined for an input that encodes to no value, and the body has no input member", () => {
+    const inputJson = validateJobInput("build", undefined);
+
+    expect(inputJson).toBeUndefined();
+    expect(withJsonMember({ callbackId: "id" }, "input", inputJson)).toBe(
+      '{"callbackId":"id"}',
+    );
+  });
+
+  it("follows an empty object without a comma", () => {
+    expect(withJsonMember({}, "input", '"x"')).toBe('{"input":"x"}');
+  });
 });

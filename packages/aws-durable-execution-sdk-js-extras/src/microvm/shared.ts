@@ -117,12 +117,16 @@ export function fitsRunHook(payload: string): boolean {
  */
 export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
 
-/** The bytes of `{"input":` and `}` around the input's JSON. */
-const JOB_INPUT_WRAPPER_BYTES = '{"input":}'.length;
+/** The text before the input's JSON in `JSON.stringify({ input })`. */
+const INPUT_MEMBER_PREFIX = '{"input":';
 
 /**
- * Rejects a job input whose JSON form has more than
- * {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
+ * Encodes a job input to JSON once, and rejects it when the JSON has more
+ * than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
+ *
+ * @returns The input's JSON text as measured. It is `undefined` when the
+ * input encodes to no value, such as `undefined` or a function. Then the
+ * bodies have no `input` field.
  *
  * Without this check, an oversized job launches a MicroVM first. The worker
  * then refuses the body, with a 400 or a connection reset. The request step
@@ -146,10 +150,26 @@ const JOB_INPUT_WRAPPER_BYTES = '{"input":}'.length;
  * 4. So the check encodes `{ input }`, and the measured form is the form
  *    that the bodies send.
  *
+ * The caller sends the returned text, and never encodes the input again:
+ *
+ * 1. `JSON.stringify` calls `toJSON` on every encode.
+ * 2. A `toJSON` can return a different value on each call.
+ * 3. So a second encode can produce a larger text than the measured one.
+ *    That text could exceed the 6 MiB body limit after the check passed.
+ * 4. A JSON parse and a second encode of the measured text are also
+ *    inexact. A `Proxy` can list an object's keys in any order. A parsed
+ *    object lists integer keys first. So the second text can order the
+ *    members differently.
+ * 5. So the caller inserts the returned text into each body with
+ *    {@link withJsonMember}. Each body then holds the measured bytes.
+ *
  * @throws \{TypeError\} When `JSON.stringify` cannot encode the input.
  * @throws \{RangeError\} When the input is too large.
  */
-export function validateJobInput(name: string, input: unknown): void {
+export function validateJobInput(
+  name: string,
+  input: unknown,
+): string | undefined {
   let json: string;
   try {
     json = JSON.stringify({ input });
@@ -159,20 +179,44 @@ export function validateJobInput(name: string, input: unknown): void {
       { cause: error },
     );
   }
-  // 1. The result is `{"input":`, then the input's JSON, then `}`.
-  // 2. The wrapper characters are ASCII. So they take 10 bytes.
-  // 3. JSON.stringify omits a property whose value encodes to undefined.
-  //    Then the result is `{}`, and the body has no `input` field.
-  // 4. So `{}` counts as 0 bytes, and any other result loses 10 bytes.
-  const bytes =
-    json === "{}"
-      ? 0
-      : Buffer.byteLength(json, "utf8") - JOB_INPUT_WRAPPER_BYTES;
+  // 1. JSON.stringify omits a property whose value encodes to undefined.
+  //    Then the result is `{}`, and the bodies have no `input` field.
+  // 2. Any other result is `{"input":`, then the input's JSON, then `}`.
+  if (json === "{}") {
+    return undefined;
+  }
+  const inputJson = json.slice(INPUT_MEMBER_PREFIX.length, -1);
+  const bytes = Buffer.byteLength(inputJson, "utf8");
   if (bytes > MAX_JOB_INPUT_BYTES) {
     throw new RangeError(
       `MicroVM "${name}": the job input is ${bytes} bytes as JSON. The limit is ${MAX_JOB_INPUT_BYTES} bytes, because the worker accepts a job body of at most 6 MiB. Pass larger data by reference, for example as an S3 key.`,
     );
   }
+  return inputJson;
+}
+
+/**
+ * Returns the JSON text of `fields` with one more member at the end: `key`,
+ * whose value is the JSON text `valueJson`. With `valueJson` `undefined`,
+ * it returns the JSON text of `fields` alone.
+ *
+ * The function inserts `valueJson` as it is, and does not encode it again.
+ * So the result holds the exact text that {@link validateJobInput} measured.
+ * `fields` must be a plain object without `toJSON`, so that its JSON text
+ * is an object.
+ */
+export function withJsonMember(
+  fields: object,
+  key: string,
+  valueJson: string | undefined,
+): string {
+  const json = JSON.stringify(fields);
+  if (valueJson === undefined) {
+    return json;
+  }
+  const member = `${JSON.stringify(key)}:${valueJson}`;
+  // `{}` has no member to follow, so the new member needs no comma.
+  return json === "{}" ? `{${member}}` : `${json.slice(0, -1)},${member}}`;
 }
 
 /**
@@ -517,39 +561,64 @@ export function createJobCallback<TOutput>(
   }) as unknown as Promise<[Promise<TOutput>, string]>;
 }
 
-export function jobDocument<TInput>(
+/**
+ * One job before delivery: the job document's fields other than `input`,
+ * and the input's JSON text from {@link validateJobInput}. Each body
+ * inserts that text with {@link withJsonMember}. So no body encodes the
+ * input again.
+ */
+export interface MeasuredJob {
+  fields: Omit<MicrovmJobDocument, "input">;
+  /** `undefined` when the input encodes to no value. */
+  inputJson: string | undefined;
+}
+
+export function measuredJob(
   callbackId: string,
-  input: TInput,
+  inputJson: string | undefined,
   heartbeatTimeout: Duration | undefined,
-): MicrovmJobDocument<TInput> {
+): MeasuredJob {
   return {
-    callbackId,
-    ...(heartbeatTimeout !== undefined && {
-      heartbeatTimeoutSeconds: durationToSeconds(heartbeatTimeout),
-    }),
-    input,
+    fields: {
+      callbackId,
+      ...(heartbeatTimeout !== undefined && {
+        heartbeatTimeoutSeconds: durationToSeconds(heartbeatTimeout),
+      }),
+    },
+    inputJson,
   };
+}
+
+/** Returns the JSON text of the job document, with the measured input. */
+export function jobDocumentJson(job: MeasuredJob): string {
+  return withJsonMember(job.fields, "input", job.inputJson);
 }
 
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
  */
-export async function deliverJob<TInput>(
+export async function deliverJob(
   child: DurableContext,
   scope: OperationScope,
   jobName: string,
   launched: LaunchResult,
   request: MicrovmRequestConfig,
-  job: MicrovmJobDocument<TInput>,
+  job: MeasuredJob,
   options: { resume?: boolean } = {},
 ): Promise<void> {
-  const body: MicrovmJobRequest<TInput> = {
-    version: 1,
-    region: scope.region,
-    microvmId: launched.microvmId,
-    ...job,
-  };
+  // The body ends with the input's measured JSON text. So it has the size
+  // that validateJobInput checked.
+  const body = withJsonMember(
+    {
+      version: 1,
+      region: scope.region,
+      microvmId: launched.microvmId,
+      ...job.fields,
+    } satisfies Omit<MicrovmJobRequest, "input">,
+    "input",
+    job.inputJson,
+  );
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
@@ -602,7 +671,7 @@ export async function deliverJob<TInput>(
         endpoint,
         path: request.path ?? DEFAULT_MICROVM_JOB_PATH,
         port: request.port ?? DEFAULT_MICROVM_PORT,
-        body: JSON.stringify(body),
+        body,
         retryWindowMs,
         windowStartedAt,
         remainingTimeMs: remainingTime(child),

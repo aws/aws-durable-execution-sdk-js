@@ -8,9 +8,9 @@ import {
   createScope,
   deliverJob,
   durationToSeconds,
-  jobDocument,
   type LaunchResult,
   launch,
+  measuredJob,
   type OperationScope,
   terminate,
   validateBaseConfig,
@@ -307,6 +307,7 @@ function invokeJob<TOutput, TInput>(
   input: TInput,
   options: MicrovmInvokeOptions,
 ): DurablePromise<TOutput> {
+  let inputJson: string | undefined;
   try {
     // A call in the shape vm.invoke(name, input, options) passes a string
     // here. This check reports that, instead of a TypeError from inside.
@@ -325,7 +326,7 @@ function invokeJob<TOutput, TInput>(
     }
     validateRequest(jobName, options);
     validateTimeout(jobName, "timeout", options.timeout);
-    validateJobInput(jobName, input);
+    inputJson = validateJobInput(jobName, input);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
@@ -346,7 +347,9 @@ function invokeJob<TOutput, TInput>(
           jobName,
           launched,
           options,
-          jobDocument(callbackId, input, options.heartbeatTimeout),
+          // The request sends the input's JSON text from
+          // validateJobInput. So `input` is encoded once per call.
+          measuredJob(callbackId, inputJson, options.heartbeatTimeout),
           { resume: resumeBeforeDelivery },
         ),
       );

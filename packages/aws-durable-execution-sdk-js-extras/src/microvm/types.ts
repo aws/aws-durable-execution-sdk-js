@@ -371,6 +371,11 @@ export interface MicrovmSession {
    * operation created in a parent context from inside a child context fails
    * the execution.
    *
+   * The call encodes `input` with `JSON.stringify` once, when `invoke` is
+   * called. So a `toJSON` method runs once per call, and each replay calls
+   * `invoke` again. The call measures that JSON text, and the request sends
+   * exactly that text. The input must be the same on every replay.
+   *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
