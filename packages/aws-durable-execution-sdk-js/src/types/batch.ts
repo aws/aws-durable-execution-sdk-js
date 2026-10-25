@@ -43,6 +43,24 @@ export enum BatchItemStatus {
    * Item was still in flight when the batch completed early. Observability
    * only and not guaranteed to survive suspend/resume reconstruction — see
    * {@link BatchResult.started}.
+   *
+   * The batch checks its completion rule each time an item's result reaches
+   * it. Once the rule is met, an item that is running and whose result has
+   * not reached the batch is STARTED. An item that had not started does not
+   * appear in the result. A STARTED item can have recorded its outcome before
+   * the item that completed the batch. Its child context, or with
+   * NestingType.FLAT its operations, can then show SUCCEEDED or FAILED in the
+   * execution history.
+   *
+   * An abandoned item's code can keep running while the invocation is active,
+   * until it awaits a checkpoint after the batch's context finishes. That
+   * checkpoint is dropped and never resolves. Nothing waits for the item, so
+   * the invocation can end before its code finishes. A step with the default
+   * StepSemantics.AtLeastOncePerRetry does not await its first checkpoint. So
+   * such a step that the item starts after that point still runs its
+   * function, and the history has no record of it. A step with
+   * StepSemantics.AtMostOncePerRetry awaits its first checkpoint, so its
+   * function does not run. The handler receives only the BatchResult.
    */
   STARTED = "STARTED",
 }
@@ -254,6 +272,14 @@ export interface CustomCompletionConfig {
    * consistent. The same race-condition caveat as the threshold fields
    * applies: when several items finish at once the batch may end with slightly
    * more completed items than the predicate first observed.
+   *
+   * Make the predicate stay complete once it returns complete, as the counts
+   * grow. An invocation can end after several items recorded their outcome
+   * but before the batch recorded its own. The next invocation settles those
+   * items again, possibly in a different order. A predicate that stays
+   * complete reaches the same decision. Another predicate, such as
+   * `successCount === 1 && failureCount === 0`, can miss it and let the batch
+   * start more items.
    *
    * The per-item statuses in {@link CompletionStatus.items} are ordered by the
    * item's original index (definition order), so `items[0]` is always the
