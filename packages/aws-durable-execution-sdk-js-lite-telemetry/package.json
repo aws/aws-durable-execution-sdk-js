@@ -57,6 +57,10 @@
     "./http": {
       "types": "./src/exporters/http.d.ts",
       "default": "./src/exporters/http.js"
+    },
+    "./file": {
+      "types": "./src/exporters/file.d.ts",
+      "default": "./src/exporters/file.js"
     }
   },
   "files": [
