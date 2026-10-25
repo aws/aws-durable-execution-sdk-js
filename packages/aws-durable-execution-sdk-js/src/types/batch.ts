@@ -55,10 +55,12 @@ export enum BatchItemStatus {
    * An abandoned item's code can keep running while the invocation is active,
    * until it awaits a checkpoint after the batch's context finishes. That
    * checkpoint is dropped and never resolves. Nothing waits for the item, so
-   * the invocation can end before its code finishes. A step does not await
-   * its first checkpoint. So a step that the item starts after that point
-   * still runs its function, and the history has no record of it. The
-   * handler receives only the BatchResult.
+   * the invocation can end before its code finishes. A step with the default
+   * StepSemantics.AtLeastOncePerRetry does not await its first checkpoint. So
+   * such a step that the item starts after that point still runs its
+   * function, and the history has no record of it. A step with
+   * StepSemantics.AtMostOncePerRetry awaits its first checkpoint, so its
+   * function does not run. The handler receives only the BatchResult.
    */
   STARTED = "STARTED",
 }
