@@ -33,6 +33,10 @@
     "./s3": {
       "types": "./src/exporters/s3.d.ts",
       "default": "./src/exporters/s3.js"
+    },
+    "./sqs": {
+      "types": "./src/exporters/sqs.d.ts",
+      "default": "./src/exporters/sqs.js"
     }
   },
   "files": [
