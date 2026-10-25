@@ -43,9 +43,9 @@ The next coordinated release uses the versions already merged in #924:
 | SDK | `3.0.0` | New stable version, `latest` |
 | OTel | `2.0.0` | New stable version, `latest` |
 | Testing SDK | `1.3.2` | Compatible patch with the widened Core 3 peer range, `latest` |
-| ESLint plugin | `1.1.1` | Already published, skip |
-| Telemetry Exporter | `0.1.0-alpha.0` | Renamed preview package, `beta` if not yet published |
-| Telemetry MCP | `0.1.0-alpha.0` | Renamed preview package, `beta` if not yet published |
+| ESLint plugin | `1.1.1` | Already published, skip. The new rule from #1093 needs a bump to ship |
+| Telemetry Exporter | `0.1.0-alpha.0` | Already published on 2026-10-22, skip. Later fixes need a bump to ship |
+| Telemetry MCP | `0.1.0-alpha.0` | Already published on 2026-10-22, skip. Later fixes need a bump to ship |
 
 Use the [release draft and migration guide](release-notes/sdk-3.0.0.md) for
 separate package timelines, factory migration examples, registry preflight
@@ -62,12 +62,13 @@ factory migration now on `main`. Released OTel 1.x retains its optional
 factory packages/layers; installed-package tests keep the released-pair controls
 and verify rejection of legacy providers.
 
-The public registry lookups made for this preparation return E404 for the two
-renamed Telemetry package names, although their old Insight names have published
-alpha versions. Their first-publication setup must be checked separately; E404
-does not establish npm publishing permissions. The existing automatic package
-list and Extras/MicroVM deferrals are unchanged. No package needs another
-version bump merely because the coordinated release is major.
+The two Telemetry packages were published outside this workflow, from the #924
+merge commit. The publisher skips a version that npm already has. So the
+Telemetry fixes and the ESLint rule merged after their published versions ship
+only if their versions are bumped before the release commit is selected. The
+existing automatic package list and Extras/MicroVM deferrals are unchanged. No
+package needs another version bump merely because the coordinated release is
+major.
 
 ## Cutting a Release
 

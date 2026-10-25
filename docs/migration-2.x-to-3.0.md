@@ -8,8 +8,9 @@ delivered through Lambda layers.
 
 Applications that register no plugins, select none through
 `DURABLE_EXECUTION_PLUGINS`, and ship no plugin providers can update their core
-dependency without changing their handler or durable operation calls. This guide
-covers migration from Core `2.x`; the
+dependency without changing their handler or durable operation calls. They should
+still review the [behavior changes outside plugins](#review-behavior-changes-outside-plugins).
+This guide covers migration from Core `2.x`; the
 [release notes](../release-notes/sdk-3.0.0.md) describe the full package scope.
 
 ## Why upgrade to 3.0
@@ -249,6 +250,12 @@ bounds the export wait; it does not guarantee delivery after timeout, export
 failure, or runtime freezing. An invocation must not shut down a shared provider.
 See the [OTel migration reference](../packages/aws-durable-execution-sdk-js-otel/README.md#migration-from-the-v1-provider-contract).
 
+The execution view now reports `faas.max_memory` on the Invocation span in
+bytes, as the OpenTelemetry semantic conventions define it. OTel 1.x reported
+the Lambda memory setting in MiB. So a 1024 MiB function now reports
+`1073741824` instead of `1024`. Update any query, dashboard or alarm that reads
+this attribute.
+
 ### Move registration metadata to the factory
 
 Use `RegisteredDurableInstrumentationPluginFactory` for custom exclusivity
@@ -279,6 +286,27 @@ const registeredAuditFactory: RegisteredDurableInstrumentationPluginFactory = {
 // Pass registeredAuditFactory in plugins when this exclusivity rule is needed.
 ```
 
+### Review behavior changes outside plugins
+
+These changes apply with or without plugins:
+
+- **Invoke failure causes.** A failed `context.invoke` still throws
+  `InvokeError`. Its `cause.name` is now the invoked function's error type, for
+  example `"PaymentError"`. In 2.x it was always `"Error"`. Update code that
+  branches on `cause.name`.
+- **Slow deserializers.** An operation now stays `EXECUTING` until its result is
+  deserialized. So a deserializer that fails slowly now fails the invocation. In
+  2.x the invocation could return `PENDING` and the failure was not reported. A
+  deserializer that never settles now keeps the invocation open until the Lambda
+  timeout.
+- **Untracked awaits between operations.** The SDK suspends an idle invocation
+  3 ms after the last operation goes idle. In 2.x it waited 20 ms. The SDK does
+  not track an `await` in handler code between two durable operations, for
+  example a dynamic `import()` or a file read. So when that `await` takes longer
+  than 3 ms while another operation such as a callback is pending, the
+  invocation can suspend before the next operation starts. The code after the
+  `await` then runs again on the next invocation. Move that work into a `step`.
+
 ### Finding affected code
 
 Search application code, providers, layer packaging, and tests:
@@ -290,6 +318,7 @@ rg -n 'DurableInstrumentationPluginProvider|RegisteredDurableInstrumentationPlug
 rg -n 'new (InvocationOtelPlugin|ExecutionOtelPlugin)|createPlugin' .
 rg -n 'onOperation(Start|End|AttemptStart|AttemptEnd|Change)|onInvocation(Start|End)|wrap(Invocation|ChildContextFn|OperationAttemptFn)' .
 rg -n '@aws/durable-execution-sdk-js|Layers:|layerVersionArn' .
+rg -n 'cause\.name|faas\.max_memory' .
 ```
 
 ## Plugin state and invocation lifecycle
@@ -333,3 +362,7 @@ See the [logging guide](../packages/aws-durable-execution-sdk-js/README.md).
    ordering and recovery after a rejection. Test near-deadline invocation end
    with a hook that never settles: `onInvocationEnd` should still run, tolerate
    incomplete hook work, and allow the response to return within its time budget.
+8. Run a workflow with a pending callback and a slow custom deserializer.
+   Confirm that the next step runs in the same invocation. Check handler code for
+   `await`s between durable operations that can take longer than 3 ms, and move
+   that work into a step.
