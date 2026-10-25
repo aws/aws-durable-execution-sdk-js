@@ -8,7 +8,7 @@ import {
 import { OperationStatus, OperationType } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-type Recorded = "SUCCEEDED" | "FAILED";
+type Recorded = "SUCCEEDED" | "FAILED" | "STARTED";
 
 /**
  * A map resumes after an earlier invocation ended between the item
@@ -35,11 +35,18 @@ const resumedOperations = (recorded: Recorded[]) => [
     Status:
       outcome === "SUCCEEDED"
         ? OperationStatus.SUCCEEDED
-        : OperationStatus.FAILED,
-    ContextDetails:
-      outcome === "SUCCEEDED"
-        ? { Result: JSON.stringify(index * 10) }
-        : { Error: { ErrorType: "Error", ErrorMessage: `boom-${index}` } },
+        : outcome === "FAILED"
+          ? OperationStatus.FAILED
+          : OperationStatus.STARTED,
+    ...(outcome === "SUCCEEDED"
+      ? { ContextDetails: { Result: JSON.stringify(index * 10) } }
+      : outcome === "FAILED"
+        ? {
+            ContextDetails: {
+              Error: { ErrorType: "Error", ErrorMessage: `boom-${index}` },
+            },
+          }
+        : {}),
   })),
 ];
 
@@ -238,6 +245,99 @@ describe("map resumed with several terminal item records", () => {
       expect(executed).toEqual([]);
     },
   );
+});
+
+describe("map resumed with an unfinished item between recorded items", () => {
+  // Cached successes deserialize only when released, so the cached failure of
+  // item 0 settles first, as in the earlier invocation's order.
+  const heldSuccesses = () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const itemSerdes = {
+      serialize: async (value: number | undefined) =>
+        value === undefined ? undefined : JSON.stringify(value),
+      deserialize: async (data: string | undefined) => {
+        await held;
+        return (data === undefined ? undefined : JSON.parse(data)) as
+          | number
+          | undefined;
+      },
+    };
+    return { itemSerdes, release };
+  };
+
+  it("does not run the unfinished item once fail-fast has decided", async () => {
+    // Reachable history: items 1 and 2 finished and started items 3 and 4.
+    // Item 4 finished, then item 0 failed. Item 3 was still running.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations([
+        "FAILED",
+        "SUCCEEDED",
+        "SUCCEEDED",
+        "STARTED",
+        "SUCCEEDED",
+      ]) as never,
+    });
+    const { itemSerdes, release } = heldSuccesses();
+    const executed: number[] = [];
+
+    const pending = context.map(
+      "m",
+      [0, 1, 2, 3, 4],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      { maxConcurrency: 3, itemSerdes },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    // Item 0's failure is known. Item 3 must not run.
+    expect(executed).toEqual([]);
+    release();
+
+    const result = await pending;
+    expect(result.all.map((item) => `${item.index}:${item.status}`)).toEqual([
+      "0:FAILED",
+      "1:SUCCEEDED",
+      "2:SUCCEEDED",
+      "4:SUCCEEDED",
+    ]);
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(executed).toEqual([]);
+  });
+
+  it("runs the unfinished item while the outcome is still open", async () => {
+    // minSuccessful: 3 is not reached by the recorded items alone. So the
+    // unfinished item 1 runs again, as it would without the recorded items.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations([
+        "SUCCEEDED",
+        "STARTED",
+        "SUCCEEDED",
+      ]) as never,
+    });
+    const executed: number[] = [];
+
+    const result = await context.map(
+      "m",
+      [0, 1, 2, 3],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      { maxConcurrency: 2, completionConfig: { minSuccessful: 3 } },
+    );
+
+    expect(executed).toEqual([1]);
+    expect(result.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+  });
 });
 
 describe("map after it resolves", () => {

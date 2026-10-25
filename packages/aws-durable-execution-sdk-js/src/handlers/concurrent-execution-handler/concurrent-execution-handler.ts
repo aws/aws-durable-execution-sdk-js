@@ -702,6 +702,11 @@ export class ConcurrencyController<Logger extends DurableLogger> {
    * recorded item has settled, the controller evaluates completion before it
    * starts later items.
    *
+   * A gap item is an item below the last recorded index that has no terminal
+   * record. Once the outcome is known while recorded items settle, the
+   * controller reserves a gap item's child id without running it, so its code
+   * does not run again for a result the batch will not use.
+   *
    * So every recorded outcome is kept. For the built-in rules and for
    * predicates that depend only on the counts, no item starts that the
    * completion rule would not start. A predicate that depends on which item
@@ -761,6 +766,11 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     // Set when the batch resolves. Items still running settle later. They must
     // not start more items, because the batch has already returned.
     let resolved = false;
+    // Whether the batch's outcome is already decided while recorded items
+    // settle. The built-in rules stay met once met. A custom predicate counts
+    // only once its decision is latched. Defined after isComplete and
+    // shouldContinue, which it calls.
+    let outcomeKnown = (): boolean => false;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -853,6 +863,11 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         );
       };
 
+      outcomeKnown = (): boolean =>
+        latchedReason !== undefined ||
+        (!config.completionConfig?.shouldComplete &&
+          (isComplete() || !shouldContinue()));
+
       const tryStartNext = (): void => {
         while (
           activeCount < maxConcurrency &&
@@ -861,6 +876,20 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         ) {
           const index = currentIndex++;
           const item = items[index];
+
+          // A gap item has no terminal record, so it was still running when
+          // the earlier invocation ended. Once the outcome is already known,
+          // starting it would run its code again although the batch will not
+          // use it. So its child id is reserved without running it. It stays
+          // out of the result, as in replayItems.
+          if (reconciling() && !recordedTerminal.has(index) && outcomeKnown()) {
+            this.skipReplayStep(parentContext);
+            log("⏭", `Skipping unfinished ${this.operationName} item:`, {
+              index,
+              itemId: item.id,
+            });
+            continue;
+          }
 
           startedItems.add(index);
           activeCount++;
