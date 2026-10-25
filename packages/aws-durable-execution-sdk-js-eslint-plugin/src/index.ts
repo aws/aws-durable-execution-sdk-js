@@ -32,9 +32,9 @@ const NAMESPACE = "@aws/durable-functions";
 
 /**
  * The recommended rules report code that breaks replay.
- * `require-durable-operation-in-child-context` is left out. The code it reports
- * replays correctly; it only gains nothing from its child context. Adding it
- * here would also make the lint of existing projects fail after an upgrade.
+ * `require-durable-operation-in-child-context` is left out, because the code it
+ * reports still replays correctly. Adding it here would also make the lint of
+ * existing projects fail after an upgrade.
  */
 const recommendedRules = {
   [`${NAMESPACE}/no-nested-durable-operations`]: "error",

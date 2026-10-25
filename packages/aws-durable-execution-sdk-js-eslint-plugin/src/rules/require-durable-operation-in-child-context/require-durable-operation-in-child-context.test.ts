@@ -140,6 +140,47 @@ ruleTester.run(
       `,
       // A child-context function the rule cannot read.
       handler("await context.runInChildContext(imported);"),
+      // A rest parameter collects the context, so the rule does not follow it.
+      handler(
+        `await context.runInChildContext(async (ctx) => traced("charge", ctx));`,
+        `import { impl } from "./impl";
+        const traced = (...args: any[]) => impl(...args);`,
+      ),
+      handler(
+        `await context.runInChildContext(async (ctx) => helper("tag", ctx));`,
+        "const helper = async (...args: any[]) => args[1].step(async () => 1);",
+      ),
+      // A spread argument before the context hides its index.
+      handler(
+        "await context.runInChildContext(async (ctx) => helper(...pre, ctx));",
+        "async function helper(c: any, d?: any) { return c.step(async () => 1); }",
+      ),
+      // A non-arrow function can read the context through `arguments`.
+      handler(
+        "await context.runInChildContext(async (ctx) => helper(ctx));",
+        "async function helper() { return arguments[0].step(async () => 1); }",
+      ),
+      handler(`
+        await context.runInChildContext(async function () {
+          return arguments[0].step(async () => 1);
+        });
+      `),
+      // A TypeScript this parameter receives no argument.
+      handler(
+        `await context.runInChildContext(async (ctx) => helper("x", ctx));`,
+        "async function helper(this: void, a: string, c: any) { return c.step(async () => 1); }",
+      ),
+      handler(`
+        await context.runInChildContext(async function (this: void, ctx: DurableContext) {
+          return ctx.step(async () => 1);
+        });
+      `),
+      // A function declaration that the file reassigns is not followed.
+      handler(
+        "await context.runInChildContext(async (ctx) => helper(ctx));",
+        `async function helper(c) { return 1; }
+        helper = async (c) => c.step(async () => 1);`,
+      ),
     ],
     invalid: [
       // The examples from the issue.
@@ -283,6 +324,62 @@ ruleTester.run(
           });
         `),
         errors: [error("runInChildContext")],
+      },
+      // A rest parameter after the context's index does not collect it.
+      {
+        code: handler(
+          "await context.runInChildContext(async (ctx) => helper(ctx, 1, 2));",
+          "function helper(c, ...rest) { c.logger.info(rest); return 1; }",
+        ),
+        errors: [error("runInChildContext")],
+      },
+      // A default value on the context parameter is not a use of it.
+      {
+        code: handler(
+          "await context.runInChildContext(async (ctx: any = null) => 1);",
+        ),
+        errors: [error("runInChildContext")],
+      },
+      // A handler passed to withDurableExecution by name.
+      {
+        code: `
+          const workflow = async (event, ctx) =>
+            ctx.map([1], async (child, item) => item);
+          export const handler = withDurableExecution(workflow);
+        `,
+        errors: [error("map")],
+      },
+      // DurableContext imported under another name.
+      {
+        code: `
+          import type { DurableContext as Ctx } from "@aws/durable-execution-sdk-js";
+          async function run(ctx: Ctx) {
+            await ctx.parallel([async (c) => compute()]);
+          }
+        `,
+        errors: [error("parallel branch")],
+      },
+      // A child-context function passed by name gives its parameter the
+      // context type, so its own map call is checked.
+      {
+        code: handler(
+          "await context.runInChildContext(process);",
+          `async function process(c) {
+            await c.step(async () => 1);
+            await c.map(items, async (inner, item) => compute(item));
+          }`,
+        ),
+        errors: [error("map")],
+      },
+      // A branch list wrapped in as const, and a branch in method syntax.
+      {
+        code: handler(`
+          await context.parallel([
+            { name: "a", async func(ctx) { return compute(); } },
+            async (ctx) => compute(),
+          ] as const);
+        `),
+        errors: [error("parallel branch"), error("parallel branch")],
       },
       // withDurableExecution called as a method, with a function expression.
       {

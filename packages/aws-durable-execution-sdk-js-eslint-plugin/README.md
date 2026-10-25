@@ -348,10 +348,18 @@ Requires a child context to perform at least one durable operation on its contex
 
 A child context is the context that `runInChildContext` passes to its function.
 `map` passes one to the function of each item, and `parallel` passes one to each
-branch. The SDK checkpoints only durable operations, such as `step`, `invoke`,
-`wait` and a nested child context. So a function that calls none on its context
-saves nothing. Its work runs again on every replay, and the child context adds
-nothing. Put the work in a step.
+branch. A child context saves the result of its function when the function
+finishes. A replay returns that saved result and does not call the function again.
+So a function that calls no durable operation on its context, such as `step`,
+`invoke` or `wait`, still replays correctly. It differs from a step in two ways:
+
+- A step retries its work when it throws. The default retry strategy makes up to six
+  attempts. A child context fails at the first error.
+- A result larger than the checkpoint size limit does not fit in the child
+  context's checkpoint. Then the SDK runs the function again on every replay to
+  rebuild the result.
+
+So the rule tells you to put the work in a step.
 
 The rule reports these functions:
 
@@ -364,7 +372,7 @@ The rule reports these functions:
 ```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    // Error: nothing durable runs on ctx
+    // Error: no durable operation runs on ctx
     await context.runInChildContext("transform", async (ctx) =>
       cheapTransform(event),
     );
@@ -382,7 +390,7 @@ const handler = withDurableExecution(
 ```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    // A step saves the result, so a replay does not run the work again
+    // A step saves the result, and it retries the work if it throws
     await context.step("transform", async () => cheapTransform(event));
 
     // A child context that contains a durable operation
@@ -398,10 +406,12 @@ const handler = withDurableExecution(
 The rule follows the context into a function declared in the same file. It does
 this when the code passes the context as an argument, such as `charge(ctx)`, and
 the function is declared as `function charge() {}` or `const charge = () => {}`.
+The rule does not follow a function declaration that the file assigns again.
 
 The rule reports nothing when the context reaches code it cannot read. Examples are
-an imported function, a method call such as `service.run(ctx)`, a return value, and
-an object property. That code may perform a durable operation.
+an imported function, a method call such as `service.run(ctx)`, a return value, an
+object property, a rest parameter, a spread argument before the context, and
+`arguments`. That code may perform a durable operation.
 
 #### Known limitations
 
@@ -409,8 +419,10 @@ an object property. That code may perform a durable operation.
 the rule checks a `map` or `parallel` call only when it knows the receiver is a
 durable context. The receiver must be a parameter that is one of these:
 
-- annotated with the type `DurableContext`
-- the second parameter of the function passed to `withDurableExecution`
+- annotated with the type `DurableContext`, including an import alias such as
+  `import type { DurableContext as Ctx }`
+- the second parameter of the function passed to `withDurableExecution`, inline or
+  by name
 - the context parameter of a `runInChildContext`, `map` or `parallel` function
 
 The rule checks `runInChildContext` on any receiver, because the name is specific
@@ -449,10 +461,10 @@ child context. This rule helps catch these issues at development time.
 
 ### Require a Durable Operation in a Child Context
 
-A child context groups durable operations. The SDK saves the results of those
-operations, not the result of plain code. So a child context with no durable
-operation saves nothing that a replay can use. The code still replays correctly,
-which is why the rule is not in the recommended config.
+A child context groups durable operations. A child context with no durable
+operation still saves its result, so it replays correctly. That is why the rule is
+not in the recommended config. A step does the same work with retries, so the rule
+points to a step.
 
 ## License
 

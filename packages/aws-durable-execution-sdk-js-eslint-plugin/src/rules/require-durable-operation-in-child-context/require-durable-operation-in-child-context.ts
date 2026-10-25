@@ -6,9 +6,17 @@ import { Rule } from "eslint";
  *
  * A child context is the context that `runInChildContext` passes to its
  * function. `map` passes one to each item's function, and `parallel` passes
- * one to each branch. Only durable operations are checkpointed. So if the
- * body calls none on its context, its work runs again on every replay, and the
- * child context adds nothing. The user should put the work in a `step`.
+ * one to each branch. A child context saves its function's result when the
+ * function finishes, and a replay returns that result. So a function with no
+ * durable operation usually does not run again. It still costs something in
+ * three cases:
+ * 1. The result is larger than the checkpoint size limit. Then the SDK runs
+ *    the function again on every replay to rebuild the result.
+ * 2. The function throws. A step retries its work, and a child context does
+ *    not.
+ * 3. A batch resumes from summarized checkpoints. An item that recorded no
+ *    operation leaves nothing to rebuild it from.
+ * So the rule tells the user to put the work in a `step`.
  *
  * The rule decides with three answers: "yes", "no" and "unknown". It reports
  * only "no". "unknown" means the context reaches code the rule cannot read,
@@ -89,16 +97,22 @@ function methodName(call: any): string | null {
   return null;
 }
 
-/** True if the type annotation names `DurableContext`, with or without a namespace. */
-function isDurableContextType(typeAnnotation: any): boolean {
-  const type = typeAnnotation?.typeAnnotation;
-  if (type?.type !== "TSTypeReference") return false;
-  const name = type.typeName;
-  if (name?.type === "Identifier") return name.name === "DurableContext";
-  if (name?.type === "TSQualifiedName") {
-    return name.right?.name === "DurableContext";
-  }
-  return false;
+/**
+ * Returns the parameters that receive call arguments.
+ *
+ * A TypeScript `this` parameter is the first entry of `fn.params`, but a call
+ * passes no argument for it. So it is dropped.
+ */
+function argumentParams(fn: any): any[] {
+  const [first, ...rest] = fn.params;
+  return first?.type === "Identifier" && first.name === "this"
+    ? rest
+    : fn.params;
+}
+
+/** Returns the identifier a parameter declares, through a default value. */
+function paramIdentifier(param: any): any {
+  return param?.type === "AssignmentPattern" ? param.left : param;
 }
 
 export const requireDurableOperationInChildContext: Rule.RuleModule = {
@@ -111,7 +125,7 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
     },
     messages: {
       noDurableOperation:
-        "This {{operation}} function calls no durable operation on its context. So its work is not checkpointed, and it runs again on every replay. Put the work in a step.",
+        "This {{operation}} function calls no durable operation on its context. Put the work in a step.",
     },
     schema: [],
   },
@@ -123,8 +137,20 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
     /** Every call to runInChildContext, map or parallel in the file. */
     const candidateCalls: any[] = [];
 
+    /** Every call to withDurableExecution in the file. */
+    const wrapperCalls: any[] = [];
+
     /** Identifier node -> the reference ESLint's scope analysis made for it. */
     let referenceOf = new Map<any, any>();
+
+    /** The functions passed to withDurableExecution, inline or by name. */
+    let handlers = new Set<any>();
+
+    /**
+     * Parameter variable -> whether it is a durable context. A variable being
+     * checked maps to false, so a check that reaches it again ends there.
+     */
+    const contextAnswers = new Map<any, boolean>();
 
     function indexReferences(): Map<any, any> {
       const index = new Map<any, any>();
@@ -146,7 +172,8 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
      *
      * An inline function returns itself. A name returns the function it is
      * declared as, either `function f() {}` or `const f = () => {}`. Anything
-     * else returns null.
+     * else returns null. So does a function declaration that the file assigns
+     * a new value to, because the name may then hold another function.
      */
     function resolveFunction(node: any): any {
       const target = unwrap(node);
@@ -157,7 +184,8 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       if (!variable || variable.defs.length !== 1) return null;
       const [def] = variable.defs;
       if (def.type === "FunctionName" && isFunctionNode(def.node)) {
-        return def.node;
+        const reassigned = variable.references.some((r: any) => r.isWrite());
+        return reassigned ? null : def.node;
       }
       if (
         def.node?.type === "VariableDeclarator" &&
@@ -216,26 +244,59 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
     }
 
     /**
+     * True if the type annotation names `DurableContext`. The name can have a
+     * namespace, as in `sdk.DurableContext`. It can also be an import alias,
+     * as in `import type { DurableContext as Ctx }`.
+     */
+    function isDurableContextType(typeAnnotation: any): boolean {
+      const type = typeAnnotation?.typeAnnotation;
+      if (type?.type !== "TSTypeReference") return false;
+      const name = type.typeName;
+      if (name?.type === "TSQualifiedName") {
+        return name.right?.name === "DurableContext";
+      }
+      if (name?.type !== "Identifier") return false;
+      if (name.name === "DurableContext") return true;
+
+      const def = referenceOf.get(name)?.resolved?.defs[0];
+      const imported = def?.type === "ImportBinding" ? def.node.imported : null;
+      return (imported?.name ?? imported?.value) === "DurableContext";
+    }
+
+    /**
      * True if the expression is known to be a durable context.
      *
      * The expression must be a parameter that is one of these:
      * 1. annotated with the type `DurableContext`;
-     * 2. the second parameter of the handler passed to `withDurableExecution`;
+     * 2. the second parameter of a handler passed to `withDurableExecution`;
      * 3. the first parameter of a child-context function this rule recognizes.
      */
     function isDurableContext(node: any): boolean {
       const target = unwrap(node);
       if (target?.type !== "Identifier") return false;
       const variable = referenceOf.get(target)?.resolved;
-      const def = variable?.defs.length === 1 ? variable.defs[0] : null;
+      if (!variable) return false;
+
+      const known = contextAnswers.get(variable);
+      if (known !== undefined) return known;
+      contextAnswers.set(variable, false);
+      const answer = checkDurableContext(variable);
+      contextAnswers.set(variable, answer);
+      return answer;
+    }
+
+    function checkDurableContext(variable: any): boolean {
+      const def = variable.defs.length === 1 ? variable.defs[0] : null;
       if (def?.type !== "Parameter") return false;
 
       const param = def.name;
       if (isDurableContextType(param.typeAnnotation)) return true;
 
       const fn = def.node;
-      const index = fn.params.indexOf(param);
-      if (index === 1) return isHandlerOfWithDurableExecution(fn);
+      const index = argumentParams(fn).findIndex(
+        (p) => paramIdentifier(p) === param,
+      );
+      if (index === 1) return handlers.has(fn);
       if (index === 0) return isChildContextFunction(fn);
       return false;
     }
@@ -249,32 +310,35 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       return node.parent;
     }
 
-    function isHandlerOfWithDurableExecution(fn: any): boolean {
-      const call = enclosingCall(fn);
-      if (call?.type !== "CallExpression" || unwrap(call.arguments[0]) !== fn) {
-        return false;
-      }
-      const callee = call.callee;
-      return (
-        (callee.type === "Identifier" &&
-          callee.name === "withDurableExecution") ||
-        methodName(call) === "withDurableExecution"
-      );
-    }
-
     /**
-     * True if the function is passed inline as a child-context function.
+     * True if the function is passed as a child-context function.
      *
-     * A parallel branch sits inside an array, and maybe inside `{ func }`, so
-     * the climb goes past those nodes to the call.
+     * An inline function is checked against the call it is passed to. A
+     * parallel branch sits inside an array, and maybe inside `{ func }`, so the
+     * climb goes past those nodes to the call. A function passed by name can be
+     * passed to any call, so every candidate call is checked.
      */
     function isChildContextFunction(fn: any): boolean {
+      const passes = (call: any) =>
+        callbacksOf(call).some((callback) => callback.fn === fn);
+
       let node = enclosingCall(fn);
       if (node?.type === "Property") node = node.parent?.parent;
       if (node?.type === "ArrayExpression") node = node.parent;
       while (node && TRANSPARENT_WRAPPERS.has(node.type)) node = node.parent;
-      if (node?.type !== "CallExpression") return false;
-      return callbacksOf(node).some((callback) => callback.fn === fn);
+      if (node?.type === "CallExpression" && passes(node)) return true;
+      return candidateCalls.some(passes);
+    }
+
+    /**
+     * True if a non-arrow function reads `arguments`. Such a function can read
+     * an argument that no parameter declares.
+     */
+    function readsArguments(fn: any): boolean {
+      if (fn.type === "ArrowFunctionExpression") return false;
+      const scope = sourceCode.scopeManager.acquire(fn);
+      const variable = scope?.set?.get("arguments");
+      return (variable?.references.length ?? 0) > 0;
     }
 
     /**
@@ -290,11 +354,18 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       index: number,
       inProgress: Set<string>,
     ): Answer {
-      let param = fn.params[index];
+      // `arguments` can reach the context through any index.
+      if (readsArguments(fn)) return "unknown";
+
+      const params = argumentParams(fn);
+      const restIndex = params.findIndex((p) => p.type === "RestElement");
+      // A rest parameter collects this argument. The rule does not follow it.
+      if (restIndex >= 0 && index >= restIndex) return "unknown";
+
       // A function that declares no parameter here cannot use the context.
+      const param = paramIdentifier(params[index]);
       if (!param) return "no";
-      if (param.type === "AssignmentPattern") param = param.left;
-      // A destructured or rest parameter: the rule does not follow it.
+      // A destructured parameter: the rule does not follow it.
       if (param.type !== "Identifier") return "unknown";
 
       const key = `${fn.range?.[0]}:${index}`;
@@ -326,6 +397,9 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       ) {
         return "no";
       }
+      // A default value such as `ctx = fallback` writes the parameter. It is
+      // used only when the caller passes nothing, so it is not a use.
+      if (reference.init) return "no";
       // A reassigned context may hold anything.
       if (reference.isWrite()) return "unknown";
 
@@ -356,6 +430,11 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
         const argIndex = parent.arguments.indexOf(node);
         const helper = resolveFunction(parent.callee);
         if (argIndex < 0 || !helper) return "unknown";
+        // A spread argument before the context hides the context's index.
+        const before = parent.arguments.slice(0, argIndex);
+        if (before.some((arg: any) => arg.type === "SpreadElement")) {
+          return "unknown";
+        }
         return performsDurableOperation(helper, argIndex, inProgress);
       }
 
@@ -374,11 +453,23 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
         ) {
           candidateCalls.push(node);
         }
+        if (
+          name === "withDurableExecution" ||
+          (node.callee.type === "Identifier" &&
+            node.callee.name === "withDurableExecution")
+        ) {
+          wrapperCalls.push(node);
+        }
       },
 
       "Program:exit"() {
         if (candidateCalls.length === 0) return;
         referenceOf = indexReferences();
+        handlers = new Set(
+          wrapperCalls
+            .map((call) => resolveFunction(call.arguments[0]))
+            .filter((fn) => fn !== null),
+        );
 
         const reported = new Set<any>();
         for (const call of candidateCalls) {
