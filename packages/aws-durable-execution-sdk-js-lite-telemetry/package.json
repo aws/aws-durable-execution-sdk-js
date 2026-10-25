@@ -61,6 +61,10 @@
     "./file": {
       "types": "./src/exporters/file.d.ts",
       "default": "./src/exporters/file.js"
+    },
+    "./otel-logs": {
+      "types": "./src/exporters/otel.d.ts",
+      "default": "./src/exporters/otel.js"
     }
   },
   "files": [
