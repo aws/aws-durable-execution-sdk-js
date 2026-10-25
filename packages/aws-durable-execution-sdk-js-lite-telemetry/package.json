@@ -45,6 +45,10 @@
     "./eventbridge": {
       "types": "./src/exporters/eventbridge.d.ts",
       "default": "./src/exporters/eventbridge.js"
+    },
+    "./redshift": {
+      "types": "./src/exporters/redshift.d.ts",
+      "default": "./src/exporters/redshift.js"
     }
   },
   "files": [
