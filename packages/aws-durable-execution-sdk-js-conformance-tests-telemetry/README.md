@@ -69,4 +69,18 @@ durable-execution-conformance \
   --parameter-overrides LambdaExecutionRoleArn=<role-arn>
 ```
 
-A caller GitHub workflow is a follow-on; the OTel orchestrator is OTel-specific.
+## CI
+
+[`.github/workflows/telemetry-conformance-tests.yml:5–80`](../../.github/workflows/telemetry-conformance-tests.yml#L5-L80)
+runs on pull requests and pushes to `main` that touch the SDK, telemetry
+exporter, this package, or related CI and dependency files. It also supports
+manual dispatch.
+
+It calls the conformance repository's reusable telemetry workflow at a pinned
+SHA. `sdk_ref` selects the PR head commit, and `examples_dir` points to this
+package. CI builds the SDK, exporter, and handlers, then deploys the template
+and validates the `telemetry` suite. Reports and execution histories are
+uploaded as artifacts.
+
+CI assumes AWS credentials through OIDC using the repository's existing test
+secrets. Fork and Dependabot pull requests skip the cloud job.

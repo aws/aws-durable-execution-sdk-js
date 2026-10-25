@@ -279,6 +279,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       executor,
       parentContext,
       config,
+      entityId,
+      executionContext,
     );
   }
 
@@ -672,11 +674,55 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     return new BatchResultImpl(resultItems, completionReason);
   }
 
+  /**
+   * Runs the items and decides when the batch completes.
+   *
+   * A batch can resume after an earlier invocation ended between the item
+   * checkpoints and the batch checkpoint. Then several items already have a
+   * terminal record. Most of them finished before that invocation's
+   * completion decision. Up to maxConcurrency - 1 of them can be racers: items
+   * that recorded their outcome after the decision but before the batch
+   * context finished, which the live result reported STARTED (issue #967). On
+   * resume, the recorded items settle again in index order, not in their
+   * original order. So an early recorded success could reach minSuccessful
+   * before another recorded item settles, and that item would be reported
+   * STARTED.
+   *
+   * So while any recorded item has not settled, the controller does not
+   * resolve. During that time it starts items only up to the last recorded
+   * index, because each recorded item needs its own start to get its id. It
+   * starts no later item, because the original invocation may have stopped
+   * before it.
+   *
+   * The built-in rules stay met once they are met, because the counts only
+   * grow. So for them the controller decides on the full set, once every
+   * recorded item has settled. A custom shouldComplete predicate need not stay
+   * met. So the controller keeps the first complete decision the predicate
+   * returns while recorded items settle, and resolves with it. Once every
+   * recorded item has settled, the controller evaluates completion before it
+   * starts later items.
+   *
+   * A gap item is an item below the last recorded index that has no terminal
+   * record. Once the outcome is known while recorded items settle, the
+   * controller reserves a gap item's child id without running it, so its code
+   * does not run again for a result the batch will not use.
+   *
+   * So every recorded outcome is kept. For the built-in rules, and for a
+   * predicate that stays complete once it is complete as the counts grow, no
+   * item starts that the completion rule would not start. Other predicates can
+   * decide differently on resume, because the original settle order is not
+   * recorded, and the resumed order can differ: a cached failure settles
+   * faster than a cached success. For example, `successCount === 1 &&
+   * failureCount === 0` can see (0, 1) and then (1, 1) on resume, and never
+   * complete.
+   */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
+    batchEntityId?: string,
+    executionContext?: ExecutionContext,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
@@ -689,6 +735,45 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     let completedCount = 0;
     let successCount = 0;
     let failureCount = 0;
+
+    // Items whose child context already has a terminal record from an
+    // earlier invocation. Items start in index order, so item i is the child
+    // entity `${batchEntityId}-${i + 1}`, as in replayItems. A FLAT item has
+    // no context record, so it is not in this set.
+    const recordedTerminal = new Set<number>();
+    let lastRecorded = -1;
+    if (
+      batchEntityId !== undefined &&
+      executionContext !== undefined &&
+      config.nesting !== NestingType.FLAT
+    ) {
+      for (let i = 0; i < items.length; i++) {
+        const status = executionContext.getStepData(
+          `${batchEntityId}-${i + 1}`,
+        )?.Status;
+        if (
+          status === OperationStatus.SUCCEEDED ||
+          status === OperationStatus.FAILED
+        ) {
+          recordedTerminal.add(i);
+          lastRecorded = i;
+        }
+      }
+    }
+    // The recorded items that have not settled yet.
+    let unsettledRecorded = recordedTerminal.size;
+    const reconciling = (): boolean => unsettledRecorded > 0;
+    // The first complete decision of a custom shouldComplete predicate while
+    // recorded items settle. See the doc comment above.
+    let latchedReason: CompletionReason | undefined;
+    // Set when the batch resolves. Items still running settle later. They must
+    // not start more items, because the batch has already returned.
+    let resolved = false;
+    // Whether the batch's outcome is already decided while recorded items
+    // settle. The built-in rules stay met once met. A custom predicate counts
+    // only once its decision is latched. Defined after isComplete and
+    // shouldContinue, which it calls.
+    let outcomeKnown = (): boolean => false;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -781,14 +866,33 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         );
       };
 
+      outcomeKnown = (): boolean =>
+        latchedReason !== undefined ||
+        (!config.completionConfig?.shouldComplete &&
+          (isComplete() || !shouldContinue()));
+
       const tryStartNext = (): void => {
         while (
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          shouldContinue()
+          (reconciling() ? currentIndex <= lastRecorded : shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];
+
+          // A gap item has no terminal record, so it was still running when
+          // the earlier invocation ended. Once the outcome is already known,
+          // starting it would run its code again although the batch will not
+          // use it. So its child id is reserved without running it. It stays
+          // out of the result, as in replayItems.
+          if (reconciling() && !recordedTerminal.has(index) && outcomeKnown()) {
+            this.skipReplayStep(parentContext);
+            log("⏭", `Skipping unfinished ${this.operationName} item:`, {
+              index,
+              itemId: item.id,
+            });
+            continue;
+          }
 
           startedItems.add(index);
           activeCount++;
@@ -825,7 +929,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemId: item.id,
                   itemName: item.name,
                 });
-                onComplete();
+                onComplete(index);
               },
               (error) => {
                 const err =
@@ -847,17 +951,36 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemName: item.name,
                   error: err.message,
                 });
-                onComplete();
+                onComplete(index);
               },
             );
         }
       };
 
-      const onComplete = (): void => {
+      const onComplete = (index: number): void => {
         activeCount--;
         completedCount++;
+        if (recordedTerminal.has(index)) {
+          unsettledRecorded--;
+        }
+        if (resolved) {
+          return;
+        }
 
-        if (isComplete() || !shouldContinue()) {
+        if (reconciling()) {
+          if (
+            latchedReason === undefined &&
+            config.completionConfig?.shouldComplete &&
+            isComplete()
+          ) {
+            latchedReason = getCompletionReason(failureCount);
+          }
+          tryStartNext();
+          return;
+        }
+
+        if (latchedReason !== undefined || isComplete() || !shouldContinue()) {
+          resolved = true;
           // Convert sparse array to dense array - items are already in correct order by index
           // Include all items that were started (have a value in resultItems)
           // Create shallow copy to prevent mutations from affecting the returned result
@@ -879,7 +1002,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
           const result = new BatchResultImpl(
             finalBatchItems,
-            getCompletionReason(failureCount),
+            latchedReason ?? getCompletionReason(failureCount),
           );
           resolve(result);
         } else {
