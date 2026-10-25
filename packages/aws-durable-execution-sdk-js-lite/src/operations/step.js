@@ -18,6 +18,7 @@
 import { fromErrorObject, toErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
 import { createLogger } from "../logger.js";
+import { wrapInfo } from "../plugins.js";
 import { defaultRetryStrategy } from "../retry.js";
 import { deserialize, serialize } from "../serdes.js";
 
@@ -100,8 +101,16 @@ async function runStep(
       let failed = false;
       let serialized;
       execution.runningStart();
+      const wrap = execution.wrap;
       try {
-        result = await fn({ logger: stepLogger, attempt });
+        // Without a wrap hook, no closure is made (README 2.12).
+        result = await (wrap
+          ? wrap(
+              wrapInfo(ctx, rawId, meta, "attempt", attempt, () =>
+                fn({ logger: stepLogger, attempt }),
+              ),
+            )
+          : fn({ logger: stepLogger, attempt }));
       } catch (err) {
         failed = true;
         error = err;

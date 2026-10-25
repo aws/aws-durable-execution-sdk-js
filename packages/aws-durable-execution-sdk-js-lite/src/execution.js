@@ -66,7 +66,16 @@ function isDue(op) {
 }
 
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
-export function createExecution({ client, arn, token, operations }) {
+// onOperationChange and wrap are the plugins' hooks (README 2.12). Each is undefined
+// when no plugin has the hook.
+export function createExecution({
+  client,
+  arn,
+  token,
+  operations,
+  onOperationChange,
+  wrap,
+}) {
   const state = new Map(operations.map((op) => [op.Id, op]));
   let pending = []; // { update, resolve }
   let last = Promise.resolve(); // resolves after the latest queued update is saved
@@ -145,8 +154,22 @@ export function createExecution({ client, arn, token, operations }) {
       return;
     }
     token = res.CheckpointToken ?? token;
-    for (const op of res.NewExecutionState?.Operations ?? []) {
+    const returned = res.NewExecutionState?.Operations ?? [];
+    for (const op of returned) {
       state.set(op.Id, op);
+    }
+    // The hook is not awaited. The snapshot is built only when a plugin has the hook.
+    // A throw from the hook makes the handler throw, like a serdes failure (README 2.12).
+    if (onOperationChange && returned.length > 0) {
+      try {
+        onOperationChange({
+          updated: returned,
+          operations: [...state.values()],
+        });
+      } catch (err) {
+        terminate({ kind: "throw", error: err });
+        return;
+      }
     }
     // A blocked operation whose record changed may proceed now. It leaves the blocked
     // set here, before checkIdle below. So the invocation does not suspend on it.
@@ -197,6 +220,10 @@ export function createExecution({ client, arn, token, operations }) {
   return {
     arn,
     terminated,
+    // The composed wrap of the plugins, or undefined (README 2.12).
+    wrap,
+    // A new array of the stored records, for the plugins.
+    snapshot: () => [...state.values()],
     get: (id) => state.get(id),
     get size() {
       return state.size;

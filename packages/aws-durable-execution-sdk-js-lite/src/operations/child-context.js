@@ -21,6 +21,7 @@
 
 import { fromErrorObject, toErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
+import { wrapInfo } from "../plugins.js";
 import { deserialize, serialize } from "../serdes.js";
 
 // The service limits one checkpoint payload. A larger result is rebuilt on replay.
@@ -71,8 +72,16 @@ export async function runChild(
   if (!record) child._checkpoint(update({ Action: "START" }));
 
   let result;
+  const wrap = ctx._execution.wrap;
   try {
-    result = await fn({ ctx: child });
+    // Every call of fn is wrapped, also a ReplayChildren re-run (README 2.12).
+    result = await (wrap
+      ? wrap(
+          wrapInfo(ctx, rawId, meta, "context", undefined, () =>
+            fn({ ctx: child }),
+          ),
+        )
+      : fn({ ctx: child }));
   } catch (err) {
     const errorObject = toErrorObject(err);
     if (!replayChildren) {

@@ -314,7 +314,13 @@ export function createInMemoryService({
       },
     },
     // The input for a new invocation. Each invocation gets a fresh token.
+    // UpdatedOperationIds: the records that changed after the last checkpoint response,
+    // for example a wait that the clock ended. The EXECUTION record is left out: only
+    // complete() changes it, from the previous invocation's own output.
     event() {
+      const UpdatedOperationIds = [...changed]
+        .filter((op) => op.Type !== "EXECUTION")
+        .map((op) => op.Id);
       // The initial state holds every record.
       changed.clear();
       token = `token-${++tokens}`;
@@ -322,6 +328,7 @@ export function createInMemoryService({
         DurableExecutionArn: ARN,
         CheckpointToken: token,
         InitialExecutionState: page(undefined, pageSize),
+        UpdatedOperationIds,
       };
     },
     // Applies outside outcomes that arrived since the last boundary. Returns how many.

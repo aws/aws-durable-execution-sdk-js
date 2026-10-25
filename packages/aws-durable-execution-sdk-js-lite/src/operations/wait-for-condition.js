@@ -22,6 +22,7 @@
 import { fromErrorObject, toErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
 import { createLogger } from "../logger.js";
+import { wrapInfo } from "../plugins.js";
 import { deserialize, serialize } from "../serdes.js";
 
 const parse = (s) => (s == null ? undefined : JSON.parse(s));
@@ -79,8 +80,16 @@ async function runCondition(
     let error;
     let failed = false;
     execution.runningStart();
+    const wrap = execution.wrap;
     try {
-      newState = await fn({ state, attempt, logger: checkLogger });
+      // Without a wrap hook, no closure is made (README 2.12).
+      newState = await (wrap
+        ? wrap(
+            wrapInfo(ctx, rawId, meta, "attempt", attempt, () =>
+              fn({ state, attempt, logger: checkLogger }),
+            ),
+          )
+        : fn({ state, attempt, logger: checkLogger }));
       decision = waitStrategy({ state: newState, attempt });
     } catch (err) {
       failed = true;

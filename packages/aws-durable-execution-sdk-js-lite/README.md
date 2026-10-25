@@ -84,6 +84,8 @@ Wraps a workflow as a Lambda handler.
   the `AWS_ACCESS_KEY_ID` environment variables, or the container credentials endpoint
   that Lambda uses for SnapStart functions. Tests replace it. See
   [Write a custom client](#write-a-custom-client).
+- `config.plugins` (optional): an array of plugin factories. Each invocation calls every
+  factory once. See [Plugins](#plugins).
 
 The workflow's return value is the execution result. It is stored as JSON. A thrown error
 fails the execution. The execution error has `ErrorType` set to the error's `name`, and
@@ -519,6 +521,122 @@ const report = await ctx.step({
 A step that runs again writes the same key again. So the new object replaces the old one.
 The SDK never deletes the objects. Delete them with an S3 lifecycle rule.
 
+### Plugins
+
+A plugin observes an invocation. It can measure, trace or log the workflow's operations.
+A plugin cannot change what the workflow does.
+
+A plugin factory is a function `factory(info)`. It returns a plugin object, or `undefined`
+for no plugin in this invocation. `withDurableExecution(workflow, { plugins })` takes an
+array of factories.
+
+1. The SDK calls each factory once per invocation, in array order. The call happens after
+   the SDK loaded every state page and before the workflow runs.
+2. So each invocation has new plugin objects. A plugin keeps its per-invocation state on
+   its object. A client or an exporter that all invocations share lives in the factory's
+   closure (see [Keep plugin state on the plugin object](#keep-plugin-state-on-the-plugin-object)).
+3. Without plugins, the SDK calls no plugin code.
+
+`info` has these fields:
+
+- `arn`: the `DurableExecutionArn`.
+- `requestId`: `lambdaContext.awsRequestId`.
+- `input`: the execution input. It is the same object as the workflow's `event`.
+- `operations`: a new array of every operation record in the state.
+- `updatedOperationIds`: the ids of the records that the service changed since the previous
+  invocation, for example a wait that ended. It is the event's `UpdatedOperationIds`, or
+  `[]`.
+- `lambdaContext`: the Lambda context.
+
+A plugin object has three optional hooks:
+
+- `onOperationChange({ updated, operations })`: the SDK calls it after it stored the
+  records of a checkpoint response. It calls it only when the response returned at least
+  one record. `updated` holds the returned records. `operations` is a new array of every
+  record. The SDK calls the hook synchronously and ignores its return value. It does not
+  await a promise.
+- `wrap({ kind, id, parentId, name, type, subType, attempt, fn })`: runs around user code.
+  It must call `fn()` exactly once and return its result. `kind` selects the code:
+  - `"invocation"`: the workflow function. The other fields are `undefined`.
+  - `"context"`: the `fn` of a child context with a `CONTEXT` record. These are
+    `runInChildContext`, `waitForCallback`, `map`, `parallel` and each NESTED item. A FLAT
+    item has no record, so it is not wrapped. Its operations are. The SDK wraps every
+    call of `fn`, also the re-run of a result larger than 256 KiB.
+  - `"attempt"`: one attempt of a step's `fn`, including the submitter of
+    `waitForCallback`, and one check of `waitForCondition`.
+- `onInvocationEnd({ status, result, error, operations })`: the SDK calls it once, after
+  it saved the last checkpoint and stored its records. The handler returns or throws
+  after it. The SDK awaits the hooks of all plugins in parallel.
+
+For `"context"` and `"attempt"`, the fields describe the operation's record:
+
+- `id`: the record's `Id`, the hashed operation id.
+- `parentId`: the record's `ParentId`. It is `undefined` at the root.
+- `name`, `type` (`"STEP"` or `"CONTEXT"`) and `subType`: the values that the SDK sends.
+- `attempt`: the attempt number, starting at 1. It is `undefined` for `"context"`.
+
+`status` in `onInvocationEnd` is one of these values:
+
+- `"SUCCEEDED"`: `result` is the workflow's return value.
+- `"FAILED"`: `error` is the `{ ErrorType, ErrorMessage, ErrorData }` that the handler
+  returns to Lambda.
+- `"PENDING"`: the invocation suspended, or a newer invocation took over.
+- `"RETRYING"`: the handler throws `error` next. Lambda then invokes again. Examples: a
+  checkpoint error that a new invocation can fix, and a serdes failure.
+
+Several plugins compose in array order. The first plugin's `wrap` is the outermost. The
+SDK builds the composed `wrap` once per invocation.
+
+The SDK does not isolate errors from hooks (rule 1.2). No hook error is ignored:
+
+1. A throw from a factory makes the handler throw. So Lambda invokes again.
+2. A throw from `onOperationChange` ends the invocation. `onInvocationEnd` then receives
+   `"RETRYING"`, and the handler throws.
+3. A throw or a rejection from `onInvocationEnd` makes the handler throw.
+4. A throw from `wrap` fails the code it wraps, like a throw from `fn`. For an attempt,
+   the retry strategy then decides.
+
+The records use the wire format of the Lambda API: `Id`, `ParentId`, `Type`, `SubType`,
+`Name`, `Status`, `StartTimestamp`, `EndTimestamp`, `StepDetails` and the other details.
+They are the objects that the SDK stores. So a plugin must not change them.
+
+A timestamp is a number of epoch seconds in a checkpoint response. It is an ISO 8601
+string in the invocation event. So in AWS, `info.operations` holds strings, and `updated`
+holds numbers. A record in `operations` can hold either form. The in-memory service of
+`runDurable` sends numbers in both. A plugin must read both forms:
+
+```js
+const ms = (t) => (typeof t === "number" ? t * 1000 : Date.parse(t));
+```
+
+The example below logs the duration of each step attempt. It writes its lines at the end
+of the invocation.
+
+```js
+const timing = ({ requestId }) => {
+  const lines = [];
+  return {
+    async wrap({ kind, name, attempt, fn }) {
+      if (kind !== "attempt") return fn();
+      const start = Date.now();
+      try {
+        return await fn();
+      } finally {
+        lines.push({ requestId, name, attempt, ms: Date.now() - start });
+      }
+    },
+    onInvocationEnd({ status }) {
+      console.log(JSON.stringify({ status, attempts: lines }));
+    },
+  };
+};
+
+export const handler = withDurableExecution(workflow, { plugins: [timing] });
+```
+
+`wrap` above is async. So it returns a promise even when `fn` returns a plain value. The
+SDK awaits what `wrap` returns, for every kind. So an async `wrap` is correct.
+
 ### createRetryStrategy(config)
 
 Returns a retry strategy for `step` and `waitForCallback`. All options are optional.
@@ -609,6 +727,11 @@ Options:
   without input. Its return value is the invoke result.
   A thrown error fails the invoke with `ErrorType` set to the error's `name`.
 - `maxInvocations` (default 100): `runDurable` throws after this many invocations.
+- `plugins` (optional): plugin factories, as in `withDurableExecution`. Each simulated
+  invocation calls every factory again. The fake Lambda context has
+  `awsRequestId` `"request-1"`, `"request-2"` and so on. Each invocation event has
+  `UpdatedOperationIds`: the ids of the records that changed after the previous
+  invocation's last checkpoint response, for example a wait that the virtual clock ended.
 - `pageSize` (optional): serves the execution state in pages of this size, to test
   pagination.
 - `service` (optional): a service from `createInMemoryService(options)`. The options above
@@ -926,6 +1049,87 @@ try {
 }
 ```
 
+### Keep plugin hooks fast, and do not throw from them
+
+The SDK calls `onOperationChange` and `wrap` on the path of every operation. So a slow
+hook slows every operation.
+
+1. Do no network call and no file access in `onOperationChange` or `wrap`. Push the data
+   to an array on the plugin object instead.
+2. The SDK does not catch errors from hooks. A throw ends the invocation, or fails the
+   wrapped code (see [Plugins](#plugins)). So catch your own errors inside each hook.
+
+### Call fn exactly once in wrap, and return its result
+
+The SDK passes `fn` to `wrap` and uses the value that `wrap` returns as the result of the
+user code.
+
+1. If `wrap` does not call `fn`, the user code does not run. Its operation never finishes.
+2. If `wrap` calls `fn` twice, the user code runs twice. A step then has its side effects
+   twice.
+3. If `wrap` returns another value, the operation saves that value.
+4. So call `fn()` once and return what it returns, or a promise for it. The SDK does not
+   check this.
+
+### Never call durable operations in plugin hooks
+
+The SDK identifies an operation by its position in the call order (section 2.4). A hook
+runs when a checkpoint response arrives, and its timing changes between invocations. So an
+operation called from a hook gets a different id in each invocation, and replay fails. Use
+only the hook's arguments and your own clients in a hook.
+
+### Do not change operation records
+
+`info.operations`, `updated`, `operations` and the records in them are the objects that
+the SDK stores. The SDK reads them to replay and to decide when an operation continues. So
+a changed record changes what the workflow does. Copy a record before you change it.
+
+### Buffer in hooks, send in onInvocationEnd
+
+The SDK awaits only `onInvocationEnd`. It does not await `onOperationChange` or `wrap`
+beyond `fn`.
+
+1. So a network call that starts in another hook can still run when the handler returns.
+   Lambda then freezes the sandbox, and the call can fail or arrive late.
+2. So collect the data on the plugin object, and send it in `onInvocationEnd`.
+3. The handler returns only after `onInvocationEnd` settles. A slow exporter delays the
+   handler and costs Lambda time. So give every network call a timeout, for example with
+   `AbortSignal.timeout(ms)`.
+4. A rejection from `onInvocationEnd` makes the handler throw, and Lambda invokes again.
+   So catch the exporter's errors when a lost export is acceptable.
+
+### Keep plugin state on the plugin object
+
+The SDK calls each factory once per invocation. Lambda Managed Instances can run several
+invocations in one process at the same time.
+
+1. So keep per-invocation state, such as open spans and buffers, on the object that the
+   factory returns, or in variables inside the factory call.
+2. Keep shared state, such as an HTTP client or an exporter, in the closure that creates
+   the factory. Create it once, outside the factory call.
+3. Do not keep per-invocation state in module-level variables.
+
+```js
+const exporter = createExporter(); // shared by every invocation
+
+const tracing = ({ requestId }) => {
+  const spans = []; // this invocation only
+  return {
+    wrap: ({ kind, name, fn }) => {
+      spans.push({ requestId, kind, name, start: Date.now() });
+      return fn();
+    },
+    onInvocationEnd: async () => {
+      try {
+        await exporter.send(spans, { signal: AbortSignal.timeout(2000) });
+      } catch (err) {
+        console.warn("trace export failed", err);
+      }
+    },
+  };
+};
+```
+
 ### Write a custom client
 
 `config.client` replaces the built-in client. Use it to call the APIs through another
@@ -980,7 +1184,12 @@ export const handler = withDurableExecution(workflow, {
 - Times are whole seconds (`seconds`, `timeoutSeconds`). The `Duration` object does not
   exist.
 - One error class exists: `DurableOperationError`. Use `errorType` to tell errors apart.
-- No plugins, no OpenTelemetry hooks and no custom loggers. The logger writes to `console`.
+- Plugins have a factory and three hooks: `onOperationChange`, `wrap` and
+  `onInvocationEnd`. No hook marks the start or the end of an operation or of an attempt.
+  The SDK does not isolate hook errors. It awaits only `onInvocationEnd`. Hooks receive
+  wire records, not `OperationInfo` objects. No OpenTelemetry hooks beyond these, no
+  `enrichLogContext`, no propagation metadata, no plugins loaded from the environment,
+  and no custom loggers. The logger writes to `console`.
 - Serdes functions receive one object: `serialize({ value, entityId, durableExecutionArn })`
   and `deserialize({ data, entityId, durableExecutionArn })`. They can return a value or a
   promise.
@@ -1091,7 +1300,11 @@ section and the full SDK disagree, this section wins inside this package.
 These features of the full SDK are not in the lite SDK. Do not add them without a decision
 from the package owner.
 
-- Plugins, OpenTelemetry hooks, and external or custom loggers.
+- Plugins beyond the factory and the three hooks of section 2.12: OpenTelemetry hooks
+  beyond these, `enrichLogContext`, propagation metadata, plugins loaded from environment
+  variables, and isolation of hook errors. The package owner decided to add the plugin
+  interface of section 2.12 only.
+- External or custom loggers.
 - `configureSerdes` and any default serdes for a context. The package owner decided to
   add per-operation serdes only (section 2.11). The `serdes` option for a whole
   `BatchResult`, `createClassSerdes` and `createClassSerdesWithDates` are out of scope
@@ -1149,6 +1362,7 @@ src/errors.js              DurableOperationError and ErrorObject conversion
 src/retry.js               createRetryStrategy
 src/logger.js              replay-aware console logger
 src/serdes.js              calls a custom serdes (section 2.11)
+src/plugins.js             plugin factories and hooks (section 2.12)
 src/operations/*.js        one file per operation
 src/transport/sigv4.js     SigV4 signing with node:crypto
 src/transport/lambda-client.js  HTTPS client for the two durable APIs
@@ -1197,17 +1411,19 @@ Rules for the client:
    again.
 3. The first operation is the `EXECUTION` operation. The user event is
    `JSON.parse(ExecutionDetails.InputPayload)`, or `{}` if the payload is empty.
-4. The SDK calls `handler({ event, ctx, lambdaContext })`.
-5. The SDK returns one of these objects to Lambda:
+4. With plugins, the SDK calls the plugin factories (section 2.12).
+5. The SDK calls `handler({ event, ctx, lambdaContext })`.
+6. The SDK returns one of these objects to Lambda:
    - `{Status: "SUCCEEDED", Result: JSON.stringify(value)}`. `Result` is absent for
      `undefined`.
    - `{Status: "FAILED", Error: ErrorObject}`.
    - `{Status: "PENDING"}`.
-6. If `Result` is larger than `6 * 1024 * 1024 - 50` bytes, the SDK checkpoints
+7. If `Result` is larger than `6 * 1024 * 1024 - 50` bytes, the SDK checkpoints
    `{Type: "EXECUTION", Action: "SUCCEED", Payload: Result}` first. It then returns
    `{Status: "SUCCEEDED", Result: ""}`. The full SDK gives this update the id
    `"execution-result-" + Date.now()`, hashed. The lite SDK does the same.
-7. If the SDK throws from the Lambda handler, Lambda records an invocation error and the
+8. With plugins, the SDK awaits `onInvocationEnd` before it returns or throws.
+9. If the SDK throws from the Lambda handler, Lambda records an invocation error and the
    service invokes the function again. The SDK throws only for errors that a new invocation
    can fix (section 2.8).
 
@@ -1250,7 +1466,7 @@ Checkpoint queue:
    the local state, keyed by `Id`. Operations read service-assigned fields from that state, for
    example `CallbackDetails.CallbackId`.
 5. A response without a `CheckpointToken` means a newer invocation took over. The SDK returns
-   PENDING. The one exception is a request that carried the `EXECUTION` update from 2.3 step 6.
+   PENDING. The one exception is a request that carried the `EXECUTION` update from 2.3 step 7.
 
 Suspension:
 
@@ -1524,3 +1740,62 @@ Each can return a value or a promise. The option names follow the full SDK:
    `undefined`, the update has no `Payload`. A replay then passes `data: undefined` to
    `deserialize`.
 7. A ReplayChildren re-run of a child context returns `fn`'s value and calls no serdes.
+
+#### 2.12 Plugins
+
+A plugin factory is a function that `withDurableExecution` receives in `config.plugins`.
+It returns a plugin object with up to three hooks. [Plugins](#plugins) documents the API.
+
+The no-plugin path:
+
+1. `withDurableExecution` calls `createPlugins` (`plugins.js`) only when
+   `plugins?.length` is above 0.
+2. `createPlugins` returns one function per hook, or `undefined` when no plugin has the
+   hook. `createExecution` receives `onOperationChange` and `wrap`. `execution.wrap`
+   exposes the composed `wrap`.
+3. Each call point checks one variable. Without the hook, it calls the user code directly.
+   The closure for `fn` and the wrap argument exist only in the branch with the hook. So
+   an operation without plugins allocates nothing more than before.
+
+The call points:
+
+1. Factories: `withDurableExecution` in `with-durable-execution.js`. It calls them after
+   `loadOperations` and before `createExecution`. A factory that throws makes the handler
+   throw. `onInvocationEnd` is then not called. A failed page request throws before the
+   factories run, so it calls no hook either.
+2. `onOperationChange`: `flush` in `execution.js`, after it stores the returned records and
+   before it wakes the blocked operations. It runs only when the response returned at
+   least one record. A throw calls `terminate` with `kind: "throw"`. That is the outcome of
+   a serdes failure. Without the `try`, the throw would reject the promise of `flush`.
+   Nothing awaits that promise. Node.js ends the process on an unhandled rejection by
+   default.
+3. `wrap` with `"invocation"`: `run` in `with-durable-execution.js`, around the workflow
+   call.
+4. `wrap` with `"context"`: `runChild` in `operations/child-context.js`, around `fn`.
+   `runInChildContext`, `waitForCallback`, `map`, `parallel` and NESTED items all go
+   through `runChild`. A FLAT item runs in `flatItem` in `batch.js`, which has no wrap.
+5. `wrap` with `"attempt"`: `runStep` in `operations/step.js` and `runCondition` in
+   `operations/wait-for-condition.js`, around `fn`. The waitForCallback submitter is a
+   step. `waitStrategy` and `retryStrategy` are not wrapped.
+6. `wrapInfo` in `plugins.js` builds the argument. It takes `Id` and `ParentId` from
+   `ctx._base`, so they equal the record's fields.
+7. `onInvocationEnd`: `withDurableExecution`, after `run` resolves or rejects. `run`
+   resolves after `drain`, and after the large-result checkpoint (2.3 step 7). `flush`
+   stores the records before it resolves the updates' promises. So the snapshot holds the
+   final records. A rejection of `run` gives `"RETRYING"`, and the handler throws the
+   same error after the hooks.
+
+Rules:
+
+1. After `terminate`, the SDK sends no checkpoint. A request that is in flight then is
+   not awaited, and its response is not stored (section 2.5). So `onInvocationEnd` can run
+   before that response arrives. Its snapshot then does not hold those records.
+2. `wrap` composes once per invocation. `reduceRight` builds the chain from the
+   original `fn` outward, so the first plugin is the outermost.
+3. The hooks receive the stored records, not copies. A copy per operation would cost
+   time on every checkpoint response. Changing a record is the plugin's mistake
+   (rule 1.2). [Do not change operation records](#do-not-change-operation-records)
+   documents it.
+4. The SDK parses `InputPayload` before the factories, so `info.input` is the workflow's
+   `event`. Lambda rejects an invoke whose payload is not JSON. So the parse does not
+   throw for an execution that Lambda started.

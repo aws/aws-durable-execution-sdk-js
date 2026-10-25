@@ -4,6 +4,7 @@ import type {
   DurableExecutionClient,
   DurableExecutionOutput,
   DurableHandler,
+  DurablePluginFactory,
   ErrorObject,
 } from "../index.js";
 
@@ -69,6 +70,8 @@ export interface RunDurableOptions<E, R> extends InMemoryServiceOptions {
   input?: E;
   /** Default 100. */
   maxInvocations?: number;
+  /** Passed to the handler. Each invocation calls every factory again. */
+  plugins?: readonly DurablePluginFactory<E, R>[];
   /**
    * An existing in-memory service. Pass one to call advanceBy() or boundary() during an
    * invocation. The service options above are then ignored.
@@ -102,6 +105,8 @@ export interface InvocationInput {
   DurableExecutionArn: string;
   CheckpointToken: string;
   InitialExecutionState: { Operations?: Operation[]; NextMarker?: string };
+  /** The ids of the records that changed after the last checkpoint response. */
+  UpdatedOperationIds: string[];
 }
 
 export interface InMemoryService {

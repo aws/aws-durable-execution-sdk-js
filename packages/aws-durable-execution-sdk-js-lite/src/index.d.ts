@@ -437,5 +437,181 @@ export interface DurableExecutionOutput {
 
 export function withDurableExecution<E = unknown, R = unknown>(
   handler: DurableHandler<E, R>,
-  config?: { client?: DurableExecutionClient },
+  config?: {
+    client?: DurableExecutionClient;
+    /** Called once per invocation, in array order. See {@link DurablePluginFactory}. */
+    plugins?: readonly DurablePluginFactory<E, R>[];
+  },
 ): (event: unknown, lambdaContext?: unknown) => Promise<DurableExecutionOutput>;
+
+/**
+ * A timestamp in an operation record. A checkpoint response sends epoch seconds as a
+ * number. The invocation event sends an ISO 8601 string. A plugin must read both.
+ */
+export type RecordTimestamp = number | string;
+
+/**
+ * An operation record in the wire format, as the SDK stores it. Plugins receive the
+ * stored objects and must not change them.
+ */
+export interface OperationRecord {
+  /** The hashed operation id. */
+  Id: string;
+  /** The hashed id of the enclosing child context. Absent at the root. */
+  ParentId?: string;
+  Name?: string;
+  /** "EXECUTION", "STEP", "WAIT", "CALLBACK", "CHAINED_INVOKE" or "CONTEXT". */
+  Type: string;
+  SubType?: string;
+  /** For example "STARTED", "PENDING", "READY", "SUCCEEDED" or "FAILED". */
+  Status: string;
+  StartTimestamp?: RecordTimestamp;
+  EndTimestamp?: RecordTimestamp;
+  ExecutionDetails?: { InputPayload?: string };
+  StepDetails?: {
+    /** The number of finished attempts. */
+    Attempt?: number;
+    Result?: string;
+    Error?: ErrorObject;
+    NextAttemptTimestamp?: RecordTimestamp;
+  };
+  WaitDetails?: { ScheduledEndTimestamp?: RecordTimestamp };
+  CallbackDetails?: {
+    CallbackId?: string;
+    Result?: string;
+    Error?: ErrorObject;
+  };
+  ChainedInvokeDetails?: { Result?: string; Error?: ErrorObject };
+  ContextDetails?: {
+    Result?: string;
+    Error?: ErrorObject;
+    ReplayChildren?: boolean;
+  };
+}
+
+/** The argument of a plugin factory. */
+export interface PluginInvocationInfo<E = unknown> {
+  /** The DurableExecutionArn. */
+  arn: string;
+  /** lambdaContext.awsRequestId. */
+  requestId: string | undefined;
+  /** The execution input: the same object as the workflow's event. */
+  input: E;
+  /** A new array of every record in the state, after all state pages are loaded. */
+  operations: readonly OperationRecord[];
+  /** The ids that the service changed since the previous invocation. */
+  updatedOperationIds: readonly string[];
+  lambdaContext: unknown;
+}
+
+/** The argument of onOperationChange. */
+export interface PluginOperationChangeInfo {
+  /** The records that one checkpoint response returned, as stored. */
+  updated: readonly OperationRecord[];
+  /** A new array of every record in the state, after the merge. */
+  operations: readonly OperationRecord[];
+}
+
+/**
+ * The argument of wrap. wrap must call fn exactly once and return its result.
+ * - "invocation": the workflow function. The other fields are undefined.
+ * - "context": the fn of a child context that has a CONTEXT record:
+ *   runInChildContext, waitForCallback, map, parallel, and NESTED items.
+ * - "attempt": one attempt of a step's fn, or one waitForCondition check.
+ */
+export type PluginWrapInfo<T> =
+  | {
+      kind: "invocation";
+      id?: undefined;
+      parentId?: undefined;
+      name?: undefined;
+      type?: undefined;
+      subType?: undefined;
+      attempt?: undefined;
+      fn: () => T;
+    }
+  | {
+      kind: "context";
+      /** Equals the record's Id. */
+      id: string;
+      /** Equals the record's ParentId. Undefined at the root. */
+      parentId: string | undefined;
+      name: string | undefined;
+      type: "CONTEXT";
+      /** The SubType that the SDK sends. */
+      subType: string;
+      attempt: undefined;
+      fn: () => T;
+    }
+  | {
+      kind: "attempt";
+      /** Equals the record's Id. */
+      id: string;
+      /** Equals the record's ParentId. Undefined at the root. */
+      parentId: string | undefined;
+      name: string | undefined;
+      type: "STEP";
+      /** The SubType that the SDK sends. */
+      subType: string;
+      /** 1-based. */
+      attempt: number;
+      fn: () => T;
+    };
+
+/** The argument of onInvocationEnd. operations is a new array of the final state. */
+export type PluginInvocationEndInfo<R = unknown> =
+  | {
+      status: "SUCCEEDED";
+      /** The workflow's return value. */
+      result: R;
+      error: undefined;
+      operations: readonly OperationRecord[];
+    }
+  | {
+      status: "FAILED";
+      result: undefined;
+      /** The error that the handler returns to Lambda. */
+      error: ErrorObject;
+      operations: readonly OperationRecord[];
+    }
+  | {
+      /** Suspended, or a newer invocation took over. */
+      status: "PENDING";
+      result: undefined;
+      error: undefined;
+      operations: readonly OperationRecord[];
+    }
+  | {
+      /** The handler throws error next, so Lambda invokes again. */
+      status: "RETRYING";
+      result: undefined;
+      error: unknown;
+      operations: readonly OperationRecord[];
+    };
+
+/**
+ * The hooks of one invocation. Every hook is optional. A throw from a hook is not
+ * caught: it fails the operation or the invocation.
+ */
+export interface DurablePlugin<R = unknown> {
+  /**
+   * Called synchronously after a checkpoint response returned at least one record.
+   * Not awaited.
+   */
+  onOperationChange?(info: PluginOperationChangeInfo): void;
+  /** Wraps user code. Must call info.fn exactly once and return its result. */
+  wrap?<T>(info: PluginWrapInfo<T>): T;
+  /**
+   * Called once, after the last checkpoint is saved, before the handler returns or
+   * throws. Awaited. A rejection makes the handler throw.
+   */
+  onInvocationEnd?(info: PluginInvocationEndInfo<R>): void | Promise<void>;
+}
+
+/**
+ * Called once per invocation, after the state is loaded and before the workflow runs.
+ * Keep per-invocation state on the returned plugin, and shared clients in the closure.
+ */
+export type DurablePluginFactory<E = unknown, R = unknown> = (
+  info: PluginInvocationInfo<E>,
+) => DurablePlugin<R> | undefined;

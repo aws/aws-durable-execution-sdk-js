@@ -1,12 +1,13 @@
 import { createContext } from "./context.js";
 import { toErrorObject } from "./errors.js";
 import { createExecution } from "./execution.js";
+import { createPlugins } from "./plugins.js";
 import { createLambdaClient } from "./transport/lambda-client.js";
 
 // Lambda's response limit is 6 MiB. The 50 bytes leave room for the envelope.
 const MAX_RESULT_BYTES = 6 * 1024 * 1024 - 50;
 
-export function withDurableExecution(handler, { client } = {}) {
+export function withDurableExecution(handler, { client, plugins } = {}) {
   return async (event, lambdaContext) => {
     const { DurableExecutionArn: arn, CheckpointToken: token } = event ?? {};
     if (!arn || !token) {
@@ -18,47 +19,106 @@ export function withDurableExecution(handler, { client } = {}) {
     // Created per invocation, so credentials rotated by Lambda are picked up.
     const api = client ?? createLambdaClient();
     const operations = await loadOperations(api, arn, token, event);
-    const execution = createExecution({ client: api, arn, token, operations });
+    const payload = operations[0]?.ExecutionDetails?.InputPayload;
+    const input = payload ? JSON.parse(payload) : {};
+    // Without plugins, the invocation calls no plugin code (README 2.12).
+    const hooks = plugins?.length
+      ? createPlugins(plugins, {
+          arn,
+          requestId: lambdaContext?.awsRequestId,
+          input,
+          operations: [...operations],
+          updatedOperationIds: event.UpdatedOperationIds ?? [],
+          lambdaContext,
+        })
+      : undefined;
+    const execution = createExecution({
+      client: api,
+      arn,
+      token,
+      operations,
+      onOperationChange: hooks?.onOperationChange,
+      wrap: hooks?.wrap,
+    });
     const ctx = createContext({ execution });
-    const input = operations[0]?.ExecutionDetails?.InputPayload;
-
-    // Returns the outcome if the execution terminated before p settled.
-    const settle = (p) =>
-      Promise.race([p.then(() => undefined), execution.terminated]);
-
-    const handlerDone = Promise.resolve()
-      .then(() =>
-        handler({ event: input ? JSON.parse(input) : {}, ctx, lambdaContext }),
-      )
-      .then(
-        (value) => ({ value }),
-        (error) => ({ error }),
-      );
-    const first = await Promise.race([handlerDone, execution.terminated]);
-    if (first.kind) return output(first);
-    // The handler finished. Un-awaited blocked operations must not suspend it now.
-    execution.runningStart();
-
-    let outcome = await settle(execution.drain());
-    if (outcome) return output(outcome);
-    if ("error" in first) {
-      return { Status: "FAILED", Error: toErrorObject(first.error) };
+    if (!hooks) {
+      return (await run(handler, { execution, ctx, input, lambdaContext }))
+        .output;
     }
-    const result = JSON.stringify(first.value);
-    if (result === undefined) return { Status: "SUCCEEDED" };
-    if (Buffer.byteLength(result) <= MAX_RESULT_BYTES) {
-      return { Status: "SUCCEEDED", Result: result };
+
+    let outcome;
+    try {
+      outcome = await run(handler, { execution, ctx, input, lambdaContext });
+    } catch (error) {
+      // The handler throws, so Lambda invokes again.
+      await hooks.onInvocationEnd({
+        status: "RETRYING",
+        result: undefined,
+        error,
+        operations: execution.snapshot(),
+      });
+      throw error;
     }
-    // Too large for the Lambda response. The service stores it from a checkpoint instead.
-    outcome = await settle(
-      execution.checkpoint({
-        ...ctx._base(`execution-result-${Date.now()}`, { type: "EXECUTION" }),
-        Action: "SUCCEED",
-        Payload: result,
-      }),
-    );
-    return outcome ? output(outcome) : { Status: "SUCCEEDED", Result: "" };
+    const { output, value } = outcome;
+    await hooks.onInvocationEnd({
+      status: output.Status,
+      result: value,
+      error: output.Error,
+      operations: execution.snapshot(),
+    });
+    return output;
   };
+}
+
+// Runs the workflow and saves the remaining checkpoints. Resolves to the Lambda output.
+// value is the workflow's return value when the output is SUCCEEDED. Rejects when the
+// handler must throw to Lambda.
+async function run(handler, { execution, ctx, input, lambdaContext }) {
+  // Returns the outcome if the execution terminated before p settled.
+  const settle = (p) =>
+    Promise.race([p.then(() => undefined), execution.terminated]);
+  const wrap = execution.wrap;
+  const args = { event: input, ctx, lambdaContext };
+
+  const handlerDone = Promise.resolve()
+    .then(() =>
+      wrap
+        ? wrap({ kind: "invocation", fn: () => handler(args) })
+        : handler(args),
+    )
+    .then(
+      (value) => ({ value }),
+      (error) => ({ error }),
+    );
+  const first = await Promise.race([handlerDone, execution.terminated]);
+  if (first.kind) return { output: output(first) };
+  // The handler finished. Un-awaited blocked operations must not suspend it now.
+  execution.runningStart();
+
+  let outcome = await settle(execution.drain());
+  if (outcome) return { output: output(outcome) };
+  if ("error" in first) {
+    return {
+      output: { Status: "FAILED", Error: toErrorObject(first.error) },
+    };
+  }
+  const { value } = first;
+  const result = JSON.stringify(value);
+  if (result === undefined) return { output: { Status: "SUCCEEDED" }, value };
+  if (Buffer.byteLength(result) <= MAX_RESULT_BYTES) {
+    return { output: { Status: "SUCCEEDED", Result: result }, value };
+  }
+  // Too large for the Lambda response. The service stores it from a checkpoint instead.
+  outcome = await settle(
+    execution.checkpoint({
+      ...ctx._base(`execution-result-${Date.now()}`, { type: "EXECUTION" }),
+      Action: "SUCCEED",
+      Payload: result,
+    }),
+  );
+  return outcome
+    ? { output: output(outcome) }
+    : { output: { Status: "SUCCEEDED", Result: "" }, value };
 }
 
 function output({ kind, error }) {

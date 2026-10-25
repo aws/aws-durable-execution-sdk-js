@@ -5,6 +5,7 @@ import { createInMemoryService } from "./in-memory-service.js";
 // delivers outside outcomes, or skips virtual time to the next due item.
 // service: an existing in-memory service. A test passes one to call advanceBy() or
 // boundary() during an invocation. The service options are then ignored.
+// plugins: passed to the handler. Each invocation calls the factories again.
 export async function runDurable({
   workflow,
   input,
@@ -12,9 +13,13 @@ export async function runDurable({
   functions,
   maxInvocations = 100,
   pageSize,
+  plugins,
   service = createInMemoryService({ input, onCallback, functions, pageSize }),
 }) {
-  const handler = withDurableExecution(workflow, { client: service.client });
+  const handler = withDurableExecution(workflow, {
+    client: service.client,
+    plugins,
+  });
   let invocations = 0;
   let lastError;
   // Each invocation error, like the service records them: a throw from the handler, or
