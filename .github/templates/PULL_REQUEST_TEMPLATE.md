@@ -8,7 +8,7 @@ By submitting this pull request, I confirm that my contribution is made under th
 
 ### Design
 
-See [Rules for every change](../../CONTRIBUTING.md#rules-for-every-change).
+See [Rules for every change](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/CONTRIBUTING.md#rules-for-every-change).
 
 - Design note (rule 3), for a new feature, a new option or a public API change: link, or "not needed".
 - Simpler options considered (rule 2), if the change adds logic:
