@@ -95,6 +95,21 @@ export interface TelemetryExporter {
   maxRecordBytes?: number;
 }
 
+/**
+ * The client interface of the built-in exporters. send POSTs one signed request and
+ * returns the parsed JSON response. It rejects with an Error that has name, status,
+ * message and requestId.
+ */
+export interface AwsClient {
+  send(request: {
+    /** Default "/". */
+    path?: string;
+    headers?: Record<string, string>;
+    /** The JSON request body. */
+    body?: string;
+  }): Promise<unknown>;
+}
+
 export interface TelemetryPluginConfig {
   exporters: readonly TelemetryExporter[];
   /** Default "on-complete". */

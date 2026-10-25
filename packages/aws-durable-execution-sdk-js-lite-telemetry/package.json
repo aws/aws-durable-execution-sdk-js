@@ -33,17 +33,5 @@
   ],
   "scripts": {
     "test": "node --test \"test/**/*.test.js\""
-  },
-  "peerDependencies": {
-    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
-    "@aws-sdk/client-rds-data": "^3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@aws-sdk/client-cloudwatch-logs": {
-      "optional": true
-    },
-    "@aws-sdk/client-rds-data": {
-      "optional": true
-    }
   }
 }

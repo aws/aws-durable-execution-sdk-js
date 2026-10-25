@@ -19,10 +19,9 @@ This package is an alpha. It is private and not published to npm. Its API can ch
 
 - Node.js 22.12 or later.
 - `@aws/durable-execution-sdk-js-lite`.
-- For the CloudWatch Logs exporter: `@aws-sdk/client-cloudwatch-logs`. For the Aurora
-  exporter: `@aws-sdk/client-rds-data`. Both are optional peer dependencies. Lambda's
-  Node.js runtimes include the AWS SDK v3. So a Lambda function needs to bundle neither
-  client. Each exporter loads only its own client.
+
+The package has no dependencies. The exporters do not use the AWS SDK. They sign and
+send their own requests. See [AWS requests](#aws-requests).
 
 ## Usage
 
@@ -48,8 +47,8 @@ export const handler = withDurableExecution(workflow, { plugins: [telemetry] });
 ```
 
 `createTelemetryPlugin` returns a plugin factory. The lite SDK calls the factory once per
-invocation. Create the plugin at module level, so the exporters and their clients live
-for the life of the sandbox.
+invocation. Create the plugin at module level, so the exporters live for the life of the
+sandbox.
 
 ## Configuration
 
@@ -130,16 +129,23 @@ exported for tests and custom exporters.
 
 ### CloudWatch Logs
 
-`createCloudWatchLogsExporter({ logGroupName, logStreamPrefix, client, maxRecordBytes })`
+`createCloudWatchLogsExporter({ logGroupName, logStreamPrefix, region, endpoint, client, maxRecordBytes })`
 writes each record as one log event.
 
 - `logGroupName`: the log group. It must exist.
 - `logStreamPrefix` (default `"durable-execution-telemetry/"`): the stream name is the
   prefix and the UTC date, for example `durable-execution-telemetry/2026/10/25`. So each
   day has a new stream.
-- `client` (default `new CloudWatchLogsClient({})`): any object with `send(command)`.
+- `region` (default `process.env.AWS_REGION`) and `endpoint` (default
+  `https://logs.REGION.amazonaws.com`): where the built-in client sends requests.
+- `client` (default: the built-in client): an object with `send({ path, headers, body })`.
+  See [AWS requests](#aws-requests). With `client`, the exporter ignores `region` and
+  `endpoint`.
 - `maxRecordBytes` (default `256_000`): CloudWatch Logs limits an event to 256 KiB minus
   26 bytes.
+
+The exporter calls the CloudWatch Logs API with the AWS JSON 1.1 protocol. Each call is
+`POST /` with the header `x-amz-target`, for example `Logs_20140328.PutLogEvents`.
 
 The exporter calls `CreateLogStream` once per stream. It ignores
 `ResourceAlreadyExistsException`, because another sandbox can create the stream first.
@@ -169,7 +175,7 @@ log group:
 
 ### Aurora PostgreSQL
 
-`createAuroraExporter({ resourceArn, secretArn, database, table, client, maxRecordBytes })`
+`createAuroraExporter({ resourceArn, secretArn, database, table, region, endpoint, client, maxRecordBytes })`
 keeps one row per execution. It uses the RDS Data API, so the function needs no VPC
 access and no database driver.
 
@@ -181,10 +187,15 @@ access and no database driver.
   not starting with a digit. The name goes into the SQL text, because the Data API
   cannot bind a table name as a parameter. So the exporter throws at creation for any
   other name.
-- `client` (default `new RDSDataClient({})`): any object with `send(command)`.
+- `region` (default `process.env.AWS_REGION`) and `endpoint` (default
+  `https://rds-data.REGION.amazonaws.com`): where the built-in client sends requests.
+- `client` (default: the built-in client): an object with `send({ path, headers, body })`.
+  See [AWS requests](#aws-requests). With `client`, the exporter ignores `region` and
+  `endpoint`.
 - `maxRecordBytes` (default `1_000_000`): the full SDK's limit for one statement.
 
-Each export runs one `ExecuteStatement` with named parameters. It inserts the row, or
+Each export runs one `ExecuteStatement` with named parameters. The Data API uses the
+REST-JSON protocol. So the call is `POST /Execute` with a JSON body. It inserts the row, or
 updates `status`, `end_time`, `duration_ms`, `record_json` and `emitted_at` of the
 existing row. The update has the condition
 `WHERE <table>.emitted_at <= EXCLUDED.emitted_at`:
@@ -235,6 +246,32 @@ An Aurora Serverless v2 cluster with a minimum of 0 ACUs pauses when idle. The D
 then rejects requests with `DatabaseResumingException` until the cluster resumes. So the
 records sent during that time are lost. The full SDK's CDK stack sets a minimum of 0.5
 ACUs, so its cluster never pauses.
+
+### AWS requests
+
+The exporters do not use the AWS SDK. A built-in client in `src/aws.js` sends each
+request:
+
+1. It signs the request with Signature Version 4, for the service `logs` or `rds-data`.
+2. It reads the credentials of the Lambda function from `AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`.
+3. With SnapStart, Lambda sets no credential variables. It serves the credentials from
+   `AWS_CONTAINER_CREDENTIALS_FULL_URI` instead. The client then fetches them from that
+   endpoint. It keeps them until 5 minutes before they expire.
+4. Each attempt has a timeout of 10 seconds.
+5. The client retries a response with status 429 or 5xx, a network error and a timeout.
+   It makes at most 3 attempts. It waits a random time before each retry: up to 100 ms
+   before the second attempt and up to 200 ms before the third.
+6. Any other error response rejects at once. The error has `name`, `status`, `message`
+   and `requestId`. `name` comes from the `x-amzn-errortype` header, or the `__type` or
+   `code` field of the body, for example `ResourceNotFoundException`.
+
+The IAM permissions of each exporter are the same as with the AWS SDK. The sections above
+list them.
+
+The `client` option replaces the built-in client. Its `send({ path, headers, body })`
+receives the path, the headers and the JSON body as a string. It returns a promise of
+the parsed response. Tests use it to check the requests without a network.
 
 ### Write an exporter
 
@@ -292,13 +329,10 @@ The handler returns only after the end of the invocation. Lambda bills that time
 slow destination costs time in every invocation.
 
 1. Keep `exportTimeoutMs` well below the function timeout.
-2. Give each client its own request timeout, so a request does not keep running after
-   the plugin stopped waiting:
-
-```js
-const client = new RDSDataClient({ requestHandler: { requestTimeout: 2000 } });
-createAuroraExporter({ resourceArn, secretArn, database, client });
-```
+2. The built-in client has its own timeout: 10 seconds per attempt, and 3 attempts.
+   So an export can keep running in the background after the plugin stopped waiting.
+   Lambda can freeze it and continue it in a later invocation. The Aurora upsert keeps
+   the newer record in that case.
 
 ### Use on-change only when you watch running executions
 
@@ -327,7 +361,8 @@ record. So do not put secrets in error messages.
 - The plugin sends the record of an invocation at its end. If the sandbox crashes or
   times out before the end of the invocation, that record is lost. With `"on-change"`,
   the records sent before the crash remain.
-- A failed export is not retried.
+- The plugin does not retry a failed export. The built-in client retries only the
+  failures listed in [AWS requests](#aws-requests).
 - No operation results. No transforms of the input or output.
 - Aurora PostgreSQL only. No MySQL.
 - With `operations: "all"`, a record holds the children of a finished child context only
@@ -338,6 +373,8 @@ record. So do not put secrets in error messages.
 ## Differences from @aws/durable-execution-sdk-js-telemetry-exporter
 
 - Two exporters: CloudWatch Logs and Aurora PostgreSQL. No default exporter.
+- No AWS SDK dependency. The exporters sign their own requests. The `client` option is an
+  object with `send({ path, headers, body })`, not an AWS SDK client.
 - No export scheduler. The lite SDK creates one plugin per invocation, calls
   `onOperationChange` synchronously from `flush`, and calls `onInvocationEnd` once,
   after the last checkpoint response. So no hook can arrive after the end. The plugin
@@ -371,11 +408,10 @@ change any file here.
    practices instead of runtime checks (rule 1.2). Plain ES modules, hand-written types,
    no build step (rule 1.4). No `node:async_hooks` and no module-level per-invocation
    state (rule 1.5).
-2. The package has no `dependencies` and no `devDependencies`. Its only
-   `peerDependencies` are the two AWS SDK clients, both optional.
-3. `src/index.js` and the files it imports use only `node:` built-ins. Each exporter
-   imports only its own client. So a user of one exporter does not need the other
-   client.
+2. The package has no dependencies of any kind: no `dependencies`, no
+   `devDependencies`, no `peerDependencies` and no `optionalDependencies`.
+3. `src` imports only relative paths and `node:` built-ins. It does not import
+   `@aws-sdk/*`. The exporters send their requests with `src/aws.js`.
 4. `src` never imports the lite SDK. Tests import it by relative path,
    `../../aws-durable-execution-sdk-js-lite/src/...`, because it is not installed in
    `node_modules`.
@@ -396,6 +432,7 @@ src/index.js                    createTelemetryPlugin, sampling, export chain, t
 src/record.js                   buildRecord: wire records to the record format
 src/truncate.js                 fitRecord: the drop order of Record size
 src/operations-by-name.js       the operationsByName form for CloudWatch Logs
+src/aws.js                      signRequest and createAwsClient: SigV4, credentials, retries
 src/exporters/cloudwatch-logs.js
 src/exporters/aurora.js
 src/*.d.ts, src/exporters/*.d.ts  hand-written types
@@ -415,6 +452,9 @@ test/types.check.ts             compile-time check against the lite SDK's plugin
    and waits for the chain, bounded by `exportTimeoutMs`.
 4. The chain never rejects: each export catches its own errors. So a failed export does
    not stop the next one.
-5. The types in `src/index.d.ts` are structural. They do not import the lite SDK, so the
+5. `src/aws.js` is a copy of the lite SDK's transport, adapted for generic POST calls.
+   The lite SDK does not export its transport. So this package keeps its own copy. A fix
+   to the signing or the retries in one copy applies to the other too.
+6. The types in `src/index.d.ts` are structural. They do not import the lite SDK, so the
    package's types resolve without it. `test/types.check.ts` checks that the factory is
    assignable to the lite SDK's `DurablePluginFactory`.

@@ -1,8 +1,4 @@
-import {
-  CloudWatchLogsClient,
-  CreateLogStreamCommand,
-  PutLogEventsCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
+import { createAwsClient } from "../aws.js";
 import { withOperationsByName } from "../operations-by-name.js";
 
 // Writes each record as one log event. The stream name ends with the UTC date, so each
@@ -10,7 +6,9 @@ import { withOperationsByName } from "../operations-by-name.js";
 export function createCloudWatchLogsExporter({
   logGroupName,
   logStreamPrefix = "durable-execution-telemetry/",
-  client = new CloudWatchLogsClient({}),
+  region,
+  endpoint,
+  client = createAwsClient({ service: "logs", region, endpoint }),
   // CloudWatch Logs limits an event to 256 KiB minus 26 bytes. The full SDK uses
   // 256_000. The plugin measures the record with the operations array. The message
   // holds operationsByName instead. A summary has no id and no timestamps, so it is
@@ -21,12 +19,21 @@ export function createCloudWatchLogsExporter({
   // factory's closure, so the set lasts for the life of the Lambda sandbox.
   const streams = new Set();
 
+  // CloudWatch Logs uses the AWS JSON 1.1 protocol: POST / with the action in x-amz-target.
+  const call = (action, input) =>
+    client.send({
+      path: "/",
+      headers: {
+        "content-type": "application/x-amz-json-1.1",
+        "x-amz-target": `Logs_20140328.${action}`,
+      },
+      body: JSON.stringify(input),
+    });
+
   async function ensureStream(logStreamName) {
     if (streams.has(logStreamName)) return;
     try {
-      await client.send(
-        new CreateLogStreamCommand({ logGroupName, logStreamName }),
-      );
+      await call("CreateLogStream", { logGroupName, logStreamName });
     } catch (err) {
       // Another sandbox, or an earlier sandbox, created the stream.
       if (err?.name !== "ResourceAlreadyExistsException") throw err;
@@ -40,18 +47,16 @@ export function createCloudWatchLogsExporter({
       const now = new Date();
       const logStreamName = `${logStreamPrefix}${now.toISOString().slice(0, 10).replaceAll("-", "/")}`;
       await ensureStream(logStreamName);
-      await client.send(
-        new PutLogEventsCommand({
-          logGroupName,
-          logStreamName,
-          logEvents: [
-            {
-              timestamp: now.getTime(),
-              message: JSON.stringify(withOperationsByName(record)),
-            },
-          ],
-        }),
-      );
+      await call("PutLogEvents", {
+        logGroupName,
+        logStreamName,
+        logEvents: [
+          {
+            timestamp: now.getTime(),
+            message: JSON.stringify(withOperationsByName(record)),
+          },
+        ],
+      });
     },
   };
 }

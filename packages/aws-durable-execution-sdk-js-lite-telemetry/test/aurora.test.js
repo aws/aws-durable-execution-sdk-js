@@ -5,7 +5,13 @@ import {
   createAuroraExporter,
   createTableSql,
 } from "../src/exporters/aurora.js";
-import { ARN, fakeClient } from "./helpers.js";
+import {
+  ARN,
+  fakeClient,
+  fakeFetch,
+  jsonResponse as json,
+  setAwsEnv,
+} from "./helpers.js";
 
 const config = (client, extra = {}) => ({
   resourceArn: "arn:aws:rds:us-east-1:123456789012:cluster:telemetry",
@@ -28,10 +34,11 @@ test("one ExecuteStatement upserts the record with named parameters", async () =
   const exporter = createAuroraExporter(config(client));
   assert.equal(exporter.maxRecordBytes, 1_000_000);
   await exporter.export(ended);
-  assert.equal(client.commands.length, 1);
-  const [command] = client.commands;
-  assert.equal(command.constructor.name, "ExecuteStatementCommand");
-  const { sql, parameters, ...target } = command.input;
+  assert.equal(client.requests.length, 1);
+  const [request] = client.requests;
+  assert.equal(request.path, "/Execute");
+  assert.deepEqual(request.headers, { "content-type": "application/json" });
+  const { sql, parameters, ...target } = request.json;
   assert.deepEqual(target, {
     resourceArn: "arn:aws:rds:us-east-1:123456789012:cluster:telemetry",
     secretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:db",
@@ -65,7 +72,7 @@ test("missing fields are sent as isNull", async () => {
   });
   await createAuroraExporter(config(client)).export(running);
   const values = Object.fromEntries(
-    client.commands[0].input.parameters.map((p) => [p.name, p.value]),
+    client.requests[0].json.parameters.map((p) => [p.name, p.value]),
   );
   assert.deepEqual(values.execution_name, { isNull: true });
   assert.deepEqual(values.end_time, { isNull: true });
@@ -78,7 +85,7 @@ test("a custom table name appears in the SQL", async () => {
   await createAuroraExporter(
     config(client, { table: "My_Table_2", maxRecordBytes: 5 }),
   ).export(ended);
-  const { sql } = client.commands[0].input;
+  const { sql } = client.requests[0].json;
   assert.match(sql, /^INSERT INTO My_Table_2\n/);
   assert.match(sql, /WHERE My_Table_2\.emitted_at <= EXCLUDED\.emitted_at$/);
 });
@@ -103,6 +110,56 @@ test("a client error rejects the export", async () => {
   await assert.rejects(createAuroraExporter(config(client)).export(ended), {
     name: "DatabaseResumingException",
   });
+});
+
+test("the built-in client sends a signed POST /Execute to the RDS Data API", async (t) => {
+  setAwsEnv(t, {
+    AWS_REGION: "us-west-2",
+    AWS_ACCESS_KEY_ID: "AKID",
+    AWS_SECRET_ACCESS_KEY: "SECRET",
+  });
+  const fetch = fakeFetch([
+    json(500, { message: "internal" }),
+    json(200, { numberOfRecordsUpdated: 1 }),
+  ]);
+  // The default client reads globalThis.fetch when the exporter is created.
+  t.mock.method(globalThis, "fetch", fetch);
+  await createAuroraExporter(config(undefined)).export(ended);
+  // The 500 is retried.
+  assert.equal(fetch.calls.length, 2);
+  const call = fetch.calls[1];
+  assert.equal(call.method, "POST");
+  assert.equal(
+    call.url.href,
+    "https://rds-data.us-west-2.amazonaws.com/Execute",
+  );
+  assert.equal(call.headers["content-type"], "application/json");
+  assert.match(
+    call.headers.authorization,
+    /^AWS4-HMAC-SHA256 Credential=AKID\/\d{8}\/us-west-2\/rds-data\/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=[0-9a-f]{64}$/,
+  );
+  const body = JSON.parse(call.body);
+  assert.equal(body.resourceArn, config().resourceArn);
+  assert.equal(body.database, "telemetry");
+  assert.match(body.sql, /^INSERT INTO durable_execution_telemetry\n/);
+  assert.equal(body.parameters.length, 9);
+});
+
+test("region and endpoint options reach the built-in client", async (t) => {
+  setAwsEnv(t, { AWS_ACCESS_KEY_ID: "AKID", AWS_SECRET_ACCESS_KEY: "SECRET" });
+  const fetch = fakeFetch([json(200, {})]);
+  t.mock.method(globalThis, "fetch", fetch);
+  await createAuroraExporter(
+    config(undefined, {
+      region: "eu-west-1",
+      endpoint: "http://localhost:4566",
+    }),
+  ).export(ended);
+  assert.equal(fetch.calls[0].url.href, "http://localhost:4566/Execute");
+  assert.match(
+    fetch.calls[0].headers.authorization,
+    /\/eu-west-1\/rds-data\/aws4_request/,
+  );
 });
 
 test("createTableSql has the full SDK's schema", () => {

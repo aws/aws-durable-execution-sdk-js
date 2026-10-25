@@ -458,10 +458,10 @@ test("both exporters receive the final record through the plugin", async () => {
     ],
   });
   assert.equal(result.status, "SUCCEEDED");
-  const message = JSON.parse(logs.commands[1].input.logEvents[0].message);
+  const message = JSON.parse(logs.requests[1].json.logEvents[0].message);
   assert.equal(message.status, "SUCCEEDED");
   assert.deepEqual(Object.keys(message.operationsByName), ["a", "w", "b"]);
-  const json = rds.commands[0].input.parameters.find(
+  const json = rds.requests[0].json.parameters.find(
     (p) => p.name === "record_json",
   );
   assert.equal(JSON.parse(json.value.stringValue).status, "SUCCEEDED");

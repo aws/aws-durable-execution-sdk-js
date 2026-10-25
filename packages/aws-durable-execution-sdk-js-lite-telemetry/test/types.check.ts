@@ -3,13 +3,12 @@
 // It imports the lite SDK by relative path, because that package is not installed in
 // node_modules. It checks that the factory fits the lite SDK's plugins option.
 
-import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
-import { RDSDataClient } from "@aws-sdk/client-rds-data";
 import {
   type DurablePluginFactory,
   withDurableExecution,
 } from "../../aws-durable-execution-sdk-js-lite/src/index.js";
 import {
+  type AwsClient,
   buildRecord,
   createTelemetryPlugin,
   type DurableExecutionTelemetryRecord,
@@ -27,18 +26,23 @@ const custom: TelemetryExporter = {
   },
 };
 
+const client: AwsClient = {
+  send: async ({ path, headers, body }) => ({ path, headers, body }),
+};
+
 const plugin = createTelemetryPlugin({
   exporters: [
     custom,
     createCloudWatchLogsExporter({
       logGroupName: "g",
-      client: new CloudWatchLogsClient({}),
+      client,
     }),
     createAuroraExporter({
       resourceArn: "r",
       secretArn: "s",
       database: "d",
-      client: new RDSDataClient({}),
+      region: "us-east-1",
+      endpoint: "https://rds-data.us-east-1.amazonaws.com",
     }),
   ],
   emitMode: "on-change",

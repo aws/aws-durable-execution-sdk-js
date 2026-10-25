@@ -23,42 +23,26 @@ const specifiers = (text) =>
     ...text.matchAll(/\bimport\s*\(\s*["']([^"']+)["']/g),
   ].map((m) => m[1]);
 
-test("package.json has only optional peer dependencies", () => {
+test("package.json has no dependencies of any kind", () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.type, "module");
   assert.deepEqual(pkg.files, ["src/", "README.md"]);
-  for (const key of [
-    "dependencies",
-    "devDependencies",
-    "optionalDependencies",
-  ]) {
-    assert.equal(key in pkg, false, key);
-  }
-  assert.deepEqual(Object.keys(pkg.peerDependencies).sort(), [
-    "@aws-sdk/client-cloudwatch-logs",
-    "@aws-sdk/client-rds-data",
-  ]);
-  for (const name of Object.keys(pkg.peerDependencies)) {
-    assert.equal(pkg.peerDependenciesMeta[name].optional, true);
+  for (const key of Object.keys(pkg)) {
+    assert.doesNotMatch(key, /dependencies/i, key);
   }
 });
 
-test("each exporter imports only its own client; the core imports no AWS SDK", () => {
-  const allowed = {
-    "src/exporters/cloudwatch-logs.js": ["@aws-sdk/client-cloudwatch-logs"],
-    "src/exporters/aurora.js": ["@aws-sdk/client-rds-data"],
-  };
+test("src imports only relative paths and node: built-ins", () => {
   const found = [];
   for (const file of srcFiles) {
     for (const spec of specifiers(read(file))) {
       found.push(spec);
-      if (spec.startsWith("./") || spec.startsWith("../")) continue;
-      if (spec === "node:crypto") continue;
-      assert.ok(allowed[file]?.includes(spec), `${file} imports ${spec}`);
+      assert.match(spec, /^(\.\.?\/|node:)/, `${file} imports ${spec}`);
     }
   }
   // The patterns must find imports that exist. Otherwise this test checks nothing.
-  assert.ok(found.includes("@aws-sdk/client-rds-data"));
+  assert.ok(found.includes("node:crypto"));
+  assert.ok(found.includes("../aws.js"));
   assert.ok(found.includes("./record.js"));
 });
 

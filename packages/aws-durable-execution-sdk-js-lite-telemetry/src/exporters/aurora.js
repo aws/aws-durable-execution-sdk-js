@@ -1,7 +1,4 @@
-import {
-  ExecuteStatementCommand,
-  RDSDataClient,
-} from "@aws-sdk/client-rds-data";
+import { createAwsClient } from "../aws.js";
 
 const DEFAULT_TABLE = "durable_execution_telemetry";
 
@@ -60,7 +57,9 @@ export function createAuroraExporter({
   secretArn,
   database,
   table = DEFAULT_TABLE,
-  client = new RDSDataClient({}),
+  region,
+  endpoint,
+  client = createAwsClient({ service: "rds-data", region, endpoint }),
   // The full SDK's value: a practical limit for one Data API statement.
   maxRecordBytes = 1_000_000,
 }) {
@@ -68,8 +67,11 @@ export function createAuroraExporter({
   return {
     maxRecordBytes,
     async export(record) {
-      await client.send(
-        new ExecuteStatementCommand({
+      // The Data API uses the REST-JSON protocol: ExecuteStatement is POST /Execute.
+      await client.send({
+        path: "/Execute",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
           resourceArn,
           secretArn,
           database,
@@ -92,7 +94,7 @@ export function createAuroraExporter({
             { name: "emitted_at", value: text(record.emittedAt) },
           ],
         }),
-      );
+      });
     },
   };
 }

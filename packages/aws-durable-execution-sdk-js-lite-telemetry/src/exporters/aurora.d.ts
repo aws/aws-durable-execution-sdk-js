@@ -1,4 +1,4 @@
-import type { TelemetryExporter } from "../index.js";
+import type { AwsClient, TelemetryExporter } from "../index.js";
 
 export interface AuroraExporterConfig {
   /** The Aurora PostgreSQL cluster ARN. The cluster must have the Data API enabled. */
@@ -8,8 +8,12 @@ export interface AuroraExporterConfig {
   database: string;
   /** Letters, digits and underscores; not starting with a digit. Default "durable_execution_telemetry". */
   table?: string;
-  /** An object with send(command), such as an RDSDataClient. Default: new RDSDataClient({}). */
-  client?: { send(command: unknown): Promise<unknown> };
+  /** The region of the built-in client. Default: process.env.AWS_REGION. Unused with client. */
+  region?: string;
+  /** Default: `https://rds-data.${region}.amazonaws.com`. Unused with client. */
+  endpoint?: string;
+  /** Default: the built-in client, signed for "rds-data" with the Lambda credentials. */
+  client?: AwsClient;
   /** Default 1_000_000. */
   maxRecordBytes?: number;
 }

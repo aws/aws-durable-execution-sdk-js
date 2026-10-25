@@ -6,7 +6,15 @@ import {
   buildOperationsByName,
   withOperationsByName,
 } from "../src/operations-by-name.js";
-import { ARN, fakeClient } from "./helpers.js";
+import {
+  ARN,
+  fakeClient,
+  fakeFetch,
+  jsonResponse as json,
+  setAwsEnv,
+} from "./helpers.js";
+
+const target = (request) => request.headers["x-amz-target"];
 
 const record = buildRecord({
   arn: ARN,
@@ -40,15 +48,20 @@ test("CreateLogStream runs once per stream, then PutLogEvents writes one event",
   assert.equal(exporter.maxRecordBytes, 256_000);
   await exporter.export(record);
   await exporter.export(record);
-  assert.deepEqual(
-    client.commands.map((c) => c.constructor.name),
-    ["CreateLogStreamCommand", "PutLogEventsCommand", "PutLogEventsCommand"],
-  );
-  assert.deepEqual(client.commands[0].input, {
+  assert.deepEqual(client.requests.map(target), [
+    "Logs_20140328.CreateLogStream",
+    "Logs_20140328.PutLogEvents",
+    "Logs_20140328.PutLogEvents",
+  ]);
+  for (const request of client.requests) {
+    assert.equal(request.path, "/");
+    assert.equal(request.headers["content-type"], "application/x-amz-json-1.1");
+  }
+  assert.deepEqual(client.requests[0].json, {
     logGroupName: "telemetry",
     logStreamName: "durable-execution-telemetry/2026/03/04",
   });
-  const put = client.commands[1].input;
+  const put = client.requests[1].json;
   assert.equal(put.logGroupName, "telemetry");
   assert.equal(put.logStreamName, "durable-execution-telemetry/2026/03/04");
   assert.equal(put.logEvents.length, 1);
@@ -77,16 +90,16 @@ test("CreateLogStream runs once per stream, then PutLogEvents writes one event",
   // A new UTC day uses a new stream.
   t.mock.timers.tick(1000);
   await exporter.export(record);
-  assert.equal(client.commands[3].constructor.name, "CreateLogStreamCommand");
+  assert.equal(target(client.requests[3]), "Logs_20140328.CreateLogStream");
   assert.equal(
-    client.commands[3].input.logStreamName,
+    client.requests[3].json.logStreamName,
     "durable-execution-telemetry/2026/03/05",
   );
 });
 
 test("ResourceAlreadyExistsException is ignored; the stream is not created again", async () => {
-  const client = fakeClient((command) => {
-    if (command.constructor.name === "CreateLogStreamCommand") {
+  const client = fakeClient((request) => {
+    if (target(request) === "Logs_20140328.CreateLogStream") {
       throw Object.assign(new Error("exists"), {
         name: "ResourceAlreadyExistsException",
       });
@@ -102,20 +115,21 @@ test("ResourceAlreadyExistsException is ignored; the stream is not created again
   assert.equal(exporter.maxRecordBytes, 1000);
   await exporter.export(record);
   await exporter.export(record);
-  assert.deepEqual(
-    client.commands.map((c) => c.constructor.name),
-    ["CreateLogStreamCommand", "PutLogEventsCommand", "PutLogEventsCommand"],
-  );
+  assert.deepEqual(client.requests.map(target), [
+    "Logs_20140328.CreateLogStream",
+    "Logs_20140328.PutLogEvents",
+    "Logs_20140328.PutLogEvents",
+  ]);
   assert.match(
-    client.commands[1].input.logStreamName,
+    client.requests[1].json.logStreamName,
     /^p\/\d{4}\/\d{2}\/\d{2}$/,
   );
 });
 
 test("another CreateLogStream error rejects, and the next export tries again", async () => {
   let fail = true;
-  const client = fakeClient((command) => {
-    if (command.constructor.name === "CreateLogStreamCommand" && fail) {
+  const client = fakeClient((request) => {
+    if (target(request) === "Logs_20140328.CreateLogStream" && fail) {
       throw Object.assign(new Error("denied"), {
         name: "AccessDeniedException",
       });
@@ -128,10 +142,62 @@ test("another CreateLogStream error rejects, and the next export tries again", a
   });
   fail = false;
   await exporter.export(record);
-  assert.deepEqual(
-    client.commands.map((c) => c.constructor.name),
-    ["CreateLogStreamCommand", "CreateLogStreamCommand", "PutLogEventsCommand"],
-  );
+  assert.deepEqual(client.requests.map(target), [
+    "Logs_20140328.CreateLogStream",
+    "Logs_20140328.CreateLogStream",
+    "Logs_20140328.PutLogEvents",
+  ]);
+});
+
+test("the built-in client sends signed AWS JSON 1.1 requests to CloudWatch Logs", async (t) => {
+  setAwsEnv(t, {
+    AWS_REGION: "us-east-1",
+    AWS_ACCESS_KEY_ID: "AKID",
+    AWS_SECRET_ACCESS_KEY: "SECRET",
+    AWS_SESSION_TOKEN: "TOKEN",
+  });
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: Date.parse("2026-03-04T05:06:07.000Z"),
+  });
+  const fetch = fakeFetch([
+    json(
+      400,
+      {
+        __type: "com.amazonaws.logs#ResourceAlreadyExistsException",
+        message: "The specified log stream already exists",
+      },
+      { "x-amzn-requestid": "rid" },
+    ),
+    json(200, { nextSequenceToken: "n" }),
+  ]);
+  // The default client reads globalThis.fetch when the exporter is created.
+  t.mock.method(globalThis, "fetch", fetch);
+  const exporter = createCloudWatchLogsExporter({
+    logGroupName: "/durable/telemetry",
+    region: "eu-central-1",
+  });
+  await exporter.export(record);
+  assert.equal(fetch.calls.length, 2);
+  const [create, put] = fetch.calls;
+  for (const call of fetch.calls) {
+    assert.equal(call.method, "POST");
+    assert.equal(call.url.href, "https://logs.eu-central-1.amazonaws.com/");
+    assert.equal(call.headers["content-type"], "application/x-amz-json-1.1");
+    assert.equal(call.headers["x-amz-date"], "20260304T050607Z");
+    assert.equal(call.headers["x-amz-security-token"], "TOKEN");
+    assert.match(
+      call.headers.authorization,
+      /^AWS4-HMAC-SHA256 Credential=AKID\/20260304\/eu-central-1\/logs\/aws4_request, SignedHeaders=content-type;host;x-amz-date;x-amz-security-token;x-amz-target, Signature=[0-9a-f]{64}$/,
+    );
+  }
+  assert.equal(create.headers["x-amz-target"], "Logs_20140328.CreateLogStream");
+  assert.deepEqual(JSON.parse(create.body), {
+    logGroupName: "/durable/telemetry",
+    logStreamName: "durable-execution-telemetry/2026/03/04",
+  });
+  assert.equal(put.headers["x-amz-target"], "Logs_20140328.PutLogEvents");
+  assert.equal(JSON.parse(put.body).logEvents[0].timestamp, Date.now());
 });
 
 test("the exporter can be created without a client", () => {
