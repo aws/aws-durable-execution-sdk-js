@@ -19,6 +19,15 @@ import {
   createTableSql,
 } from "../src/exporters/aurora.js";
 import { createCloudWatchLogsExporter } from "../src/exporters/cloudwatch-logs.js";
+import { createDynamoDBExporter } from "../src/exporters/dynamodb.js";
+import { createEventBridgeExporter } from "../src/exporters/eventbridge.js";
+import { createFirehoseExporter } from "../src/exporters/firehose.js";
+import {
+  createRedshiftExporter,
+  createTableSql as createRedshiftTableSql,
+} from "../src/exporters/redshift.js";
+import { createS3Exporter } from "../src/exporters/s3.js";
+import { createSQSExporter } from "../src/exporters/sqs.js";
 
 const custom: TelemetryExporter = {
   export: async (record: DurableExecutionTelemetryRecord) => {
@@ -44,6 +53,19 @@ const plugin = createTelemetryPlugin({
       region: "us-east-1",
       endpoint: "https://rds-data.us-east-1.amazonaws.com",
     }),
+    createDynamoDBExporter({ tableName: "t", sortKey: "", client }),
+    createS3Exporter({ bucket: "b", partitioning: "function-name", client }),
+    createSQSExporter({
+      queueUrl: "https://sqs.us-east-1.amazonaws.com/1/q.fifo",
+    }),
+    createFirehoseExporter({ deliveryStreamName: "s", maxRecordBytes: 1000 }),
+    createEventBridgeExporter(),
+    createRedshiftExporter({
+      workgroupName: "w",
+      database: "d",
+      schema: "s",
+      table: "t",
+    }),
   ],
   emitMode: "on-change",
   operations: "all",
@@ -62,5 +84,7 @@ const record: DurableExecutionTelemetryRecord = buildRecord({
   operations: [{ Id: "1", Type: "STEP", Status: "STARTED", StartTimestamp: 1 }],
 });
 const sql: string = createTableSql("t");
+const redshiftSql: string = createRedshiftTableSql({ schema: "s" });
 void record;
 void sql;
+void redshiftSql;
