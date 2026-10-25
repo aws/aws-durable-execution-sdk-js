@@ -409,6 +409,20 @@ ruleTester.run(
         code: lines.join("\n"),
         errors: [{ ...error("map"), column: 77 }],
       })),
+      // Many unrelated array-map helpers. Each lookup of a receiver used to
+      // check the other helpers again, which took factorial time: 9 helpers
+      // took 0.7 s, and each further helper multiplied that. With 30 helpers
+      // this case would not finish before the Jest timeout.
+      {
+        code: [
+          ...Array.from(
+            { length: 30 },
+            (_, i) => `function f${i}(xs) { return xs.map((x) => x); }`,
+          ),
+          "withDurableExecution(async (e, ctx) => ctx.runInChildContext(async (c) => c.map([1], async (i) => 1)));",
+        ].join("\n"),
+        errors: [{ ...error("map"), line: 31 }],
+      },
       // A branch list wrapped in as const, and a branch in method syntax.
       {
         code: handler(`

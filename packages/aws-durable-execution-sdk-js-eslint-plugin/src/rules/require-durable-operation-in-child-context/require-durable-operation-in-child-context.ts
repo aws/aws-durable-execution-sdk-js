@@ -8,14 +8,12 @@ import { Rule } from "eslint";
  * function. `map` passes one to each item's function, and `parallel` passes
  * one to each branch. A child context saves its function's result when the
  * function finishes, and a replay returns that result. So a function with no
- * durable operation usually does not run again. It still costs something in
- * three cases:
+ * durable operation usually does not run again. It still differs from a step
+ * in two ways:
  * 1. The result is larger than the checkpoint size limit. Then the SDK runs
  *    the function again on every replay to rebuild the result.
  * 2. The function throws. A step retries its work, and a child context does
  *    not.
- * 3. A batch resumes from summarized checkpoints. An item that recorded no
- *    operation leaves nothing to rebuild it from.
  * So the rule tells the user to put the work in a `step`.
  *
  * The rule decides with three answers: "yes", "no" and "unknown". It reports
@@ -31,7 +29,7 @@ import { Rule } from "eslint";
  *   has a method with that name. `map` and `parallel` are common names, for
  *   example lodash `_.map` and async `parallel`. So the rule checks them only
  *   when the receiver is known to be a durable context. See
- *   `isDurableContext`.
+ *   `findContexts`.
  */
 
 /** The methods of a durable context that create a durable operation. */
@@ -143,23 +141,8 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
     /** Identifier node -> the reference ESLint's scope analysis made for it. */
     let referenceOf = new Map<any, any>();
 
-    /** The functions passed to withDurableExecution, inline or by name. */
-    let handlers = new Set<any>();
-
-    /**
-     * Parameter variable -> whether it is a durable context. Only final
-     * answers are stored. See `isDurableContext`.
-     */
-    const contextAnswers = new Map<any, boolean>();
-
-    /** The parameter variables whose context check has not finished. */
-    const contextChecks = new Set<any>();
-
-    /**
-     * True if the current context check reached a variable in
-     * `contextChecks`. Then its false answer is provisional.
-     */
-    let reachedUnfinishedCheck = false;
+    /** The parameter variables known to hold a durable context. */
+    let contexts = new Set<any>();
 
     function indexReferences(): Map<any, any> {
       const index = new Map<any, any>();
@@ -289,87 +272,78 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       return (imported?.name ?? imported?.value) === "DurableContext";
     }
 
-    /**
-     * True if the expression is known to be a durable context.
-     *
-     * The expression must be a parameter that is one of these:
-     * 1. annotated with the type `DurableContext`;
-     * 2. the second parameter of a handler passed to `withDurableExecution`;
-     * 3. the first parameter of a child-context function this rule recognizes.
-     */
+    /** True if the expression is a parameter in `contexts`. */
     function isDurableContext(node: any): boolean {
       const target = unwrap(node);
       if (target?.type !== "Identifier") return false;
-      const variable = referenceOf.get(target)?.resolved;
-      if (!variable) return false;
-
-      const known = contextAnswers.get(variable);
-      if (known !== undefined) return known;
-      // A lookup that reaches a variable still being checked answers false for
-      // it. That false is provisional, because the outer check can still
-      // answer true. So an answer of false that depended on it is not cached.
-      // The next lookup checks the variable again, after the outer check has
-      // finished.
-      if (contextChecks.has(variable)) {
-        reachedUnfinishedCheck = true;
-        return false;
-      }
-
-      const outerReached = reachedUnfinishedCheck;
-      reachedUnfinishedCheck = false;
-      contextChecks.add(variable);
-      const answer = checkDurableContext(variable);
-      contextChecks.delete(variable);
-      if (answer || !reachedUnfinishedCheck) {
-        contextAnswers.set(variable, answer);
-      }
-      reachedUnfinishedCheck ||= outerReached;
-      return answer;
+      return contexts.has(referenceOf.get(target)?.resolved);
     }
 
-    function checkDurableContext(variable: any): boolean {
-      const def = variable.defs.length === 1 ? variable.defs[0] : null;
-      if (def?.type !== "Parameter") return false;
-
-      const param = def.name;
-      if (isDurableContextType(param.typeAnnotation)) return true;
-
-      const fn = def.node;
-      const index = argumentParams(fn).findIndex(
-        (p) => paramIdentifier(p) === param,
-      );
-      if (index === 1) return handlers.has(fn);
-      if (index === 0) return isChildContextFunction(fn);
-      return false;
-    }
-
-    /** Climbs from a function to the call it is an argument of, if any. */
-    function enclosingCall(fn: any): any {
-      let node = fn;
-      while (node.parent && TRANSPARENT_WRAPPERS.has(node.parent.type)) {
-        node = node.parent;
-      }
-      return node.parent;
+    /** Returns the variable of the parameter that receives argument `index`. */
+    function paramVariable(fn: any, index: number): any {
+      const param = paramIdentifier(argumentParams(fn)[index]);
+      if (param?.type !== "Identifier") return null;
+      return sourceCode.scopeManager
+        .getDeclaredVariables(fn)
+        .find((v: any) => v.defs.some((d: any) => d.name === param));
     }
 
     /**
-     * True if the function is passed as a child-context function.
+     * Finds every parameter that is known to hold a durable context.
      *
-     * An inline function is checked against the call it is passed to. A
-     * parallel branch sits inside an array, and maybe inside `{ func }`, so the
-     * climb goes past those nodes to the call. A function passed by name can be
-     * passed to any call, so every candidate call is checked.
+     * A parameter holds a durable context if it is one of these:
+     * 1. annotated with the type `DurableContext`;
+     * 2. the second parameter of a handler passed to `withDurableExecution`;
+     * 3. the first parameter of a child-context function. A `runInChildContext`
+     *    call passes one on any receiver. A `map` or `parallel` call passes
+     *    one only when its receiver holds a durable context.
+     *
+     * Cases 1 and 2 are read directly. Case 3 depends on other parameters, so
+     * the function repeats a pass over the candidate calls until a pass adds
+     * no parameter. The set only grows, so the loop ends. Each pass costs one
+     * look at every candidate call. An earlier recursive version checked the
+     * receivers again for each lookup, which took factorial time on a file
+     * with many unrelated `xs.map(...)` helpers.
      */
-    function isChildContextFunction(fn: any): boolean {
-      const passes = (call: any) =>
-        callbacksOf(call).some((callback) => callback.fn === fn);
+    function findContexts(): Set<any> {
+      const found = new Set<any>();
 
-      let node = enclosingCall(fn);
-      if (node?.type === "Property") node = node.parent?.parent;
-      if (node?.type === "ArrayExpression") node = node.parent;
-      while (node && TRANSPARENT_WRAPPERS.has(node.type)) node = node.parent;
-      if (node?.type === "CallExpression" && passes(node)) return true;
-      return candidateCalls.some(passes);
+      const stack = [sourceCode.scopeManager.globalScope];
+      while (stack.length > 0) {
+        const scope = stack.pop()!;
+        for (const variable of scope.variables) {
+          const def = variable.defs.length === 1 ? variable.defs[0] : null;
+          if (
+            def?.type === "Parameter" &&
+            isDurableContextType(def.name.typeAnnotation)
+          ) {
+            found.add(variable);
+          }
+        }
+        stack.push(...scope.childScopes);
+      }
+
+      for (const call of wrapperCalls) {
+        const handler = resolveFunction(call.arguments[0]);
+        const variable = handler && paramVariable(handler, 1);
+        if (variable) found.add(variable);
+      }
+
+      contexts = found;
+      let added = true;
+      while (added) {
+        added = false;
+        for (const call of candidateCalls) {
+          for (const { fn } of callbacksOf(call)) {
+            const variable = paramVariable(fn, 0);
+            if (variable && !found.has(variable)) {
+              found.add(variable);
+              added = true;
+            }
+          }
+        }
+      }
+      return found;
     }
 
     /**
@@ -507,11 +481,7 @@ export const requireDurableOperationInChildContext: Rule.RuleModule = {
       "Program:exit"() {
         if (candidateCalls.length === 0) return;
         referenceOf = indexReferences();
-        handlers = new Set(
-          wrapperCalls
-            .map((call) => resolveFunction(call.arguments[0]))
-            .filter((fn) => fn !== null),
-        );
+        contexts = findContexts();
 
         const reported = new Set<any>();
         for (const call of candidateCalls) {
