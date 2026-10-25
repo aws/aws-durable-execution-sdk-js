@@ -521,3 +521,42 @@ test("an empty plugins array behaves like no plugins", async () => {
   });
   assert.equal(run.result, 3);
 });
+
+test("the event's epoch milliseconds reach plugins as epoch seconds", async () => {
+  // Lambda sends the event's timestamps as epoch milliseconds. The SDK stores seconds.
+  const step = {
+    Id: "s",
+    Type: "STEP",
+    Name: "a",
+    Status: "PENDING",
+    StartTimestamp: 1_792_914_400_873,
+    EndTimestamp: 1_792_914_402_873,
+    StepDetails: { Attempt: 1, NextAttemptTimestamp: 1_792_914_403_500 },
+  };
+  const wait = {
+    Id: "w",
+    Type: "WAIT",
+    Status: "STARTED",
+    StartTimestamp: "2026-10-25T07:46:40.250Z",
+    WaitDetails: { ScheduledEndTimestamp: 1_792_914_410_000 },
+  };
+  const client = createFakeClient({ operations: [executionOp(), step, wait] });
+  let seen;
+  await withDurableExecution(async () => 1, {
+    client,
+    plugins: [
+      (i) => {
+        seen = i.operations;
+      },
+    ],
+  })(event([step, wait]), {});
+  const [, s, w] = seen;
+  assert.equal(s.StartTimestamp, 1_792_914_400.873);
+  assert.equal(s.EndTimestamp, 1_792_914_402.873);
+  assert.equal(s.StepDetails.NextAttemptTimestamp, 1_792_914_403.5);
+  assert.equal(s.StepDetails.Attempt, 1);
+  assert.equal(w.StartTimestamp, Date.parse("2026-10-25T07:46:40.250Z") / 1000);
+  assert.equal(w.WaitDetails.ScheduledEndTimestamp, 1_792_914_410);
+  // The event's own objects are not changed.
+  assert.equal(step.StartTimestamp, 1_792_914_400_873);
+});

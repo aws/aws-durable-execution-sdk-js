@@ -52,8 +52,9 @@ export function sizeBound(u) {
 }
 
 // True if the record's scheduled time has passed: a wait's end or a step's next attempt.
-// The API sends epoch seconds as a number. The invocation event sends an ISO string.
-// A callback or an invoke has no scheduled time.
+// Every stored timestamp is a number of epoch seconds: the API sends seconds, and
+// withDurableExecution converts the invocation event's milliseconds on load. A callback
+// or an invoke has no scheduled time.
 function isDue(op) {
   const t =
     op?.Type === "WAIT"
@@ -62,7 +63,7 @@ function isDue(op) {
         ? op.StepDetails?.NextAttemptTimestamp
         : undefined;
   if (t == null) return false;
-  return (typeof t === "number" ? t * 1000 : Date.parse(t)) <= Date.now();
+  return t * 1000 <= Date.now();
 }
 
 // Per-invocation state: the operation records, the checkpoint queue and suspension.

@@ -128,8 +128,36 @@ function output({ kind, error }) {
   throw error;
 }
 
+// A record timestamp in the invocation event is a number of epoch milliseconds. The API
+// sends epoch seconds. Converting the event's records here gives one unit everywhere:
+// the state, isDue and the plugins all read epoch seconds. A string is parsed as ISO
+// 8601, which the event can also carry.
+const toSeconds = (t) =>
+  t == null ? t : (typeof t === "number" ? t : Date.parse(t)) / 1000;
+
+function fromEvent(op) {
+  const out = { ...op };
+  if ("StartTimestamp" in op) out.StartTimestamp = toSeconds(op.StartTimestamp);
+  if ("EndTimestamp" in op) out.EndTimestamp = toSeconds(op.EndTimestamp);
+  if (op.StepDetails?.NextAttemptTimestamp != null) {
+    out.StepDetails = {
+      ...op.StepDetails,
+      NextAttemptTimestamp: toSeconds(op.StepDetails.NextAttemptTimestamp),
+    };
+  }
+  if (op.WaitDetails?.ScheduledEndTimestamp != null) {
+    out.WaitDetails = {
+      ...op.WaitDetails,
+      ScheduledEndTimestamp: toSeconds(op.WaitDetails.ScheduledEndTimestamp),
+    };
+  }
+  return out;
+}
+
 async function loadOperations(api, arn, token, event) {
-  const operations = [...(event.InitialExecutionState?.Operations ?? [])];
+  const operations = (event.InitialExecutionState?.Operations ?? []).map(
+    fromEvent,
+  );
   let marker = event.InitialExecutionState?.NextMarker;
   while (marker) {
     const page = await api.getExecutionState({

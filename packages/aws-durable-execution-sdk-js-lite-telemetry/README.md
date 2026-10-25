@@ -119,9 +119,9 @@ Three kinds of operation never appear, as in the full SDK:
 An operation never has a `result`. The full SDK includes a result only when you opt in
 for one operation name. This package has no such option.
 
-The lite SDK sends a timestamp as epoch seconds in a checkpoint response, and as an ISO
-8601 string in the invocation event. The plugin reads both. Every time in the record is
-an ISO 8601 string in UTC with milliseconds, for example `2026-10-23T18:42:40.243Z`.
+Every timestamp in a lite SDK record is epoch seconds. The plugin writes every time in
+the record as an ISO 8601 string in UTC with milliseconds, for example
+`2026-10-23T18:42:40.243Z`.
 
 `buildRecord(args)` builds a record from wire records. The plugin uses it. It is
 exported for tests and custom exporters.

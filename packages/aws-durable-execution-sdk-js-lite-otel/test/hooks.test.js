@@ -108,7 +108,7 @@ test("RETRYING and FAILED invocations have ERROR status", async () => {
   }
 });
 
-test("record fallbacks: ISO timestamps, a missing end, no name, other error details", async () => {
+test("record fallbacks: fractional seconds, a missing end, no name, other error details", async () => {
   const exporter = fakeExporter();
   const plugin = otel(exporter)(info({ requestId: undefined }));
   await plugin.onInvocationEnd(
@@ -117,8 +117,8 @@ test("record fallbacks: ISO timestamps, a missing end, no name, other error deta
         Id: "cb",
         Type: "CALLBACK",
         Status: "TIMED_OUT",
-        StartTimestamp: "2026-01-01T00:00:00.250Z",
-        EndTimestamp: "2026-01-01T00:00:01.500Z",
+        StartTimestamp: 1_767_225_600.25,
+        EndTimestamp: 1_767_225_601.5,
       },
       {
         Id: "inv",

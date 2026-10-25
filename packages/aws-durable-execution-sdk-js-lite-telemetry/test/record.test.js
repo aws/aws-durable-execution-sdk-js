@@ -33,7 +33,7 @@ test("an ARN without an execution name gives no executionName", () => {
   assert.equal(record.functionQualifier, "1");
 });
 
-test("buildRecord reads numbers, fractional numbers and ISO strings", () => {
+test("buildRecord reads whole and fractional epoch seconds", () => {
   const record = buildRecord({
     arn: ARN,
     status: "SUCCEEDED",
@@ -43,7 +43,7 @@ test("buildRecord reads numbers, fractional numbers and ISO strings", () => {
         Id: "e",
         Type: "EXECUTION",
         Status: "STARTED",
-        StartTimestamp: "2026-01-01T00:00:00.000Z",
+        StartTimestamp: 1_767_225_600,
       },
       {
         Id: "1",
@@ -57,20 +57,20 @@ test("buildRecord reads numbers, fractional numbers and ISO strings", () => {
       },
       {
         Id: "2",
-        Name: "iso",
+        Name: "frac",
         Type: "WAIT",
         Status: "SUCCEEDED",
-        StartTimestamp: "2026-01-01T00:00:00.250Z",
+        StartTimestamp: 1_767_225_600.25,
         EndTimestamp: 1_767_225_602,
       },
       { Id: "3", Name: "open", Type: "CALLBACK", Status: "STARTED" },
-      { Id: "4", Name: "bad", Type: "STEP", StartTimestamp: "not a date" },
+      { Id: "4", Name: "bad", Type: "STEP" },
     ],
   });
   assert.equal(record.startTime, "2026-01-01T00:00:00.000Z");
   assert.equal(record.endTime, "2026-01-01T00:01:00.000Z");
   assert.equal(record.durationMs, 60_000);
-  const [num, iso, open, bad] = record.operations;
+  const [num, frac, open, bad] = record.operations;
   assert.deepEqual(num, {
     id: "1",
     name: "num",
@@ -84,8 +84,8 @@ test("buildRecord reads numbers, fractional numbers and ISO strings", () => {
     attempt: 2,
     error: undefined,
   });
-  assert.equal(iso.startTime, "2026-01-01T00:00:00.250Z");
-  assert.equal(iso.durationMs, 1750);
+  assert.equal(frac.startTime, "2026-01-01T00:00:00.250Z");
+  assert.equal(frac.durationMs, 1750);
   assert.equal(open.endTime, undefined);
   assert.equal(open.durationMs, undefined);
   assert.equal(bad.startTime, undefined);

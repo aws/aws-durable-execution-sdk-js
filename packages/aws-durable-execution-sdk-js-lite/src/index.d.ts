@@ -445,10 +445,10 @@ export function withDurableExecution<E = unknown, R = unknown>(
 ): (event: unknown, lambdaContext?: unknown) => Promise<DurableExecutionOutput>;
 
 /**
- * A timestamp in an operation record. A checkpoint response sends epoch seconds as a
- * number. The invocation event sends an ISO 8601 string. A plugin must read both.
+ * A timestamp in an operation record: epoch seconds, possibly fractional. The SDK
+ * converts the invocation event's epoch milliseconds to seconds when it loads the state.
  */
-export type RecordTimestamp = number | string;
+export type RecordTimestamp = number;
 
 /**
  * An operation record in the wire format, as the SDK stores it. Plugins receive the

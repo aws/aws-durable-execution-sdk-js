@@ -21,6 +21,32 @@ const DETAILS = {
 const clean = (obj) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 const clone = (op) => structuredClone(op);
+
+// The API sends timestamps as epoch seconds. The Lambda invocation event sends them as
+// epoch milliseconds, as observed in AWS. The event's state is converted, so tests see
+// both forms as Lambda sends them.
+const ms = (t) => (typeof t === "number" ? Math.round(t * 1000) : t);
+function eventPage({ Operations, ...rest }) {
+  return {
+    ...rest,
+    Operations: Operations?.map((op) => {
+      if (op.StartTimestamp !== undefined)
+        op.StartTimestamp = ms(op.StartTimestamp);
+      if (op.EndTimestamp !== undefined) op.EndTimestamp = ms(op.EndTimestamp);
+      if (op.StepDetails?.NextAttemptTimestamp !== undefined) {
+        op.StepDetails.NextAttemptTimestamp = ms(
+          op.StepDetails.NextAttemptTimestamp,
+        );
+      }
+      if (op.WaitDetails?.ScheduledEndTimestamp !== undefined) {
+        op.WaitDetails.ScheduledEndTimestamp = ms(
+          op.WaitDetails.ScheduledEndTimestamp,
+        );
+      }
+      return op;
+    }),
+  };
+}
 const INVALID = "InvalidParameterValueException";
 // The members of an update that the service reads as strings.
 const STRING_FIELDS =
@@ -327,7 +353,7 @@ export function createInMemoryService({
       return {
         DurableExecutionArn: ARN,
         CheckpointToken: token,
-        InitialExecutionState: page(undefined, pageSize),
+        InitialExecutionState: eventPage(page(undefined, pageSize)),
         UpdatedOperationIds,
       };
     },

@@ -600,13 +600,13 @@ The records use the wire format of the Lambda API: `Id`, `ParentId`, `Type`, `Su
 `Name`, `Status`, `StartTimestamp`, `EndTimestamp`, `StepDetails` and the other details.
 They are the objects that the SDK stores. So a plugin must not change them.
 
-A timestamp is a number of epoch seconds in a checkpoint response. It is an ISO 8601
-string in the invocation event. So in AWS, `info.operations` holds strings, and `updated`
-holds numbers. A record in `operations` can hold either form. The in-memory service of
-`runDurable` sends numbers in both. A plugin must read both forms:
+Every timestamp in a record is a number of epoch seconds, possibly fractional. The
+checkpoint API sends seconds. The Lambda invocation event sends epoch milliseconds, and
+the SDK converts the event's records to seconds when it loads them. So `info.operations`,
+`updated` and `operations` all use seconds:
 
 ```js
-const ms = (t) => (typeof t === "number" ? t * 1000 : Date.parse(t));
+const ms = (t) => t * 1000;
 ```
 
 The example below logs the duration of each step attempt. It writes its lines at the end
@@ -1409,6 +1409,11 @@ Rules for the client:
 2. The SDK loads the remaining pages with `GetDurableExecutionState` until `NextMarker` is
    empty. If a page request fails, the SDK throws from the Lambda handler, so Lambda invokes
    again.
+   The event's records hold timestamps as epoch milliseconds (numbers), as observed in
+   AWS. The API's records hold epoch seconds. The SDK converts the event's
+   `StartTimestamp`, `EndTimestamp`, `StepDetails.NextAttemptTimestamp` and
+   `WaitDetails.ScheduledEndTimestamp` to seconds. A string is parsed as ISO 8601. So
+   every stored timestamp is epoch seconds.
 3. The first operation is the `EXECUTION` operation. The user event is
    `JSON.parse(ExecutionDetails.InputPayload)`, or `{}` if the payload is empty.
 4. With plugins, the SDK calls the plugin factories (section 2.12).
@@ -1513,8 +1518,9 @@ Suspension:
    pending as an invocation error, and it invokes again a limited number of times. So
    before the SDK returns PENDING, it checks the live blocked records for a due time
    that has passed: `WaitDetails.ScheduledEndTimestamp` of a WAIT, or
-   `StepDetails.NextAttemptTimestamp` of a STEP. The API sends these as epoch seconds.
-   The invocation event sends them as ISO strings. The SDK reads both.
+   `StepDetails.NextAttemptTimestamp` of a STEP. Every stored timestamp is epoch
+   seconds: the API sends seconds, and the SDK converts the invocation event's epoch
+   milliseconds when it loads the state (section 2.3, step 2).
 14. If such a time has passed, the SDK sends one checkpoint with `Updates: []`. Its response
    wakes the changed operations (step 3). Then the suspension check runs again. A refresh
    that wakes nothing is not repeated until an operation wakes. So the invocation then

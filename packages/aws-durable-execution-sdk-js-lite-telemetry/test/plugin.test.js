@@ -241,28 +241,17 @@ test("callback and invoke errors appear in operation records", async () => {
   });
 });
 
-test("ISO string timestamps in the invocation event give the same times as numbers", async () => {
-  // The real service sends ISO strings in the invocation event and epoch seconds in
-  // checkpoint responses. The in-memory service sends numbers in both. So this
-  // service converts the event's timestamps to strings.
+test("epoch milliseconds in the invocation event give the same times as seconds", async () => {
+  // Lambda sends epoch milliseconds in the invocation event and epoch seconds in
+  // checkpoint responses, and so does the in-memory service. The lite SDK converts the
+  // event's records to seconds when it loads them.
   const service = createInMemoryService();
-  const event = service.event;
-  service.event = () => {
-    const e = event();
-    for (const op of e.InitialExecutionState.Operations) {
-      for (const key of ["StartTimestamp", "EndTimestamp"]) {
-        if (typeof op[key] === "number") {
-          op[key] = new Date(op[key] * 1000).toISOString();
-        }
-      }
-    }
-    return e;
-  };
   const { records } = await run(threeSteps, {}, { service });
   const [record] = records;
   assert.equal(record.startTime, START_ISO);
   const [a, w, b] = record.operations;
-  // a and w come from the event (strings). b comes from a checkpoint response (numbers).
+  // a and w come from the event (milliseconds). b comes from a checkpoint response
+  // (seconds).
   assert.equal(a.startTime, START_ISO);
   assert.equal(w.durationMs, 10_000);
   assert.equal(

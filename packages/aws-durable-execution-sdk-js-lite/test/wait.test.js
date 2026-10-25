@@ -13,9 +13,9 @@ const waitRecord = (rawId, Status, Name) => ({
   ...(Name !== undefined && { Name }),
   Status,
   StartTimestamp: 1,
-  // In the future. A wait whose end has passed makes the SDK refresh the state once
+  // Epoch milliseconds, as in the invocation event. In the future. A wait whose end has passed makes the SDK refresh the state once
   // before it suspends (README 2.5).
-  WaitDetails: { ScheduledEndTimestamp: Date.now() / 1000 + 3600 },
+  WaitDetails: { ScheduledEndTimestamp: Date.now() + 3_600_000 },
 });
 
 test("fresh wait sends START with WaitSeconds and suspends", async () => {

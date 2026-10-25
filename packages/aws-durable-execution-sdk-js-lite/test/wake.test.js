@@ -198,9 +198,9 @@ const waitRecord = (Status, ScheduledEndTimestamp) => ({
   WaitDetails: { ScheduledEndTimestamp },
 });
 
-// The API sends epoch seconds as a number. The invocation event sends an ISO string.
+// The invocation event sends epoch milliseconds. An ISO string is read too.
 for (const [form, past] of [
-  ["epoch seconds", Date.now() / 1000 - 1],
+  ["epoch milliseconds", Date.now() - 1000],
   ["an ISO string", new Date(Date.now() - 1000).toISOString()],
 ]) {
   test(`a blocked wait past its end (${form}) refreshes the state once before suspending`, async () => {
@@ -231,7 +231,7 @@ test("a refresh that changes nothing suspends after one empty checkpoint", async
       await ctx.wait({ seconds: 5 });
       assert.fail("must not continue");
     },
-    { operations: [waitRecord("STARTED", Date.now() / 1000 - 1)] },
+    { operations: [waitRecord("STARTED", Date.now() - 1000)] },
   );
   assert.deepEqual(output, { Status: "PENDING" });
   assert.deepEqual(

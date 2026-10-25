@@ -18,10 +18,9 @@ export const TERMINAL = new Set([
   "CANCELLED",
 ]);
 
-// A record timestamp is a number of epoch seconds in a checkpoint response. It is an
-// ISO 8601 string in the invocation event. Returns epoch milliseconds.
-export const recordMs = (t) =>
-  typeof t === "number" ? t * 1000 : Date.parse(t);
+// A record timestamp is a number of epoch seconds. The lite SDK converts the invocation
+// event's milliseconds when it loads the state. Returns epoch milliseconds.
+export const recordMs = (t) => t * 1000;
 
 // HrTime is [seconds, nanoseconds]. Epoch nanoseconds exceed 2^53, so the seconds are
 // split off before the multiplication.

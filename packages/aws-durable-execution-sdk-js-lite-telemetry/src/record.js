@@ -14,12 +14,12 @@ const DETAILS = [
   "ContextDetails",
 ];
 
-// A checkpoint response sends epoch seconds as a number. The invocation event sends an
-// ISO 8601 string. Returns epoch milliseconds, or undefined for a missing or invalid
-// value. Rounding keeps durations whole: 1700000000.123 * 1000 is not an integer.
+// A record timestamp is a number of epoch seconds. The lite SDK converts the invocation
+// event's milliseconds when it loads the state. Returns epoch milliseconds, or
+// undefined for a missing value. Rounding keeps durations whole: 1700000000.123 * 1000
+// is not an integer.
 export function toEpochMs(t) {
-  const ms = typeof t === "number" ? Math.round(t * 1000) : Date.parse(t);
-  return Number.isFinite(ms) ? ms : undefined;
+  return typeof t === "number" ? Math.round(t * 1000) : undefined;
 }
 
 const toIso = (ms) =>
