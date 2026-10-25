@@ -429,6 +429,13 @@ export class SkipTimeCoordinator {
       participant.onClockAdvanced();
     }
 
+    // A participant consumes an end when it applies it. If the same end is still reported,
+    // another pass would apply it again and schedule yet another pass, forever. So stop
+    // here, and leave the next advance to the participant's own calls.
+    if (earliest.participant.earliestDeadline() === earliest.deadlineMs) {
+      return;
+    }
+
     // Applying an end usually makes its owner busy, and the owner calls advance() again
     // once its invocation has run. But an invoked or detached owner whose running
     // invocation has expired its hold does not stop the clock, and the invocation that the
