@@ -22,3 +22,34 @@ updates:
       actions-deps:
         patterns:
           - "*"
+
+  # npm security updates. Automatic security updates are enabled in the
+  # repository settings. Without this entry, Dependabot opens one pull request
+  # per vulnerable package. With it, Dependabot fixes every open alert in a
+  # directory in one pull request.
+  #
+  # Security updates are triggered by an alert, not by the schedule below. The
+  # schedule is required, but it controls version updates only.
+  - package-ecosystem: "npm"
+    # Each directory has its own package-lock.json.
+    directories:
+      - "/"
+      - "/packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # 0 turns off npm version updates. The maintainers update dependencies by
+    # hand. Security updates have their own limit of 10 open pull requests,
+    # which this setting does not change.
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "javascript"
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
