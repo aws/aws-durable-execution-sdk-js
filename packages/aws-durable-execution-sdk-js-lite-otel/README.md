@@ -74,6 +74,11 @@ it from AWS Secrets Manager once, outside the handler, and create the exporter w
 - `flushIntervalMs` (default 5000): finished operation and attempt spans are sent at most
   this many milliseconds after they end, during the invocation. `0` sends every span at
   the end of the invocation.
+- `otelApi` (optional): your `@opentelemetry/api` module namespace (`import * as api`),
+  or an object `{ context, trace }`. The plugin calls only `context.active()`,
+  `context.with(context, fn)` and `trace.setSpanContext(context, spanContext)`. It does
+  not check the object. Without `otelApi`, the plugin finds the context manager of
+  `@opentelemetry/api` 1.x itself. See [Context propagation](#context-propagation).
 
 The default resource has these attributes. An attribute without a value is omitted.
 
@@ -273,9 +278,11 @@ The plugin makes a durable span the active span while user code runs:
 - the operation span, while a child context's `fn` runs;
 - the invocation span, while the workflow function runs.
 
-This works only with a context manager that you register with `@opentelemetry/api` 1.x.
-A context manager follows the active span across `await`. Register one once, for example
-`AsyncLocalStorageContextManager` from `@opentelemetry/context-async-hooks`:
+Then spans that your code or an auto-instrumentation creates inside a step are children of
+the attempt span. This needs a context manager that you register with
+`@opentelemetry/api`. A context manager follows the active span across `await`. Register
+one once, for example `AsyncLocalStorageContextManager` from
+`@opentelemetry/context-async-hooks`:
 
 ```js
 import { context } from "@opentelemetry/api";
@@ -286,7 +293,27 @@ context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
 
 The `register()` of a `NodeSDK` or a `NodeTracerProvider` registers one too.
 
-The plugin does not import `@opentelemetry/api`. It finds the context manager this way:
+The plugin does not import `@opentelemetry/api`. It reaches the API in one of two ways.
+
+### With otelApi
+
+Pass the API to the plugin. Use this way when your code already imports the API.
+
+```js
+import * as api from "@opentelemetry/api";
+
+createOtelPlugin({ exporter, otelApi: api });
+```
+
+1. The plugin calls `api.trace.setSpanContext(api.context.active(), spanContext)`. The
+   result is a context that holds a non-recording span of the durable span's ids.
+2. It runs user code with `api.context.with(thatContext, fn)`.
+3. These are public functions of the API. So this way works with every API version that
+   keeps them, also a future major version.
+
+### Without otelApi
+
+The plugin finds the context manager of `@opentelemetry/api` 1.x itself:
 
 1. Several copies of the API can be loaded in one process. So the API keeps one shared
    registry on `globalThis`, under `Symbol.for("opentelemetry.js.api.1")`.
@@ -297,11 +324,24 @@ The plugin does not import `@opentelemetry/api`. It finds the context manager th
    `with` with a context that holds a non-recording span of the durable span's ids.
 5. So `trace.getActiveSpan()` in user code returns that span.
 
-Then spans that your code or an auto-instrumentation creates inside a step are children of
-the attempt span. Without a registered context manager, these spans do not nest under the
-durable spans. The plugin's own spans are still complete, because it sets every parent from
-the ids above. So a runtime without `AsyncLocalStorage`, for example LLRT, still gets every
-durable span.
+The plugin looks up the registry when it first runs user code. It keeps a registry that it
+found. It looks again on every run while it finds none. So a context manager that you
+register after you create the plugin, for example with `NodeSDK.start()`, is used.
+
+Another major version of the API stores its registry under another key, for example
+`Symbol.for("opentelemetry.js.api.2")`. The plugin does not know that registry's layout:
+
+1. So it does not use that registry. User code runs, and user spans do not nest under
+   the durable spans.
+2. It logs one line with `console.warn`, once per process for each such major version.
+   The line names the registry's version and recommends `otelApi`.
+3. The durable spans are unaffected.
+
+### Without a context manager
+
+Without a registered context manager, user spans do not nest under the durable spans. The
+plugin's own spans are still complete, because it sets every parent from the ids above. So
+a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durable span.
 
 ## Limitations
 
@@ -329,10 +369,13 @@ durable span.
 - The workflow span of a top-level execution links to a Lambda or upstream span that
   this plugin does not export.
 - Log lines do not carry the trace id or span id.
-- Nesting depends on the internal registry layout of `@opentelemetry/api` major version 1
-  (see [Context propagation](#context-propagation)). A future major version stores its
-  registry under another key. Then user spans silently stop nesting under the durable
-  spans. The durable spans are unaffected.
+- Without `otelApi`, nesting depends on the internal registry layout of
+  `@opentelemetry/api` major version 1 (see [Context propagation](#context-propagation)).
+  With only another major version loaded, user spans do not nest under the durable spans.
+  The plugin logs one warning. The durable spans are unaffected. Pass `otelApi` to avoid
+  this.
+- The plugin does not check `otelApi`. If the object lacks one of the three functions,
+  the plugin throws a `TypeError` when it runs user code.
 
 ## Differences from @aws/durable-execution-sdk-js-otel
 
@@ -382,7 +425,7 @@ src/index.js     createOtelPlugin: the factory and the hooks
 src/ids.js       deterministic ids and the sampling decision
 src/spans.js     span objects, time conversion, the default resource
 src/export.js    the export with a timeout
-src/otel-context.js  the active span, through the registry of @opentelemetry/api
+src/otel-context.js  the active span, through otelApi or the registry of @opentelemetry/api 1.x
 src/version.js   the instrumentation scope version
 src/index.d.ts   the public types
 ```

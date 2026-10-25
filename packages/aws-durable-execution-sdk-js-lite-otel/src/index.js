@@ -9,7 +9,7 @@ import {
   traceId as traceIdOf,
   workflowSpanId,
 } from "./ids.js";
-import { runWithSpanContext } from "./otel-context.js";
+import { contextRunner } from "./otel-context.js";
 import {
   buildSpan,
   plainResource,
@@ -22,8 +22,8 @@ import {
 // The operation types whose records the service ends. The SDK ends STEP and CONTEXT.
 const SERVICE_ENDED = new Set(["WAIT", "CALLBACK", "CHAINED_INVOKE"]);
 
-// The exporter and the resource are shared by every invocation. They live in this
-// closure. The state of one invocation lives in the closure of one factory call. Lambda
+// The exporter, the resource and the context runner are shared by every invocation. They
+// live in this closure. The state of one invocation lives in the closure of one factory call. Lambda
 // Managed Instances can run several invocations in one process at the same time. So no
 // per-invocation state is kept at module level.
 export function createOtelPlugin({
@@ -33,7 +33,9 @@ export function createOtelPlugin({
   sampleRate = 1,
   exportTimeoutMs = 3000,
   flushIntervalMs = 5000,
+  otelApi,
 }) {
+  const runWithSpanContext = contextRunner(otelApi);
   const res =
     resource ??
     plainResource({
@@ -142,7 +144,8 @@ export function createOtelPlugin({
       parentId === undefined ? workflowId : operationSpanId(arn, parentId);
 
     // The span is the active span while fn runs. So spans that user code creates become
-    // its children. Without a registered context manager, fn only runs.
+    // its children. Without otelApi and without a registered context manager of
+    // @opentelemetry/api 1.x, fn only runs.
     const runIn = (spanId, fn) =>
       runWithSpanContext(spanContext(traceId, spanId), fn);
 

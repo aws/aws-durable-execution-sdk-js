@@ -117,6 +117,24 @@ export interface OtelPluginConfig {
    * invocation. Default 5000.
    */
   flushIntervalMs?: number;
+  /**
+   * The module namespace of your @opentelemetry/api (`import * as api` of that module),
+   * or an object with its `context` and `trace`. The plugin then makes a durable span active
+   * with `context.with(trace.setSpanContext(context.active(), spanContext), fn)`. Without
+   * it, the plugin finds the context manager of @opentelemetry/api 1.x on globalThis.
+   */
+  otelApi?: OtelApi;
+}
+
+/** The members of @opentelemetry/api that the plugin calls. The plugin does not check them. */
+export interface OtelApi {
+  context: {
+    active(): unknown;
+    with<T>(context: unknown, fn: () => T): T;
+  };
+  trace: {
+    setSpanContext(context: unknown, spanContext: SpanContext): unknown;
+  };
 }
 
 /** Returns a plugin factory for withDurableExecution's config.plugins. */

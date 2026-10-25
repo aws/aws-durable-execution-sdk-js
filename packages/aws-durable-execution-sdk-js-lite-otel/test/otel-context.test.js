@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { test } from "node:test";
-import { runWithSpanContext, SPAN_KEY } from "../src/otel-context.js";
+import { contextRunner, SPAN_KEY } from "../src/otel-context.js";
 import {
   fakeExporter,
   idOf,
@@ -14,18 +14,24 @@ import {
 const REGISTRY_KEY = Symbol.for("opentelemetry.js.api.1");
 const SC = { traceId: "a".repeat(32), spanId: "b".repeat(16), traceFlags: 1 };
 
-// Puts a registry on globalThis for one test. undefined removes it. The previous value
-// is restored after the test.
-function withRegistry(t, registry) {
-  const had = REGISTRY_KEY in globalThis;
-  const old = globalThis[REGISTRY_KEY];
-  if (registry === undefined) delete globalThis[REGISTRY_KEY];
-  else globalThis[REGISTRY_KEY] = registry;
+// Each call uses a new runner, so no registry is cached between tests.
+const runWithSpanContext = (sc, fn) => contextRunner()(sc, fn);
+
+// Puts a value on globalThis under key for one test. undefined removes it. The previous
+// value is restored after the test.
+function withGlobal(t, key, value) {
+  const had = key in globalThis;
+  const old = globalThis[key];
+  if (value === undefined) delete globalThis[key];
+  else globalThis[key] = value;
   t.after(() => {
-    if (had) globalThis[REGISTRY_KEY] = old;
-    else delete globalThis[REGISTRY_KEY];
+    if (had) globalThis[key] = old;
+    else delete globalThis[key];
   });
 }
+
+// Puts a registry of major version 1 on globalThis for one test.
+const withRegistry = (t, registry) => withGlobal(t, REGISTRY_KEY, registry);
 
 // A context with the same setValue and getValue as BaseContext of @opentelemetry/api.
 const fakeContext = (values = new Map()) => ({
@@ -209,4 +215,167 @@ test("with the real API and no context manager, no span is active in user code",
       }),
   });
   assert.equal(seen, undefined);
+});
+
+// An otelApi object that records its calls. setSpanContext returns a new object, so a
+// test can check that with receives exactly that object.
+function fakeApi() {
+  const root = { name: "root" };
+  const calls = { active: 0, set: [], with: [] };
+  return {
+    calls,
+    root,
+    context: {
+      active: () => {
+        calls.active++;
+        return root;
+      },
+      with: (ctx, fn) => {
+        calls.with.push(ctx);
+        return fn();
+      },
+    },
+    trace: {
+      setSpanContext: (ctx, spanContext) => {
+        const derived = { parent: ctx, spanContext };
+        calls.set.push(derived);
+        return derived;
+      },
+    },
+  };
+}
+
+// A step, so that the plugin calls runIn for the invocation and for one attempt.
+const oneStep = ({ ctx }) => ctx.step({ name: "s", fn: () => "ok" });
+
+test("with otelApi, with receives the context that setSpanContext derives from active()", () => {
+  const api = fakeApi();
+  const run = contextRunner(api);
+  assert.equal(
+    run(SC, () => 7),
+    7,
+  );
+  assert.equal(api.calls.active, 1);
+  assert.equal(api.calls.set.length, 1);
+  assert.equal(api.calls.set[0].parent, api.root);
+  assert.equal(api.calls.set[0].spanContext, SC);
+  assert.deepEqual(api.calls.with, api.calls.set);
+  assert.equal(api.calls.with[0], api.calls.set[0]);
+  const error = new Error("boom");
+  assert.throws(
+    () =>
+      run(SC, () => {
+        throw error;
+      }),
+    (e) => e === error,
+  );
+});
+
+test("otelApi takes precedence over the registry", async (t) => {
+  const manager = fakeManager();
+  withRegistry(t, { version: "1.9.1", context: manager });
+  const api = fakeApi();
+  const exporter = fakeExporter();
+  await runDurable({
+    plugins: [otel(exporter, { otelApi: api })],
+    workflow: oneStep,
+  });
+  assert.equal(manager.calls.length, 0);
+  const ids = api.calls.set.map((c) => c.spanContext.spanId);
+  assert.ok(ids.includes(idOf(one(exporter.spans(), "Invocation"))));
+  assert.ok(ids.includes(idOf(one(exporter.spans(), "s attempt 1"))));
+});
+
+test("a registry of another major version: fn runs directly, and one line is logged per process", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  withRegistry(t, undefined);
+  const manager = fakeManager();
+  withGlobal(t, Symbol.for("opentelemetry.js.api.2"), {
+    version: "2.0.0",
+    context: manager,
+  });
+  for (let i = 0; i < 3; i++) {
+    assert.equal(
+      runWithSpanContext(SC, () => i),
+      i,
+    );
+  }
+  // Two plugins, two runs each. Each run is one invocation.
+  for (const plugin of [otel(fakeExporter()), otel(fakeExporter())]) {
+    for (let i = 0; i < 2; i++) {
+      const out = await runDurable({ plugins: [plugin], workflow: oneStep });
+      assert.equal(out.status, "SUCCEEDED");
+    }
+  }
+  assert.equal(manager.calls.length, 0);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.equal(
+    warn.mock.calls[0].arguments[0],
+    "durable-execution-sdk-js-lite-otel: @opentelemetry/api 2.0.0 is not supported for context propagation. Spans from your code do not nest under durable spans. Pass otelApi to createOtelPlugin, or use @opentelemetry/api 1.x.",
+  );
+});
+
+test("a registry of another major version without a version field is named by its major", (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  withRegistry(t, undefined);
+  withGlobal(t, Symbol.for("opentelemetry.js.api.3"), {});
+  assert.equal(
+    runWithSpanContext(SC, () => "x"),
+    "x",
+  );
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(warn.mock.calls[0].arguments[0], /@opentelemetry\/api 3\.x /);
+});
+
+test("without any registry, nothing is logged", (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  withRegistry(t, undefined);
+  runWithSpanContext(SC, () => {});
+  assert.equal(warn.mock.callCount(), 0);
+});
+
+test("a registry that appears after the plugin was created is used by the next run", async (t) => {
+  withRegistry(t, undefined);
+  const runner = contextRunner();
+  assert.equal(
+    runner(SC, () => 1),
+    1,
+  );
+  const plugin = otel(fakeExporter());
+  await runDurable({ plugins: [plugin], workflow: oneStep });
+  const manager = fakeManager();
+  globalThis[REGISTRY_KEY] = { version: "1.9.1", context: manager };
+  runner(SC, () => {});
+  assert.equal(manager.calls.length, 1);
+  await runDurable({ plugins: [plugin], workflow: oneStep });
+  // The workflow function and the step attempt.
+  assert.equal(manager.calls.length, 3);
+});
+
+test("with otelApi as the real API module, user code sees the attempt span as the active span", async (t) => {
+  const api = await loadApi(t);
+  if (api === undefined) return;
+  const { context, trace, ROOT_CONTEXT } = api;
+  assert.ok(context.setGlobalContextManager(alsContextManager(ROOT_CONTEXT)));
+  t.after(() => context.disable());
+  const seen = {};
+  const exporter = fakeExporter();
+  await runDurable({
+    plugins: [otel(exporter, { otelApi: api })],
+    workflow: ({ ctx }) =>
+      ctx.step({
+        name: "work",
+        fn: async () => {
+          await new Promise((r) => setImmediate(r));
+          seen.work = trace.getSpanContext(context.active());
+          seen.recording = trace.getActiveSpan().isRecording();
+        },
+      }),
+  });
+  assert.deepEqual(
+    seen.work,
+    one(exporter.spans(), "work attempt 1").spanContext(),
+  );
+  assert.equal(seen.recording, false);
+  assert.equal(trace.getSpanContext(context.active()), undefined);
 });
