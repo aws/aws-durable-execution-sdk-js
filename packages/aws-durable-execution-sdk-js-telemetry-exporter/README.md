@@ -1010,6 +1010,20 @@ When `createExampleFunction` and `autoInvoke` are both enabled, the stack create
 
 After deployment, data starts flowing automatically to all enabled destinations.
 
+#### Aurora Engine Version Check
+
+When Aurora is enabled, every CDK command first asks RDS (`DescribeDBEngineVersions`) whether
+`destinations.aurora.engineVersion` can run this stack's Serverless v2 cluster in the target
+region. An unsupported version then fails in seconds, before CloudFormation creates anything.
+The error lists the versions RDS offers. For a stack that is already deployed, set the cluster's
+current version: a different version upgrades the cluster in place.
+
+- The check needs AWS credentials and the `rds:DescribeDBEngineVersions` permission at synth time.
+  If the call fails (no credentials, no network, permission denied), the app prints a warning and
+  continues, and an unsupported version fails at deploy time instead.
+- To skip the check, pass `-c skipEngineVersionCheck=true`. Use it with `cdk destroy` when RDS
+  has retired the version the stack was deployed with.
+
 #### Aurora Table Auto-Creation
 
 When Aurora is enabled, the stack deploys a custom resource that creates the `durable_execution_telemetry` table automatically via the RDS Data API. No manual SQL needed.
@@ -1019,6 +1033,9 @@ When Aurora is enabled, the stack deploys a custom resource that creates the `du
 ```bash
 npx cdk destroy
 ```
+
+If RDS has retired the configured Aurora `engineVersion` since the deploy, the engine version
+check stops the command. Skip it with `npx cdk destroy -c skipEngineVersionCheck=true`.
 
 This removes all created resources (tables, clusters, functions, rules). Resources use `RemovalPolicy.DESTROY` by default for clean teardown.
 

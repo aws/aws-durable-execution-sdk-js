@@ -26,7 +26,7 @@
       "databaseName": "postgres",
       "databaseNameComment": "Name of the default database created in the cluster and queried by the extension.",
       "engineVersion": "17.9",
-      "engineVersionComment": "Aurora PostgreSQL engine version for a new cluster (major.minor). RDS retires minor versions over time; if a deploy fails with 'Cannot find version', pick a current one from `aws rds describe-db-engine-versions --engine aurora-postgresql`. For a stack that is already deployed, set this to the cluster's current version before you redeploy: a different major version (for example 16 to 17) is a major version upgrade, which this stack does not allow, so CloudFormation rejects the update and rolls back.",
+      "engineVersionComment": "Aurora PostgreSQL engine version for a new cluster (major.minor). RDS retires minor versions over time. Every CDK command checks this value against the versions RDS offers for Serverless v2 in the target region and fails early, listing the available versions; when AWS cannot be reached, it warns and continues. Pass `-c skipEngineVersionCheck=true` to skip the check, for example for `cdk destroy` after RDS retired the version. For a stack that is already deployed, set this to the cluster's current version before you redeploy: a different major version (for example 16 to 17) is a major version upgrade, which this stack does not allow, so CloudFormation rejects the update and rolls back.",
       "minCapacity": 0.5,
       "minCapacityComment": "Minimum Aurora Serverless v2 capacity in ACUs / Aurora Capacity Units (the cluster never scales below this; 0.5 is the smallest allowed).",
       "maxCapacity": 1,

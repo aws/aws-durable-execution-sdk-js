@@ -1,14 +1,18 @@
 import plugin from "./index";
 
 const NAMESPACE = "@aws/durable-functions";
-const RULE_NAMES = [
+const RECOMMENDED_RULE_NAMES = [
   "no-closure-in-durable-operations",
   "no-nested-durable-operations",
   "no-non-deterministic-outside-step",
 ];
+const RULE_NAMES = [
+  ...RECOMMENDED_RULE_NAMES,
+  "require-durable-operation-in-child-context",
+];
 
 describe("plugin", () => {
-  it("exports the three rules", () => {
+  it("exports the four rules", () => {
     expect(Object.keys(plugin.rules).sort()).toEqual(RULE_NAMES);
   });
 
@@ -26,10 +30,10 @@ describe("plugin", () => {
       expect(config.plugins[NAMESPACE]).toBe(plugin);
     });
 
-    it("enables every rule as an error, and only the plugin's rules", () => {
+    it("enables the three replay rules as errors, and no other rule", () => {
       expect(config.rules).toEqual(
         Object.fromEntries(
-          RULE_NAMES.map((r) => [`${NAMESPACE}/${r}`, "error"]),
+          RECOMMENDED_RULE_NAMES.map((r) => [`${NAMESPACE}/${r}`, "error"]),
         ),
       );
     });

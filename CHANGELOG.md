@@ -120,8 +120,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
   SDK's set of invocation responses is unchanged.
 
+- The failed-suspend warning of the MicroVM worker in
+  `@aws/durable-execution-sdk-js-microvm-worker` now has one message per outcome:
+  - "could not suspend the idle MicroVM, because the service rejected the call. A missing
+    permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role."
+  - "could not suspend the idle MicroVM, because the service refused the call for now."
+  - "the suspend call for the idle MicroVM had an unknown outcome."
+
+  Before, the text also described the worker state. The state is now in the fields `outcome`,
+  `suspendHookArrived`, `terminating`, `closed`, and `refusingJobs`. A log query that matched an
+  old text must match the new message or the `outcome` field.
+
+- `microvm` and `vm.invoke` in `@aws/durable-execution-sdk-js-extras` now reject a job input
+  whose JSON form has more than `MAX_JOB_INPUT_BYTES` UTF-8 bytes: 6,283,264 bytes, 6 MiB minus
+  8 KiB. They reject it with a `RangeError`, before any durable operation starts. The worker
+  refuses a job body over 6 MiB. Before, the operation launched the MicroVM first. The request
+  step then failed with `MicrovmDeliveryError`. After a connection reset, both retry tiers
+  retried for minutes while the MicroVM was billed. A value that `JSON.stringify` cannot encode,
+  such as a `BigInt`, now also fails before any durable operation. It fails with a `TypeError`
+  whose message names the operation and whose `cause` is the error of `JSON.stringify`. An
+  execution that started on an earlier build, with an input in the last 8 KiB below the old
+  limit, fails at its next replay.
+
 ### Fixed
 
+- After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
+  fail to suspend the invocation. The same held after any child context returned while a step
+  it started was still running. A step still running in an abandoned item tries to checkpoint
+  its result. The SDK drops that checkpoint, because its ancestor context has finished. Before,
+  the step then stayed `EXECUTING` for the rest of the invocation, and an `EXECUTING` operation
+  blocks suspension. So the invocation could not suspend. A wait or callback longer than the
+  remaining invocation time then ran until the Lambda timeout. Now, when the SDK drops the
+  awaited result checkpoint of a step or `waitForCondition`, it marks that operation completed.
+  A child context is not affected, because it does not wait for its checkpoint and stays running
+  until it settles. See ADR 0002.
+- A `map` or `parallel` that resumed after an earlier invocation ended between the item
+  checkpoints and the batch checkpoint could drop a recorded outcome. The items with a recorded
+  outcome settle again in index order, not in their original order. With `minSuccessful`, early
+  recorded successes could complete the batch before another recorded item settled. That item
+  was then reported `STARTED`, or with `maxConcurrency` not reported at all. A dropped failure
+  also left `hasFailure` `false`. Now the batch does not resolve until every item with a
+  recorded outcome has settled. Until then it starts items only up to the last recorded item. An
+  unfinished item in that range is not run again once the batch's outcome is already known. A
+  custom `shouldComplete` decision made while the recorded items settle is kept. So every
+  recorded outcome is kept. For the built-in rules, and for a `shouldComplete` predicate that
+  stays complete once it is complete as the counts grow, no item starts that the completion rule
+  would not start. Other predicates can decide differently on resume, because the resumed items
+  can settle in a different order than the original ones. `NestingType.FLAT` items have no
+  context record, so they are not covered.
+- After a `map` or `parallel` resolved, an item that was still running could start another item
+  when it settled. This happened with a `shouldComplete` predicate that returns continue after it
+  has completed the batch. Now no item starts after the batch has resolved.
+
+- **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
+  `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
+  target region, and fail before anything is created. Before, an unsupported version failed only
+  when CloudFormation created the cluster, after the VPC and other resources existed. The check
+  also rejects a version without Serverless v2 support, and a `minCapacity` or `maxCapacity`
+  outside the version's range. The error lists the available versions of the same major version.
+  When AWS cannot be reached, or the `rds:DescribeDBEngineVersions` permission is missing, the app
+  warns and continues. Pass `-c skipEngineVersionCheck=true` to skip the check, for example for
+  `cdk destroy` after RDS retired the version.
 - **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
   telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
   lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
@@ -446,6 +505,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with a token the service had already rejected. It now answers `PENDING`.
 
 ### Added
+
+- **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
+  `runInChildContext` function, a `map` function, or a `parallel` branch that calls no durable
+  operation on its context, and tells the user to put the work in a step. A step retries the
+  work when it throws, and a child context does not. The rule follows the context into helper
+  functions declared in the same file. It reports nothing when the context reaches code it
+  cannot read, such as an imported function. The rule is not in `flat/recommended`, because
+  the code it reports still replays correctly.
 
 - `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
   interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry

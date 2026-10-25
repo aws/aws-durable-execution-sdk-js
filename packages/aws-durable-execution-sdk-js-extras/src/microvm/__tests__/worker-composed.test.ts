@@ -29,8 +29,8 @@ import {
 import { defaultMicrovmRetryStrategy } from "..";
 import {
   deliverJob,
-  jobDocument,
   type LaunchResult,
+  measuredJob,
   type OperationScope,
 } from "../shared";
 
@@ -247,7 +247,7 @@ describe("the request step against the real worker listener", () => {
       "job",
       launched,
       {},
-      jobDocument(callbackId, { n: 1 }, undefined),
+      measuredJob(callbackId, JSON.stringify({ n: 1 }), undefined),
       { resume },
     );
 
