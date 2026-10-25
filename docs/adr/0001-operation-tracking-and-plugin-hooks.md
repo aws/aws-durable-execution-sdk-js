@@ -49,7 +49,8 @@ The rules are numbered the same way in `packages/aws-durable-execution-sdk-js/AG
 Rule 1. An operation stays `EXECUTING` until its result is ready for the caller. This covers
 serializing, checkpointing, the synchronous part of plugin hooks, and deserializing, on the
 execution and the replay path. `completeAfter` in `utils/checkpoint/complete-after.ts`
-implements it for one operation.
+implements it for one operation. [ADR 0002](./0002-abandoned-operations-stop-executing.md) amends this rule for an
+operation whose awaited checkpoint is dropped because an ancestor finished.
 
 Rule 2. A child context is `EXECUTING` from the moment its function returns or throws until it
 settles. This holds while a `wrapChildContextFn` hook still runs after the function settled. It
@@ -109,5 +110,5 @@ function, so they cannot be detached.
 - Review. `.github/CODEOWNERS` requires a maintainer review for the files that implement these
   rules. The AI PR review reads `packages/aws-durable-execution-sdk-js/AGENTS.md`, which lists
   the rules.
-- Changing a rule needs a new ADR that supersedes this one. The ADR states the new rule, the
+- Changing a rule needs a new ADR that supersedes or amends this one. The ADR states the new rule, the
   measured effect on suspension, and the tests that change.
