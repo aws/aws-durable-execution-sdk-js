@@ -1,5 +1,10 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import { BatchItemStatus } from "../../types";
+import {
+  BatchItemStatus,
+  CompletionOutcome,
+  completeBatch,
+  continueBatch,
+} from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
@@ -42,30 +47,39 @@ const statusesOf = (result: { all: { status: BatchItemStatus }[] }) =>
   result.all.map((item) => item.status);
 
 describe("map resumed with several terminal item records", () => {
-  it("keeps a recorded failure that settles after a recorded success reaches minSuccessful", async () => {
-    // In the earlier invocation, item 1 failed first and item 0 then
-    // succeeded, which reached minSuccessful: 1.
+  it("keeps a recorded failure that settles after recorded successes reach minSuccessful", async () => {
+    // In the earlier invocation, items 0 and 1 started. Item 1 succeeded, so
+    // item 2 started. Item 2 failed, so item 3 started. Item 0 then succeeded,
+    // which reached minSuccessful: 2. The invocation ended before the map
+    // checkpoint.
     const { context } = createTestDurableContext({
-      existingOperations: resumedOperations(["SUCCEEDED", "FAILED"]) as never,
+      existingOperations: resumedOperations([
+        "SUCCEEDED",
+        "SUCCEEDED",
+        "FAILED",
+      ]) as never,
     });
     const executed: number[] = [];
 
     const result = await context.map(
       "m",
-      [0, 1, 2],
+      [0, 1, 2, 3],
       async (_child, item) => {
         executed.push(item);
         return item * 10;
       },
-      { maxConcurrency: 1, completionConfig: { minSuccessful: 1 } },
+      { maxConcurrency: 2, completionConfig: { minSuccessful: 2 } },
     );
 
+    // Without the fix, items 0 and 1 reach minSuccessful first, and the
+    // recorded failure of item 2 is reported STARTED.
     expect(statusesOf(result)).toEqual([
+      BatchItemStatus.SUCCEEDED,
       BatchItemStatus.SUCCEEDED,
       BatchItemStatus.FAILED,
     ]);
     expect(result.hasFailure).toBe(true);
-    expect(result.failed()[0].error?.message).toContain("boom-1");
+    expect(result.failed()[0].error?.message).toContain("boom-2");
     expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
     expect(executed).toEqual([]);
   });
@@ -179,5 +193,88 @@ describe("map resumed with several terminal item records", () => {
     ]);
     expect(result.hasFailure).toBe(false);
     expect(executed).toEqual([]);
+  });
+
+  it.each([
+    ["SUCCEEDED", CompletionOutcome.SUCCEEDED, "CUSTOM_COMPLETION_SUCCEEDED"],
+    ["FAILED", CompletionOutcome.FAILED, "CUSTOM_COMPLETION_FAILED"],
+  ] as const)(
+    "keeps a custom predicate's decision made while recorded items settle (outcome %s)",
+    async (_name, outcome, reason) => {
+      // In the earlier invocation, items 0 and 1 started together. The first
+      // to settle made the predicate complete. The other recorded its
+      // outcome before the map context finished.
+      const { context } = createTestDurableContext({
+        existingOperations: resumedOperations([
+          "SUCCEEDED",
+          "SUCCEEDED",
+        ]) as never,
+      });
+      const executed: number[] = [];
+
+      const result = await context.map(
+        "m",
+        [0, 1, 2],
+        async (_child, item) => {
+          executed.push(item);
+          return item * 10;
+        },
+        {
+          maxConcurrency: 2,
+          completionConfig: {
+            // Not monotone: it completes only at the first settlement.
+            shouldComplete: ({ completedCount }) =>
+              completedCount === 1 ? completeBatch(outcome) : continueBatch(),
+          },
+        },
+      );
+
+      expect(statusesOf(result)).toEqual([
+        BatchItemStatus.SUCCEEDED,
+        BatchItemStatus.SUCCEEDED,
+      ]);
+      expect(result.completionReason).toBe(reason);
+      expect(result.status).toBe(outcome);
+      expect(executed).toEqual([]);
+    },
+  );
+});
+
+describe("map after it resolves", () => {
+  it("starts no item when an item that was still running settles", async () => {
+    const { context } = createTestDurableContext();
+    const executed: number[] = [];
+    let releaseItem1!: () => void;
+    const item1Held = new Promise<void>((resolve) => {
+      releaseItem1 = resolve;
+    });
+
+    const result = await context.map(
+      "m",
+      [0, 1, 2],
+      async (_child, item) => {
+        executed.push(item);
+        if (item === 1) {
+          await item1Held;
+        }
+        return item;
+      },
+      {
+        maxConcurrency: 2,
+        completionConfig: {
+          // Not monotone: it completes at the first settlement and returns
+          // continue afterwards.
+          shouldComplete: ({ completedCount }) =>
+            completedCount === 1 ? completeBatch() : continueBatch(),
+        },
+      },
+    );
+    expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
+
+    // Item 1 settles after the map has returned. Without the guard, its
+    // settlement re-evaluates the predicate, gets continue, and starts item 2.
+    releaseItem1();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(executed).toEqual([0, 1]);
   });
 });
