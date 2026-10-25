@@ -145,10 +145,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded outcome has settled. Until then it starts items only up to the last recorded item. An
   unfinished item in that range is not run again once the batch's outcome is already known. A
   custom `shouldComplete` decision made while the recorded items settle is kept. So every
-  recorded outcome is kept, and for the built-in rules and count-based predicates no item starts
-  that the completion rule would not start. A predicate that depends on which item settled first
-  can still decide differently on resume. `NestingType.FLAT` items have no context record, so
-  they are not covered.
+  recorded outcome is kept. For the built-in rules, and for a `shouldComplete` predicate that
+  stays complete once it is complete as the counts grow, no item starts that the completion rule
+  would not start. Other predicates can decide differently on resume, because the resumed items
+  can settle in a different order than the original ones. `NestingType.FLAT` items have no
+  context record, so they are not covered.
 - After a `map` or `parallel` resolved, an item that was still running could start another item
   when it settled. This happened with a `shouldComplete` predicate that returns continue after it
   has completed the batch. Now no item starts after the batch has resolved.

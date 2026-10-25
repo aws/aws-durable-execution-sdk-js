@@ -247,6 +247,51 @@ describe("map resumed with several terminal item records", () => {
   );
 });
 
+describe("map resumed with a predicate that does not stay complete", () => {
+  it("can decide differently than the original run (documented limit)", async () => {
+    // Original run, maxConcurrency 2: item 0 succeeded, which completed the
+    // batch at (successCount 1, failureCount 0). Item 1 then recorded a
+    // failure before the batch checkpoint. Item 2 never started.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations(["SUCCEEDED", "FAILED"]) as never,
+    });
+    const seen: string[] = [];
+    const executed: number[] = [];
+
+    const result = await context.map(
+      "m",
+      [0, 1, 2],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      {
+        maxConcurrency: 2,
+        completionConfig: {
+          shouldComplete: ({ successCount, failureCount, completedCount }) => {
+            seen.push(`${completedCount}:(${successCount},${failureCount})`);
+            return successCount === 1 && failureCount === 0
+              ? completeBatch()
+              : continueBatch();
+          },
+        },
+      },
+    );
+
+    // On resume the cached failure settles before the cached success. So the
+    // predicate sees (0, 1) and then (1, 1), never (1, 0), and item 2 runs.
+    // The shouldComplete docs ask for a predicate that stays complete as the
+    // counts grow, which avoids this.
+    expect(seen.slice(0, 2)).toEqual(["1:(0,1)", "2:(1,1)"]);
+    expect(executed).toEqual([2]);
+    expect(result.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.FAILED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+  });
+});
+
 describe("map resumed with an unfinished item between recorded items", () => {
   // Cached successes deserialize only when released, so the cached failure of
   // item 0 settles first, as in the earlier invocation's order.

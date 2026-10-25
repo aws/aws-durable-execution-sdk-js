@@ -255,6 +255,14 @@ export interface CustomCompletionConfig {
    * applies: when several items finish at once the batch may end with slightly
    * more completed items than the predicate first observed.
    *
+   * Make the predicate stay complete once it returns complete, as the counts
+   * grow. An invocation can end after several items recorded their outcome
+   * but before the batch recorded its own. The next invocation settles those
+   * items again, possibly in a different order. A predicate that stays
+   * complete reaches the same decision. Another predicate, such as
+   * `successCount === 1 && failureCount === 0`, can miss it and let the batch
+   * start more items.
+   *
    * The per-item statuses in {@link CompletionStatus.items} are ordered by the
    * item's original index (definition order), so `items[0]` is always the
    * first item/branch, `items[1]` the second, and so on — even when items

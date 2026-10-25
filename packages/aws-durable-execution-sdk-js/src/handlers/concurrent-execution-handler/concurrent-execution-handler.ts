@@ -707,11 +707,14 @@ export class ConcurrencyController<Logger extends DurableLogger> {
    * controller reserves a gap item's child id without running it, so its code
    * does not run again for a result the batch will not use.
    *
-   * So every recorded outcome is kept. For the built-in rules and for
-   * predicates that depend only on the counts, no item starts that the
-   * completion rule would not start. A predicate that depends on which item
-   * settled first can still decide differently on resume, because the
-   * original settle order is not recorded.
+   * So every recorded outcome is kept. For the built-in rules, and for a
+   * predicate that stays complete once it is complete as the counts grow, no
+   * item starts that the completion rule would not start. Other predicates can
+   * decide differently on resume, because the original settle order is not
+   * recorded, and the resumed order can differ: a cached failure settles
+   * faster than a cached success. For example, `successCount === 1 &&
+   * failureCount === 0` can see (0, 1) and then (1, 1) on resume, and never
+   * complete.
    */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
