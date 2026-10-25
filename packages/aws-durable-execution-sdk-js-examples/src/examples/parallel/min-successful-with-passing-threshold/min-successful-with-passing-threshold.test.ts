@@ -38,7 +38,17 @@ createTests({
       // Verify the results array matches
       expect(result.results).toEqual(["Branch 1 result", "Branch 2 result"]);
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        // branch-5's step is still running when the parallel completes. Its
+        // result checkpoint is dropped at about 2 s, and the step then no
+        // longer blocks the wait after the parallel from suspending. The wait
+        // has elapsed by then. Whether the invocation suspends depends on
+        // whether the SDK has already observed the elapsed wait: locally it
+        // has, and in the cloud the backed-off poll can observe it later. So
+        // 1 or 2 invocations are both valid. All other event counts remain
+        // exact.
+        invocationCompletedDifference: 1,
+      });
     });
   },
 });

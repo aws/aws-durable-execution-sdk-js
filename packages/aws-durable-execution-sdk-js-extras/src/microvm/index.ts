@@ -19,6 +19,7 @@ export { DEFAULT_AUTO_SUSPEND_IDLE_SECONDS, microvmSession } from "./session";
 export { MicrovmOperationSubType } from "./subtypes";
 export {
   durationToSeconds,
+  MAX_JOB_INPUT_BYTES,
   MAX_MICROVM_DURATION_SECONDS,
   MAX_RUN_HOOK_PAYLOAD_LENGTH,
 } from "./shared";
