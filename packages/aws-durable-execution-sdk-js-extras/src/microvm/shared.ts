@@ -117,6 +117,9 @@ export function fitsRunHook(payload: string): boolean {
  */
 export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
 
+/** The bytes of `{"input":` and `}` around the input's JSON. */
+const JOB_INPUT_WRAPPER_BYTES = '{"input":}'.length;
+
 /**
  * Rejects a job input whose JSON form has more than
  * {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
@@ -132,22 +135,39 @@ export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
  * the check throws a `TypeError` that names the operation, with the error of
  * `JSON.stringify` as its `cause`.
  *
+ * The check encodes the input as the value of a property named `input`:
+ *
+ * 1. `JSON.stringify` passes a `toJSON` method the key of the value. The key
+ *    of a root value is `""`.
+ * 2. Every body that carries the input holds it under the key `input`. The
+ *    HTTP job request does, and so does the `job` of the run hook payload.
+ * 3. So a `toJSON` that depends on its key can return a short form at the
+ *    root and a long form under `input`.
+ * 4. So the check encodes `{ input }`, and the measured form is the form
+ *    that the bodies send.
+ *
  * @throws \{TypeError\} When `JSON.stringify` cannot encode the input.
  * @throws \{RangeError\} When the input is too large.
  */
 export function validateJobInput(name: string, input: unknown): void {
-  let json: string | undefined;
+  let json: string;
   try {
-    // JSON.stringify returns undefined for an undefined input. The body then
-    // has no `input` field.
-    json = JSON.stringify(input);
+    json = JSON.stringify({ input });
   } catch (error) {
     throw new TypeError(
       `MicroVM "${name}": the job input must be JSON-serializable: ${(error as Error).message}`,
       { cause: error },
     );
   }
-  const bytes = json === undefined ? 0 : Buffer.byteLength(json, "utf8");
+  // 1. The result is `{"input":`, then the input's JSON, then `}`.
+  // 2. The wrapper characters are ASCII. So they take 10 bytes.
+  // 3. JSON.stringify omits a property whose value encodes to undefined.
+  //    Then the result is `{}`, and the body has no `input` field.
+  // 4. So `{}` counts as 0 bytes, and any other result loses 10 bytes.
+  const bytes =
+    json === "{}"
+      ? 0
+      : Buffer.byteLength(json, "utf8") - JOB_INPUT_WRAPPER_BYTES;
   if (bytes > MAX_JOB_INPUT_BYTES) {
     throw new RangeError(
       `MicroVM "${name}": the job input is ${bytes} bytes as JSON. The limit is ${MAX_JOB_INPUT_BYTES} bytes, because the worker accepts a job body of at most 6 MiB. Pass larger data by reference, for example as an S3 key.`,

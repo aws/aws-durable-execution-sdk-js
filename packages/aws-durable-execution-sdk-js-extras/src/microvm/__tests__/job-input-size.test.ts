@@ -181,6 +181,77 @@ describe("microvm job input size", () => {
     expect(endpoint.requests).toHaveLength(1);
     expect("input" in endpoint.requests[0].body).toBe(false);
   });
+
+  // JSON.stringify passes a toJSON method the key of the value. The key of a
+  // root value is "". Every job body holds the input under the key "input".
+  // So these inputs encode differently at the root and in the body.
+  it("measures a key-sensitive toJSON under the key the body uses, and rejects it before any durable operation", async () => {
+    const input = {
+      toJSON(key: string) {
+        return key === "input" ? "x".repeat(MAX_JOB_INPUT_BYTES + 1) : "";
+      },
+    };
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvm(context, "build", input, {
+            ...baseConfig(client),
+            fetch: endpoint.fetch,
+          }),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("FAILED");
+    expect(execution.getError()?.errorType).toBe("RangeError");
+    // The value is MAX_JOB_INPUT_BYTES + 1 characters, plus 2 quotes.
+    expect(execution.getError()?.errorMessage).toBe(
+      tooLarge("build", MAX_JOB_INPUT_BYTES + 3),
+    );
+    expect(execution.getOperations()).toHaveLength(0);
+    expect(client.runInputs).toHaveLength(0);
+    expect(endpoint.requests).toHaveLength(0);
+  });
+
+  it("accepts a key-sensitive toJSON that is short under the key the body uses, and delivers that form", async () => {
+    const input = {
+      toJSON(key: string) {
+        return key === "input" ? "short" : "x".repeat(MAX_JOB_INPUT_BYTES + 1);
+      },
+    };
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          // `request.path` selects HTTP delivery. So the job goes in a body
+          // that the test can read.
+          microvm(context, "build", input, {
+            ...baseConfig(client),
+            heartbeatTimeout: { hours: 1 },
+            request: { path: "/job" },
+            fetch: endpoint.fetch,
+          }),
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.runInputs).toHaveLength(1);
+    expect(endpoint.requests).toHaveLength(1);
+    expect(endpoint.requests[0].body.input).toBe("short");
+  });
 });
 
 describe("vm.invoke job input size", () => {
