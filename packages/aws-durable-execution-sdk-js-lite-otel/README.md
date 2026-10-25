@@ -397,7 +397,9 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
 
 This section is for people and AI agents who change this package. The rules of the lite
 SDK's [Contributing](../aws-durable-execution-sdk-js-lite/README.md#contributing) section
-apply, with these changes:
+apply, including rule 1.9: return to the design phase when a review round finds new
+blocking problems after the previous findings were addressed. The rules below add to them
+or replace them for this package:
 
 1. `package.json` has no `dependencies`, no `peerDependencies`, no `devDependencies` and
    no `optionalDependencies`.
