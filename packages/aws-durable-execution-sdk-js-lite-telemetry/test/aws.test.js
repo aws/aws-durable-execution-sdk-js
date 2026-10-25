@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { createAwsClient, signRequest } from "../src/aws.js";
 import { fakeFetch, jsonResponse as json, setAwsEnv } from "./helpers.js";
@@ -49,6 +50,75 @@ test("signRequest: a session token is added and signed", () => {
   );
 });
 
+// The "GET Object" and "PUT Object" examples of the AWS S3 documentation, "Signature
+// Calculations for the Authorization Header: Transferring Payload in a Single Chunk".
+const s3 = {
+  credentials: {
+    accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+    secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  },
+  region: "us-east-1",
+  service: "s3",
+  date: new Date("2013-05-24T00:00:00Z"),
+};
+
+test("signRequest: S3 GET Object example", () => {
+  const h = signRequest({
+    ...s3,
+    method: "GET",
+    url: "https://examplebucket.s3.amazonaws.com/test.txt",
+    headers: { Range: "bytes=0-9" },
+  });
+  assert.equal(
+    h["x-amz-content-sha256"],
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  );
+  assert.equal(
+    h.authorization,
+    "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41",
+  );
+});
+
+test("signRequest: S3 PUT Object example signs the encoded key once", () => {
+  // The key is test$file.text. The path carries it encoded once, as /test%24file.text.
+  // A second encoding would sign /test%2524file.text.
+  const h = signRequest({
+    ...s3,
+    method: "PUT",
+    url: "https://examplebucket.s3.amazonaws.com/test%24file.text",
+    headers: {
+      Date: "Fri, 24 May 2013 00:00:00 GMT",
+      "x-amz-storage-class": "REDUCED_REDUNDANCY",
+    },
+    body: "Welcome to Amazon S3.",
+  });
+  assert.equal(
+    h["x-amz-content-sha256"],
+    "44ce7dd67c959e0d3524ffac1771dfbba87d2b6b4b4e99e42034a8b803f8b072",
+  );
+  assert.match(
+    h.authorization,
+    /SignedHeaders=date;host;x-amz-content-sha256;x-amz-date;x-amz-storage-class, Signature=98ad721746da40c64f1a55b78f14c238d841ea1380cd77a1b5971af0ece108bd$/,
+  );
+});
+
+test("signRequest: an S3 key with spaces and a percent sign is signed encoded once", () => {
+  // The key is "lite-smoke/aws-client test %.json". The canonical URI must be
+  // /lite-smoke/aws-client%20test%20%25.json. A second encoding would sign %2520 and
+  // %2525. The expected value comes from that canonical request, built by hand. The
+  // client sent a live PUT of this key with the same rules, and S3 accepted it.
+  const h = signRequest({
+    ...s3,
+    method: "PUT",
+    url: "https://examplebucket.s3.amazonaws.com/lite-smoke/aws-client%20test%20%25.json",
+    body: "{}",
+  });
+  assert.match(
+    h.authorization,
+    /Signature=0a477a06a0cbef0a0fc08aa56c50c3ada86b8ee82976e25734e87a4ed8eff549$/,
+  );
+});
+
 const ENV = {
   AWS_REGION: "us-east-1",
   AWS_ACCESS_KEY_ID: "AKID",
@@ -88,6 +158,47 @@ test("send POSTs a signed request and returns the parsed JSON", async (t) => {
 test("an empty response body returns {}", async (t) => {
   setAwsEnv(t, ENV);
   assert.deepEqual(await client(fakeFetch([json(200)])).send(request), {});
+});
+
+test("method PUT is sent and signed; an s3 client signs the body hash", async (t) => {
+  setAwsEnv(t, ENV);
+  const fetch = fakeFetch([json(200)]);
+  await createAwsClient({
+    service: "s3",
+    endpoint: "https://bucket.s3.us-east-1.amazonaws.com",
+    fetch,
+  }).send({ method: "PUT", path: "/a%20b.json", body: '{"a":1}' });
+  const [c] = fetch.calls;
+  assert.equal(c.method, "PUT");
+  assert.equal(
+    c.url.href,
+    "https://bucket.s3.us-east-1.amazonaws.com/a%20b.json",
+  );
+  assert.equal(
+    c.headers["x-amz-content-sha256"],
+    createHash("sha256").update('{"a":1}').digest("hex"),
+  );
+  assert.match(
+    c.headers.authorization,
+    /\/us-east-1\/s3\/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date,/,
+  );
+  // The signature covers the method PUT.
+  const date = new Date(
+    c.headers["x-amz-date"].replace(
+      /(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z/,
+      "$1-$2-$3T$4:$5:$6Z",
+    ),
+  );
+  const expected = signRequest({
+    method: "PUT",
+    url: c.url,
+    body: '{"a":1}',
+    credentials: { accessKeyId: "AKID", secretAccessKey: "SECRET" },
+    region: "us-east-1",
+    service: "s3",
+    date,
+  });
+  assert.equal(c.headers.authorization, expected.authorization);
 });
 
 test("path, region, endpoint and credentials options are used", async (t) => {

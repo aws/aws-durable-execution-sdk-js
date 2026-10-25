@@ -1,7 +1,7 @@
 // A copy of the lite SDK's transport (src/transport/sigv4.js and lambda-client.js),
-// adapted for generic POST calls. This package has no dependencies, so it cannot use the
-// AWS SDK. The lite SDK does not export its transport. So the exporters sign and send
-// their own requests with this file.
+// adapted for generic POST and PUT calls. This package has no dependencies, so it cannot
+// use the AWS SDK. The lite SDK does not export its transport. So the exporters sign and
+// send their own requests with this file.
 
 import { createHash, createHmac } from "node:crypto";
 
@@ -40,9 +40,15 @@ export function signRequest({
     out["x-amz-security-token"] = credentials.sessionToken;
   }
 
-  // Non-S3 services sign the already-encoded path encoded once more.
-  // So each segment is encoded again, and "%" becomes "%25".
-  const path = u.pathname.split("/").map(encodeRfc3986).join("/") || "/";
+  const payloadHash = sha256(body ?? "");
+  // AWS rule: non-S3 services sign the already-encoded path encoded once more. So each
+  // segment is encoded again, and "%" becomes "%25". S3 signs the encoded path as it is.
+  // S3 also requires the signed header x-amz-content-sha256 with the hash of the body.
+  let path = u.pathname.split("/").map(encodeRfc3986).join("/") || "/";
+  if (service === "s3") {
+    path = u.pathname;
+    out["x-amz-content-sha256"] = payloadHash;
+  }
   const query = [...u.searchParams]
     .map(([k, v]) => [encodeRfc3986(k), encodeRfc3986(v)])
     .sort(([ak, av], [bk, bv]) =>
@@ -59,7 +65,7 @@ export function signRequest({
     ...names.map((n) => `${n}:${out[n]}`),
     "",
     signedHeaders,
-    sha256(body ?? ""),
+    payloadHash,
   ].join("\n");
 
   const scope = `${day}/${region}/${service}/aws4_request`;
@@ -118,8 +124,8 @@ function credentialSource(fetch) {
   };
 }
 
-// send() POSTs one request signed for `service` and returns the parsed JSON response.
-// It retries 429, 5xx and network errors up to 3 attempts in total.
+// send() sends one POST or PUT request signed for `service` and returns the parsed JSON
+// response. It retries 429, 5xx and network errors up to 3 attempts in total.
 export function createAwsClient({
   service,
   region = process.env.AWS_REGION,
@@ -136,12 +142,12 @@ export function createAwsClient({
   const backoff = (attempt) =>
     sleep(Math.random() * retryBaseMs * 2 ** (attempt - 1));
 
-  async function send({ path = "/", headers = {}, body }) {
+  async function send({ method = "POST", path = "/", headers = {}, body }) {
     const url = new URL(path, endpoint);
     for (let attempt = 1; ; attempt++) {
       // x-amz-date changes per attempt, so each attempt is signed again.
       const signed = signRequest({
-        method: "POST",
+        method,
         url,
         headers,
         body,
@@ -154,7 +160,7 @@ export function createAwsClient({
       let res;
       try {
         res = await fetch(url, {
-          method: "POST",
+          method,
           headers: signed,
           body,
           signal: AbortSignal.timeout(timeoutMs),

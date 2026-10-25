@@ -96,16 +96,22 @@ export interface TelemetryExporter {
 }
 
 /**
- * The client interface of the built-in exporters. send POSTs one signed request and
- * returns the parsed JSON response. It rejects with an Error that has name, status,
- * message and requestId.
+ * The client interface of the built-in exporters. send sends one signed request and
+ * returns the parsed JSON response, or {} for an empty response. It rejects with an
+ * Error that has name, status, message and requestId.
  */
 export interface AwsClient {
   send(request: {
-    /** Default "/". */
+    /** Default "POST". */
+    method?: "POST" | "PUT";
+    /**
+     * The URL path, already percent-encoded. For S3, encode each segment of the object
+     * key with RFC 3986: encodeURIComponent, then also encode !'()*. S3 signs the path
+     * as it is sent. Default "/".
+     */
     path?: string;
     headers?: Record<string, string>;
-    /** The JSON request body. */
+    /** The request body. */
     body?: string;
   }): Promise<unknown>;
 }
