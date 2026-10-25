@@ -174,6 +174,31 @@ agent. A round is one review of a revision, followed by the contributor's change
 5. The reviewer approves only a change that follows every rule. A reviewer who wants an
    exception names the rule and the reason in the review, and a maintainer decides.
 
+#### 10. Other SDKs inform a change; they do not justify it
+
+1. The Durable Execution SDKs in other languages follow the same specification and pass
+   the same [conformance tests](https://github.com/aws/aws-durable-execution-conformance-tests).
+2. A new conformance test or a change in another SDK says what this repository must
+   support. The rules of this repository say how it is built. So a change here follows
+   these rules, whatever another SDK did. "Another SDK does it this way" is not a reason
+   in a design note. The reason is the problem in this repository.
+3. If a conformance test requires behavior that breaks a rule of this repository, the
+   contributor raises the conflict with the maintainers. The contributor does not skip
+   the test and does not break the rule.
+
+#### 11. Same behavior, native syntax
+
+1. All SDKs provide the same capabilities. Executions and tools cross language
+   boundaries. So these must be the same in every language:
+   - the wire format: operation ids, checkpoint updates, payloads and errors;
+   - the replay and checkpoint semantics that the conformance tests check;
+   - the names of the concepts: step, wait, map, parallel, callback, invoke.
+2. The API surface can differ: syntax, signatures, overloads, option objects and the
+   async model. A pattern that is native to Java, .NET or Python does not apply to this
+   SDK only because another SDK uses it.
+3. A capability that another SDK has and this SDK leaves out needs a reason in the
+   design note (rule 3).
+
 ### SDK invariants
 
 The SDK keeps rules about when an invocation may suspend and how plugin hooks run. Read
