@@ -1,0 +1,32 @@
+{
+  "name": "@aws/durable-execution-sdk-js-lite-otel",
+  "description": "OpenTelemetry tracing plugin for the dependency-free lite durable execution SDK",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-lite-otel"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  }
+}
