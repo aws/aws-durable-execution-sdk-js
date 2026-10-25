@@ -29,6 +29,10 @@
     "./dynamodb": {
       "types": "./src/exporters/dynamodb.d.ts",
       "default": "./src/exporters/dynamodb.js"
+    },
+    "./s3": {
+      "types": "./src/exporters/s3.d.ts",
+      "default": "./src/exporters/s3.js"
     }
   },
   "files": [
