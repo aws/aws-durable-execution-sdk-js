@@ -1,0 +1,49 @@
+{
+  "name": "@aws/durable-execution-sdk-js-lite-telemetry",
+  "description": "Execution telemetry plugin with CloudWatch Logs and Aurora PostgreSQL exporters for the dependency-free lite durable execution SDK",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-lite-telemetry"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./cloudwatch-logs": {
+      "types": "./src/exporters/cloudwatch-logs.d.ts",
+      "default": "./src/exporters/cloudwatch-logs.js"
+    },
+    "./aurora": {
+      "types": "./src/exporters/aurora.d.ts",
+      "default": "./src/exporters/aurora.js"
+    }
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
+    "@aws-sdk/client-rds-data": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-cloudwatch-logs": {
+      "optional": true
+    },
+    "@aws-sdk/client-rds-data": {
+      "optional": true
+    }
+  }
+}
