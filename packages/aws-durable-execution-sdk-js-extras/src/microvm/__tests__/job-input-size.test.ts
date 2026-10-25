@@ -125,12 +125,15 @@ describe("microvm job input size", () => {
           // the cause.
           microvm(context, "build", { count: 1n }, baseConfig(client)).then(
             () => "no error",
-            (error: Error) => ({
-              name: error.name,
-              message: error.message,
-              causeName: (error.cause as Error).name,
-              causeMessage: (error.cause as Error).message,
-            }),
+            (reason: unknown) => {
+              const error = reason as Error;
+              return {
+                name: error.name,
+                message: error.message,
+                causeName: (error.cause as Error).name,
+                causeMessage: (error.cause as Error).message,
+              };
+            },
           ),
       ),
     });
