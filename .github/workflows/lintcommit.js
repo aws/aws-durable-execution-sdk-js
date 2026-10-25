@@ -42,6 +42,8 @@ const scopes = new Set([
   "telemetry",
   // The dependency-free SDK in packages/aws-durable-execution-sdk-js-lite.
   "sdk-lite",
+  "sdk-lite-otel",
+  "sdk-lite-telemetry",
 ]);
 
 /**
