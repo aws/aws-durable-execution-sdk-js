@@ -136,6 +136,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   awaited result checkpoint of a step or `waitForCondition`, it marks that operation completed.
   A child context is not affected, because it does not wait for its checkpoint and stays running
   until it settles. See ADR 0002.
+- A `map` or `parallel` that resumed after an earlier invocation ended between the item
+  checkpoints and the batch checkpoint could drop a recorded outcome. The items with a recorded
+  outcome settle again in index order, not in their original order. With `minSuccessful`, early
+  recorded successes could complete the batch before another recorded item settled. That item
+  was then reported `STARTED`, or with `maxConcurrency` not reported at all. A dropped failure
+  also left `hasFailure` `false`. Now the batch does not resolve until every item with a
+  recorded outcome has settled. Until then it starts items only up to the last recorded item. An
+  unfinished item in that range is not run again once the batch's outcome is already known. A
+  custom `shouldComplete` decision made while the recorded items settle is kept. So every
+  recorded outcome is kept. For the built-in rules, and for a `shouldComplete` predicate that
+  stays complete once it is complete as the counts grow, no item starts that the completion rule
+  would not start. Other predicates can decide differently on resume, because the resumed items
+  can settle in a different order than the original ones. `NestingType.FLAT` items have no
+  context record, so they are not covered.
+- After a `map` or `parallel` resolved, an item that was still running could start another item
+  when it settled. This happened with a `shouldComplete` predicate that returns continue after it
+  has completed the batch. Now no item starts after the batch has resolved.
 
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
