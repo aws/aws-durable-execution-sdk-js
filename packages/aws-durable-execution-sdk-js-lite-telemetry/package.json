@@ -41,6 +41,10 @@
     "./firehose": {
       "types": "./src/exporters/firehose.d.ts",
       "default": "./src/exporters/firehose.js"
+    },
+    "./eventbridge": {
+      "types": "./src/exporters/eventbridge.d.ts",
+      "default": "./src/exporters/eventbridge.js"
     }
   },
   "files": [
