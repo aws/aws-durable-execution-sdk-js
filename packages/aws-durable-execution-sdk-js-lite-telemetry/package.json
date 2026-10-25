@@ -53,6 +53,10 @@
     "./lambda-log": {
       "types": "./src/exporters/lambda-log.d.ts",
       "default": "./src/exporters/lambda-log.js"
+    },
+    "./http": {
+      "types": "./src/exporters/http.d.ts",
+      "default": "./src/exporters/http.js"
     }
   },
   "files": [
