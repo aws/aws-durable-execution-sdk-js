@@ -153,7 +153,10 @@ try {
 
 The class is the same on the first run and on every replay, so code that branches on it stays deterministic. Other errors keep their own types:
 
-- An invalid config throws `TypeError` or `RangeError` before any durable operation. So does an input over `MAX_JOB_INPUT_BYTES`, with `RangeError`.
+- An invalid config throws `TypeError` or `RangeError` before any durable operation.
+- A missing `executionRoleArn` throws `TypeError` before any durable operation. `RunMicrovm` accepts a launch without a role. The MicroVM then cannot call the durable callback APIs, so it cannot report the job result.
+- An empty `imageIdentifier` or `executionRoleArn` is not checked before the launch. `RunMicrovm` rejects it with `ValidationException`, which is not retried. So the operation fails with `MicrovmLaunchError`.
+- A job input over `MAX_JOB_INPUT_BYTES` throws `RangeError` before any durable operation. A job input that `JSON.stringify` cannot encode throws `TypeError` before any durable operation. See [Job inputs](#job-inputs).
 - An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`.
 - An SDK error from a durable operation that the handler ran keeps its type. This covers every type that the SDK rebuilds as its own class: `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackTimeoutError`, `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `WaitForConditionError`, and `PromiseCombinatorError`.
 - A failed terminate is logged, not thrown.
@@ -355,6 +358,9 @@ The operations retry network and service failures. They launch and terminate the
    - With a function timeout under 11 seconds, every attempt fails. The job then fails with a `MicrovmDeliveryError` whose message says to raise the function timeout.
    - Every job over HTTP has a request step. So the Lambda default timeout of 3 seconds fails every such job.
 2. To give the first retry tier its whole window, set the function timeout to `request.retryWindow` plus 11 seconds, 71 seconds with the default window. Add the time of the launch step, which can run in the same invocation. With a shorter timeout, the first tier ends early, and the step retry strategy makes more attempts, each in another invocation.
+3. On a compute other than Lambda, give the durable function a Lambda context whose `getRemainingTimeInMillis()` returns the time left in milliseconds, or give it no Lambda context. The operations read the function from `context.lambdaContext`.
+   - Without the function, or with a result that is not a finite number, the request step assumes no deadline. Only the retry window then limits the first tier.
+   - A `getRemainingTimeInMillis()` that throws fails the request step with its error. The default retry strategy does not retry a plain `Error`. So the job fails with `MicrovmDeliveryError`. The core SDK reads such a reader as no deadline. The MicroVM operations fail instead.
 
 ### Job inputs
 
@@ -393,6 +399,9 @@ The operations retry network and service failures. They launch and terminate the
    - Under `$LATEST`, a launch step that retries after the change can fail with `MicrovmLaunchError`, as [Deploys and versions](#deploys-and-versions) describes.
    - A session that launched before the change keeps the resume mode that it recorded. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs).
 3. Pass `vm.invoke` the context that the call runs in: the session handler's `ctx`, or a nested context such as a `map` item's context. Do not pass the outer `context` of the durable function. A durable operation that is created in a parent context from inside a child context fails the execution. See [`microvmSession`](#microvmsession-send-several-jobs-to-one-microvm).
+4. Call `vm.invoke(ctx, name, input, options)` with the context first, and pass `microvmSession` a function as its handler. The TypeScript types require both.
+   - The session calls the handler after the launch, inside its child context. So a handler that is not a function fails the session with a `TypeError`, wrapped in `ChildContextError`, after the MicroVM has launched. The terminate step still ends the MicroVM.
+   - `vm.invoke` checks the job name, the options, and the input, and then calls `runInChildContext` on its first argument. So a first argument that is not a durable context makes `vm.invoke` throw a `TypeError`, after the MicroVM has launched. A call in the shape `vm.invoke(name, input, options)` rejects before that, with the `TypeError` of the job name or options check. When the error ends the handler, the terminate step still ends the MicroVM.
 
 ### Retry strategies
 

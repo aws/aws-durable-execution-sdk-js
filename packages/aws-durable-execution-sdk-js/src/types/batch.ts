@@ -43,6 +43,24 @@ export enum BatchItemStatus {
    * Item was still in flight when the batch completed early. Observability
    * only and not guaranteed to survive suspend/resume reconstruction — see
    * {@link BatchResult.started}.
+   *
+   * The batch checks its completion rule each time an item's result reaches
+   * it. Once the rule is met, an item that is running and whose result has
+   * not reached the batch is STARTED. An item that had not started does not
+   * appear in the result. A STARTED item can have recorded its outcome before
+   * the item that completed the batch. Its child context, or with
+   * NestingType.FLAT its operations, can then show SUCCEEDED or FAILED in the
+   * execution history.
+   *
+   * An abandoned item's code can keep running while the invocation is active,
+   * until it awaits a checkpoint after the batch's context finishes. That
+   * checkpoint is dropped and never resolves. Nothing waits for the item, so
+   * the invocation can end before its code finishes. A step with the default
+   * StepSemantics.AtLeastOncePerRetry does not await its first checkpoint. So
+   * such a step that the item starts after that point still runs its
+   * function, and the history has no record of it. A step with
+   * StepSemantics.AtMostOncePerRetry awaits its first checkpoint, so its
+   * function does not run. The handler receives only the BatchResult.
    */
   STARTED = "STARTED",
 }
