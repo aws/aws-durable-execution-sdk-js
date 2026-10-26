@@ -175,7 +175,8 @@ describe("sendJob with suspendCheck", () => {
 
   it("uses recheck, not suspendCheck, when both are set", async () => {
     const endpoint = new FakeEndpoint();
-    endpoint.responses = [503];
+    // A sign that both checks act on.
+    endpoint.responses = [connectFailed()];
     const recheck = jest.fn(async () => undefined);
     const suspendCheck = jest.fn(async () => undefined);
 
@@ -183,6 +184,24 @@ describe("sendJob with suspendCheck", () => {
 
     expect(recheck).toHaveBeenCalledTimes(1);
     expect(suspendCheck).not.toHaveBeenCalled();
+  });
+
+  it("fails without a check when no time is left for it", async () => {
+    const endpoint = new FakeEndpoint();
+    endpoint.responses = [connectFailed()];
+    const suspendCheck = jest.fn(async () => undefined);
+
+    // The first backoff of 250 milliseconds ends exactly at the end of the
+    // window. So the check would get 0 milliseconds.
+    const error = await send(endpoint, {
+      retryWindowMs: 250,
+      suspendCheck,
+    }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
+    expect(error.message).toMatch(/Last failure: HTTP 502\.$/);
+    expect(suspendCheck).not.toHaveBeenCalled();
+    expect(endpoint.requests).toHaveLength(1);
   });
 
   it("adds the note to the final MicrovmEndpointUnavailableError", async () => {

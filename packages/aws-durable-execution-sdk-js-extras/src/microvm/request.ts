@@ -261,12 +261,16 @@ export interface SendJobOptions {
    * can suspend the MicroVM after a `suspendAfter` job, and the session can
    * lose the record of that job on replay. A suspended or suspending MicroVM
    * gets no answer to a request, or its endpoint answers HTTP 502 with
-   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. A booting MicroVM gets
-   * neither: its endpoint holds the request until the worker listens. So the
-   * next attempt calls it after either sign, at most once per 2 seconds. A
-   * session that never suspends then makes no extra call. It receives what
-   * remains of the retry window, in milliseconds. `undefined` from it keeps
-   * the current endpoint.
+   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the next attempt calls
+   * it after either sign, at most once per 2 seconds. A booting MicroVM gets
+   * neither sign, because its endpoint holds the request until the worker
+   * listens. That holds unless the worker takes more than 10 seconds to
+   * start listening. Then the first delivery gets no answer, and the
+   * operation makes one GetMicrovm call. So a session that never suspends
+   * makes no extra call, except in that case. It receives what remains of
+   * the retry window, in milliseconds. `undefined` from it keeps the current
+   * endpoint. When {@link SendJobOptions.recheck} is set too, only `recheck`
+   * runs.
    */
   suspendCheck?: (maxWaitMs: number) => Promise<string | undefined>;
   /**
@@ -505,6 +509,16 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     // A failed request or a gateway error can mean that the MicroVM
     // suspended itself. So a session checks the state, and resumes the
     // MicroVM, before it retries.
+    //
+    // A session without the resume mode checks the state only after a sign
+    // of a suspended MicroVM. A booting MicroVM gives no such sign, unless
+    // the worker takes more than 10 seconds to start listening. The check
+    // repeats after each such failure, at most once per 2 seconds. The
+    // worker can suspend after the job's first state check, and the last
+    // call to the service wins.
+    //
+    // A session sets only one of the two checks. So when both are set, only
+    // `recheck` runs.
     if (
       options.recheck &&
       (status === undefined || (status >= 502 && status <= 504))
@@ -515,13 +529,10 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
       endpoint = (await options.recheck(remainingMs)) ?? endpoint;
       url = endpointUrl(endpoint, options.path);
-    }
-    // A session without the resume mode checks the state only after a sign
-    // of a suspended MicroVM. A booting MicroVM gives no such sign. The
-    // check repeats after each such failure, at most once per 2 seconds. The
-    // worker can suspend after the job's first state check, and the last
-    // call to the service wins.
-    if (options.suspendCheck && (status === undefined || connectFailed)) {
+    } else if (
+      options.suspendCheck &&
+      (status === undefined || connectFailed)
+    ) {
       const now = Date.now();
       if (
         lastSuspendCheck === undefined ||
