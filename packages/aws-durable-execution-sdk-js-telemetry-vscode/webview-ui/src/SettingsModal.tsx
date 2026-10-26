@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import { RECOMMENDED_BEDROCK_MODELS } from "./types";
 import { postMessage } from "./hostBridge";
+import { WriteAccessWarning } from "./WriteAccessWarning";
 
 interface Props {
   visible: boolean;
@@ -555,6 +556,7 @@ export function SettingsModal({
                       )}
                     </Alert>
                   )}
+                  <WriteAccessWarning writeAccess={testResult?.writeAccess} />
                 </SpaceBetween>
               </SpaceBetween>
             ),
