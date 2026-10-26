@@ -58,8 +58,8 @@ export function reserveStartsAt(
   remainingTimeMs: (() => number | undefined) | undefined,
 ): number | undefined {
   const remaining = remainingTimeMs?.();
-  // remainingTime() already turns a value that is not a finite number into
-  // undefined. This check also covers a caller that passes its own reader.
+  // remainingTime() passes on the compute's value unchanged. So this check
+  // turns a value that is not a finite number into no deadline.
   return remaining === undefined || !Number.isFinite(remaining)
     ? undefined
     : Date.now() + remaining - INVOCATION_RESERVE_MS;
@@ -224,6 +224,7 @@ export interface SendJobOptions {
   /**
    * The remaining invocation time. `undefined`, as a value or as a result,
    * means the compute reports no deadline, and only the retry window applies.
+   * A result that is not a finite number means the same.
    */
   remainingTimeMs?: () => number | undefined;
   log: (message: string, data: Record<string, unknown>) => void;

@@ -98,7 +98,7 @@ jobs:
         # The runner image is Amazon Linux; actions/setup-python only ships
         # Ubuntu builds, so uv provides the Python 3.14 the conformance runner
         # requires and activates a venv for the steps below.
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.14"
           activate-environment: true
