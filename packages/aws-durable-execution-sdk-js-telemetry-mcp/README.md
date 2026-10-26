@@ -108,6 +108,25 @@ provider chain — environment variables, `~/.aws/credentials`, SSO — honoring
 `DURABLE_TELEMETRY_AWS_PROFILE` (or `AWS_PROFILE`) when set. The identity you use
 needs read access to whichever destination you point at.
 
+> **Warning: give this server read-only credentials.** The agent writes the SQL
+> that this server runs. The agent can be prompt-injected, for example by text
+> stored in an execution payload. The server checks every query with a read-only
+> validator before it runs. That validator is a text check, not a guarantee. So
+> the database permissions are what actually prevent writes. Use credentials that
+> can only read:
+>
+> - **IAM:** grant only the read actions for your destination, as listed under
+>   [Required IAM Permissions](../aws-durable-execution-sdk-js-telemetry-vscode/README.md#required-iam-permissions).
+>   Do not use an administrator role or profile.
+> - **Aurora and Redshift:** IAM permission to call the Data API does not limit
+>   what SQL can do. The database user decides that. Point
+>   `DURABLE_TELEMETRY_AURORA_SECRET_ARN`, `DURABLE_TELEMETRY_REDSHIFT_SECRET_ARN`,
+>   or `DURABLE_TELEMETRY_REDSHIFT_DB_USER` at a database user that has only
+>   `SELECT` on the telemetry table. Do not reuse the user that the exporter
+>   writes with.
+> - **OpenSearch:** map the identity to a role with read-only index permissions
+>   on the telemetry index.
+
 ### Destinations and their required variables
 
 `DURABLE_TELEMETRY_DESTINATION_TYPE` selects the backend. Seven destination types
@@ -275,12 +294,16 @@ Read this before pointing the server at production data.
   and contacts none. It is stdio in, JSON out, running on your machine; the only
   outbound calls it makes are the read-only AWS API calls needed to run your
   query.
-- **Every query is read-only; the server cannot modify your data.** On the SQL
-  destinations any statement that is not `SELECT`/`WITH` is refused before a
-  single AWS call is made. On the CloudWatch Logs destinations the Logs Insights
-  query language has no write or DDL forms at all, and the only API used can only
-  read. There is no code path through this server that mutates the customer's
-  data.
+- **The server refuses queries that are not read-only, but your credentials are
+  the boundary.** On the SQL destinations the server refuses any query that does
+  not start with `SELECT`/`WITH`, contains a write keyword, contains a second
+  statement, or uses SQL syntax its validator does not support. It refuses before
+  it makes any AWS call. This check reads query text. A database can perform
+  writes the check cannot see, for example through a function called from a
+  `SELECT`. So run the server with read-only credentials, as described under
+  [Configuration](#configuration). On the CloudWatch Logs destinations the Logs
+  Insights query language has no write or DDL forms, and the only API used can
+  only read.
 
 Installing this server into an agent you chose is itself the opt-in; there is no
 separate consent gate, acceptance flag, or version to accept.
@@ -298,9 +321,9 @@ separate consent gate, acceptance flag, or version to accept.
   the agent, through `test_destination`, exactly what is wrong. So if tools are
   listed but queries report incomplete config, run `test_destination` first — it
   is the diagnostic.
-- **A query is refused as not read-only.** That is the security boundary working:
-  only `SELECT`/`WITH` reaches an AWS call on the SQL destinations. Rephrase as a
-  read.
+- **A query is refused as not read-only.** The validator found a write keyword, a
+  second statement, or SQL syntax it does not support (for example `$$`
+  dollar-quoting or a backslash escape). Rephrase the query as a plain read.
 - **`query` against `sqs` errors out.** Expected — `sqs` is tail-only and has no
   query engine. Point the server at a queryable destination.
 

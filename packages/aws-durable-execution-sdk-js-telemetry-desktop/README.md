@@ -107,6 +107,11 @@ follow-up, not an oversight.
 
 ## Security posture
 
+- **Use read-only AWS and database credentials.** A model writes the query in
+  Ask and Agent modes. The app checks every SQL query with a read-only validator,
+  but that check reads query text and is not a guarantee. So the credentials are
+  what actually prevent writes. Follow the warning under
+  [Required IAM Permissions](../aws-durable-execution-sdk-js-telemetry-vscode/README.md#required-iam-permissions).
 - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`,
   `webviewTag: false`. The renderer has no Node access; the preload script
   exposes exactly one function plus an inbound message relay.
