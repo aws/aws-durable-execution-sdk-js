@@ -673,24 +673,75 @@ describe("suspend after a job", () => {
     });
   });
 
-  describe("no suspend", () => {
-    it("warns and does not suspend when no run hook arrived", async () => {
-      const worker = start();
-      await job(worker, "cb-1");
+  describe("a job that ends before the run hook", () => {
+    const SKIP_WARNING =
+      "cannot suspend the MicroVM after a job: the run hook named no MicroVM";
+    const skipWarnings = () =>
+      warn.mock.calls.filter(([m]) => m === SKIP_WARNING);
 
+    it("keeps the request until the run hook arrives, then suspends the MicroVM that it names", async () => {
+      const worker = start();
+      // The job request names a MicroVM. The worker must never suspend it.
+      await job(worker, "cb-1");
       await finishJob("cb-1");
 
+      // No run hook has been handled. So the request waits, without a
+      // warning.
       expect(microvms.suspended).toEqual([]);
-      expect(warn).toHaveBeenCalledWith(
-        "cannot suspend the MicroVM after a job: the run hook named no MicroVM",
-        { callbackId: "cb-1" },
-      );
+      expect(warn).not.toHaveBeenCalled();
+
+      expect(await runHook(worker)).toBe(200);
+      await advance(0);
+
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      expect(info).toHaveBeenCalledWith("suspending the MicroVM after a job", {
+        microvmId: "mvm-1",
+        callbackId: "cb-1",
+      });
+
+      // The start cleared the request. The resume hook and a later plain
+      // job start no second suspend.
+      await hook(worker, "resume");
+      expect((await job(worker, "cb-2", {})).status).toBe(202);
+      await finishJob("cb-2");
+      await advance(GRACE_MS);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("warns once and does not suspend when the run hook names no MicroVM", async () => {
+      const worker = start();
+      await job(worker, "cb-1");
+      await finishJob("cb-1");
+      expect(warn).not.toHaveBeenCalled();
+
+      await call(worker, `${HOOK_PATH_PREFIX}run`, { microvmId: "mvm-1" });
+      await advance(0);
+
+      expect(microvms.suspended).toEqual([]);
+      expect(skipWarnings()).toEqual([[SKIP_WARNING, { callbackId: "cb-1" }]]);
       // The request is consumed. A later event does not warn again.
       expect((await job(worker, "cb-2", {})).status).toBe(202);
       await finishJob("cb-2");
-      expect(warn).toHaveBeenCalledTimes(1);
+      expect(skipWarnings()).toHaveLength(1);
+      expect(microvms.suspended).toEqual([]);
     });
 
+    it("drops the waiting request on close(), so the run hook starts no suspend", async () => {
+      const worker = start();
+      await job(worker, "cb-1");
+      await finishJob("cb-1");
+
+      worker.close();
+      await runHook(worker);
+      await advance(0);
+
+      expect(microvms.suspended).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("no suspend", () => {
     it("warns and does not suspend when the run hook had no payload", async () => {
       const worker = start();
       await call(worker, `${HOOK_PATH_PREFIX}run`, { microvmId: "mvm-1" });
@@ -732,6 +783,19 @@ describe("suspend after a job", () => {
 
       worker.close();
       await finishJob("cb-2");
+      await advance(GRACE_MS);
+
+      expect(microvms.suspended).toEqual([]);
+    });
+
+    it("records no request for a job that ends after a terminate hook", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      await hook(worker, "terminate");
+      // The handler of cb-1 ignores its signal, so it ends now.
+      await finishJob("cb-1");
       await advance(GRACE_MS);
 
       expect(microvms.suspended).toEqual([]);

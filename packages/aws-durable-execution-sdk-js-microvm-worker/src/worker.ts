@@ -648,7 +648,8 @@ export function createMicrovmWorkerListener<
   let suspendTarget: { microvmId: string; region: string } | undefined;
   // Set when a job with suspendAfter has ended, until the suspend starts. A
   // job that ends while other work runs leaves it set. So the suspend starts
-  // when that work ends.
+  // when that work ends. A request that comes before the first run hook
+  // waits for it, because only that hook can set suspendTarget.
   let suspendAfterJob: { callbackId: string } | undefined;
   let idleTimer: NodeJS.Timeout | undefined;
   // Set from the moment the idle time ends until the MicroVM runs again.
@@ -803,6 +804,11 @@ export function createMicrovmWorkerListener<
    * A job that ends during a refusal records none. Every start of a refusal
    * clears it: this function, the idle timer, and the suspend hook. So this
    * function needs no check of `suspending`.
+   *
+   * A job request can arrive before the run hook. Until the first valid run
+   * hook is handled, the worker does not know whether a target exists. So
+   * a request without a target waits for that run hook. The run hook's end
+   * calls this function again, and the request then fires or is dropped.
    */
   function suspendAfterJobIfDue(): void {
     if (
@@ -816,11 +822,15 @@ export function createMicrovmWorkerListener<
     ) {
       return;
     }
+    if (suspendTarget === undefined && !runHookAccepted) {
+      return;
+    }
     const { callbackId } = suspendAfterJob;
     suspendAfterJob = undefined;
     if (suspendTarget === undefined) {
       // A job request names a MicroVM, but the worker never suspends that
-      // one. See suspendTarget.
+      // one. See suspendTarget. The run hook was handled and gave no target.
+      // So no later event can give one.
       logger.warn(
         "cannot suspend the MicroVM after a job: the run hook named no MicroVM",
         { callbackId },
@@ -1020,7 +1030,8 @@ export function createMicrovmWorkerListener<
         } finally {
           runHooks.delete(work);
           // A run hook in flight blocks a suspend after a job. It can also
-          // set the suspend target.
+          // set the suspend target. A request that waited for the first
+          // run hook fires or is dropped here.
           suspendAfterJobIfDue();
         }
         return;
