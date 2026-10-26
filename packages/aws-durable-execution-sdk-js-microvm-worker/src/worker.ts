@@ -354,14 +354,22 @@ export interface MicrovmWorkerListener {
  * listener completes the job's callback with the result, or fails it with
  * the error.
  *
- * A second delivery of a callback ID is answered like the first and ignored,
- * while that job runs and after it ended. This also holds while the listener
- * refuses jobs for a suspend or a `terminate` hook. A duplicate starts no
- * job, so no job freezes with the MicroVM or stops when it ends. The listener
- * remembers the last 1,000 finished callback IDs. When a job ends and the
- * listener already holds 1,000 IDs, it removes the oldest one. So a retried
- * delivery runs a job once, unless at least 1,000 other jobs ended in
- * between, or the worker process restarted.
+ * A second delivery of a callback ID starts no job. The listener answers it
+ * this way:
+ *
+ * - A finished job gets HTTP 202 in every state. Its outcome is reported. A
+ *   503 would make the durable function resume the MicroVM for nothing.
+ * - A running job gets HTTP 202 while the listener runs normally or the
+ *   MicroVM terminates.
+ * - A running job gets HTTP 503 while the listener refuses jobs for a
+ *   suspend. The job can freeze with the MicroVM. A 202 would end the
+ *   delivery, and nothing would resume the MicroVM. The 503 makes the
+ *   durable function check the state and resume the MicroVM.
+ *
+ * The listener remembers the last 1,000 finished callback IDs. When a job
+ * ends and the listener already holds 1,000 IDs, it removes the oldest one.
+ * So a retried delivery runs a job once, unless at least 1,000 other jobs
+ * ended in between, or the worker process restarted.
  *
  * A document that does not match the contract gets HTTP 400. If the document
  * still names a callback, the listener fails that callback. So the durable
@@ -382,9 +390,9 @@ export interface MicrovmWorkerListener {
  * 4. From the moment the idle time ends, the listener answers every new job
  *    with HTTP 503 and does not start it. A job accepted then would freeze
  *    with the MicroVM. After a 503, the durable function checks the
- *    MicroVM's state, resumes it, and delivers the job again. A second
- *    delivery of a known callback ID still gets HTTP 202, because it starts
- *    no job.
+ *    MicroVM's state, resumes it, and delivers the job again. No job runs
+ *    then. So a second delivery belongs to a finished job, and gets HTTP
+ *    202, because it starts no job.
  * 5. The refusal ends when the `resume` lifecycle hook arrives, or 30 seconds
  *    after the call returned. The 30-second case covers an image without the
  *    `resume` hook. In both cases the idle time then starts again. At most
@@ -458,8 +466,9 @@ export interface MicrovmWorkerListener {
  *   SuspendMicrovm or the idle policy. The listener answers HTTP 200 at once,
  *   because a suspend hook that runs past its timeout terminates the
  *   MicroVM. It then refuses new jobs with HTTP 503, as after its own
- *   suspend, until the `resume` hook or for 30 seconds. Running jobs freeze
- *   with the MicroVM, and continue after a resume. A `run` hook job that
+ *   suspend, until the `resume` hook or for 30 seconds. A second delivery of
+ *   a running job gets HTTP 503 too. Running jobs freeze with the MicroVM,
+ *   and continue after a resume. A `run` hook job that
  *   arrives during the refusal starts when the refusal ends, because the
  *   durable function cannot deliver it again.
  * - `terminate`: Lambda is about to end the MicroVM, after TerminateMicrovm
@@ -1144,10 +1153,21 @@ export function createMicrovmWorkerListener<
     // A known callback ID belongs to a job that runs now or already ended.
     // The durable function sent it again because it lost the first 202, or
     // because its request step ran again on replay. The answer starts no
-    // job. So it is safe while the MicroVM suspends or terminates. A 503
-    // here would make the durable function resume the MicroVM for nothing.
-    // So the duplicate check comes before the refusals.
-    if (isKnownJob(job.callbackId)) {
+    // job. Three cases follow:
+    //
+    // 1. A finished job gets 202 in every state. Its outcome is reported. A
+    //    503 would make the durable function resume the MicroVM for nothing.
+    // 2. A known job gets 202 while the MicroVM terminates. A running job
+    //    reports its outcome, or the terminate hook fails its callback.
+    // 3. A running job gets 503 while the worker refuses jobs for a suspend.
+    //    The job can freeze with the MicroVM. A 202 would end the delivery,
+    //    and nothing would resume the MicroVM. The 503 makes the durable
+    //    function check the state and resume the MicroVM.
+    const running = jobs.has(job.callbackId);
+    if (
+      finished.has(job.callbackId) ||
+      (running && (terminating || !suspending))
+    ) {
       logger.warn("duplicate job ignored", { microvmId });
       respond(response, 202, {});
       return;
