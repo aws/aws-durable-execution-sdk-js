@@ -20,6 +20,8 @@ describe("assertReadOnly: allows legitimate read-only queries", () => {
     ok("SELECT REPLACE (functionName, 'a', 'b') FROM t"));
   it("column names that merely contain keywords", () =>
     ok("SELECT deleted_at, created_at, updated_at FROM t"));
+  it("column names that end in a keyword", () =>
+    ok("SELECT last_update, autocreate FROM t"));
   it("a keyword only inside a string literal", () =>
     ok("SELECT * FROM t WHERE status = 'DELETED'"));
   it("a keyword only inside a line comment", () =>
