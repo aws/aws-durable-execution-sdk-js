@@ -34,12 +34,17 @@ jest.mock("./configCore", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
 jest.mock("./writeAccess", () => ({
-  checkWriteAccess: jest.fn(async () => ({ status: "read-only" })),
+  checkWriteAccess: jest.fn(async () => ({
+    status: "unverified",
+    reason: "r",
+  })),
+  // Default: results land outside the data, so the Athena probe may run.
+  checkAthenaResultLocation: jest.fn(async () => ({ kind: "outside" })),
 }));
 
 import type { TelemetryConfig } from "./configCore";
 import { testDestination } from "./destinationTest";
-import { checkWriteAccess } from "./writeAccess";
+import { checkAthenaResultLocation, checkWriteAccess } from "./writeAccess";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
@@ -104,6 +109,34 @@ describe("testDestination — S3/Athena", () => {
     expect(tableExists).not.toHaveBeenCalled();
     expect(runAthenaQuery).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "inside the table's data",
+      { kind: "inside", finding: "Athena writes inside." },
+      /Athena writes inside\./,
+    ],
+    [
+      "undetermined",
+      { kind: "undetermined", reason: "No location." },
+      /No location\./,
+    ],
+  ] as const)(
+    "skips the Athena probe when the result location is %s",
+    async (_name, result, detail) => {
+      (tableExists as jest.Mock).mockResolvedValue(true);
+      (checkAthenaResultLocation as jest.Mock).mockResolvedValueOnce(result);
+      const r = await testDestination(baseCfg(complete));
+      expect(runAthenaQuery).not.toHaveBeenCalled();
+      expect(r.ok).toBe(false);
+      const probe = r.checks.find(
+        (c) => c.label === "Athena test query (SELECT 1)",
+      );
+      expect(probe?.ok).toBe(false);
+      expect(probe?.detail).toMatch(/^Skipped/);
+      expect(probe?.detail).toMatch(detail);
+    },
+  );
 
   it("passes when the table exists and the test query succeeds", async () => {
     (tableExists as jest.Mock).mockResolvedValue(true);

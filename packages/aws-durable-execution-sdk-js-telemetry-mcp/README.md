@@ -130,27 +130,31 @@ needs read access to whichever destination you point at.
 ### Credentials that can change data
 
 Before the first `query`, `get_execution` or `list_executions` call in a
-session, the server checks whether queries could change data:
+session, the server looks for ways that queries could change data:
 
-- **Aurora and Redshift:** it asks the database whether its user is a superuser,
-  can write any table, or can call a function that runs with another role's
-  privileges (a `SECURITY DEFINER` function, or a Redshift Lambda UDF). A
-  `SELECT` can write through such a function on these engines.
-- **S3 + Athena:** it checks whether the Athena result location is inside the
-  table's data location. If it is, each query writes result files that the table
-  then reads as records. It reads the workgroup with `athena:GetWorkGroup`,
-  because a workgroup that enforces its configuration replaces the configured
-  result location. Without that permission the check cannot run.
-- **Other destinations:** no check. A single read-only query cannot change data
-  there.
+- **Aurora:** whether the database user is a superuser, can write any table,
+  can advance or reset a sequence (`nextval`/`setval`), or can call a
+  `SECURITY DEFINER` function that another role owns.
+- **Redshift:** whether the database user is a superuser, can write any table,
+  or can call a Lambda UDF or another role's `SECURITY DEFINER` function.
+- **S3 + Athena:** whether Athena writes query results inside the table's data
+  location, where the table reads them as records. It reads the workgroup with
+  `athena:GetWorkGroup`, because a workgroup that enforces its configuration
+  replaces the configured result location.
+- **Other destinations:** nothing is checked.
 
-If the check finds a way to change data, or cannot run, the server stops and
-asks you to accept the risk. A client that supports MCP form elicitation shows
-the prompt; accepting allows queries for the rest of the session. A client that
-does not support it gets a tool error that names what was found. To accept
-permanently, set `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's
-`env` block. Only you can accept: no tool accepts on the agent's behalf.
-`test_destination` reports the same check in its `writeAccess` field.
+The server never concludes that your credentials are read-only. A `SELECT` can
+change data in ways no check can list, so finding nothing proves nothing.
+Checking that the credentials can only read is your responsibility.
+
+So the server always asks you to accept before the first query. The prompt
+names what it found, or says it could not confirm the credentials are
+read-only. A client that supports MCP form elicitation shows the prompt;
+accepting allows queries for the rest of the session. A client that does not
+support it gets a tool error. To accept permanently, set
+`DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
+you can accept: no tool accepts on the agent's behalf. `test_destination`
+reports the same check in its `writeAccess` field.
 
 ### Destinations and their required variables
 

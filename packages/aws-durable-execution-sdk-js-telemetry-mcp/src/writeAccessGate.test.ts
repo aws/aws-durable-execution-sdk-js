@@ -33,20 +33,8 @@ function gate(opts: {
 
 describe("createWriteAccessGate", () => {
   it.each([
-    { status: "read-only" },
-    { status: "not-checked", reason: "r" },
-  ] as WriteAccessResult[])(
-    "lets queries run without asking when the check reports $status",
-    async (result) => {
-      const { run, ask } = gate({ result });
-      expect(await run()).toBeNull();
-      expect(ask).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each([
     CAN_WRITE,
-    { status: "unknown", reason: "timeout" },
+    { status: "unverified", reason: "Nothing found." },
   ] as WriteAccessResult[])(
     "asks the user when the check reports $status",
     async (result) => {
@@ -63,6 +51,20 @@ describe("createWriteAccessGate", () => {
     expect(blocked?.error).toContain("The database user is a superuser.");
     expect(blocked?.error).toContain("The user did not accept the risk.");
     expect(blocked?.howToAccept).toContain(ACCEPT_WRITE_ACCESS_ENV_VAR);
+  });
+
+  it("tells an unverified user that the credentials are unconfirmed", async () => {
+    const { run, ask } = gate({
+      result: { status: "unverified", reason: "Nothing found." },
+      answer: "decline",
+    });
+    const blocked = await run();
+    expect(ask.mock.calls[0]).toEqual([
+      expect.stringContaining(
+        "could not confirm that its credentials are read-only. Nothing found.",
+      ),
+    ]);
+    expect(blocked?.error).toContain("Nothing found.");
   });
 
   it("blocks when the client cannot show a prompt", async () => {

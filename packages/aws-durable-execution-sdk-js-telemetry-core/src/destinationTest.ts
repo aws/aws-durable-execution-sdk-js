@@ -10,7 +10,11 @@ import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
 import { pingOpenSearch, countOpenSearchDocs } from "./opensearch";
-import { checkWriteAccess, type WriteAccessResult } from "./writeAccess";
+import {
+  checkAthenaResultLocation,
+  checkWriteAccess,
+  type WriteAccessResult,
+} from "./writeAccess";
 
 /**
  * Result of a single check within a destination test (e.g. "Glue table exists",
@@ -36,8 +40,7 @@ export interface DestinationTestReport {
   /**
    * Whether queries could change data at this destination. Present only when
    * every check passed, because the write check needs a reachable destination.
-   * A `can-write` result is a warning, not a failed check, so it does not
-   * change `ok`.
+   * Both results are warnings, not failed checks, so they do not change `ok`.
    */
   writeAccess?: WriteAccessResult;
 }
@@ -191,7 +194,21 @@ async function testAthena(
 
   // SELECT 1 exercises the workgroup / output-location / Athena permissions
   // without scanning the data. This is what catches the common "primary
-  // workgroup with no result location" misconfiguration.
+  // workgroup with no result location" misconfiguration. But the probe itself
+  // writes a result file, so it runs only once the result location is known
+  // to be outside the table's data. Otherwise the probe would add a row.
+  const location = await checkAthenaResultLocation(cfg, credentials);
+  if (location.kind !== "outside") {
+    checks.push({
+      label: "Athena test query (SELECT 1)",
+      ok: false,
+      detail:
+        location.kind === "inside"
+          ? `Skipped, so that it writes nothing into the table. ${location.finding}`
+          : `Skipped, because the probe writes a result file and its location is unknown. ${location.reason}`,
+    });
+    return report(checks);
+  }
   checks.push(
     await probe("Athena test query (SELECT 1)", async () => {
       await runAthenaQuery({

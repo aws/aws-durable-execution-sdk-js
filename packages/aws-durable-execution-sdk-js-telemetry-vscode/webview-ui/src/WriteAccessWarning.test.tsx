@@ -22,22 +22,20 @@ describe("WriteAccessWarning", () => {
     assert.match(html, /The database user is a superuser\./);
   });
 
-  it("shows the reason when the check could not run", () => {
-    const html = render({ status: "unknown", reason: "connection refused" });
+  it("says the credentials are unconfirmed, with the reason, when nothing was found", () => {
+    const html = render({
+      status: "unverified",
+      reason:
+        "It is your responsibility to give these tools read-only credentials.",
+    });
     assert.match(
       html,
-      /Could not check whether these credentials can change data/,
+      /Could not confirm that these credentials are read-only/,
     );
-    assert.match(html, /connection refused/);
+    assert.match(html, /It is your responsibility/);
   });
 
-  for (const writeAccess of [
-    { status: "read-only" } as const,
-    { status: "not-checked", reason: "r" } as const,
-    undefined,
-  ]) {
-    it(`renders nothing for ${writeAccess?.status ?? "no result"}`, () => {
-      assert.equal(render(writeAccess), "");
-    });
-  }
+  it("renders nothing when there is no result", () => {
+    assert.equal(render(undefined), "");
+  });
 });

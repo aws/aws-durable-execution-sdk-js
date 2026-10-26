@@ -2,9 +2,9 @@
  * Calls the registered tools through a real MCP client, connected in memory,
  * with core's write check and this package's query paths replaced by spies.
  *
- * The property under test: when the write check reports that queries could
- * change data and the user has not accepted, no data tool reaches its query
- * path. Deleting any tool's `if (blocked) return blocked;` fails a test here.
+ * The property under test: until the user accepts, no data tool reaches its
+ * query path, whatever the write check reports. Deleting any tool's
+ * `if (blocked) return blocked;` fails a test here.
  */
 const checkWriteAccess = jest.fn();
 const testDestination = jest.fn();
@@ -91,11 +91,13 @@ describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
     await client.close();
   });
 
-  it("reaches its query path when the check finds no way to write", async () => {
-    checkWriteAccess.mockResolvedValue({ status: "read-only" });
+  it("does not reach its query path when the check found nothing", async () => {
+    // Finding nothing is not proof of read-only, so the user must still accept.
+    checkWriteAccess.mockResolvedValue({ status: "unverified", reason: "r" });
     const client = await connect(false);
-    await client.callTool({ name: tool, arguments: args });
-    expect(queryPath).toHaveBeenCalledTimes(1);
+    const result = await client.callTool({ name: tool, arguments: args });
+    expect(result.isError).toBe(true);
+    expect(queryPath).not.toHaveBeenCalled();
     await client.close();
   });
 

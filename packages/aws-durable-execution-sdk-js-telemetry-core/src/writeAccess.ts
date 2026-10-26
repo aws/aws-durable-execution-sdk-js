@@ -1,21 +1,27 @@
 /**
- * Detects whether running read-only queries against a destination could still
- * change data, so the hosts can warn the customer.
+ * Looks for ways that read-only queries could still change data at a
+ * destination, so the hosts can warn the customer and ask for consent.
  *
- * WHY ONLY THREE DESTINATIONS ARE CHECKED.
+ * WHY THERE IS NO "READ-ONLY" RESULT.
  *
  * 1. `assertReadOnly` refuses a second statement and every write keyword. So a
  *    write can only come from something legal inside one SELECT.
- * 2. On Aurora PostgreSQL a SELECT can call a function that writes. On Redshift
- *    a SELECT can call a Lambda UDF. So on these two engines this module asks
- *    the database for the user's superuser status, the tables it can write,
- *    and the functions it can call that run with another role's privileges.
- * 3. On S3 + Athena a SELECT cannot write. But Athena writes each query's
- *    results to the result location. If that location is inside the table's
- *    data location, the table reads the result files as records. So every
- *    query adds rows, and this module compares the two locations.
- * 4. DynamoDB PartiQL, OpenSearch SQL and CloudWatch Logs Insights have no way
- *    for one SELECT to write, so they report `not-checked` with that reason.
+ * 2. On PostgreSQL such a SELECT can write through tables, superuser status,
+ *    SECURITY DEFINER functions, sequences, extensions such as dblink, and
+ *    more. The list has no fixed end, so no set of catalog queries can show
+ *    that a user cannot write.
+ * 3. So a finding gives `can-write`, and no finding gives `unverified`: the
+ *    tools could not confirm the credentials are read-only, and checking them
+ *    is the customer's responsibility. Both ask for the customer's consent.
+ *
+ * What is checked:
+ * - Aurora PostgreSQL: superuser status, writable tables, sequences the user
+ *   can advance or reset, and SECURITY DEFINER functions of other roles.
+ * - Redshift: superuser status, writable tables, Lambda UDFs and other roles'
+ *   SECURITY DEFINER functions.
+ * - S3 + Athena: whether Athena writes query results inside the table's data,
+ *   where the table reads them as records.
+ * - Other destinations: nothing; the result is `unverified`.
  *
  * This module runs its own catalog queries. They are fixed SELECTs written
  * here, not model output, so they do not go through `assertReadOnly`.
@@ -27,14 +33,17 @@ import { runRedshiftQuery } from "./redshift";
 import { getTableLocation, getWorkGroupOutput } from "./athena";
 
 export type WriteAccessResult =
-  /** The check ran and found no way for a query to change data. */
-  | { status: "read-only" }
-  /** The check ran and found at least one way. `findings` names each one. */
+  /** The check found at least one way to change data. `findings` names each one. */
   | { status: "can-write"; findings: string[] }
-  /** The destination has no way for one SELECT to write, or the check lacks an input. */
-  | { status: "not-checked"; reason: string }
-  /** The check itself failed, for example because the destination is unreachable. */
-  | { status: "unknown"; reason: string };
+  /**
+   * The check found no way, could not look, or failed. `reason` says which.
+   * This is not a statement that the credentials are read-only.
+   */
+  | { status: "unverified"; reason: string };
+
+/** Ends every `unverified` reason. */
+const CUSTOMER_DUTY =
+  "It is your responsibility to give these tools read-only credentials.";
 
 /** Lists at most this many tables, and this many functions, so the warning stays short. */
 const MAX_LISTED_TABLES = 5;
@@ -54,6 +63,18 @@ WHERE c.relkind IN ('r', 'p')
   AND has_schema_privilege(n.oid, 'USAGE')
   AND (has_table_privilege(c.oid, 'INSERT') OR has_table_privilege(c.oid, 'UPDATE')
     OR has_table_privilege(c.oid, 'DELETE') OR has_table_privilege(c.oid, 'TRUNCATE'))
+LIMIT ${MAX_LISTED_TABLES}`;
+
+/**
+ * `nextval` needs USAGE or UPDATE on a sequence, and `setval` needs UPDATE.
+ * Both change the sequence's state for good, even inside a SELECT.
+ */
+const POSTGRES_WRITABLE_SEQUENCES_SQL = `SELECT n.nspname || '.' || c.relname
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'S'
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND has_schema_privilege(n.oid, 'USAGE')
+  AND (has_sequence_privilege(c.oid, 'USAGE') OR has_sequence_privilege(c.oid, 'UPDATE'))
 LIMIT ${MAX_LISTED_TABLES}`;
 
 const REDSHIFT_SUPERUSER_SQL =
@@ -116,31 +137,42 @@ WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
     OR (p.prosecdef AND p.proowner <> (SELECT usesysid FROM pg_user WHERE usename = current_user)))
 LIMIT ${MAX_LISTED_TABLES}`;
 
-/**
- * Builds the findings from the three catalog query results. The Data API
- * returns a boolean column as the string "true" or "false".
- */
-function databaseFindings(
-  superuserRows: string[][],
-  writableRows: string[][],
-  functionRows: string[][],
-): WriteAccessResult {
+/** Rows of each catalog query. The Data API returns booleans as "true"/"false". */
+interface CatalogRows {
+  superuser: string[][];
+  tables: string[][];
+  sequences: string[][];
+  functions: string[][];
+}
+
+function databaseFindings(rows: CatalogRows): WriteAccessResult {
   const findings: string[] = [];
-  if (superuserRows[0]?.[0] === "true") {
+  if (rows.superuser[0]?.[0] === "true") {
     findings.push("The database user is a superuser.");
   }
-  for (const [table] of writableRows) {
+  for (const [table] of rows.tables) {
     findings.push(`The database user can write table ${table}.`);
   }
-  for (const [fn] of functionRows) {
+  for (const [sequence] of rows.sequences) {
+    findings.push(
+      `The database user can advance or reset sequence ${sequence} ` +
+        `(nextval/setval).`,
+    );
+  }
+  for (const [fn] of rows.functions) {
     findings.push(
       `A query can call function ${fn}, which runs with another role's ` +
         `privileges and can write.`,
     );
   }
-  return findings.length > 0
-    ? { status: "can-write", findings }
-    : { status: "read-only" };
+  if (findings.length > 0) return { status: "can-write", findings };
+  return {
+    status: "unverified",
+    reason:
+      "No write privilege was found, but a SELECT on this engine can still " +
+      "change data through functions and extensions this check cannot see. " +
+      CUSTOMER_DUTY,
+  };
 }
 
 /**
@@ -153,71 +185,89 @@ function withTrailingSlash(uri: string): string {
 }
 
 /**
- * The location Athena actually writes results to. A workgroup with
- * EnforceWorkGroupConfiguration replaces the location a query submits, so the
- * workgroup is read even when `athenaOutputLocation` is set. Athena uses the
- * `primary` workgroup when none is configured. Reading the workgroup needs
- * `athena:GetWorkGroup`; if that fails, the error reaches `checkWriteAccess`,
- * which returns `unknown`.
+ * Where Athena writes query results relative to the table's data.
+ *
+ * - `inside`: every query writes a result file the table then reads as rows.
+ * - `outside`: queries do not add rows.
+ * - `undetermined`: the location could not be established; `reason` says why.
+ *
+ * A workgroup with EnforceWorkGroupConfiguration replaces the location a query
+ * submits, so the workgroup is read (with `athena:GetWorkGroup`) even when
+ * `athenaOutputLocation` is set. Athena uses `primary` when no workgroup is
+ * configured. Test connection calls this before its Athena probe, because the
+ * probe itself writes a result file.
  */
-async function effectiveOutputLocation(
-  cfg: TelemetryConfig,
-  credentials: ReturnType<typeof resolveCredentials>,
-): Promise<string | undefined> {
-  const workgroup = await getWorkGroupOutput({
-    region: cfg.region,
-    credentials,
-    workgroup: cfg.athenaWorkgroup || "primary",
-  });
-  if (workgroup.enforced) return workgroup.outputLocation;
-  return cfg.athenaOutputLocation || workgroup.outputLocation;
-}
+export type AthenaResultLocation =
+  | { kind: "inside"; finding: string }
+  | { kind: "outside" }
+  | { kind: "undetermined"; reason: string };
 
-async function checkAthena(
+export async function checkAthenaResultLocation(
   cfg: TelemetryConfig,
   credentials: ReturnType<typeof resolveCredentials>,
-): Promise<WriteAccessResult> {
-  const outputLocation = await effectiveOutputLocation(cfg, credentials);
+): Promise<AthenaResultLocation> {
+  let outputLocation: string | undefined;
+  let dataLocation: string | undefined;
+  try {
+    const workgroup = await getWorkGroupOutput({
+      region: cfg.region,
+      credentials,
+      workgroup: cfg.athenaWorkgroup || "primary",
+    });
+    outputLocation = workgroup.enforced
+      ? workgroup.outputLocation
+      : cfg.athenaOutputLocation || workgroup.outputLocation;
+    const tableLocation = await getTableLocation({
+      region: cfg.region,
+      credentials,
+      database: cfg.athenaDatabase,
+      table: cfg.athenaTable,
+    });
+    dataLocation = tableLocation ?? (cfg.athenaS3Location || undefined);
+  } catch (err) {
+    return {
+      kind: "undetermined",
+      reason: `Could not read the Athena workgroup or Glue table: ${errorMessage(err)}`,
+    };
+  }
   if (!outputLocation) {
     return {
-      status: "not-checked",
+      kind: "undetermined",
       reason:
         "Neither the settings nor the Athena workgroup set a result location.",
     };
   }
-  const tableLocation = await getTableLocation({
-    region: cfg.region,
-    credentials,
-    database: cfg.athenaDatabase,
-    table: cfg.athenaTable,
-  });
-  const dataLocation = tableLocation ?? (cfg.athenaS3Location || undefined);
   if (!dataLocation) {
     return {
-      status: "not-checked",
+      kind: "undetermined",
       reason: "The table does not exist and no S3 data location is set.",
     };
   }
-  const results = withTrailingSlash(outputLocation);
-  const data = withTrailingSlash(dataLocation);
-  if (results.startsWith(data)) {
+  if (
+    withTrailingSlash(outputLocation).startsWith(
+      withTrailingSlash(dataLocation),
+    )
+  ) {
     return {
-      status: "can-write",
-      findings: [
-        `Athena writes query results to ${outputLocation}, which is ` +
-          `inside the table's data location ${dataLocation}. The table reads ` +
-          `those result files as records, so every query adds rows. Move the ` +
-          `result location outside the data location.`,
-      ],
+      kind: "inside",
+      finding:
+        `Athena writes query results to ${outputLocation}, which is inside ` +
+        `the table's data location ${dataLocation}. The table reads those ` +
+        `result files as records, so every query adds rows. Move the result ` +
+        `location outside the data location.`,
     };
   }
-  return { status: "read-only" };
+  return { kind: "outside" };
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
- * Checks whether queries through these tools could change data at `cfg`'s
+ * Looks for ways queries through these tools could change data at `cfg`'s
  * destination. Never throws: a failure of the check itself is returned as
- * `unknown`.
+ * `unverified` with the error as the reason.
  */
 export async function checkWriteAccess(
   cfg: TelemetryConfig,
@@ -237,15 +287,24 @@ export async function checkWriteAccess(
           ...conn,
           sql: POSTGRES_SUPERUSER_SQL,
         });
-        const writable = await runAuroraQuery({
+        const tables = await runAuroraQuery({
           ...conn,
           sql: POSTGRES_WRITABLE_TABLES_SQL,
+        });
+        const sequences = await runAuroraQuery({
+          ...conn,
+          sql: POSTGRES_WRITABLE_SEQUENCES_SQL,
         });
         const functions = await runAuroraQuery({
           ...conn,
           sql: POSTGRES_DEFINER_FUNCTIONS_SQL,
         });
-        return databaseFindings(superuser.rows, writable.rows, functions.rows);
+        return databaseFindings({
+          superuser: superuser.rows,
+          tables: tables.rows,
+          sequences: sequences.rows,
+          functions: functions.rows,
+        });
       }
       case "redshift": {
         const conn = {
@@ -261,7 +320,7 @@ export async function checkWriteAccess(
           ...conn,
           sql: REDSHIFT_SUPERUSER_SQL,
         });
-        const writable = await runRedshiftQuery({
+        const tables = await runRedshiftQuery({
           ...conn,
           sql: REDSHIFT_WRITABLE_TABLES_SQL,
         });
@@ -269,21 +328,41 @@ export async function checkWriteAccess(
           ...conn,
           sql: REDSHIFT_RISKY_FUNCTIONS_SQL,
         });
-        return databaseFindings(superuser.rows, writable.rows, functions.rows);
+        // Redshift has no sequences (it uses IDENTITY columns).
+        return databaseFindings({
+          superuser: superuser.rows,
+          tables: tables.rows,
+          sequences: [],
+          functions: functions.rows,
+        });
       }
-      case "s3":
-        return await checkAthena(cfg, credentials);
+      case "s3": {
+        const location = await checkAthenaResultLocation(cfg, credentials);
+        if (location.kind === "inside") {
+          return { status: "can-write", findings: [location.finding] };
+        }
+        return {
+          status: "unverified",
+          reason:
+            (location.kind === "undetermined"
+              ? `${location.reason} `
+              : "Athena writes query results outside the table's data. ") +
+            "These tools cannot read the identity's S3 and Glue permissions. " +
+            CUSTOMER_DUTY,
+        };
+      }
       default:
         return {
-          status: "not-checked",
+          status: "unverified",
           reason:
-            "A single read-only query cannot change data on this destination.",
+            "These tools cannot read this destination's permissions. " +
+            CUSTOMER_DUTY,
         };
     }
   } catch (err) {
     return {
-      status: "unknown",
-      reason: err instanceof Error ? err.message : String(err),
+      status: "unverified",
+      reason: `The check could not run: ${errorMessage(err)} ${CUSTOMER_DUTY}`,
     };
   }
 }

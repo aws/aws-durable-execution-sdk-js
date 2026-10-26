@@ -381,16 +381,16 @@ No credentials are stored by the extension.
 
 Depending on your destination:
 
-| Destination     | Permissions needed                                                                                                                                                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                |
-| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                         |
-| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
-| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                   |
-| OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                   |
-| S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
-| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
-| Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                            |
+| Destination     | Permissions needed                                                                                                                                                                                                                                              |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                                       |
+| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                                                |
+| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                                                    |
+| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                                          |
+| OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                                          |
+| S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `athena:GetWorkGroup`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
+| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                                              |
+| Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                                                   |
 
 Redshift needs one credential action, chosen by how you connect:
 
@@ -420,14 +420,16 @@ Redshift needs one credential action, chosen by how you connect:
 >   save and to write Athena results. Scope `s3:PutObject` to the results bucket.
 >   If the Glue table already exists, omit the two Glue write actions.
 >
-> **Test connection** in Settings checks this for you. On Aurora and Redshift it
-> asks the database whether its user is a superuser, can write any table, or can
-> call a function that runs with another role's privileges. On
-> S3 + Athena it checks whether the query result location is inside the table's
-> data location, where every query would add rows. For that it also reads the
-> Athena workgroup, which needs `athena:GetWorkGroup`; without it, the warning
-> says the check could not run. If it finds either, a warning lists what it
-> found. The warning does not stop you from saving.
+> **Test connection** in Settings looks for ways that queries could change
+> data. On Aurora it checks superuser status, writable tables, sequences, and
+> other roles' `SECURITY DEFINER` functions. On Redshift it checks superuser
+> status, writable tables, Lambda UDFs and `SECURITY DEFINER` functions. On
+> S3 + Athena it checks whether query results land inside the table's data,
+> where every query would add rows; it skips its own test query in that case.
+> A passing test always shows a warning. Either it lists what it found, or it
+> says it could not confirm the credentials are read-only. Finding nothing
+> proves nothing, so checking the credentials is your responsibility. The
+> warning does not stop you from saving.
 
 ## How Queries Are Generated
 

@@ -1,15 +1,18 @@
 /**
- * Stops the data tools until the user accepts the risk of credentials that can
+ * Stops the data tools until the user accepts the risk that queries could
  * change data.
  *
- * WHY THIS GATE EXISTS.
+ * WHY THIS GATE ALWAYS ASKS.
  *
  * 1. The agent writes the SQL this server runs, and the agent can be
  *    prompt-injected.
  * 2. `assertReadOnly` reads query text. On Aurora and Redshift a SELECT can
  *    still write through a function, so it cannot block every write.
- * 3. So when core's `checkWriteAccess` finds that queries could change data,
- *    the user must accept that before the first query runs.
+ * 3. Core's `checkWriteAccess` reports either `can-write` (it found a way) or
+ *    `unverified` (it found none, could not look, or failed). It never reports
+ *    read-only, because no check can show that.
+ * 4. So the user accepts once per process before the first query, and the
+ *    prompt says which of the two results the check gave.
  *
  * WHO CAN ACCEPT.
  *
@@ -117,10 +120,6 @@ export function createWriteAccessGate(
 
   async function decide(): Promise<WriteAccessBlocked | null> {
     const result = await deps.check();
-    if (result.status === "read-only" || result.status === "not-checked") {
-      allowed = true;
-      return null;
-    }
     let answer: PromptAnswer;
     try {
       answer = await deps.ask(promptMessage(result));
@@ -149,21 +148,18 @@ function describe(result: WriteAccessResult): string {
   if (result.status === "can-write") {
     return `The credentials this server uses can change data. ${result.findings.join(" ")}`;
   }
-  if (result.status === "unknown") {
-    return (
-      "The server could not check whether its credentials can change data: " +
-      result.reason
-    );
-  }
-  return "";
+  return (
+    "The server could not confirm that its credentials are read-only. " +
+    result.reason
+  );
 }
 
 function promptMessage(result: WriteAccessResult): string {
   return (
     `${describe(result)} ` +
     "Queries are written by the agent, and the server's read-only check " +
-    "reads query text, so it cannot block every write. Use read-only " +
-    "credentials, or accept the risk to continue for this session."
+    "reads query text, so it cannot block every write. Accept to continue " +
+    "for this session."
   );
 }
 

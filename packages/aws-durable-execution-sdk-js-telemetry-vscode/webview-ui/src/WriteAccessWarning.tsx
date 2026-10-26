@@ -4,13 +4,15 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import type { DestinationTestReport } from "./types";
 
 /**
- * The warning under "Test connection" when queries could change data.
+ * The warning under "Test connection". Every passing test shows one.
  *
  * - `can-write`: names each way a query could change data.
- * - `unknown`: the check itself failed, so the reason is shown.
- * - `read-only`, `not-checked`, or no result: renders nothing.
+ * - `unverified`: the check found nothing, could not look, or failed. That
+ *   does not mean the credentials are read-only, so the warning says checking
+ *   them is the customer's responsibility and shows the reason.
+ * - No result (a check failed earlier): renders nothing.
  *
- * It never blocks saving; the MCP server is the host that gates queries.
+ * It never blocks saving; the MCP server is the host that asks for consent.
  */
 export function WriteAccessWarning({
   writeAccess,
@@ -36,11 +38,11 @@ export function WriteAccessWarning({
       </Alert>
     );
   }
-  if (writeAccess?.status === "unknown") {
+  if (writeAccess?.status === "unverified") {
     return (
       <Alert
         type="warning"
-        header="Could not check whether these credentials can change data"
+        header="Could not confirm that these credentials are read-only"
       >
         {writeAccess.reason}
       </Alert>
