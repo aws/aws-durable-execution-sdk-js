@@ -424,6 +424,10 @@ export interface MicrovmWorkerListener {
  *    successful call. The service may have suspended the MicroVM anyway. An
  *    error after the client retried an earlier attempt also counts as
  *    unknown, because the earlier attempt may have suspended the MicroVM.
+ *    With one attempt, a server error or a dropped connection on the first
+ *    attempt counts as unknown. So the worker can refuse jobs for up to 30
+ *    seconds on a MicroVM that did not suspend. That is the accepted cost,
+ *    because a retry could suspend the MicroVM with the next job inside.
  *    When the refusal ends, the idle time starts again, so the worker tries
  *    the call again. A `resume` hook during the call, or the end of a
  *    `suspend` hook's 30 seconds during the call, has already ended the
