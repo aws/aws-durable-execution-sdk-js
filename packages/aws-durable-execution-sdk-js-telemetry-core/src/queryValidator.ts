@@ -40,34 +40,74 @@ const DANGEROUS_KEYWORD =
 const VALID_SELECT = /^\s*(SELECT|WITH)\b/i;
 
 /**
- * Engines whose string literals treat a backslash as an ordinary character.
- * Every other engine label (including any label not listed here) is assumed to
- * treat a backslash as an escape character, which is the fail-closed choice.
+ * The lexical rules of one engine that decide where a literal or a comment
+ * starts and ends. The scanner below needs them because it must split a query
+ * into code, literals and comments the same way the engine does.
  *
- * - Trino/Presto SQL (Athena): `'a\'` is a complete literal.
- * - PartiQL (DynamoDB): quotes are escaped only by doubling.
- *
- * PostgreSQL treats a backslash as an escape inside `E'...'` literals, and
- * Redshift (and PostgreSQL with standard_conforming_strings off) inside plain
- * `'...'` literals. OpenSearch SQL accepts `\'` inside a literal.
+ * - `backslashEscapes`: a backslash inside a quoted literal can escape the
+ *   closing quote. Then `'\''` is one complete literal to the engine, but two
+ *   literals with code between them to a scanner that only knows `''`.
+ * - `mysqlComments`: the engine follows the MySQL comment rules. `#` starts a
+ *   line comment, and `--` starts one only when whitespace follows.
+ * - `backtickQuotes`: a backtick starts a quoted identifier that ends at the
+ *   next backtick.
  */
-const BACKSLASH_IS_LITERAL = new Set(["Trino/Presto SQL", "PartiQL"]);
+interface Dialect {
+  backslashEscapes: boolean;
+  mysqlComments: boolean;
+  backtickQuotes: boolean;
+}
 
 /**
- * Engines that may read `#` as the start of a line comment. OpenSearch SQL
- * derives from the MySQL grammar, which does. Unknown engines are treated the
- * same way. PostgreSQL is not in this set because `#` is its XOR operator and
- * the `#>` / `#>>` JSON path operators are common in queries over the
- * `record_json` column.
+ * Evidence for each entry is listed in the pull request that introduced this
+ * table. In summary:
+ *
+ * - PostgreSQL: `E'...'` literals take backslash escapes. `#` is an operator
+ *   (for example the `#>>` JSON path operator), not a comment.
+ * - Redshift: plain `'...'` literals take backslash escapes. The documented
+ *   `QUOTE_LITERAL` function doubles backslashes for this reason.
+ * - Trino (Athena engine v3): quotes are escaped only by doubling.
+ * - PartiQL for DynamoDB: the DynamoDB developer guide states that a backslash
+ *   does not escape a single quote. A backtick starts an Ion literal, whose
+ *   strings can contain a backtick, so backticks are rejected.
+ * - OpenSearch SQL: its lexer grammar is derived from MySQL. Literals and
+ *   backtick identifiers take backslash escapes, and `#` and `-- ` start line
+ *   comments.
  */
-function hashMayStartComment(engine: string): boolean {
-  return ![
-    "PostgreSQL",
-    "Redshift SQL",
-    "Trino/Presto SQL",
-    "PartiQL",
-  ].includes(engine);
-}
+const DIALECTS: Record<string, Dialect> = {
+  PostgreSQL: {
+    backslashEscapes: true,
+    mysqlComments: false,
+    backtickQuotes: false,
+  },
+  "Redshift SQL": {
+    backslashEscapes: true,
+    mysqlComments: false,
+    backtickQuotes: false,
+  },
+  "Trino/Presto SQL": {
+    backslashEscapes: false,
+    mysqlComments: false,
+    backtickQuotes: false,
+  },
+  PartiQL: {
+    backslashEscapes: false,
+    mysqlComments: false,
+    backtickQuotes: false,
+  },
+  "OpenSearch SQL": {
+    backslashEscapes: true,
+    mysqlComments: true,
+    backtickQuotes: true,
+  },
+};
+
+/** An unknown engine gets every restriction. This is the fail-closed choice. */
+const STRICTEST: Dialect = {
+  backslashEscapes: true,
+  mysqlComments: true,
+  backtickQuotes: false,
+};
 
 function refuse(engine: string, reason: string): never {
   throw new Error(`Refused to execute ${engine} query: ${reason}`);
@@ -75,49 +115,35 @@ function refuse(engine: string, reason: string): never {
 
 /**
  * Returns `query` with the CONTENTS of string literals ('...'), quoted
- * identifiers ("..." and `...`) and comments (-- to end of line, and block
- * comments) replaced by spaces, so the keyword scan can't be fooled by a keyword
- * that only appears inside a string (e.g. `WHERE status = 'DELETED'`) or a
- * comment (`-- delete old rows`). Non-string/comment characters and overall
- * length are preserved.
- *
- * Backtick-quoted text is treated as a quoted region on every engine. OpenSearch
- * SQL uses it for index names that contain `-` (the structured MCP tools emit
- * it), and Trino lexes it as one token. PostgreSQL and Redshift reject the
- * character, so the database fails the query before running anything.
+ * identifiers ("...", and `...` on OpenSearch) and comments replaced by
+ * spaces, so the keyword scan can't be fooled by a keyword that only appears
+ * inside a string (e.g. `WHERE status = 'DELETED'`) or a comment
+ * (`-- delete old rows`). Non-string/comment characters and overall length are
+ * preserved.
  *
  * WHY THIS SCANNER THROWS INSTEAD OF GUESSING.
  *
- * The keyword scan is only correct if this scanner splits the query into code,
- * strings and comments exactly as the database does. Any construct the two
- * disagree on lets a caller hide code from the scan. Example: PostgreSQL reads
- * `$$'$$` as one dollar-quoted string, but a scanner that does not know
- * dollar-quoting reads the `'` as the start of a string. In
+ * 1. The keyword scan is correct only if this scanner splits the query into
+ *    code, literals and comments the same way the engine does.
+ * 2. Any construct the two split differently lets a caller hide code from the
+ *    scan. Example: PostgreSQL reads `$$'$$` as one dollar-quoted literal. A
+ *    scanner that does not know dollar-quoting reads the `'` as the start of a
+ *    literal. So in `SELECT $$'$$; DELETE FROM t; --'` that scanner blanks the
+ *    DELETE, and PostgreSQL runs it.
+ * 3. So the scanner accepts only constructs whose boundaries it knows for the
+ *    given engine. It rejects the query when it meets any other construct:
+ *    - `$` outside a literal (PostgreSQL and Redshift dollar-quoting);
+ *    - a backslash inside a literal, when `backslashEscapes` is set;
+ *    - `#` or `--` outside a literal, when `mysqlComments` is set (supporting
+ *      MySQL comment rules would need more cases than the queries need);
+ *    - a backtick outside a literal, when `backtickQuotes` is not set;
+ *    - `/*` inside a block comment (PostgreSQL nests block comments, so the
+ *      first `*\/` does not always end the comment);
+ *    - an unterminated literal or block comment.
  *
- *   SELECT $$'$$; DELETE FROM t; --'
- *
- * that scanner blanks `; DELETE FROM t; --` as string content, while
- * PostgreSQL runs the DELETE.
- *
- * The supported engines have different lexical rules, so this scanner does not
- * try to model each one. It accepts only the subset on which all of them agree
- * and REJECTS the query when it meets anything outside that subset:
- *
- * - `$` outside a literal: PostgreSQL/Redshift dollar-quoting (`$$...$$`,
- *   `$tag$...$tag$`).
- * - A backslash outside a literal, or inside one on an engine where it is an
- *   escape character (see BACKSLASH_IS_LITERAL): `E'\''` and Redshift `'\''`
- *   are one complete literal each.
- * - `#` outside a literal on an engine that may read it as a comment.
- * - `--` followed by a non-whitespace character: MySQL-derived grammars
- *   (OpenSearch SQL) start a comment only at `-- ` followed by whitespace.
- * - `/*` inside a block comment: PostgreSQL nests block comments, so the first
- *   `*\/` does not always end the comment.
- * - An unterminated literal or block comment.
- *
- * Line comments end at `\n` OR `\r`, as they do in PostgreSQL and Trino. Ending
- * a comment early only exposes more text to the keyword scan, which is the safe
- * direction.
+ * A `--` line comment ends at `\n` or `\r`, as it does in PostgreSQL and Trino.
+ * An engine that ends the comment later only hides less code than this scanner
+ * assumes, so the difference is safe.
  *
  * Note: like the scanners in queryShape.ts, `''`-style escaping inside a
  * single-quoted string is treated as two adjacent strings; this only ever
@@ -125,15 +151,14 @@ function refuse(engine: string, reason: string): never {
  * doesn't affect the scan.
  */
 function blankStringsAndComments(query: string, engine: string): string {
-  const backslashIsLiteral = BACKSLASH_IS_LITERAL.has(engine);
-  const hashIsCode = !hashMayStartComment(engine);
+  const dialect = DIALECTS[engine] ?? STRICTEST;
   let out = "";
   let inString: string | null = null;
   for (let i = 0; i < query.length; i++) {
     const ch = query[i];
     const next = query[i + 1];
     if (inString) {
-      if (ch === "\\" && !backslashIsLiteral) {
+      if (ch === "\\" && dialect.backslashEscapes) {
         refuse(
           engine,
           "a backslash inside a quoted string or identifier is not allowed, " +
@@ -144,15 +169,11 @@ function blankStringsAndComments(query: string, engine: string): string {
       if (ch === inString) inString = null;
       continue;
     }
+    if (dialect.mysqlComments && (ch === "#" || (ch === "-" && next === "-"))) {
+      refuse(engine, 'line comments ("--" or "#") are not allowed.');
+    }
     // Line comment: blank through end of line (\n or \r).
     if (ch === "-" && next === "-") {
-      const after = query[i + 2];
-      if (after !== undefined && !/\s/.test(after)) {
-        refuse(
-          engine,
-          'a "--" comment must be followed by whitespace or end the query.',
-        );
-      }
       while (i < query.length && query[i] !== "\n" && query[i] !== "\r") {
         out += " ";
         i++;
@@ -178,6 +199,9 @@ function blankStringsAndComments(query: string, engine: string): string {
       i += 1; // for-loop's i++ consumes the second char of */
       continue;
     }
+    if (ch === "`" && !dialect.backtickQuotes) {
+      refuse(engine, "backticks are not allowed outside a quoted string.");
+    }
     if (ch === "'" || ch === '"' || ch === "`") {
       inString = ch;
       out += " ";
@@ -189,12 +213,6 @@ function blankStringsAndComments(query: string, engine: string): string {
         '"$" is not allowed outside a quoted string (dollar-quoted strings ' +
           "are not supported).",
       );
-    }
-    if (ch === "\\") {
-      refuse(engine, "a backslash is not allowed outside a quoted string.");
-    }
-    if (ch === "#" && !hashIsCode) {
-      refuse(engine, '"#" is not allowed outside a quoted string.');
     }
     out += ch;
   }

@@ -113,8 +113,12 @@ describe("assertReadOnly: rejects lexing differences that hide a write", () => {
     opensearch.rejected("SELECT `'`; DELETE FROM t; -- '"));
   it("OpenSearch: a backtick-quoted index name is allowed", () =>
     opensearch.ok("SELECT * FROM `durable-execution-telemetry` LIMIT 5"));
-  it("-- without whitespace is not a comment in OpenSearch SQL", () =>
-    opensearch.rejected("SELECT 1--'\n'; DELETE FROM t; -- '"));
+  it("OpenSearch: any -- comment is rejected, because an identifier can contain --", () =>
+    opensearch.rejected("SELECT abc-- '\n'; DELETE FROM t; -- '"));
+  it("PostgreSQL: a -- comment with no space after it is allowed", () =>
+    pg.ok("SELECT 1 --comment\nFROM t"));
+  it("PartiQL: a backtick (Ion literal) is rejected", () =>
+    partiql.rejected("SELECT * FROM t WHERE a = `1`"));
   it("an unterminated string is rejected", () =>
     pg.rejected("SELECT 'abc FROM t"));
   it("an unterminated block comment is rejected", () =>
