@@ -805,6 +805,10 @@ export function createMicrovmWorkerListener<
    * clears it: this function, the idle timer, and the suspend hook. So this
    * function needs no check of `suspending`.
    *
+   * A request is never pending after a terminate hook or close() either.
+   * Both clear it, and a job that ends after either records none. So this
+   * function needs no check of `terminating` or `closed`.
+   *
    * A job request can arrive before the run hook. Until the first valid run
    * hook is handled, the worker does not know whether a target exists. So
    * a request without a target waits for that run hook. The run hook's end
@@ -816,8 +820,6 @@ export function createMicrovmWorkerListener<
       jobs.size > 0 ||
       callbackReports.size > 0 ||
       runHooks.size > 0 ||
-      terminating ||
-      closed ||
       suspendCallRunning
     ) {
       return;
@@ -1488,8 +1490,9 @@ export function createMicrovmWorkerListener<
         remember(job.callbackId, suspendAfter);
         // runJob resolves after the outcome reports end, whether the
         // handler succeeded or failed. So the freeze cannot stop this job's
-        // own report. A terminate hook or close() has already dropped any
-        // request, and nothing can start a suspend after them. A job that
+        // own report. A terminate hook or close() drops a pending request,
+        // and a job that ends after either records none. So no request is
+        // pending after them. A job that
         // ends while the worker refuses jobs for a suspend records none:
         // the MicroVM is suspending already, so the request is done.
         if (suspendAfter && !suspending && !terminating && !closed) {
