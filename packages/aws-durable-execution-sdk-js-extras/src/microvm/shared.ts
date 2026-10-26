@@ -21,7 +21,11 @@ import {
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
-import { ensureRunning } from "./lifecycle";
+import {
+  ensureRunning,
+  MicrovmStateCheckError,
+  resumeIfSuspended,
+} from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
 import type {
@@ -107,10 +111,12 @@ export function fitsRunHook(payload: string): boolean {
  *
  * 1. The worker refuses a job request body over 6 MiB.
  * 2. The body holds the input's JSON and fixed fields: the version, the
- *    Region, the MicroVM ID, the callback ID, and the heartbeat timeout.
+ *    Region, the MicroVM ID, the suspend-after flag, the callback ID, and the
+ *    heartbeat timeout.
  * 3. The callback ID has at most 1,024 base64 characters. The MicroVM ID has
  *    at most 256 characters, so at most 1,536 bytes as JSON. The other
- *    fields take less than 200 bytes.
+ *    fields take less than 200 bytes. The suspend-after flag,
+ *    `,"suspendAfter":true`, takes 20 of them.
  * 4. So the fixed fields take less than 3 KiB. So 8 KiB covers them.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
@@ -466,6 +472,24 @@ export function validateRequest(
 const MAX_REQUEST_RETRY_WINDOW_SECONDS = 10 * 60;
 
 /**
+ * Validates `suspendAfter`, and returns it. `undefined` reads as `false`.
+ *
+ * @throws \{TypeError\} When it is set and is not a boolean.
+ */
+export function validateSuspendAfter(
+  name: string,
+  suspendAfter: unknown,
+): boolean {
+  if (suspendAfter === undefined) {
+    return false;
+  }
+  if (typeof suspendAfter !== "boolean") {
+    throw new TypeError(`MicroVM "${name}": suspendAfter must be a boolean`);
+  }
+  return suspendAfter;
+}
+
+/**
  * An RFC 3986 path, section 3.3: segments of pchar characters and `%XX`
  * escapes. The WHATWG URL parser in `fetch` leaves such a path unchanged,
  * unless it has a {@link DOT_SEGMENT}.
@@ -623,6 +647,45 @@ export function jobDocumentJson(job: MeasuredJob): string {
   return withJsonMember(job.fields, "input", job.inputJson);
 }
 
+/** The options of {@link deliverJob}. */
+export interface DeliverJobOptions {
+  /**
+   * Whether each attempt first makes sure the MicroVM runs, and resumes a
+   * suspended one. A function is read at the start of each attempt. So a
+   * step retry, and a `map` item that starts after a sibling set the
+   * session's flag, see the current value.
+   */
+  resume?: boolean | (() => boolean);
+  /**
+   * Turns on the check after a sign of a suspended MicroVM, for an attempt
+   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
+   * every job. A failed GetMicrovm call in that check logs one warning per
+   * job, and the attempt keeps sending the job.
+   */
+  suspendCheck?: boolean;
+  /** Adds `"suspendAfter": true` to the job request. */
+  suspendAfter?: boolean;
+  /**
+   * Returns `true` when the job may log the warning about a worker that
+   * ignores `suspendAfter`. The session returns `true` once per session.
+   */
+  claimSuspendAfterWarning?: () => boolean;
+}
+
+/**
+ * The warning, once per job, after a failed state check of a session
+ * without the resume mode.
+ */
+const STATE_CHECK_WARNING =
+  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
+
+/**
+ * The sentence that the first tier adds to its final error after a denied
+ * state check. Without it, the message names only the last HTTP failure.
+ */
+const GET_DENIED_NOTE =
+  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
+
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
@@ -634,20 +697,25 @@ export async function deliverJob(
   launched: LaunchResult,
   request: MicrovmRequestConfig,
   job: MeasuredJob,
-  options: { resume?: boolean } = {},
+  options: DeliverJobOptions = {},
 ): Promise<void> {
   // The body ends with the input's measured JSON text. So it has the size
-  // that validateJobInput checked.
+  // that validateJobInput checked. The field `suspendAfter` is present only
+  // when it is true, so other jobs keep the same body.
   const body = withJsonMember(
     {
       version: 1,
       region: scope.region,
       microvmId: launched.microvmId,
+      ...(options.suspendAfter === true && { suspendAfter: true }),
       ...job.fields,
     } satisfies Omit<MicrovmJobRequest, "input">,
     "input",
     job.inputJson,
   );
+  // One warning per job for a failed state check. The attempts of the step
+  // in this invocation share it.
+  let checkWarned = false;
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
@@ -659,6 +727,10 @@ export async function deliverJob(
       const client = getClient(scope.config, scope.region);
       const log = (message: string, data: Record<string, unknown>): void =>
         stepContext.logger.info(`MicroVM "${jobName}": ${message}`, data);
+      const resume =
+        typeof options.resume === "function"
+          ? options.resume()
+          : options.resume === true;
       const retryWindowMs =
         request.retryWindow === undefined
           ? DEFAULT_REQUEST_RETRY_WINDOW_MS
@@ -681,9 +753,36 @@ export async function deliverJob(
           remainingTimeMs: remainingTime(child),
           log,
         });
-      const endpoint = options.resume
+      const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
+      let getDenied = false;
+      const checkState = async (
+        maxWaitMs: number,
+      ): Promise<string | undefined> => {
+        try {
+          return await resumeIfSuspended({
+            client,
+            microvmId: launched.microvmId,
+            maxWaitMs,
+            remainingTimeMs: remainingTime(child),
+            log,
+          });
+        } catch (error) {
+          if (!(error instanceof MicrovmStateCheckError)) {
+            throw error;
+          }
+          getDenied ||= error.denied;
+          if (!checkWarned) {
+            checkWarned = true;
+            stepContext.logger.warn(STATE_CHECK_WARNING, {
+              microvmId: launched.microvmId,
+              error: error.message,
+            });
+          }
+          return undefined;
+        }
+      };
       // The launch records an endpoint for every `http` delivery, and the
       // caller delivers over HTTP only then. So a missing endpoint is a
       // defect, not a transient failure. The error name is not retryable,
@@ -705,7 +804,20 @@ export async function deliverJob(
         windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(options.resume && { recheck: running }),
+        ...(resume && { recheck: running }),
+        ...(!resume &&
+          options.suspendCheck === true && { suspendCheck: checkState }),
+        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
+        ...(options.suspendAfter === true && {
+          onSuspendAfterIgnored: () => {
+            if (options.claimSuspendAfterWarning?.() === true) {
+              stepContext.logger.warn(
+                `the worker in MicroVM ${launched.microvmId} does not support suspendAfter. The MicroVM keeps running after the job.`,
+                { microvmId: launched.microvmId },
+              );
+            }
+          },
+        }),
       });
     },
     {

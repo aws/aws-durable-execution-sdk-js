@@ -24,8 +24,10 @@ export type MicrovmApiOperation =
  * MicroVMs operation next to its request ID. Every modeled error of the
  * service extends that class. The AWS SDK also uses that class for an error
  * that the service model does not list.
+ *
+ * @internal
  */
-function isMicrovmsServiceError(
+export function isMicrovmsServiceError(
   error: unknown,
 ): error is LambdaMicrovmsServiceException {
   return error instanceof LambdaMicrovmsServiceException;
