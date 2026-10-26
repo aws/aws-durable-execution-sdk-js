@@ -849,20 +849,46 @@ describe("suspend and terminate hooks", () => {
       });
     });
 
-    it("answers a resend of a running job with 202 during the refusal, and does not start it again", async () => {
-      const worker = start();
+    it("answers a resend of a running job with 503 during the refusal, and with 202 after the resume hook", async () => {
+      // The running job can freeze with the MicroVM. A 202 would end the
+      // durable function's delivery, and nothing would resume the MicroVM.
+      // The 503 makes the durable function check the state and resume it.
+      const info = jest.fn();
+      const worker = start(undefined, info);
       await runHook(worker);
       expect(await job(worker, "cb-1")).toBe(202);
       await hook(worker, "suspend");
 
-      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-1")).toBe(503);
       expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual(["cb-1"]);
+      expect(info).toHaveBeenCalledWith(
+        "job refused: the MicroVM is suspending",
+        { microvmId: "mvm-1" },
+      );
+
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
       expect(started).toEqual(["cb-1"]);
 
       await finishJob("cb-1");
       expect(lambda.completions).toEqual([
         { kind: "success", callbackId: "cb-1" },
       ]);
+    });
+
+    it("answers a resend of a running job with 202 when a terminate hook follows the suspend hook", async () => {
+      // The terminate hook fails the job's callback. So a 503 would only make
+      // the durable function retry against a MicroVM that is ending.
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await hook(worker, "suspend");
+      await hook(worker, "terminate");
+
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual(["cb-1"]);
     });
 
     it("accepts jobs again 30 seconds after the hook without a resume", async () => {

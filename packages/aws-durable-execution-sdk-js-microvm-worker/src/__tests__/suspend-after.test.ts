@@ -196,6 +196,24 @@ describe("suspend after a job", () => {
       expect(microvms.suspended).toEqual(["mvm-1"]);
     });
 
+    it("answers a second delivery of the running job with 503 and no header during a suspend hook refusal, and with 202 and the header after the resume hook", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+      await hook(worker, "suspend");
+
+      const refused = await job(worker, "cb-1");
+      expect(refused.status).toBe(503);
+      expect(refused.headers).not.toHaveProperty("X-Microvm-Suspend-After");
+
+      await hook(worker, "resume");
+      const accepted = await job(worker, "cb-1");
+      expect(accepted).toEqual({
+        status: 202,
+        headers: expect.objectContaining(ACK),
+      });
+    });
+
     it("answers a second delivery without the field with no header", async () => {
       const worker = start();
       await runHook(worker);

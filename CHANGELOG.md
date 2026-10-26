@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Coordinated release summary
+
+Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
+below describe each change in detail.
+
+- Plugin factories replace plugin instances in `DurableExecutionConfig.plugins`.
+  The SDK creates one plugin per invocation. (6597e075)
+- The SDK no longer awaits operation plugin hooks. (4e4e9407)
+- OTel reports `faas.max_memory` in bytes, not MiB. (e049d07c)
+- `InvokeError.cause.name` is the invoked function's error type. (a0d310f5)
+- The idle cooldown before an invocation suspends is 3 ms, not 20 ms. (c0a7e349)
+- Telemetry Exporter and Telemetry MCP are `0.1.0-alpha.1`, and the ESLint
+  plugin is `1.2.0`. So the fixes merged after their published versions ship.
+
+
 ### Changed
 
 - **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
@@ -520,13 +535,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the fix, because a retry could suspend the MicroVM with the next job inside.
 
 - The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` answered a second delivery
-  of a known job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
+  of a finished job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
   durable function sends a job again when it lost the first 202, or when its request step runs
   again on replay. After the 503, it resumed the MicroVM, sent the job again, and got 202. So the
-  MicroVM ran again for nothing. The worker now checks for a known callback ID before it refuses
-  a job. A second delivery of a job that runs or already ended gets HTTP 202 in every state, and
-  starts no job. A new job still gets HTTP 503 during the refusal. The `run` hook already checked
-  for a known job first.
+  MicroVM ran again for nothing. The worker now answers a second delivery this way, and starts no
+  job:
+  - A finished job gets HTTP 202 in every state. Its outcome is already reported.
+  - A running job gets HTTP 202 while the MicroVM terminates. The `terminate` hook fails its
+    callback.
+  - A running job gets HTTP 503 while the worker refuses jobs for a suspend, as before. The job
+    can freeze with the MicroVM. A 202 would end the delivery, and nothing would resume the
+    MicroVM. The 503 makes the durable function check the state and resume the MicroVM.
+
+  Outside a refusal, a second delivery gets HTTP 202, as before. A new job still gets HTTP 503
+  during the refusal. The `run` hook already checked for a known job first.
 
 ### Added
 
