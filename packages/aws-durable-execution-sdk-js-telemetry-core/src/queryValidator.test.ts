@@ -1,4 +1,4 @@
-import { assertReadOnly } from "./queryValidator";
+import { assertReadOnly, type SqlEngine } from "./queryValidator";
 
 const ok = (q: string) =>
   expect(() => assertReadOnly(q, "PostgreSQL")).not.toThrow();
@@ -69,9 +69,14 @@ describe("assertReadOnly: rejects obvious writes and bad shapes", () => {
 // only knows '...', "...", -- and /* */. The scanner would blank the DELETE as
 // string or comment content while the database runs it.
 describe("assertReadOnly: rejects lexing differences that hide a write", () => {
-  const forEngine = (engine: string) => ({
+  // Match the refusal message, so an unrelated error (for example a TypeError)
+  // cannot make a rejection test pass.
+  const forEngine = (engine: SqlEngine) => ({
     ok: (q: string) => expect(() => assertReadOnly(q, engine)).not.toThrow(),
-    rejected: (q: string) => expect(() => assertReadOnly(q, engine)).toThrow(),
+    rejected: (q: string) =>
+      expect(() => assertReadOnly(q, engine)).toThrow(
+        `Refused to execute ${engine} query`,
+      ),
   });
   const pg = forEngine("PostgreSQL");
   const redshift = forEngine("Redshift SQL");
@@ -99,10 +104,6 @@ describe("assertReadOnly: rejects lexing differences that hide a write", () => {
     opensearch.rejected("SELECT '\\''; DELETE FROM t; --'"));
   it("a backslash in a double-quoted literal is rejected", () =>
     opensearch.rejected('SELECT "\\""; DELETE FROM t; --"'));
-  it("an unknown engine treats a backslash as an escape", () =>
-    expect(() =>
-      assertReadOnly("SELECT '\\''; DELETE FROM t; --'", "SomeNewEngine"),
-    ).toThrow());
   it("PostgreSQL nested block comments hide a second statement", () =>
     pg.rejected("SELECT 1 /* /* */ '*/ ; DELETE FROM t; --'"));
   it("a carriage return ends a PostgreSQL line comment", () =>

@@ -74,7 +74,22 @@ interface Dialect {
  *   backtick identifiers take backslash escapes, and `#` and `-- ` start line
  *   comments.
  */
-const DIALECTS: Record<string, Dialect> = {
+/**
+ * The SQL engines this validator supports. Each caller passes one of these
+ * labels, and the label also appears in refusal messages.
+ */
+export type SqlEngine =
+  | "PostgreSQL"
+  | "Redshift SQL"
+  | "Trino/Presto SQL"
+  | "PartiQL"
+  | "OpenSearch SQL";
+
+/**
+ * Every SqlEngine has an entry, so the compiler rejects a new engine label
+ * until its lexical rules are added here.
+ */
+const DIALECTS: Record<SqlEngine, Dialect> = {
   PostgreSQL: {
     backslashEscapes: true,
     mysqlComments: false,
@@ -102,14 +117,7 @@ const DIALECTS: Record<string, Dialect> = {
   },
 };
 
-/** An unknown engine gets every restriction. This is the fail-closed choice. */
-const STRICTEST: Dialect = {
-  backslashEscapes: true,
-  mysqlComments: true,
-  backtickQuotes: false,
-};
-
-function refuse(engine: string, reason: string): never {
+function refuse(engine: SqlEngine, reason: string): never {
   throw new Error(`Refused to execute ${engine} query: ${reason}`);
 }
 
@@ -150,8 +158,8 @@ function refuse(engine: string, reason: string): never {
  * leaves stray individual characters as "code", never a full keyword, so it
  * doesn't affect the scan.
  */
-function blankStringsAndComments(query: string, engine: string): string {
-  const dialect = DIALECTS[engine] ?? STRICTEST;
+function blankStringsAndComments(query: string, engine: SqlEngine): string {
+  const dialect = DIALECTS[engine];
   let out = "";
   let inString: string | null = null;
   for (let i = 0; i < query.length; i++) {
@@ -225,7 +233,7 @@ function blankStringsAndComments(query: string, engine: string): string {
 /**
  * Throws if the query is not a single read-only SELECT (or WITH...SELECT).
  */
-export function assertReadOnly(query: string, engine: string): void {
+export function assertReadOnly(query: string, engine: SqlEngine): void {
   const trimmed = query.trim();
 
   if (!trimmed) {

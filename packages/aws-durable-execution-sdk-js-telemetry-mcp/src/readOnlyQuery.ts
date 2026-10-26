@@ -28,6 +28,7 @@ import {
   runLogsInsightsQuery,
   runOpenSearchQuery,
   runRedshiftQuery,
+  type SqlEngine,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
 
@@ -215,7 +216,7 @@ export async function runReadOnlyQuery(
   }
 
   // 1. Engine label per destination. Unsupported types are rejected up front.
-  let engine: string;
+  let engine: SqlEngine;
   switch (cfg.destinationType) {
     case "dynamodb":
       engine = "PartiQL";
