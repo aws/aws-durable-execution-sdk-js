@@ -1,5 +1,5 @@
 // The plugin's contract for work that settles after onInvocationEnd, and for concurrent
-// invocations (README, Contributing, rule 9). The lite SDK's README states what the SDK
+// invocations (README, Contributing, rule 6). The lite SDK's README states what the SDK
 // guarantees: "A plugin ignores work that settles after onInvocationEnd".
 
 import assert from "node:assert/strict";

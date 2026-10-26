@@ -1225,8 +1225,10 @@ record. So do not put secrets in error messages.
   names it `prefix`.
 - No export scheduler. The lite SDK creates one plugin per invocation, calls
   `onOperationChange` synchronously from `flush`, and calls `onInvocationEnd` once,
-  after the last checkpoint response. So no hook can arrive after the end. Within one
-  invocation, the plugin chains the exports of each exporter.
+  after the last checkpoint response. After the workflow returns, a branch that still
+  runs can save a checkpoint, and the SDK then calls `onOperationChange` again. The
+  plugin ignores that call (Design, item 8). Within one invocation, the plugin chains
+  the exports of each exporter.
 - No `flush` on exporters, and no `render`. The plugin measures the record with the
   `operations` array. The full SDK measures the rendered record. So with
   `operationsFormat: "both"`, set `maxRecordBytes` with room for `operationsByName`.
@@ -1311,13 +1313,19 @@ change any file here.
    `node_modules`.
 5. Telemetry never fails the workflow. Catch every error of an exporter and of record
    building. Log one `console.warn` line.
-6. Keep the record compatible with the full SDK's `DurableExecutionTelemetryRecord`, and
+6. A callback that arrives after `onInvocationEnd` started changes nothing and is never
+   exported. The lite SDK can call `onOperationChange` then (see
+   [A plugin ignores work that settles after onInvocationEnd](../aws-durable-execution-sdk-js-lite/README.md#a-plugin-ignores-work-that-settles-after-oninvocationend)).
+   A record built then would be newer than the final record, and an upserting exporter
+   would keep it. `test/invocation-end.test.js` fails without this rule. It also checks
+   that two plugin objects of concurrent invocations never mix records.
+7. Keep the record compatible with the full SDK's `DurableExecutionTelemetryRecord`, and
    the table with its schema. A new field must exist there first.
-7. Before a commit, run `npm test` in this folder and
+8. Before a commit, run `npm test` in this folder and
    `npx biome check packages/aws-durable-execution-sdk-js-lite-telemetry` from the
    repository root. Check the types with
    `npx tsc --noEmit --strict --ignoreConfig --module nodenext --target es2022 --skipLibCheck test/types.check.ts`.
-8. Commit titles use the scope `sdk-lite-telemetry`.
+9. Commit titles use the scope `sdk-lite-telemetry`.
 
 ### Files
 
@@ -1368,3 +1376,8 @@ test/types.check.ts             compile-time check against the lite SDK's plugin
 7. The types in `src/index.d.ts` are structural. They do not import the lite SDK, so the
    package's types resolve without it. `test/types.check.ts` checks that the factory is
    assignable to the lite SDK's `DurablePluginFactory`.
+8. `onInvocationEnd` sets the flag `ended` first. `onOperationChange` emits nothing
+   once `ended` is set. The lite SDK can call `onOperationChange` after the end of an
+   invocation whose workflow returned (rule 6). Each record gets a larger `emittedAt`
+   than the previous one. So without the flag, a RUNNING record would follow the final
+   record, and the Aurora and Redshift upserts would keep the RUNNING record.
