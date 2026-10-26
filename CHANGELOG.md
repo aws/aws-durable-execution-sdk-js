@@ -550,15 +550,6 @@ below describe each change in detail.
   Outside a refusal, a second delivery gets HTTP 202, as before. A new job still gets HTTP 503
   during the refusal. The `run` hook already checked for a known job first.
 
-- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` dropped a `suspendAfter`
-  request whose job ended before the `run` hook arrived. A job request can come before that hook.
-  The worker then had no suspend target yet, so it logged `cannot suspend the MicroVM after a
-  job: the run hook named no MicroVM` and cleared the request. The `run` hook that followed set
-  the target, but no request was left. So the MicroVM kept running through the wait, although
-  the worker had acknowledged the option. A request that comes before the first `run` hook now
-  waits for it. The request fires when that hook names a MicroVM, and is dropped with the warning
-  when it names none.
-
 ### Added
 
 - **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
@@ -637,7 +628,8 @@ below describe each change in detail.
   without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
   version 1. The session sets the flag before the job starts. So the job itself and each later
   job of the session handle check the MicroVM state before delivery, and resume a suspended
-  MicroVM. The worker acknowledges the field with the header
+  MicroVM. A request from a job that ends before the first accepted run hook waits for that
+  hook. The worker acknowledges the field with the header
   `X-Microvm-Suspend-After: accepted`. Without that header, the session logs a warning once per
   session in each execution environment: `the worker in MicroVM <id> does not support
   suspendAfter. The MicroVM keeps running after the job.` `microvm` rejects `suspendAfter` in
