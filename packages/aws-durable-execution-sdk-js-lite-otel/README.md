@@ -412,11 +412,18 @@ add to them or replace them for this package:
 5. A telemetry failure must never fail the workflow. So every export catches and logs its
    failure, and `onInvocationEnd` waits at most `exportTimeoutMs` in total. This is the
    one safeguard that the package adds. Other misuse is documented, not checked.
-6. Tests use `runDurable` from the lite SDK's testing module, by a relative path.
-7. Before a commit, run `npm test` in this folder and `npx biome check
+6. A callback that arrives after `onInvocationEnd` started changes nothing and is never
+   exported. Examples: an attempt whose `fn` settles later, and an `onOperationChange`
+   after the end. The lite SDK can deliver both (see
+   [A plugin ignores work that settles after onInvocationEnd](../aws-durable-execution-sdk-js-lite/README.md#a-plugin-ignores-work-that-settles-after-oninvocationend)).
+   The `ended` flag in `src/index.js` holds this rule. A test in `test/hooks.test.js`
+   fails without it. Another test there checks that two plugin objects of concurrent
+   invocations never mix spans.
+7. Tests use `runDurable` from the lite SDK's testing module, by a relative path.
+8. Before a commit, run `npm test` in this folder and `npx biome check
    packages/aws-durable-execution-sdk-js-lite-otel` from the repository root. Both must
    pass.
-8. Commit titles use the scope `sdk-lite-otel`, for example
+9. Commit titles use the scope `sdk-lite-otel`, for example
    `feat(sdk-lite-otel): add execution-view tracing plugin`.
 
 ### Files

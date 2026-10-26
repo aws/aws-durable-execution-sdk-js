@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createOtelPlugin } from "../src/index.js";
 import { STATUS_ERROR } from "../src/spans.js";
 import {
@@ -222,4 +223,120 @@ test("ARN in helpers matches the in-memory service", async () => {
   const exporter = fakeExporter();
   await runDurable({ plugins: [otel(exporter)], workflow: () => 1 });
   assert.equal(exporter.spans()[0].attributes["durable.execution.arn"], ARN);
+});
+
+// A promise and the functions that settle it.
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+// A terminal STEP record, as a checkpoint response carries it.
+const stepRecord = (Id, Name) => ({
+  Id,
+  Name,
+  Type: "STEP",
+  SubType: "Step",
+  Status: "SUCCEEDED",
+  StartTimestamp: 1,
+  EndTimestamp: 2,
+  StepDetails: { Attempt: 1 },
+});
+
+test("an attempt that settles after onInvocationEnd adds no span and starts no export", async () => {
+  const exporter = fakeExporter();
+  // A short interval: a span buffered after the end would be exported within 20 ms.
+  const plugin = otel(exporter, { flushIntervalMs: 20 })(info());
+  const resolved = deferred();
+  const rejected = deferred();
+  const p1 = plugin.wrap({
+    ...attemptInfo(() => resolved.promise),
+    name: "late-ok",
+  });
+  const p2 = plugin.wrap({
+    ...attemptInfo(() => rejected.promise),
+    id: "op-2",
+    name: "late-error",
+  });
+  await plugin.onInvocationEnd(end());
+  const batches = exporter.batches.length;
+  const spans = exporter.spans().length;
+
+  resolved.resolve(1);
+  rejected.reject(new Error("late"));
+  await p1;
+  await assert.rejects(p2);
+  // The SDK can also call onOperationChange after the end (README of the lite SDK, "A
+  // plugin ignores work that settles after onInvocationEnd").
+  plugin.onOperationChange({
+    updated: [stepRecord("op-3", "late-record")],
+    operations: [],
+  });
+  await sleep(50);
+
+  assert.equal(exporter.batches.length, batches);
+  assert.equal(exporter.spans().length, spans);
+  for (const name of [
+    "late-ok attempt 1",
+    "late-error attempt 1",
+    "late-record",
+  ]) {
+    assert.equal(exporter.spans().filter((s) => s.name === name).length, 0);
+  }
+});
+
+test("two concurrent plugin objects never mix spans", async () => {
+  const exporter = fakeExporter();
+  const factory = otel(exporter, { flushIntervalMs: 60_000 });
+  const arnA = `${ARN}-a`;
+  const arnB = `${ARN}-b`;
+  const a = factory(info({ arn: arnA, requestId: "req-a" }));
+  const b = factory(info({ arn: arnB, requestId: "req-b" }));
+  assert.notEqual(a, b);
+
+  // The hooks of the two invocations interleave, as on Lambda Managed Instances.
+  const fa = deferred();
+  const fb = deferred();
+  const pa = a.wrap({ ...attemptInfo(() => fa.promise), name: "step-a" });
+  const pb = b.wrap({ ...attemptInfo(() => fb.promise), name: "step-b" });
+  b.onOperationChange({
+    updated: [stepRecord("op-b", "rec-b")],
+    operations: [],
+  });
+  a.onOperationChange({
+    updated: [stepRecord("op-a", "rec-a")],
+    operations: [],
+  });
+  fb.resolve();
+  fa.resolve();
+  await Promise.all([pa, pb]);
+  await b.onInvocationEnd(end());
+  await a.onInvocationEnd(end());
+
+  assert.equal(exporter.batches.length, 2);
+  const [batchB, batchA] = exporter.batches;
+  const expected = [
+    [batchA, arnA, "a"],
+    [batchB, arnB, "b"],
+  ];
+  for (const [batch, arn, x] of expected) {
+    assert.deepEqual(batch.map((s) => s.name).sort(), [
+      "Invocation",
+      `rec-${x}`,
+      `step-${x} attempt 1`,
+    ]);
+    for (const s of batch) {
+      assert.equal(s.attributes["durable.execution.arn"], arn);
+    }
+    assert.equal(new Set(batch.map((s) => s.spanContext().traceId)).size, 1);
+  }
+  assert.notEqual(
+    batchA[0].spanContext().traceId,
+    batchB[0].spanContext().traceId,
+  );
 });
