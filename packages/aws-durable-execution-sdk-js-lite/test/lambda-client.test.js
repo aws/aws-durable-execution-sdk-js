@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { withDurableExecution } from "../src/index.js";
 import { createLambdaClient } from "../src/transport/lambda-client.js";
 import { VERSION } from "../src/version.js";
+import { event } from "./helpers/fake-client.js";
 
 const ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:f:$LATEST/durable-execution/x/y";
@@ -333,4 +335,91 @@ test("container credentials are fetched again when they expire within 5 minutes"
   await c.getExecutionState({ DurableExecutionArn: ARN });
   await c.getExecutionState({ DurableExecutionArn: ARN });
   assert.match(fetch.calls[3].headers.authorization, /Credential=K2\//);
+});
+
+// A fetch that never responds. Like the real fetch, it rejects when the signal aborts.
+// The timer of AbortSignal.timeout does not keep the event loop alive. So a hanging
+// request would end the test run early. A timer keeps the loop alive until the test ends.
+function hangingFetch(t) {
+  const keepAlive = setTimeout(() => {}, 5000);
+  t.after(() => clearTimeout(keepAlive));
+  const fn = (_url, init) => {
+    fn.calls.push(init);
+    return new Promise((_, reject) => {
+      init.signal.addEventListener("abort", () => reject(init.signal.reason));
+    });
+  };
+  fn.calls = [];
+  return fn;
+}
+
+test("a request ends 500 ms before the deadline, not after 55 s", {
+  timeout: 2000,
+}, async (t) => {
+  const fetch = hangingFetch(t);
+  const start = Date.now();
+  // 600 ms ahead: the attempt times out after 100 ms. The retry finds less than 500 ms.
+  await assert.rejects(
+    client(fetch, { deadline: start + 600 }).getExecutionState({
+      DurableExecutionArn: ARN,
+    }),
+    { name: "DeadlineExceededError" },
+  );
+  assert.ok(Date.now() - start < 150, `took ${Date.now() - start} ms`);
+  assert.equal(fetch.calls.length, 1);
+});
+
+test("no retry starts when less than 500 ms are left", async () => {
+  const fetch = fakeFetch([json(503, {}), json(200, {})]);
+  const slow = async (url, init) => {
+    await new Promise((r) => setTimeout(r, 300));
+    return fetch(url, init);
+  };
+  // After the first attempt, 400 ms are left.
+  await assert.rejects(
+    client(slow, { deadline: Date.now() + 700 }).getExecutionState({
+      DurableExecutionArn: ARN,
+    }),
+    { name: "DeadlineExceededError" },
+  );
+  assert.equal(fetch.calls.length, 1);
+});
+
+test("without a deadline, an attempt is not aborted before 55 s", async () => {
+  let aborted;
+  const fetch = async (_url, init) => {
+    await new Promise((r) => setTimeout(r, 700));
+    aborted = init.signal.aborted;
+    return json(200, {});
+  };
+  await client(fetch).getExecutionState({ DurableExecutionArn: ARN });
+  assert.equal(aborted, false);
+});
+
+test("withDurableExecution bounds the built-in client by the invocation's deadline", {
+  timeout: 2000,
+}, async (t) => {
+  const fetch = hangingFetch(t);
+  t.mock.method(globalThis, "fetch", fetch);
+  const handler = withDurableExecution(({ ctx }) => ctx.step({ fn: () => 1 }));
+  const start = Date.now();
+  await assert.rejects(
+    handler(event(), { getRemainingTimeInMillis: () => 600 }),
+    {
+      name: "DeadlineExceededError",
+    },
+  );
+  assert.ok(Date.now() - start < 150, `took ${Date.now() - start} ms`);
+  assert.equal(fetch.calls.length, 1);
+});
+
+test("withDurableExecution without getRemainingTimeInMillis uses no deadline", async (t) => {
+  t.mock.method(globalThis, "fetch", async () =>
+    json(200, { CheckpointToken: "t2" }),
+  );
+  const handler = withDurableExecution(({ ctx }) => ctx.step({ fn: () => 1 }));
+  assert.deepEqual(await handler(event(), {}), {
+    Status: "SUCCEEDED",
+    Result: "1",
+  });
 });
