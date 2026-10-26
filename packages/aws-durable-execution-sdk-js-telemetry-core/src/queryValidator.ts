@@ -150,8 +150,10 @@ function refuse(engine: SqlEngine, reason: string): never {
  *    - an unterminated literal or block comment.
  *
  * A `--` line comment ends at `\n` or `\r`, as it does in PostgreSQL and Trino.
- * An engine that ends the comment later only hides less code than this scanner
- * assumes, so the difference is safe.
+ * If an engine ended a comment later than this, the scanner would check text
+ * that the engine ignores, which is safe. If an engine ended a comment earlier,
+ * the engine would run text that the scanner blanked. None of the supported
+ * engines ends a `--` comment at any character other than `\n` or `\r`.
  *
  * Note: like the scanners in queryShape.ts, `''`-style escaping inside a
  * single-quoted string is treated as two adjacent strings; this only ever
