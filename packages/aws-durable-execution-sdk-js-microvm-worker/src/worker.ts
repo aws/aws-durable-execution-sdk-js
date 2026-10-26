@@ -564,8 +564,11 @@ export function createMicrovmWorkerListener<
   // runs at a time.
   let suspendCallRunning = false;
   // Aborts the running SuspendMicrovm call. The resume hook uses it. Set
-  // only while suspendCallRunning is set.
-  let suspendCallAbort: AbortController | undefined;
+  // only while suspendCallRunning is set. `microvmId` is the call's target,
+  // the run hook's ID, so the resume hook logs the same ID as the call.
+  let suspendCallAbort:
+    | { controller: AbortController; microvmId: string }
+    | undefined;
   // Set when the idle time could not start because a call was running, for
   // example after a resume hook during the call. The idle time then starts
   // when the call ends.
@@ -760,7 +763,7 @@ export function createMicrovmWorkerListener<
     // A retry then would suspend the MicroVM with that job inside. An aborted
     // call sends no later attempt.
     const resumed = new AbortController();
-    suspendCallAbort = resumed;
+    suspendCallAbort = { controller: resumed, microvmId: target };
     try {
       await client.send(
         new SuspendMicrovmCommand({ microvmIdentifier: target }),
@@ -891,15 +894,17 @@ export function createMicrovmWorkerListener<
         // The MicroVM runs again. So jobs can run again. A resume without
         // a job would otherwise leave the MicroVM running until the next
         // job ends.
-        if (suspendCallAbort && !suspendCallAbort.signal.aborted) {
+        if (suspendCallAbort && !suspendCallAbort.controller.signal.aborted) {
           // The worker's own call has not returned. The client could retry
           // it after the next job starts, and freeze that job. So the worker
-          // aborts the call before it ends the refusal.
+          // aborts the call before it ends the refusal. A second resume hook
+          // during the same call finds the signal aborted, so it neither
+          // aborts nor logs again.
           logger.info(
             "stopping the suspend call: the MicroVM resumed during it",
-            { microvmId },
+            { microvmId: suspendCallAbort.microvmId },
           );
-          suspendCallAbort.abort(
+          suspendCallAbort.controller.abort(
             new Error("the MicroVM resumed during the SuspendMicrovm call"),
           );
         }
