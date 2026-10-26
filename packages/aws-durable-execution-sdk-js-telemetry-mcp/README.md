@@ -132,9 +132,10 @@ needs read access to whichever destination you point at.
 Before the first `query`, `get_execution` or `list_executions` call in a
 session, the server checks whether queries could change data:
 
-- **Aurora and Redshift:** it asks the database whether its user is a superuser
-  or can write any table. A `SELECT` can write through a function on these
-  engines.
+- **Aurora and Redshift:** it asks the database whether its user is a superuser,
+  can write any table, or can call a function that runs with another role's
+  privileges (a `SECURITY DEFINER` function, or a Redshift Lambda UDF). A
+  `SELECT` can write through such a function on these engines.
 - **S3 + Athena:** it checks whether the Athena result location is inside the
   table's data location. If it is, each query writes result files that the table
   then reads as records. The check is skipped when the workgroup chooses the

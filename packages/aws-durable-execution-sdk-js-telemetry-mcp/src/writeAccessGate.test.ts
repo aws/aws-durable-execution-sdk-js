@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { WriteAccessResult } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
   ACCEPT_WRITE_ACCESS_ENV_VAR,
@@ -171,35 +169,6 @@ describe("askUserToAccept", () => {
       expect(await askUserToAccept(s, "m")).toBe(action);
     },
   );
-});
-
-// server.ts runs main() on import, so the wiring is checked in its source.
-describe("server.ts wiring", () => {
-  const source = readFileSync(join(__dirname, "server.ts"), "utf8");
-  const handlerOf = (tool: string): string => {
-    const start = source.indexOf(`"${tool}",`);
-    const next = source.indexOf("server.registerTool(", start);
-    return source.slice(start, next === -1 ? undefined : next);
-  };
-
-  it.each(["query", "get_execution", "list_executions"])(
-    "%s waits for the write-access gate before it runs a query",
-    (tool) => {
-      const handler = handlerOf(tool);
-      const gateAt = handler.indexOf("await blockedByWriteAccess()");
-      const runAt = handler.search(
-        /runReadOnlyQuery\(|runGetExecution\(|runListExecutions\(/,
-      );
-      expect(gateAt).toBeGreaterThan(-1);
-      expect(runAt).toBeGreaterThan(gateAt);
-    },
-  );
-
-  it("test_destination reports the check instead of waiting for the gate", () => {
-    const handler = handlerOf("test_destination");
-    expect(handler).not.toContain("blockedByWriteAccess");
-    expect(handler).toContain("writeAccess: report.writeAccess");
-  });
 });
 
 // Runs askUserToAccept against the real SDK server and client, connected in

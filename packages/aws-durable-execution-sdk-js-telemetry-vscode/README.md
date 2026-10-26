@@ -421,7 +421,8 @@ Redshift needs one credential action, chosen by how you connect:
 >   If the Glue table already exists, omit the two Glue write actions.
 >
 > **Test connection** in Settings checks this for you. On Aurora and Redshift it
-> asks the database whether its user is a superuser or can write any table. On
+> asks the database whether its user is a superuser, can write any table, or can
+> call a function that runs with another role's privileges. On
 > S3 + Athena it checks whether the query result location is inside the table's
 > data location, where every query would add rows. If it finds either, a warning
 > lists what it found. The warning does not stop you from saving.

@@ -30,15 +30,17 @@ function cfg(overrides: Partial<TelemetryConfig>): TelemetryConfig {
   } as TelemetryConfig;
 }
 
-/** Queues the two catalog query results: superuser first, writable tables second. */
+/** Queues the three catalog query results: superuser, writable tables, functions. */
 function catalog(
   runner: jest.Mock,
   superuser: string,
   writableTables: string[],
+  functions: string[] = [],
 ): void {
   runner
     .mockResolvedValueOnce({ rows: [[superuser]] })
-    .mockResolvedValueOnce({ rows: writableTables.map((t) => [t]) });
+    .mockResolvedValueOnce({ rows: writableTables.map((t) => [t]) })
+    .mockResolvedValueOnce({ rows: functions.map((f) => [f]) });
 }
 
 beforeEach(() => jest.resetAllMocks());
@@ -76,12 +78,24 @@ describe.each([
     });
   });
 
-  it("asks the database about superuser status and table privileges", async () => {
+  it("names each function that runs with another role's privileges", async () => {
+    catalog(runner, "false", [], ["app.purge(integer)"]);
+    expect(await checkWriteAccess(config)).toEqual({
+      status: "can-write",
+      findings: [
+        "A query can call function app.purge(integer), which runs with " +
+          "another role's privileges and can write.",
+      ],
+    });
+  });
+
+  it("asks the database about superuser status, table privileges and functions", async () => {
     catalog(runner, "false", []);
     await checkWriteAccess(config);
     const sqls = runner.mock.calls.map(([opts]) => opts.sql as string);
     expect(sqls[0]).toMatch(/super/);
     expect(sqls[1]).toMatch(/has_table_privilege/);
+    expect(sqls[2]).toMatch(/prosecdef/);
   });
 
   it("returns unknown when the database cannot be reached", async () => {
