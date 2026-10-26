@@ -10,7 +10,7 @@ Applications that register no plugins, select none through
 `DURABLE_EXECUTION_PLUGINS`, and ship no plugin providers can update their core
 dependency without changing their handler or durable operation calls. They should
 still review the [behavior changes outside plugins](#review-behavior-changes-outside-plugins).
-This guide covers migration from Core `2.x`; the
+This guide covers migration from Core `2.x`. The
 [release notes](../release-notes/sdk-3.0.0.md) describe the full package scope.
 
 ## Why upgrade to 3.0
@@ -37,7 +37,7 @@ environment-loaded providers, OTel registrations, and custom operation hooks. Us
 | `new InvocationOtelPlugin(config)` registration | `createInvocationOtelPluginFactory(config)` |
 | `new ExecutionOtelPlugin(config)` registration | `createExecutionOtelPluginFactory(config)` |
 | Registration metadata on the plugin instance or constructor | Metadata on the registered factory |
-| SDK awaits operation-hook promises before continuing | Synchronous state setup; explicitly queued asynchronous work when order matters |
+| SDK awaits operation-hook promises before continuing | Synchronous state setup. Explicitly queued asynchronous work when order matters |
 
 ### Upgrade dependencies together
 
@@ -126,8 +126,8 @@ export const handler = withDurableExecution(
 
 A bare function or plugin class without a `createPlugin` member is not a factory.
 For example, `plugins: [(info) => new AuditPlugin(info.executionArn)]` is invalid.
-Do not return a cached plugin from a factory; that would share its state across
-invocations again.
+Do not return a cached plugin from a factory. A cached plugin shares its state
+across invocations again.
 
 Invalid registrations fail with `PluginLoadError` when the handler's plugin
 configuration is resolved. A valid factory that throws or returns `null` or
@@ -167,9 +167,8 @@ Before calling `onInvocationEnd`, the SDK drains promises returned by earlier
 operation hooks across all plugins until they settle or until 500 ms before
 the invocation's deadline. It then calls `onInvocationEnd` and waits until it
 settles or until 50 ms before the deadline. These bounds reserve time for
-flushing and returning the Lambda response. Reaching a bound stops the wait;
-it does not cancel the
-underlying work or guarantee telemetry delivery. Pending work may never
+flushing and returning the Lambda response. Reaching a bound stops the wait.
+It does not cancel the underlying work or guarantee telemetry delivery. Pending work may never
 complete after the runtime freezes. If the context reports no usable deadline,
 both waits continue until the work settles.
 
@@ -205,7 +204,7 @@ export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory
 
 Remove `pluginApiVersion` and `pluginType` after migrating construction and state
 ownership. Declaring `pluginApiVersion` causes rejection on both explicit and
-environment registration; the SDK does not reinterpret a v1 provider with a
+environment registration. The SDK does not reinterpret a v1 provider with a
 different lifetime. Replace imports of `DurableInstrumentationPluginProvider`,
 `DurableInstrumentationPluginType`, and
 `DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION` with the appropriate factory type.
@@ -246,7 +245,7 @@ Register only one view across code and environment selection. The subpaths
 entry points, but must resolve to OTel 2.
 
 Shared providers remain outside invocation instances. `flushTimeoutMillis`
-bounds the export wait; it does not guarantee delivery after timeout, export
+bounds the export wait. It does not guarantee delivery after timeout, export
 failure, or runtime freezing. An invocation must not shut down a shared provider.
 See the [OTel migration reference](../packages/aws-durable-execution-sdk-js-otel/README.md#migration-from-the-v1-provider-contract).
 
@@ -263,7 +262,7 @@ metadata. `RegisteredDurableInstrumentationPluginType` is removed.
 `RegisteredDurableInstrumentationPlugin` remains a type describing instance
 metadata, but registration validates the factory's metadata in Core 3.
 The symbol remains
-`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`; place its
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`. Place its
 `name` and optional `exclusiveGroup` metadata on the registered factory, not on
 the returned plugin or its constructor. Configuration validates it before constructing plugins.
 Inherited groups accumulate, so a wrapper must preserve its underlying view's
@@ -326,11 +325,11 @@ rg -n 'cause\.name|faas\.max_memory' .
 Keep invocation identity, spans, and operation buffers on the new plugin. Keep
 intentionally shared providers/exporters outside it. One execution can suspend
 and resume many times, creating a new plugin each time. Instance fields are not
-checkpointed; reconstruct execution-wide state from invocation metadata and
+checkpointed. Reconstruct execution-wide state from invocation metadata and
 checkpointed operations rather than assuming the last instance survives.
 
 Do not use the presence of `OperationInfo.error` alone to detect failure. Error
-details can be absent for failed operations; use `OperationInfo.status` and
+details can be absent for failed operations. Use `OperationInfo.status` and
 `AttemptEndInfo.outcome` for their respective outcomes. This metadata correction
 does not change persisted error payloads or operation identity.
 
@@ -343,8 +342,8 @@ See the [logging guide](../packages/aws-durable-execution-sdk-js/README.md).
 1. Resolve the coordinated package versions, regenerate the lock file, and run
    your TypeScript build and tests. Verify the effective versions in any bundles
    and Lambda layers.
-2. Exercise explicit and environment-selected providers. Confirm plugin output;
-   a successful workflow does not prove a factory returned usable instrumentation.
+2. Exercise explicit and environment-selected providers. Confirm plugin output.
+   A successful workflow does not prove a factory returned usable instrumentation.
 3. Run a workflow that suspends and resumes. Verify a fresh plugin for each
    invocation, stable operation identity, and no repeated completed-step side
    effects. Keep operation names, order, nesting, and serialization compatible
