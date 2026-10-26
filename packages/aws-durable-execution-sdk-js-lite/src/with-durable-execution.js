@@ -16,8 +16,15 @@ export function withDurableExecution(handler, { client, plugins } = {}) {
           "Is durable execution enabled for this function?",
       );
     }
-    // Created per invocation, so credentials rotated by Lambda are picked up.
-    const api = client ?? createLambdaClient();
+    // Created per invocation, so credentials rotated by Lambda are picked up. Its
+    // requests end before the invocation's deadline (README 2.2).
+    const api =
+      client ??
+      createLambdaClient({
+        deadline:
+          lambdaContext?.getRemainingTimeInMillis &&
+          Date.now() + lambdaContext.getRemainingTimeInMillis(),
+      });
     const operations = await loadOperations(api, arn, token, event);
     const payload = operations[0]?.ExecutionDetails?.InputPayload;
     const input = payload ? JSON.parse(payload) : {};

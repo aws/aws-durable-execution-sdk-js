@@ -1121,7 +1121,8 @@ correct on Lambda (default). [Make steps idempotent](#make-steps-idempotent),
 [Race operations inside a child context](#race-operations-inside-a-child-context) cover
 code that keeps running after its result is decided. Plugin writers also read
 [A plugin ignores work that settles after onInvocationEnd](#a-plugin-ignores-work-that-settles-after-oninvocationend).
-Client writers read [Write a custom client](#write-a-custom-client).
+Client writers read [Write a custom client](#write-a-custom-client). The built-in client
+ends every request before the invocation's deadline (section 2.2, rule 7).
 
 ### Keep each step far below the function timeout
 
@@ -1400,9 +1401,10 @@ Set a timeout on every `checkpoint` and `getExecutionState` request.
 3. A request that times out throws an error without `status`. So Lambda invokes again
    (rule 2 above).
 
-The built-in client sets a timeout of 55 seconds per attempt, with up to 3 attempts
-(section 2.2). It does not bound the timeout by the time left in the invocation. That
-bound is under design.
+The built-in client sets a timeout of 55 seconds per attempt, with up to 3 attempts. It
+also ends every request at least 500 ms before the invocation's deadline. It reads the
+deadline from `lambdaContext.getRemainingTimeInMillis()` (section 2.2, rule 7). A custom
+client does not get this bound. Give it one with the timeout of step 2 above.
 
 ## Differences from @aws/durable-execution-sdk-js
 
@@ -1642,6 +1644,26 @@ Rules for the client:
 6. The client is an object with two async methods: `checkpoint(request)` and
    `getExecutionState(request)`. Requests and responses use the API field names above. Tests
    and the local runner replace the client through `withDurableExecution(handler, { client })`.
+7. Each attempt has a timeout of 55 seconds. The built-in client also ends every request
+   before the invocation's deadline. On Lambda Managed Instances, an invocation timeout
+   does not stop the running code. So without this bound, a request could run after the
+   invocation ended.
+   1. When `lambdaContext.getRemainingTimeInMillis` exists, `withDurableExecution`
+      passes `deadline: Date.now() + lambdaContext.getRemainingTimeInMillis()` to
+      `createLambdaClient`. The Node.js runtime documents the method
+      ([Lambda context object in Node.js](https://docs.aws.amazon.com/lambda/latest/dg/nodejs-context.html)).
+      That it exists on Lambda Managed Instances is unverified. Without it, the deadline is
+      `Infinity`, and each attempt keeps 55 seconds.
+   2. Before each attempt, including a retry, the client computes
+      `min(55 000, deadline - Date.now() - 500)` milliseconds. That is the attempt's
+      timeout. The 500 ms margin leaves time to end the invocation.
+   3. If the value is 0 or less, the client sends nothing. It throws an `Error` named
+      `DeadlineExceededError`, without `status`. So the handler throws to Lambda
+      (section 2.8, item 4), and Lambda invokes again. The invocation is about to time
+      out anyway.
+   4. The backoff before a retry is at most 100 ms before attempt 2 and 200 ms before
+      attempt 3. Both are below the margin. So the client throws before the deadline.
+   5. A custom client receives no deadline ([Write a custom client](#write-a-custom-client)).
 
 #### 2.3 Invocation flow
 

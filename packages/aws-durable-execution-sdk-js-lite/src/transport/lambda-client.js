@@ -4,6 +4,8 @@ import { encodeRfc3986, signRequest } from "./sigv4.js";
 
 const API = "/2025-12-01/durable-executions";
 const MAX_ATTEMPTS = 3;
+// The time that the SDK keeps to end the invocation before its deadline.
+const MARGIN_MS = 500;
 // The global timer, not node:timers/promises, which LLRT does not provide.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -53,6 +55,8 @@ export function createLambdaClient({
     `https://lambda.${region}.amazonaws.com`,
   fetch = globalThis.fetch,
   retryBaseMs = 100,
+  // Epoch milliseconds when the invocation times out. Infinity keeps 55 s per attempt.
+  deadline = Infinity,
 } = {}) {
   const getCredentials = credentials
     ? async () => credentials
@@ -69,6 +73,15 @@ export function createLambdaClient({
     if (body !== undefined) headers["content-type"] = "application/json";
 
     for (let attempt = 1; ; attempt++) {
+      // On Lambda Managed Instances, a timeout does not stop the code. So no attempt
+      // runs past the deadline. The error has no status, so the handler throws to
+      // Lambda (README 2.8). The invocation is about to time out anyway.
+      const timeout = Math.min(55_000, deadline - Date.now() - MARGIN_MS);
+      if (timeout <= 0) {
+        const err = new Error("Less than 500 ms left in the invocation");
+        err.name = "DeadlineExceededError";
+        throw err;
+      }
       // x-amz-date changes per attempt, so each attempt is signed again.
       const signed = signRequest({
         method,
@@ -87,7 +100,7 @@ export function createLambdaClient({
           method,
           headers: signed,
           body,
-          signal: AbortSignal.timeout(55_000),
+          signal: AbortSignal.timeout(timeout),
         });
       } catch (err) {
         // A rejected fetch is a network error or a timeout. Both may succeed on retry.

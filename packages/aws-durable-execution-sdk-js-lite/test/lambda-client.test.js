@@ -409,7 +409,9 @@ test("withDurableExecution bounds the built-in client by the invocation's deadli
       name: "DeadlineExceededError",
     },
   );
-  assert.ok(Date.now() - start < 150, `took ${Date.now() - start} ms`);
+  // The attempt times out after 100 ms. The backoff before the retry check adds up to
+  // 100 ms with the default retryBaseMs.
+  assert.ok(Date.now() - start < 300, `took ${Date.now() - start} ms`);
   assert.equal(fetch.calls.length, 1);
 });
 
