@@ -176,4 +176,38 @@ describe("contract between extras and the worker", () => {
       autoSuspendIdleSeconds: 60,
     });
   });
+
+  it("builds a session job request with suspendAfter that the worker parses", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "session",
+            { ...baseConfig(client), fetch: endpoint.fetch },
+            async (vm, ctx) =>
+              vm.invoke(ctx, "job", input, {
+                timeout: { minutes: 1 },
+                suspendAfter: true,
+              }),
+          ),
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("job.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("job.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    expect((await executionPromise).getStatus()).toBe("SUCCEEDED");
+
+    const parsed = parseJobRequest<Input>(endpoint.requests[0].body);
+    expect(parsed.version).toBe(SUPPORTED_PAYLOAD_VERSION);
+    expect(parsed.suspendAfter).toBe(true);
+    expect(parsed.input).toEqual(input);
+  });
 });

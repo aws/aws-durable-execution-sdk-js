@@ -46,6 +46,17 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const AUTH_TOKEN_MINUTES = 5;
 
 /**
+ * The endpoint answers HTTP 502 with `x-aws-proxy-error:
+ * MICROVM_CONNECT_FAILED` while the MicroVM is suspending or suspended. A
+ * probe measured the answer in about 60 milliseconds.
+ */
+const PROXY_ERROR_HEADER = "x-aws-proxy-error";
+const CONNECT_FAILED = "MICROVM_CONNECT_FAILED";
+
+/** The shortest time between two calls of {@link SendJobOptions.suspendCheck}. */
+const SUSPEND_CHECK_INTERVAL_MS = 2_000;
+
+/**
  * Returns the time by which every call of the first tier must end: the
  * start of the invocation reserve. Returns `undefined` when the compute
  * reports no deadline.
@@ -242,7 +253,51 @@ export interface SendJobOptions {
    * never extends the tier.
    */
   recheck?: (maxWaitMs: number) => Promise<string | undefined>;
+  /**
+   * Resumes the MicroVM if it is suspended, and returns its current
+   * endpoint.
+   *
+   * A session job without {@link SendJobOptions.recheck} sets it. A worker
+   * can suspend the MicroVM after a `suspendAfter` job, and the session can
+   * lose the record of that job on replay. A suspended or suspending MicroVM
+   * gets no answer to a request, or its endpoint answers HTTP 502 with
+   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the next attempt calls
+   * it after either sign, at most once per 2 seconds. A booting MicroVM gets
+   * neither sign, because its endpoint holds the request until the worker
+   * listens. That holds unless the worker takes more than 10 seconds to
+   * start listening. Then the first delivery gets no answer, and the
+   * operation makes one GetMicrovm call. So a session that never suspends
+   * makes no extra call, except in that case. It receives what remains of
+   * the retry window, in milliseconds. `undefined` from it keeps the current
+   * endpoint. When {@link SendJobOptions.recheck} is set too, only `recheck`
+   * runs.
+   */
+  suspendCheck?: (maxWaitMs: number) => Promise<string | undefined>;
+  /**
+   * Returns a sentence to add to the message of
+   * {@link MicrovmEndpointUnavailableError}, or `undefined`.
+   */
+  unavailableNote?: () => string | undefined;
+  /**
+   * Called when the answer that accepted the job lacks the header
+   * `X-Microvm-Suspend-After: accepted`.
+   *
+   * A `suspendAfter` job sets it. A worker that supports the field sends
+   * the header. An older worker ignores the field, and the MicroVM keeps
+   * running after the job.
+   */
+  onSuspendAfterIgnored?: () => void;
 }
+
+/**
+ * The header with which a worker acknowledges `suspendAfter` in its 202
+ * answer. Its value is {@link SUSPEND_AFTER_ACCEPTED}. The worker package
+ * and the Python SDK use the same header.
+ */
+export const SUSPEND_AFTER_HEADER = "X-Microvm-Suspend-After";
+
+/** The value of {@link SUSPEND_AFTER_HEADER} from a worker that supports it. */
+export const SUSPEND_AFTER_ACCEPTED = "accepted";
 
 /**
  * Delivers one job to a MicroVM route. It is the first retry tier: it runs
@@ -294,6 +349,18 @@ export interface SendJobOptions {
  * request for a callback ID that runs or recently ended, so the job still
  * runs once.
  *
+ * A session job checks the MicroVM state in one of two ways. With
+ * {@link SendJobOptions.recheck}, it checks after any 502, 503, 504, or
+ * request without an answer. With {@link SendJobOptions.suspendCheck}, it
+ * checks only after a 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`
+ * or a request without an answer, at most once per 2 seconds. The function
+ * then sends the job again to the endpoint that the check reports.
+ *
+ * A `suspendAfter` job also reads the answer that accepted it. A worker that
+ * supports the field answers with `X-Microvm-Suspend-After: accepted`.
+ * Without that header, the function calls
+ * {@link SendJobOptions.onSuspendAfterIgnored}.
+ *
  * @returns The status that accepted the job.
  */
 export async function sendJob(options: SendJobOptions): Promise<number> {
@@ -314,10 +381,12 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
 
   let attempt = 0;
   let lastFailure = "no attempt";
-  const unavailable = (): MicrovmEndpointUnavailableError =>
-    new MicrovmEndpointUnavailableError(
-      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.`,
+  const unavailable = (): MicrovmEndpointUnavailableError => {
+    const note = options.unavailableNote?.();
+    return new MicrovmEndpointUnavailableError(
+      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.${note ? ` ${note}` : ""}`,
     );
+  };
   const newToken = (): Promise<Record<string, string>> =>
     callBeforeDeadline(
       (sendOptions) => createAuthToken(options, sendOptions),
@@ -330,6 +399,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
   let token = await newToken();
   let refreshedToken = false;
   let delay = INITIAL_DELAY_MS;
+  let lastSuspendCheck: number | undefined;
 
   for (attempt = 1; ; attempt++) {
     // The request must end before the reserve, like every call in the tier.
@@ -341,6 +411,8 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     let status: number | undefined;
     let hasLocation = false;
     let followed = false;
+    let connectFailed = false;
+    let suspendAfterAnswer: string | null = null;
     try {
       const response = await options.fetch(url, {
         method: "POST",
@@ -358,6 +430,10 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       status = response.status;
       hasLocation = Boolean(response.headers.get("location"));
       followed = response.redirected;
+      connectFailed =
+        status === 502 &&
+        response.headers.get(PROXY_ERROR_HEADER) === CONNECT_FAILED;
+      suspendAfterAnswer = response.headers.get(SUSPEND_AFTER_HEADER);
       // The body is not used. Reading it releases the connection.
       await response.arrayBuffer().catch(() => undefined);
     } catch (error) {
@@ -376,6 +452,12 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     }
     if (status !== undefined && status >= 200 && status < 300) {
       options.log("job accepted", { attempt, status });
+      if (
+        options.onSuspendAfterIgnored !== undefined &&
+        suspendAfterAnswer !== SUSPEND_AFTER_ACCEPTED
+      ) {
+        options.onSuspendAfterIgnored();
+      }
       return status;
     }
     if (status !== undefined) {
@@ -427,6 +509,16 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     // A failed request or a gateway error can mean that the MicroVM
     // suspended itself. So a session checks the state, and resumes the
     // MicroVM, before it retries.
+    //
+    // A session without the resume mode checks the state only after a sign
+    // of a suspended MicroVM. A booting MicroVM gives no such sign, unless
+    // the worker takes more than 10 seconds to start listening. The check
+    // repeats after each such failure, at most once per 2 seconds. The
+    // worker can suspend after the job's first state check, and the last
+    // call to the service wins.
+    //
+    // A session sets only one of the two checks. So when both are set, only
+    // `recheck` runs.
     if (
       options.recheck &&
       (status === undefined || (status >= 502 && status <= 504))
@@ -437,6 +529,23 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
       endpoint = (await options.recheck(remainingMs)) ?? endpoint;
       url = endpointUrl(endpoint, options.path);
+    } else if (
+      options.suspendCheck &&
+      (status === undefined || connectFailed)
+    ) {
+      const now = Date.now();
+      if (
+        lastSuspendCheck === undefined ||
+        now - lastSuspendCheck >= SUSPEND_CHECK_INTERVAL_MS
+      ) {
+        lastSuspendCheck = now;
+        const remainingMs = deadline() - now;
+        if (remainingMs <= 0) {
+          throw unavailable();
+        }
+        endpoint = (await options.suspendCheck(remainingMs)) ?? endpoint;
+        url = endpointUrl(endpoint, options.path);
+      }
     }
   }
 }
