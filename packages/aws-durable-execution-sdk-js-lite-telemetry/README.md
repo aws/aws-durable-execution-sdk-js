@@ -109,10 +109,12 @@ import { createSQSExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/
    - one record when it ends. Its status is RUNNING when the invocation suspends or
      retries.
 
-In `"on-change"` mode, the plugin starts each export at once. The exports of one
-invocation run one after the other, in the order the records were built. So an exporter
-that replaces the row of an execution never replaces a newer record of the same
-invocation with an older one. The end of the invocation waits for all of them.
+In `"on-change"` mode, the plugin starts each export at once. Each exporter receives the
+records of one invocation one after the other, in the order the records were built. So an
+exporter that replaces the row of an execution never replaces a newer record of the same
+invocation with an older one. The exporters do not wait for each other. So a slow
+exporter does not delay the records of another exporter. The end of the invocation waits
+for all of them.
 
 ## Record format
 
@@ -980,7 +982,9 @@ The exporter needs no IAM permission. Authenticate with `headers`. To call an en
 inside a VPC, the function needs a VPC configuration with a route to the endpoint.
 
 Keep `timeoutMs` below `exportTimeoutMs`. Otherwise the request can keep running after
-the plugin stops waiting. Lambda can then freeze it with the sandbox.
+the plugin stops waiting. Lambda can then freeze it with the sandbox. In `"on-change"`
+mode, the requests of one invocation add up. See
+[Keep exportTimeoutMs short](#keep-exporttimeoutms-short).
 
 ### File
 
@@ -1162,6 +1166,13 @@ slow destination costs time in every invocation.
    upserts keep the newer record in that case.
 3. The HTTP and OpenTelemetry logs exporters do not use the built-in client. Their
    requests have the timeout `timeoutMs`. Keep it below `exportTimeoutMs`.
+4. Each exporter receives the records of one invocation one after the other. So a slow
+   exporter does not delay the other exporters. Its own records still wait for each
+   other. In `"on-change"` mode, an invocation can send several records. Their export
+   times add up. If the sum exceeds `exportTimeoutMs`, the plugin stops waiting before
+   that exporter received the last record of the invocation. Lambda can then freeze the
+   rest. So for a slow exporter, keep `timeoutMs` times the records per invocation below
+   `exportTimeoutMs`, or use `"on-complete"`.
 
 ### Use on-change only when you watch running executions
 
@@ -1214,8 +1225,8 @@ record. So do not put secrets in error messages.
   names it `prefix`.
 - No export scheduler. The lite SDK creates one plugin per invocation, calls
   `onOperationChange` synchronously from `flush`, and calls `onInvocationEnd` once,
-  after the last checkpoint response. So no hook can arrive after the end. The plugin
-  only chains the exports of one invocation.
+  after the last checkpoint response. So no hook can arrive after the end. Within one
+  invocation, the plugin chains the exports of each exporter.
 - No `flush` on exporters, and no `render`. The plugin measures the record with the
   `operations` array. The full SDK measures the rendered record. So with
   `operationsFormat: "both"`, set `maxRecordBytes` with room for `operationsByName`.
@@ -1311,7 +1322,7 @@ change any file here.
 ### Files
 
 ```
-src/index.js                    createTelemetryPlugin, sampling, export chain, timeout
+src/index.js                    createTelemetryPlugin, sampling, export chains, timeout
 src/record.js                   buildRecord: wire records to the record format
 src/truncate.js                 fitRecord: the drop order of Record size
 src/operations-by-name.js       the operationsByName form and applyOperationsFormat
@@ -1338,18 +1349,22 @@ test/types.check.ts             compile-time check against the lite SDK's plugin
 
 1. The factory closure holds the exporters and the options. Each factory call holds the
    state of one invocation in local variables: the start time, the last `emittedAt` and
-   the export chain.
+   one export chain per exporter.
 2. `onOperationChange` exists only in `"on-change"` mode. So the other modes add no work
    to checkpoint responses.
 3. `onOperationChange` is synchronous, and the SDK does not await it. So it builds the
-   record and appends the export to the chain. `onInvocationEnd` appends its own export
-   and waits for the chain, bounded by `exportTimeoutMs`.
-4. The chain never rejects: each export catches its own errors. So a failed export does
+   record and appends one export to each exporter's chain. `onInvocationEnd` appends its
+   own export to each chain and waits for all chains together, bounded by
+   `exportTimeoutMs`.
+4. An upserting exporter must not receive an older record after a newer one. That order
+   matters only within one exporter. So each exporter has its own chain, and a slow
+   exporter delays only its own records.
+5. A chain never rejects: each export catches its own errors. So a failed export does
    not stop the next one.
-5. `src/aws.js` is a copy of the lite SDK's transport, adapted for generic POST and PUT
+6. `src/aws.js` is a copy of the lite SDK's transport, adapted for generic POST and PUT
    calls and for S3 signing. The lite SDK does not export its transport. So this package
    keeps its own copy. A fix to the signing or the retries in one copy applies to the
    other too.
-6. The types in `src/index.d.ts` are structural. They do not import the lite SDK, so the
+7. The types in `src/index.d.ts` are structural. They do not import the lite SDK, so the
    package's types resolve without it. `test/types.check.ts` checks that the factory is
    assignable to the lite SDK's `DurablePluginFactory`.

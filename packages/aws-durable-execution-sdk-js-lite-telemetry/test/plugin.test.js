@@ -337,9 +337,10 @@ test("failing, throwing and hanging exporters do not change the result", async (
     assert.equal(call.arguments.length, 1);
     assert.equal(call.arguments[0].includes("\n"), false);
   }
-  // The hanging exporter blocks the chain of each invocation after its first record.
-  // The good exporter still received the first record of each invocation.
-  assert.equal(good.records.length, 2);
+  // Each exporter has its own chain. The hanging exporter blocks only its own chain. So
+  // the good exporter received every record of both invocations: 3 per invocation.
+  assert.equal(good.records.length, 6);
+  assert.equal(good.records.at(-1).status, "SUCCEEDED");
 });
 
 test("a record that cannot be built logs a warning and the workflow continues", async (t) => {
@@ -372,11 +373,11 @@ test("a record that cannot be built logs a warning and the workflow continues", 
   assert.equal(exporter.records.length, 1);
 });
 
-test("on-change exports of one invocation run in order", async () => {
+test("on-change exports of one invocation reach an exporter in order", async () => {
   const log = [];
   let n = 0;
-  // Each export takes less time than the one before it. Without the chain, later
-  // exports would finish first.
+  // Each export takes less time than the one before it. Without the exporter's chain,
+  // later exports would finish first.
   const exporter = {
     async export(record) {
       const i = n++;
@@ -402,6 +403,58 @@ test("on-change exports of one invocation run in order", async () => {
     assert.equal(log[2 * i + 1], `end ${i}`);
   }
   assert.equal(log.at(-2), `start ${n - 1} SUCCEEDED`);
+});
+
+test("a slow exporter does not delay the records of another exporter", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const healthy = fakeExporter();
+  const slowEmittedAt = [];
+  const slow = {
+    async export(record) {
+      slowEmittedAt.push(record.emittedAt);
+      await new Promise((_, reject) =>
+        setTimeout(reject, 100, new Error("slow")),
+      );
+    },
+  };
+  // The steps are asynchronous. So each step has its own checkpoint responses, and the
+  // invocation sends several records.
+  const result = await runDurable({
+    workflow: async ({ ctx }) => {
+      for (let i = 0; i < 5; i++)
+        await ctx.step({
+          name: `s${i}`,
+          fn: () => new Promise((resolve) => setTimeout(resolve, 10, i)),
+        });
+      return "done";
+    },
+    plugins: [
+      createTelemetryPlugin({
+        exporters: [healthy, slow],
+        emitMode: "on-change",
+        exportTimeoutMs: 300,
+      }),
+    ],
+  });
+  assert.equal(result.invocations, 1);
+  const atReturn = healthy.records.map((r) => r.emittedAt);
+  assert.equal(healthy.records.at(-1).status, "SUCCEEDED");
+  assert.ok(
+    warn.mock.calls.some((c) =>
+      c.arguments[0].includes("did not finish within 300 ms"),
+    ),
+  );
+  // The slow exporter's chain continues after the handler returned. So the test waits
+  // for it.
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  // At least 4 records at 100 ms each take longer than exportTimeoutMs. So a single
+  // chain across all exporters could not deliver all of them to the healthy exporter.
+  assert.ok(slowEmittedAt.length >= 4);
+  // The healthy exporter had every record when the handler returned.
+  assert.equal(atReturn.length, slowEmittedAt.length);
+  // Each exporter receives the records in emittedAt order.
+  assert.deepEqual(atReturn, atReturn.toSorted());
+  assert.deepEqual(slowEmittedAt, atReturn);
 });
 
 test("each exporter gets its own truncated copy", async (t) => {

@@ -37,10 +37,11 @@ export function createTelemetryPlugin({
     const startTime = new Date(executionStartMs(info.operations));
     const input = includeInput ? info.input : undefined;
     let lastEmittedMs = 0;
-    // The exports of this invocation, chained. Each export starts after the previous
-    // one settled. So an exporter that upserts never replaces a newer record of this
-    // invocation with an older one.
-    let exports = Promise.resolve();
+    // One chain of exports per exporter. Each export of an exporter starts after its
+    // previous export settled. So an exporter that upserts never replaces a newer record
+    // of this invocation with an older one. The chains are independent. So a slow
+    // exporter does not delay the records of the other exporters.
+    let chains = exporters.map(() => Promise.resolve());
 
     // Telemetry must not change the workflow. A throw from onOperationChange would end
     // the invocation. So emit catches its own errors.
@@ -62,8 +63,8 @@ export function createTelemetryPlugin({
           emittedAt: new Date(lastEmittedMs),
           operationsMode: operations,
         });
-        exports = exports.then(() =>
-          Promise.all(exporters.map((exporter) => exportTo(exporter, record))),
+        chains = chains.map((chain, i) =>
+          chain.then(() => exportTo(exporters[i], record)),
         );
       } catch (err) {
         warn(`could not build the record: ${describe(err)}`);
@@ -87,7 +88,7 @@ export function createTelemetryPlugin({
             status === "FAILED" ? error : undefined,
           );
         }
-        await settleWithin(exports, exportTimeoutMs);
+        await settleWithin(Promise.all(chains), exportTimeoutMs);
       },
     };
   };
