@@ -96,6 +96,86 @@ describe("resumeIfSuspended", () => {
     );
   });
 
+  it("resumes again after a conflict during SUSPENDING, once the MicroVM is SUSPENDED", async () => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [state("SUSPENDING"), state("SUSPENDED")];
+    // The MicroVM stays SUSPENDED until a resume is accepted.
+    client.microvmState = "SUSPENDED";
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+    // Each sleep advances the clock. So a wait that never resumes ends at
+    // maxWaitMs.
+    const now = jest.spyOn(Date, "now");
+    let clock = 1_000_000;
+    now.mockImplementation(() => clock);
+    const opts = {
+      ...options(client),
+      sleep: jest.fn(async (ms: number) => {
+        clock += ms;
+      }),
+    };
+
+    try {
+      await expect(resumeIfSuspended(opts)).resolves.toBe(
+        "mvm-1.lambda-microvm.us-east-1.on.aws",
+      );
+      expect(client.events).toEqual([
+        "get:SUSPENDING",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+        "get:RUNNING",
+      ]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("calls ResumeMicrovm at most once per poll while it conflicts, and stops at maxWaitMs", async () => {
+    const client = new FakeMicrovmsClient();
+    const now = jest.spyOn(Date, "now");
+    let clock = 1_000_000;
+    now.mockImplementation(() => clock);
+    try {
+      client.getResponses = [state("SUSPENDING")];
+      client.microvmState = "SUSPENDED";
+      const conflict = Object.assign(new Error("busy"), {
+        name: "ConflictException",
+      });
+      client.resumeResponses = Array.from({ length: 20 }, () =>
+        throwing(conflict),
+      );
+      const opts = {
+        ...options(client),
+        maxWaitMs: 2_000,
+        sleep: jest.fn(async (ms: number) => {
+          clock += ms;
+        }),
+      };
+
+      const error = await resumeIfSuspended(opts).catch((e) => e);
+      expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
+      expect(error.message).toContain("Last state: SUSPENDED.");
+      // Polls after 0, 250, 750, and 1,750 ms fit in 2 seconds. The next
+      // delay of 2 seconds does not.
+      expect(client.events).toEqual([
+        "get:SUSPENDING",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+      ]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it.each(["TERMINATING", "TERMINATED"])(
     "throws MicrovmStateError for a %s MicroVM, with the request ID",
     async (value) => {

@@ -182,6 +182,39 @@ describe("a session job without the resume mode", () => {
     expect(endpoint.requests[1].url).toBe("https://resumed.example/build");
   });
 
+  it("resumes again after a conflict during SUSPENDING, once the MicroVM is SUSPENDED", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = suspendableEndpoint(client);
+    endpoint.responses = [new TypeError("fetch failed")];
+    // The MicroVM stays SUSPENDED until a resume is accepted.
+    client.microvmState = "SUSPENDED";
+    client.getResponses = [async () => ({ state: "SUSPENDING" })];
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+    const runner = runnerFor(
+      client,
+      endpoint,
+      oneJob({ retryWindow: { seconds: 5 } }),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "build", 1);
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.events).toEqual([
+      "request:/build",
+      "get:SUSPENDING",
+      "resume",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/build",
+      "terminate",
+    ]);
+  });
+
   it.each([502, 503, 504])(
     "makes no GetMicrovm call after a plain %i",
     async (status) => {

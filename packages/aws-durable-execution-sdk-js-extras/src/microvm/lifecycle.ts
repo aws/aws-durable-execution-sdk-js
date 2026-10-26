@@ -54,9 +54,11 @@ export interface EnsureRunningOptions {
  * - `PENDING`: the function returns at once. A new MicroVM reports `PENDING`
  *   until it boots. The request's own retries wait for the `run` hook, as
  *   they did before the session suspended MicroVMs.
- * - `SUSPENDED`: it calls ResumeMicrovm once, then waits for `RUNNING`. The
- *   MicroVM stays `SUSPENDED` while its `resume` hook runs. So the function
- *   does not call ResumeMicrovm again for each `SUSPENDED` answer.
+ * - `SUSPENDED`: it calls ResumeMicrovm, then waits for `RUNNING`. The
+ *   MicroVM stays `SUSPENDED` while its `resume` hook runs. So after the
+ *   service accepts a resume, the function does not call ResumeMicrovm again
+ *   for each `SUSPENDED` answer. A resume rejected with `ConflictException`
+ *   was not accepted. So the next `SUSPENDED` answer sends it again.
  * - `SUSPENDING`: it waits. The MicroVM becomes `SUSPENDED`, and the function
  *   then resumes it.
  * - `TERMINATING`, `TERMINATED`, or not found: it throws
@@ -69,7 +71,9 @@ export interface EnsureRunningOptions {
  * `AccessDeniedException`, is rethrown as the same error object. When it is
  * an error of the Lambda MicroVMs service, its message then ends with the
  * request ID of the call. See {@link addRequestId}. A `ConflictException`
- * from ResumeMicrovm is not an error: polling continues.
+ * from ResumeMicrovm is not an error: polling continues, and the next
+ * `SUSPENDED` answer sends ResumeMicrovm again. Each poll makes at most one
+ * ResumeMicrovm call.
  *
  * It polls after 250 milliseconds, doubling the wait up to 2 seconds. It
  * stops after `maxWaitMs`, or 10 seconds before the invocation times out. It
@@ -83,7 +87,7 @@ export interface EnsureRunningOptions {
 export async function ensureRunning(
   options: EnsureRunningOptions,
 ): Promise<string | undefined> {
-  return waitUntilRunning(options, false);
+  return waitUntilRunning(options, { attempted: false, accepted: false });
 }
 
 /**
@@ -139,13 +143,16 @@ export class MicrovmResumeDeniedError extends Error {
  *    the job.
  * 2. `RUNNING` or `PENDING`: the function returns at once.
  * 3. `SUSPENDING` or `SUSPENDED`: it calls ResumeMicrovm once. The service
- *    honors a resume during `SUSPENDING` too. It then waits for `RUNNING`,
+ *    can honor a resume during `SUSPENDING`. It then waits for `RUNNING`,
  *    as {@link ensureRunning} does after its own resume.
  * 4. `TERMINATING`, `TERMINATED`, or not found: it throws
  *    {@link MicrovmStateError}.
  *
  * A denied ResumeMicrovm throws {@link MicrovmResumeDeniedError}. A
- * `ConflictException` is not an error: polling continues. Any other
+ * `ConflictException` is not an error: polling continues. ResumeMicrovm
+ * requires `SUSPENDED`, so the service can reject a resume during
+ * `SUSPENDING` with that error. The wait then sends ResumeMicrovm again at
+ * the next `SUSPENDED` answer, as {@link ensureRunning} does. Any other
  * ResumeMicrovm error is rethrown as the same error object, as in
  * {@link ensureRunning}. So is any error of a GetMicrovm call after the
  * resume.
@@ -194,6 +201,11 @@ export async function resumeIfSuspended(
   if (state !== "SUSPENDING" && state !== "SUSPENDED") {
     return current.endpoint;
   }
+  // A resume during SUSPENDING saves a poll when the service accepts it. The
+  // service can also reject it with ConflictException, because ResumeMicrovm
+  // requires SUSPENDED. That resume did not take effect. So the wait sends
+  // ResumeMicrovm again when it sees SUSPENDED.
+  let accepted = true;
   try {
     await callBeforeDeadline(
       (sendOptions) =>
@@ -225,11 +237,12 @@ export async function resumeIfSuspended(
     if (errorName !== "ConflictException") {
       throw addRequestId("ResumeMicrovm", error);
     }
+    accepted = false;
   }
   options.log("resuming MicroVM", { state });
   return waitUntilRunning(
     { ...options, maxWaitMs: options.maxWaitMs - (Date.now() - started) },
-    true,
+    { attempted: true, accepted },
   );
 }
 
@@ -256,12 +269,31 @@ function throwIfEnded(
 }
 
 /**
- * The loop of {@link ensureRunning}. `resumeAlreadySent` states that the
- * caller has already called ResumeMicrovm.
+ * What the caller of {@link waitUntilRunning} has done.
+ *
+ * `attempted` states that a ResumeMicrovm call was made. `PENDING` then
+ * means a resume in progress, not a new MicroVM. `accepted` states that the
+ * service accepted a ResumeMicrovm call. A call rejected with
+ * `ConflictException` is attempted but not accepted.
+ */
+interface ResumeProgress {
+  attempted: boolean;
+  accepted: boolean;
+}
+
+/**
+ * The loop of {@link ensureRunning}.
+ *
+ * It calls ResumeMicrovm for each `SUSPENDED` answer until the service
+ * accepts a call. A `ConflictException` does not count as accepted. So the
+ * next `SUSPENDED` answer sends ResumeMicrovm again. Each poll makes at most
+ * one ResumeMicrovm call, and the poll delay and the deadline apply. So a
+ * repeated conflict ends with `MicrovmEndpointUnavailableError` at the
+ * deadline.
  */
 async function waitUntilRunning(
   options: EnsureRunningOptions,
-  resumeAlreadySent: boolean,
+  progress: ResumeProgress,
 ): Promise<string | undefined> {
   const sleep =
     options.sleep ??
@@ -276,7 +308,7 @@ async function waitUntilRunning(
     reserve === undefined
       ? started + options.maxWaitMs
       : Math.min(started + options.maxWaitMs, reserve);
-  let resumeSent = resumeAlreadySent;
+  let { attempted, accepted } = progress;
   let delay = INITIAL_POLL_MS;
   let lastState: string | undefined;
   const unavailable = (): MicrovmEndpointUnavailableError =>
@@ -332,21 +364,23 @@ async function waitUntilRunning(
       throw addRequestId("GetMicrovm", error);
     }
 
-    if (state === "RUNNING" || (state === "PENDING" && !resumeSent)) {
-      if (resumeSent) {
+    if (state === "RUNNING" || (state === "PENDING" && !attempted)) {
+      if (attempted) {
         options.log("MicroVM resumed", { waitedMs: Date.now() - started });
       }
       return endpoint;
     }
     throwIfEnded(options.microvmId, current);
-    if (state === "SUSPENDED" && !resumeSent) {
+    if (state === "SUSPENDED" && !accepted) {
+      attempted = true;
       try {
         await resumeMicrovm();
+        accepted = true;
       } catch (error) {
-        // ConflictException means a transition is already in progress, for
-        // example an auto-resume. Polling continues after a successful resume
-        // or a ConflictException. ResourceNotFoundException means that the
-        // MicroVM was removed after the state check.
+        // ConflictException means that the service did not take this resume,
+        // for example while a transition is in progress. The next SUSPENDED
+        // answer sends ResumeMicrovm again. ResourceNotFoundException means
+        // that the MicroVM was removed after the state check.
         const errorName = (error as Error).name;
         if (errorName === "ResourceNotFoundException") {
           throw microvmNotFound(options.microvmId, "ResumeMicrovm", error);
@@ -355,7 +389,6 @@ async function waitUntilRunning(
           throw addRequestId("ResumeMicrovm", error);
         }
       }
-      resumeSent = true;
       options.log("resuming MicroVM", { state });
     }
 
