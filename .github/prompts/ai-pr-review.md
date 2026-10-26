@@ -46,8 +46,11 @@ responding.
 
 Report only actionable findings in severity order. A code finding states its
 impact and a concrete fix, and identifies the affected file and changed line.
-An approach finding identifies the changed line when one exists. Otherwise it
-goes in the top-level summary without a line. When an
+An approach finding also identifies a changed file and an added line. Use the
+added line that most directly shows the broken rule. For example, use the first
+line of the new feature, option or API when its design note is missing. Its
+fix is the return to the design phase, with a simpler direction when you see
+one. When an
 inline-comment tool is available, use it and set `commit_id` to the head SHA in
 `.ai-review-context/pr.json`. Otherwise, include a `path:line` reference in the
 top-level summary. Do not comment on unchanged lines and do not repeat findings.
