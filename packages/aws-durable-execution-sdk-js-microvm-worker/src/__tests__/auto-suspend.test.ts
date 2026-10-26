@@ -36,14 +36,19 @@ const abortError = (): Error =>
  *
  * Like the AWS SDK's Node.js handler, it sends nothing when the signal is
  * already aborted. It fails a pending attempt with an AbortError when the
- * signal aborts.
+ * signal aborts. With `holdAbort` set, that failure waits for
+ * `settleAbort()`. So a test can act after the abort and before the call
+ * settles.
  */
 class LostAnswerHandler {
   /** For each attempt that reached the service, the jobs that ran then. */
   readonly attempts: string[][] = [];
   /** The abort signal of each attempt. */
   readonly signals: AbortSignal[] = [];
+  /** When set, an aborted attempt fails only on `settleAbort()`. */
+  holdAbort = false;
   private lost: ((error: Error) => void) | undefined;
+  private abortHeld: (() => void) | undefined;
 
   constructor(private readonly runningJobs: () => string[]) {}
 
@@ -68,10 +73,24 @@ class LostAnswerHandler {
     }
     return new Promise((_resolve, reject) => {
       this.lost = reject;
-      abortSignal?.addEventListener("abort", () => reject(abortError()), {
-        once: true,
-      });
+      abortSignal?.addEventListener(
+        "abort",
+        () => {
+          if (this.holdAbort) {
+            this.abortHeld = () => reject(abortError());
+          } else {
+            reject(abortError());
+          }
+        },
+        { once: true },
+      );
     });
+  }
+
+  /** Fails the aborted attempt that `holdAbort` held. */
+  settleAbort(): void {
+    this.abortHeld?.();
+    this.abortHeld = undefined;
   }
 
   /** Fails the pending attempt, as a stale connection does after the thaw. */
@@ -696,6 +715,7 @@ describe("auto-suspend when idle", () => {
 
     afterEach(() => {
       // A held attempt keeps idle() pending. So every test releases it.
+      handler.settleAbort();
       handler.reset();
       process.env = savedEnv;
     });
@@ -704,6 +724,7 @@ describe("auto-suspend when idle", () => {
     const listen = (
       createMicrovmsClient?: (region: string) => LambdaMicrovmsClient,
       warn: jest.Mock = jest.fn(),
+      info: jest.Mock = jest.fn(),
     ): MicrovmWorkerListener => {
       target = createMicrovmWorkerListener({
         routes: {
@@ -716,7 +737,7 @@ describe("auto-suspend when idle", () => {
         },
         createClient: () => lambdaClient,
         createMicrovmsClient,
-        logger: { info: () => {}, warn, error: () => {} },
+        logger: { info, warn, error: () => {} },
       });
       return target;
     };
@@ -832,6 +853,127 @@ describe("auto-suspend when idle", () => {
 
       await advance(1);
       expect(handler.attempts).toEqual([[], []]);
+    });
+
+    /** The info line of the resume hook that aborts the call. */
+    const STOPPING = "stopping the suspend call: the MicroVM resumed during it";
+
+    it("aborts the call and logs it once when a second resume hook arrives during the same call", async () => {
+      const info = jest.fn();
+      const warn = jest.fn();
+      // The aborted attempt fails only when the test settles it. So the call
+      // still runs when the second hook arrives.
+      handler.holdAbort = true;
+      const abort = jest.spyOn(AbortController.prototype, "abort");
+      try {
+        const worker = listen(retryingClient, warn, info);
+        await runHook(worker, IDLE_SECONDS);
+        await advance(IDLE_MS);
+
+        await resumeHook(worker);
+        await resumeHook(worker);
+        expect(warn).not.toHaveBeenCalled();
+        const resumeAborts = abort.mock.calls.filter(
+          ([reason]) =>
+            reason instanceof Error &&
+            reason.message ===
+              "the MicroVM resumed during the SuspendMicrovm call",
+        );
+        expect(resumeAborts).toHaveLength(1);
+        // The line names the call's target, the run hook's ID.
+        expect(
+          info.mock.calls.filter(([message]) => message === STOPPING),
+        ).toEqual([[STOPPING, { microvmId: "mvm-1" }]]);
+
+        // The call ends with one unknown outcome. Both hooks asked for the
+        // idle time during the call. It starts once, when the call ends. So
+        // one new call follows it.
+        handler.settleAbort();
+        await advance(0);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expectFailedSuspendWarning(warn, {
+          outcome: "unknown",
+          suspendHookArrived: false,
+          terminating: false,
+          closed: false,
+          refusingJobs: false,
+        });
+        await advance(IDLE_MS - 1);
+        expect(handler.attempts).toEqual([[]]);
+        await advance(1);
+        expect(handler.attempts).toEqual([[], []]);
+        expect(
+          info.mock.calls.filter(([message]) => message === STOPPING),
+        ).toHaveLength(1);
+      } finally {
+        abort.mockRestore();
+      }
+    });
+
+    /**
+     * Runs a call that the resume hook aborts. A `suspend` hook arrives after
+     * the resume and before the aborted call ends. The call then ends.
+     */
+    const suspendHookDuringAbortedCall = async (
+      worker: MicrovmWorkerListener,
+      warn: jest.Mock,
+    ): Promise<void> => {
+      handler.holdAbort = true;
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      await resumeHook(worker);
+      // The resume ended the refusal.
+      expect(await job(worker, "cb-1")).toBe(202);
+      await finishJob("cb-1");
+
+      // Lambda suspends the MicroVM again, for example after an attempt
+      // that the client sent before the resume.
+      expect(await call(worker, `${HOOK_PATH_PREFIX}suspend`, {})).toBe(200);
+      expect(await job(worker, "cb-2")).toBe(503);
+
+      // The aborted call ends. Its unknown outcome keeps the hook's refusal.
+      handler.settleAbort();
+      await advance(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expectFailedSuspendWarning(warn, {
+        outcome: "unknown",
+        suspendHookArrived: true,
+        terminating: false,
+        closed: false,
+        refusingJobs: true,
+      });
+      expect(await job(worker, "cb-3")).toBe(503);
+    };
+
+    it("keeps the refusal of a suspend hook that arrives before the aborted call ends, until the next resume hook", async () => {
+      const warn = jest.fn();
+      const worker = listen(retryingClient, warn);
+      await suspendHookDuringAbortedCall(worker, warn);
+
+      await advance(GRACE_MS - 1);
+      expect(await job(worker, "cb-4")).toBe(503);
+      // The refusal starts no call.
+      expect(handler.attempts).toEqual([[]]);
+
+      await resumeHook(worker);
+      expect(await job(worker, "cb-5")).toBe(202);
+      expect(started).toEqual(["cb-1", "cb-5"]);
+    });
+
+    it("keeps the refusal of a suspend hook that arrives before the aborted call ends, for 30 seconds without a resume hook", async () => {
+      const warn = jest.fn();
+      const worker = listen(retryingClient, warn);
+      await suspendHookDuringAbortedCall(worker, warn);
+
+      // The call ended at the time of the hook. So the refusal ends 30
+      // seconds after the hook.
+      await advance(GRACE_MS - 1);
+      expect(await job(worker, "cb-4")).toBe(503);
+      expect(handler.attempts).toEqual([[]]);
+
+      await advance(1);
+      expect(await job(worker, "cb-5")).toBe(202);
+      expect(started).toEqual(["cb-1", "cb-5"]);
     });
   });
 
