@@ -8,12 +8,13 @@ import {
   createScope,
   deliverJob,
   durationToSeconds,
-  jobDocument,
   type LaunchResult,
   launch,
+  measuredJob,
   type OperationScope,
   terminate,
   validateBaseConfig,
+  validateJobInput,
   validateRequest,
   validateTimeout,
 } from "./shared";
@@ -93,16 +94,21 @@ import type {
  * @param config - The MicroVM configuration. `timeout` bounds the whole
  * session.
  * @param handler - Sends the jobs. It receives the session handle and the
- * session's child context.
+ * session's child context. It must be a function. The session calls it after
+ * the launch, inside the child context. So a value that is not a function
+ * fails the session with a `TypeError`, wrapped in `ChildContextError`, and
+ * the terminate step still ends the MicroVM.
  * @returns The handler's return value.
- * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
- * `handler` is invalid.
+ * @throws \{TypeError\} When `name` is invalid, or `executionRoleArn` is
+ * missing.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * or `autoSuspendIdleTime` is shorter than 10 seconds or longer than
  * `timeout`.
  * @throws \{TypeError\} When `autoSuspendIdleTime` is set while
  * `autoSuspendOnIdle` is not `true`.
  * @throws \{MicrovmLaunchError\} When the launch fails after all retries.
+ * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
+ * `RunMicrovm` rejects it with `ValidationException`.
  *
  * @public
  *
@@ -121,11 +127,6 @@ export function microvmSession<TOutput = unknown>(
     timeoutSeconds = validateBaseConfig(name, config);
     autoSuspendIdleSeconds = validateAutoSuspend(name, config, timeoutSeconds);
     scope = createScope(context, name, config);
-    if (typeof handler !== "function") {
-      throw new TypeError(
-        `MicroVM session "${name}": handler must be a function`,
-      );
-    }
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
@@ -169,14 +170,9 @@ export function microvmSession<TOutput = unknown>(
       //    502. The request step retries a 502 until both retry tiers end.
       // 5. So each job follows the resume mode that the launch recorded, not
       //    the current config.
-      // A launch checkpoint written before this change has no
-      // `resumeBeforeDelivery` field. The code before this change computed
-      // the mode from the current config on every replay. So the session does
-      // the same for such a checkpoint.
-      const resumeBeforeDelivery =
-        typeof launched.resumeBeforeDelivery === "boolean"
-          ? launched.resumeBeforeDelivery
-          : resumeFromConfig;
+      // Every session launch records a boolean. So only `true` turns the
+      // state check on. A missing field, or any other value, reads as false.
+      const resumeBeforeDelivery = launched.resumeBeforeDelivery === true;
 
       try {
         return await handler(
@@ -311,17 +307,8 @@ function invokeJob<TOutput, TInput>(
   input: TInput,
   options: MicrovmInvokeOptions,
 ): DurablePromise<TOutput> {
+  let inputJson: string | undefined;
   try {
-    // A call in the shape vm.invoke(name, input, options) passes a string
-    // here. This check reports that, instead of a TypeError from inside.
-    if (
-      typeof (context as { runInChildContext?: unknown } | undefined)
-        ?.runInChildContext !== "function"
-    ) {
-      throw new TypeError(
-        `MicroVM session "${scope.name}": invoke requires the durable context to create the job in, as its first argument`,
-      );
-    }
     if (typeof jobName !== "string" || jobName.length === 0) {
       throw new TypeError(
         `MicroVM session "${scope.name}": invoke requires a non-empty job name`,
@@ -329,6 +316,7 @@ function invokeJob<TOutput, TInput>(
     }
     validateRequest(jobName, options);
     validateTimeout(jobName, "timeout", options.timeout);
+    inputJson = validateJobInput(jobName, input);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
@@ -349,7 +337,9 @@ function invokeJob<TOutput, TInput>(
           jobName,
           launched,
           options,
-          jobDocument(callbackId, input, options.heartbeatTimeout),
+          // The request sends the input's JSON text from
+          // validateJobInput. So `input` is encoded once per call.
+          measuredJob(callbackId, inputJson, options.heartbeatTimeout),
           { resume: resumeBeforeDelivery },
         ),
       );

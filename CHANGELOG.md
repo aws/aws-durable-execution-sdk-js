@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Coordinated release summary
+
+Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
+below describe each change in detail.
+
+- Plugin factories replace plugin instances in `DurableExecutionConfig.plugins`.
+  The SDK creates one plugin per invocation. (6597e075)
+- The SDK no longer awaits operation plugin hooks. (4e4e9407)
+- OTel reports `faas.max_memory` in bytes, not MiB. (e049d07c)
+- `InvokeError.cause.name` is the invoked function's error type. (a0d310f5)
+- The idle cooldown before an invocation suspends is 3 ms, not 20 ms. (c0a7e349)
+- Telemetry Exporter and Telemetry MCP are `0.1.0-alpha.1`, and the ESLint
+  plugin is `1.2.0`. So the fixes merged after their published versions ship.
+
+
 ### Changed
 
 - **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
@@ -113,8 +128,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
   SDK's set of invocation responses is unchanged.
 
+- The failed-suspend warning of the MicroVM worker in
+  `@aws/durable-execution-sdk-js-microvm-worker` now has one message per outcome:
+  - "could not suspend the idle MicroVM, because the service rejected the call. A missing
+    permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role."
+  - "could not suspend the idle MicroVM, because the service refused the call for now."
+  - "the suspend call for the idle MicroVM had an unknown outcome."
+
+  Before, the text also described the worker state. The state is now in the fields `outcome`,
+  `suspendHookArrived`, `terminating`, `closed`, and `refusingJobs`. A log query that matched an
+  old text must match the new message or the `outcome` field.
+
+- `microvm` and `vm.invoke` in `@aws/durable-execution-sdk-js-extras` now reject a job input
+  whose JSON form has more than `MAX_JOB_INPUT_BYTES` UTF-8 bytes: 6,283,264 bytes, 6 MiB minus
+  8 KiB. They reject it with a `RangeError`, before any durable operation starts. The worker
+  refuses a job body over 6 MiB. Before, the operation launched the MicroVM first. The request
+  step then failed with `MicrovmDeliveryError`. After a connection reset, both retry tiers
+  retried for minutes while the MicroVM was billed. A value that `JSON.stringify` cannot encode,
+  such as a `BigInt`, now also fails before any durable operation. It fails with a `TypeError`
+  whose message names the operation and whose `cause` is the error of `JSON.stringify`. An
+  execution that started on an earlier build, with an input in the last 8 KiB below the old
+  limit, fails at its next replay.
+
 ### Fixed
 
+- After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
+  fail to suspend the invocation. The same held after any child context returned while a step
+  it started was still running. A step still running in an abandoned item tries to checkpoint
+  its result. The SDK drops that checkpoint, because its ancestor context has finished. Before,
+  the step then stayed `EXECUTING` for the rest of the invocation, and an `EXECUTING` operation
+  blocks suspension. So the invocation could not suspend. A wait or callback longer than the
+  remaining invocation time then ran until the Lambda timeout. Now, when the SDK drops the
+  awaited result checkpoint of a step or `waitForCondition`, it marks that operation completed.
+  A child context is not affected, because it does not wait for its checkpoint and stays running
+  until it settles. See ADR 0002.
+- A `map` or `parallel` that resumed after an earlier invocation ended between the item
+  checkpoints and the batch checkpoint could drop a recorded outcome. The items with a recorded
+  outcome settle again in index order, not in their original order. With `minSuccessful`, early
+  recorded successes could complete the batch before another recorded item settled. That item
+  was then reported `STARTED`, or with `maxConcurrency` not reported at all. A dropped failure
+  also left `hasFailure` `false`. Now the batch does not resolve until every item with a
+  recorded outcome has settled. Until then it starts items only up to the last recorded item. An
+  unfinished item in that range is not run again once the batch's outcome is already known. A
+  custom `shouldComplete` decision made while the recorded items settle is kept. So every
+  recorded outcome is kept. For the built-in rules, and for a `shouldComplete` predicate that
+  stays complete once it is complete as the counts grow, no item starts that the completion rule
+  would not start. Other predicates can decide differently on resume, because the resumed items
+  can settle in a different order than the original ones. `NestingType.FLAT` items have no
+  context record, so they are not covered.
+- After a `map` or `parallel` resolved, an item that was still running could start another item
+  when it settled. This happened with a `shouldComplete` predicate that returns continue after it
+  has completed the batch. Now no item starts after the batch has resolved.
+
+- **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
+  `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
+  target region, and fail before anything is created. Before, an unsupported version failed only
+  when CloudFormation created the cluster, after the VPC and other resources existed. The check
+  also rejects a version without Serverless v2 support, and a `minCapacity` or `maxCapacity`
+  outside the version's range. The error lists the available versions of the same major version.
+  When AWS cannot be reached, or the `rds:DescribeDBEngineVersions` permission is missing, the app
+  warns and continues. Pass `-c skipEngineVersionCheck=true` to skip the check, for example for
+  `cdk destroy` after RDS retired the version.
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
+  lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
+  `'$.claimid'` worked. The table now sets `case.insensitive` to `false` and maps each camelCase
+  record key to its lowercase column. The Athena schema prompt now says to use the payload's exact
+  key case. A table created earlier keeps lowercasing keys, and Athena cannot change the SerDe
+  properties in place, so on that table a camelCase path returns NULL. To update it: if the
+  explorer created the table, run `DROP TABLE <database>.<table>` (the table is external, so the
+  S3 data is kept) and save the destination in the explorer again; if the CDK stack created it,
+  redeploy the stack.
+- **Durable Execution Telemetry MCP**: `test_destination` no longer requires
+  `DURABLE_TELEMETRY_ATHENA_S3_LOCATION` for the `s3` destination. Only a host that creates the
+  Athena table needs it, and this server only queries an existing table. A missing table is now a
+  failed check instead of "will be created on Save".
+- **Durable Execution Telemetry CDK stack**: the Aurora PostgreSQL engine version comes from
+  `destinations.aurora.engineVersion` in `cdk/config.json` (default `17.9`). The stack pinned
+  16.4, which RDS no longer offers, so a fresh deploy failed. If you already deployed the stack,
+  set `engineVersion` to your cluster's current version before you redeploy: the stack does not
+  allow a major version upgrade, so a change from 16 to 17 is rejected and rolled back.
+- **Durable Execution Telemetry CDK stack**: the Aurora table's `execution_arn` is now
+  `VARCHAR(512)` and `execution_name` is `VARCHAR(256)`, the sizes the README already documents.
+  An execution ARN with a long function name and execution name could exceed the old 256. A
+  redeploy also widens these columns on a table an earlier version created.
 - **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
   telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
   `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
@@ -180,6 +277,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserve an already-exported context's identity for delayed child completion,
   and use the known backend end as a zero-duration start fallback when no start
   was recorded. Existing supplied timestamps and caller outcomes are preserved.
+- **OpenTelemetry**: `ExecutionOtelPlugin` with an application-owned provider now sets
+  `faas.max_memory` on the Invocation span in bytes, as the semantic conventions define it.
+  Before, it reported the `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` value unchanged, in MiB, so a
+  1024 MiB function reported `1024` instead of `1073741824`. Update any query or alarm that
+  reads this attribute.
 
 - With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
   duration of every wait and retry delay. The checkpoint server recorded times on its own real
@@ -410,7 +512,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
     with a token the service had already rejected. It now answers `PENDING`.
 
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` could suspend its
+  MicroVM during a job. The worker's own `SuspendMicrovm` client made up to 3 attempts. The
+  sequence:
+  1. An attempt suspended the MicroVM, and its answer was lost across the freeze.
+  2. The durable function resumed the MicroVM. The `resume` hook ended the worker's refusal, and
+     the next job started.
+  3. The client retried. The retry suspended the MicroVM with the job inside. Nothing resumed it,
+     so the job failed at its heartbeat timeout or its timeout.
+
+  `SuspendMicrovm` succeeds on a MicroVM that is already suspending or suspended. So a retry
+  gains nothing. The worker's own client now makes one attempt. The worker also aborts the call
+  when the `resume` hook arrives while the call runs. So a client from `createMicrovmsClient`
+  that retries sends no later attempt either. An aborted call is an unknown outcome. The
+  `resume` hook has already ended the refusal, so the worker starts no new one. With one attempt,
+  a throttle or a clock-skew error on the worker's own client now counts as refused for now. So
+  the worker accepts jobs again at once, and tries the call again after at least 30 seconds.
+  Before, the retried error counted as unknown, and the worker refused jobs for up to 30 seconds.
+  With one attempt, a server error or a dropped connection on the worker's own client now counts
+  as unknown. Before, the client retried it, and a retry often succeeded. So the worker now
+  refuses jobs for up to 30 seconds on a MicroVM that did not suspend. That is the accepted cost
+  of the fix, because a retry could suspend the MicroVM with the next job inside.
+
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` answered a second delivery
+  of a finished job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
+  durable function sends a job again when it lost the first 202, or when its request step runs
+  again on replay. After the 503, it resumed the MicroVM, sent the job again, and got 202. So the
+  MicroVM ran again for nothing. The worker now answers a second delivery this way, and starts no
+  job:
+  - A finished job gets HTTP 202 in every state. Its outcome is already reported.
+  - A running job gets HTTP 202 while the MicroVM terminates. The `terminate` hook fails its
+    callback.
+  - A running job gets HTTP 503 while the worker refuses jobs for a suspend, as before. The job
+    can freeze with the MicroVM. A 202 would end the delivery, and nothing would resume the
+    MicroVM. The 503 makes the durable function check the state and resume the MicroVM.
+
+  Outside a refusal, a second delivery gets HTTP 202, as before. A new job still gets HTTP 503
+  during the refusal. The `run` hook already checked for a known job first.
+
 ### Added
+
+- **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
+  `runInChildContext` function, a `map` function, or a `parallel` branch that calls no durable
+  operation on its context, and tells the user to put the work in a step. A step retries the
+  work when it throws, and a child context does not. The rule follows the context into helper
+  functions declared in the same file. It reports nothing when the context reaches code it
+  cannot read, such as an imported function. The rule is not in `flat/recommended`, because
+  the code it reports still replays correctly.
 
 - `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
   interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry

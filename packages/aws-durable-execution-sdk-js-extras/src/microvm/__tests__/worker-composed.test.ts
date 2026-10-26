@@ -29,8 +29,8 @@ import {
 import { defaultMicrovmRetryStrategy } from "..";
 import {
   deliverJob,
-  jobDocument,
   type LaunchResult,
+  measuredJob,
   type OperationScope,
 } from "../shared";
 
@@ -152,6 +152,15 @@ describe("the request step against the real worker listener", () => {
   let statuses: (number | string)[];
   /** When set, the endpoint delivers the next job request and loses its answer. */
   let loseNextAnswer: boolean;
+  /**
+   * When set, Lambda sends the worker the `suspend` hook just before the
+   * endpoint forwards the next job request. The MicroVM freezes after that
+   * request.
+   */
+  let suspendBeforeNextRequest: boolean;
+  /** Callback IDs whose handler waits for `releaseJob`. */
+  let heldJobs: Set<string>;
+  let releaseJob: Map<string, () => void>;
 
   beforeEach(() => {
     // The listener reads request bodies with nextTick and microtasks, which
@@ -164,6 +173,9 @@ describe("the request step against the real worker listener", () => {
     completions = [];
     statuses = [];
     loseNextAnswer = false;
+    suspendBeforeNextRequest = false;
+    heldJobs = new Set();
+    releaseJob = new Map();
     const lambda = {
       send: async (command: { constructor: { name: string } }) => {
         completions.push(command.constructor.name);
@@ -177,6 +189,11 @@ describe("the request step against the real worker listener", () => {
     listener = createMicrovmWorkerListener({
       handler: async (input, context) => {
         ran.push(`${context.callbackId}:${JSON.stringify(input)}`);
+        if (heldJobs.has(context.callbackId)) {
+          await new Promise<void>((resolve) => {
+            releaseJob.set(context.callbackId, resolve);
+          });
+        }
         return "done";
       },
       createClient: () => lambda,
@@ -189,6 +206,9 @@ describe("the request step against the real worker listener", () => {
   afterEach(async () => {
     listener.close();
     service.finishSuspend();
+    for (const release of releaseJob.values()) {
+      release();
+    }
     await jest.runOnlyPendingTimersAsync();
     await listener.idle();
     jest.useRealTimers();
@@ -200,11 +220,24 @@ describe("the request step against the real worker listener", () => {
       statuses.push(502);
       return new Response(null, { status: 502 });
     }
+    const freeze = suspendBeforeNextRequest;
+    if (freeze) {
+      suspendBeforeNextRequest = false;
+      await send(
+        listener,
+        `${HOOK_PATH_PREFIX}suspend`,
+        {},
+        LAMBDA_HOOK_HEADERS,
+      );
+    }
     const status = await send(
       listener,
       new URL(url).pathname,
       init.body as string,
     );
+    if (freeze) {
+      service.state = "SUSPENDED";
+    }
     if (loseNextAnswer) {
       loseNextAnswer = false;
       statuses.push("lost");
@@ -247,7 +280,7 @@ describe("the request step against the real worker listener", () => {
       "job",
       launched,
       {},
-      jobDocument(callbackId, { n: 1 }, undefined),
+      measuredJob(callbackId, JSON.stringify({ n: 1 }), undefined),
       { resume },
     );
 
@@ -346,6 +379,47 @@ describe("the request step against the real worker listener", () => {
 
     expect(statuses).toEqual(["lost", 202]);
     expect(ran).toEqual(['cb-1:{"n":1}']);
+    expect(
+      completions.filter(
+        (c) => c === "SendDurableExecutionCallbackSuccessCommand",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("resumes the MicroVM when a suspend hook arrives before the resend of a running job", async () => {
+    // 1. The worker starts cb-1, and the endpoint loses the 202.
+    // 2. The request step checks the state, and finds RUNNING.
+    // 3. Lambda sends the suspend hook. The worker refuses jobs.
+    // 4. The resend of cb-1 arrives. The MicroVM then freezes with cb-1.
+    // A 202 in step 4 would end the delivery. Nothing would resume the
+    // MicroVM, and cb-1 would never complete. The 503 makes the request
+    // step check the state again, find SUSPENDED, and resume the MicroVM.
+    await runHook();
+    heldJobs.add("cb-1");
+    loseNextAnswer = true;
+    const delivery = deliver("cb-1");
+    await jest.advanceTimersByTimeAsync(0);
+    expect(statuses).toEqual(["lost"]);
+    expect(service.calls).toEqual(["get:RUNNING"]);
+    suspendBeforeNextRequest = true;
+
+    await settle(delivery, 60_000);
+
+    expect(statuses).toEqual(["lost", 503, 202]);
+    expect(service.calls).toEqual([
+      "get:RUNNING",
+      "get:RUNNING",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+    ]);
+    expect(service.state).toBe("RUNNING");
+    expect(ran).toEqual(['cb-1:{"n":1}']);
+
+    // The job continues after the resume, and completes once.
+    releaseJob.get("cb-1")?.();
+    await jest.advanceTimersByTimeAsync(0);
+    await listener.idle();
     expect(
       completions.filter(
         (c) => c === "SendDurableExecutionCallbackSuccessCommand",

@@ -62,6 +62,18 @@ function report(checks: DestinationCheck[]): DestinationTestReport {
   };
 }
 
+/** How the calling host uses the destination. */
+export interface DestinationTestOptions {
+  /**
+   * Whether the host creates the Athena table itself. The explorer apps do:
+   * they need `athenaS3Location` (the source data location) to create the table
+   * on Save, so a missing table is reported as "will be created". The MCP
+   * server does not: it only queries an existing table, so it does not need
+   * the S3 location, and a missing table is a failed check. Defaults to `true`.
+   */
+  createsAthenaTable?: boolean;
+}
+
 /**
  * Runs read-only connectivity + completeness checks for the configured
  * destination. Never writes data — creating the Glue table stays on Save; the
@@ -75,12 +87,13 @@ function report(checks: DestinationCheck[]): DestinationTestReport {
  */
 export async function testDestination(
   cfg: TelemetryConfig,
+  options: DestinationTestOptions = {},
 ): Promise<DestinationTestReport> {
   const credentials = resolveCredentials(cfg.awsProfile);
 
   switch (cfg.destinationType) {
     case "s3":
-      return testAthena(cfg, credentials);
+      return testAthena(cfg, credentials, options.createsAthenaTable ?? true);
     case "dynamodb":
       return testDynamoDB(cfg, credentials);
     case "aurora":
@@ -108,12 +121,15 @@ export async function testDestination(
 async function testAthena(
   cfg: TelemetryConfig,
   credentials: ReturnType<typeof resolveCredentials>,
+  createsTable: boolean,
 ): Promise<DestinationTestReport> {
   const checks: DestinationCheck[] = [];
 
   const missing: string[] = [];
   if (!cfg.athenaDatabase) missing.push("Glue Database");
-  if (!cfg.athenaS3Location) missing.push("S3 Location");
+  // The S3 location is the source data location, used only to create the
+  // table. A host that does not create the table does not need it.
+  if (createsTable && !cfg.athenaS3Location) missing.push("S3 Location");
   // Note: athenaTable is never blank here — normalizeConfig() defaults it to
   // "durable_execution_telemetry" — so it can't be reported missing.
   checks.push({
@@ -145,9 +161,14 @@ async function testAthena(
         database: cfg.athenaDatabase,
         table: cfg.athenaTable,
       });
-      return exists
-        ? `${cfg.athenaDatabase}.${cfg.athenaTable} is present.`
-        : `${cfg.athenaDatabase}.${cfg.athenaTable} does not exist yet — it will be created automatically when you Save.`;
+      if (exists) return `${cfg.athenaDatabase}.${cfg.athenaTable} is present.`;
+      if (createsTable) {
+        return `${cfg.athenaDatabase}.${cfg.athenaTable} does not exist yet — it will be created automatically when you Save.`;
+      }
+      // probe() reports a throw as a failed check with this message.
+      throw new Error(
+        `${cfg.athenaDatabase}.${cfg.athenaTable} does not exist. Create it first (the exporter's CDK stack or the explorer app creates it).`,
+      );
     }),
   );
 

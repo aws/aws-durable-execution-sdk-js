@@ -27,6 +27,9 @@ Build **resilient, long-running AWS Lambda functions** with automatic state pers
 
 ## 📦 Packages
 
+Upgrading an existing application? Read the [2.x to 3.0 migration guide](docs/migration-2.x-to-3.0.md)
+for the coordinated Core 3 / OTel 2 upgrade and plugin factory examples.
+
 This monorepo contains the following packages. Most developers need only the first two.
 
 ### Build and test durable functions

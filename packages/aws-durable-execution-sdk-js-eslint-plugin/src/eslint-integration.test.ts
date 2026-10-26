@@ -111,6 +111,41 @@ export const handler = async (event: any, context: any) => {
   });
 
   describe("registering the plugin by hand", () => {
+    it("reports a child context with no durable operation when the rule is on", async () => {
+      // The rule uses scope analysis, which differs between ESLint versions,
+      // so it runs here on every version in the peer range.
+      const code = `
+export const handler = withDurableExecution(async (event: any, context) => {
+  await context.runInChildContext(async (ctx) => helper(ctx));
+  await context.map(event.items, async (ctx, item) => ctx.step(async () => item));
+});
+function helper(c: any) { c.logger.info("x"); return 1; }
+`;
+      const messages = await lint(code, [
+        {
+          files: ["**/*.ts"],
+          plugins: { durable: plugin },
+          rules: {
+            "durable/require-durable-operation-in-child-context": "error",
+          },
+        },
+      ]);
+
+      expect(messages.map((m) => [m.ruleId, m.line])).toEqual([
+        ["durable/require-durable-operation-in-child-context", 3],
+      ]);
+    });
+
+    it("is off in the recommended config", async () => {
+      const code = `
+export const handler = withDurableExecution(async (event: any, context) => {
+  await context.runInChildContext(async (ctx) => 1);
+});
+`;
+      expect(await lint(code, [plugin.configs["flat/recommended"]])).toEqual(
+        [],
+      );
+    });
     it("works under a namespace the user chooses", async () => {
       const messages = await lint(VIOLATING, [
         {

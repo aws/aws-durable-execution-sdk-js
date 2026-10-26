@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1149.0",
+    "@aws-sdk/client-rds": "^3.1149.0",
     "@aws-sdk/client-redshift-data": "^3.1149.0",
     "@aws/durable-execution-sdk-js": "file:../../aws-durable-execution-sdk-js",
     "@aws/durable-execution-sdk-js-telemetry-exporter": "file:..",
