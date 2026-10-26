@@ -66,6 +66,12 @@ export interface DestinationTestReport {
   ok: boolean;
   summary: string;
   checks: DestinationCheck[];
+  /** Mirrors core's WriteAccessResult; present only when every check passed. */
+  writeAccess?:
+    | { status: "read-only" }
+    | { status: "can-write"; findings: string[] }
+    | { status: "not-checked"; reason: string }
+    | { status: "unknown"; reason: string };
 }
 
 /** A single SQS message, normalized for display. */

@@ -68,6 +68,7 @@ const QUERY_EXECUTING_EXPORTS = [
   "fetchRedshiftRecord",
   // Metadata and DDL.
   "tableExists",
+  "getTableLocation",
   "ensureAthenaTable",
 ] as const;
 
@@ -95,6 +96,12 @@ const PERMITTED_OUTSIDE_CHOKE_POINT: Record<
     reason:
       "the test_destination tool. Core's own connectivity probe; it issues fixed " +
       "read-only statements that no caller can influence.",
+  },
+  checkWriteAccess: {
+    file: "server.ts",
+    reason:
+      "the write-access gate before the first data query. It issues fixed " +
+      "catalog SELECTs and a Glue GetTable that no caller can influence.",
   },
 };
 

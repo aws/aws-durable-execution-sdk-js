@@ -10,6 +10,7 @@ import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
 import { pingOpenSearch, countOpenSearchDocs } from "./opensearch";
+import { checkWriteAccess, type WriteAccessResult } from "./writeAccess";
 
 /**
  * Result of a single check within a destination test (e.g. "Glue table exists",
@@ -32,6 +33,13 @@ export interface DestinationTestReport {
   ok: boolean;
   summary: string;
   checks: DestinationCheck[];
+  /**
+   * Whether queries could change data at this destination. Present only when
+   * every check passed, because the write check needs a reachable destination.
+   * A `can-write` result is a warning, not a failed check, so it does not
+   * change `ok`.
+   */
+  writeAccess?: WriteAccessResult;
 }
 
 /** Awaits a connectivity probe and turns success/throw into a DestinationCheck. */
@@ -88,6 +96,15 @@ export interface DestinationTestOptions {
 export async function testDestination(
   cfg: TelemetryConfig,
   options: DestinationTestOptions = {},
+): Promise<DestinationTestReport> {
+  const result = await runChecks(cfg, options);
+  if (!result.ok) return result;
+  return { ...result, writeAccess: await checkWriteAccess(cfg) };
+}
+
+async function runChecks(
+  cfg: TelemetryConfig,
+  options: DestinationTestOptions,
 ): Promise<DestinationTestReport> {
   const credentials = resolveCredentials(cfg.awsProfile);
 

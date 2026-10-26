@@ -17,6 +17,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
+  checkWriteAccess,
   testDestination,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
@@ -36,6 +37,11 @@ import {
   TEST_DESTINATION_DESCRIPTION,
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
+import {
+  askUserToAccept,
+  createWriteAccessGate,
+  writeAccessAcceptedByEnv,
+} from "./writeAccessGate";
 
 /**
  * The package's own version. esbuild replaces this token at build time with the
@@ -83,10 +89,32 @@ function missingConfigResult(config: TelemetryConfig) {
 }
 
 /**
- * Registers the `test_destination` and `query` tools. The `config` is captured
- * from startup (read once) so the tools never re-read the environment.
+ * Registers the tools. The `config` and `acceptedByEnv` are captured from
+ * startup (read once) so the tools never re-read the environment.
  */
-function registerTools(server: McpServer, config: TelemetryConfig): void {
+function registerTools(
+  server: McpServer,
+  config: TelemetryConfig,
+  acceptedByEnv: boolean,
+): void {
+  // The three data tools call this before any query; see writeAccessGate.ts.
+  const writeAccessGate = createWriteAccessGate({
+    check: () => checkWriteAccess(config),
+    acceptedByEnv,
+    ask: (message) => askUserToAccept(server.server, message),
+  });
+  const blockedByWriteAccess = async (): Promise<ReturnType<
+    typeof jsonResult
+  > | null> => {
+    const blocked = await writeAccessGate();
+    return blocked
+      ? jsonResult(
+          { ...blocked, destinationType: config.destinationType },
+          true,
+        )
+      : null;
+  };
+
   server.registerTool(
     "test_destination",
     {
@@ -131,6 +159,7 @@ function registerTools(server: McpServer, config: TelemetryConfig): void {
           ok: report.ok,
           summary: report.summary,
           checks: report.checks,
+          writeAccess: report.writeAccess,
           destinationType: config.destinationType,
           region: config.region,
           // Nothing was missing on this path; report it explicitly so the
@@ -233,7 +262,11 @@ function registerTools(server: McpServer, config: TelemetryConfig): void {
         };
       }
 
-      // 2. Execute through the single choke point. This is the ONLY place the
+      // 2. Stop until the user accepts credentials that can change data.
+      const blocked = await blockedByWriteAccess();
+      if (blocked) return blocked;
+
+      // 3. Execute through the single choke point. This is the ONLY place the
       //    tool does anything — it never touches a runner directly.
       try {
         // Translate the log-only lookback window (hours) into the choke point's
@@ -357,6 +390,8 @@ function registerTools(server: McpServer, config: TelemetryConfig): void {
     async ({ executionArn, year, month, day, lookbackHours }) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
+      const blocked = await blockedByWriteAccess();
+      if (blocked) return blocked;
       try {
         return jsonResult(
           await runGetExecution(config, {
@@ -432,6 +467,8 @@ function registerTools(server: McpServer, config: TelemetryConfig): void {
     async ({ status, functionName, since, until, limit, lookbackHours }) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
+      const blocked = await blockedByWriteAccess();
+      if (blocked) return blocked;
       try {
         return jsonResult(
           await runListExecutions(config, {
@@ -469,7 +506,7 @@ async function main(): Promise<void> {
     version: DURABLE_TELEMETRY_MCP_VERSION,
   });
 
-  registerTools(server, config);
+  registerTools(server, config, writeAccessAcceptedByEnv(process.env));
   registerPrompts(server);
 
   const transport = new StdioServerTransport();

@@ -367,6 +367,33 @@ export async function tableExists(opts: {
 }
 
 /**
+ * The S3 location of a Glue table's data (`StorageDescriptor.Location`), or
+ * `undefined` when the table does not exist or has no location.
+ */
+export async function getTableLocation(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  database: string;
+  table: string;
+}): Promise<string | undefined> {
+  const client = new GlueClient({
+    region: opts.region,
+    credentials: opts.credentials,
+  });
+  try {
+    const out = await client.send(
+      new GetTableCommand({ DatabaseName: opts.database, Name: opts.table }),
+    );
+    return out.Table?.StorageDescriptor?.Location || undefined;
+  } catch (err) {
+    if (err instanceof Error && err.name === "EntityNotFoundException") {
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+/**
  * Create the Glue table (via Athena DDL, which registers it in the Glue
  * Catalog). Idempotent — safe to call every time settings are saved.
  *

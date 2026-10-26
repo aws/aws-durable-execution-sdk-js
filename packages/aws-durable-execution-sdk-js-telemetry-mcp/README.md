@@ -127,6 +127,29 @@ needs read access to whichever destination you point at.
 > - **OpenSearch:** map the identity to a role with read-only index permissions
 >   on the telemetry index.
 
+### Credentials that can change data
+
+Before the first `query`, `get_execution` or `list_executions` call in a
+session, the server checks whether queries could change data:
+
+- **Aurora and Redshift:** it asks the database whether its user is a superuser
+  or can write any table. A `SELECT` can write through a function on these
+  engines.
+- **S3 + Athena:** it checks whether the Athena result location is inside the
+  table's data location. If it is, each query writes result files that the table
+  then reads as records. The check is skipped when the workgroup chooses the
+  result location.
+- **Other destinations:** no check. A single read-only query cannot change data
+  there.
+
+If the check finds a way to change data, or cannot run, the server stops and
+asks you to accept the risk. A client that supports MCP form elicitation shows
+the prompt; accepting allows queries for the rest of the session. A client that
+does not support it gets a tool error that names what was found. To accept
+permanently, set `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's
+`env` block. Only you can accept: no tool accepts on the agent's behalf.
+`test_destination` reports the same check in its `writeAccess` field.
+
 ### Destinations and their required variables
 
 `DURABLE_TELEMETRY_DESTINATION_TYPE` selects the backend. Seven destination types
