@@ -1064,6 +1064,24 @@ await ctx.step({
 });
 ```
 
+On [Lambda Managed Instances](#running-on-lambda-managed-instances), a run of `fn` can
+also overlap a later run of the same step. An old invocation can still run `fn` when
+its retry starts (see
+[Keep each step far below the function timeout](#keep-each-step-far-below-the-function-timeout)).
+
+1. So the idempotency key must be the same in every run of the step. Then an API that
+   deduplicates by the key also detects two runs at the same time.
+2. Derive the key from the execution and the step. For example, combine an id that is
+   unique to the execution, taken from the execution input, with the step name:
+   `` `${event.orderId}:charge` ``.
+3. Do not derive the key from the time or from a random value.
+4. The SDK does not pass the execution ARN or the operation id to `fn`. A key that an
+   at-most-once step generated earlier is stable too, because that step returns only
+   after its result is saved.
+
+The SDK does not start `fn` after the invocation suspended (section 2.9, step 5). A
+`fn` that already runs then continues until it settles. Its result is not saved.
+
 ### Check errorType, not the error class
 
 Every failed operation throws a `DurableOperationError`. The original error class is not
@@ -1078,6 +1096,128 @@ try {
   await ctx.step({ name: "backorder", fn: () => backorder(item) });
 }
 ```
+
+### Running on Lambda Managed Instances
+
+On Lambda Managed Instances (LMI), Lambda runs the function on EC2 instances and manages
+them. Three facts of this environment matter for a durable function:
+
+1. The execution environment does not freeze between invocations. It runs
+   continuously ([LMI execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-execution-environment.html)).
+2. An invocation timeout does not stop the running code. Lambda marks the invocation as
+   failed, and the code continues to run in the environment (same page, "Invoke
+   timeouts").
+3. Concurrent invocations in one Node.js worker thread share the handler object and the
+   module state ([LMI Node.js runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-nodejs-runtime.html)).
+
+After a failed invocation, the service invokes the function again (section 2.3, step 9).
+So code of an ended invocation can keep running next to its retry, or next to an
+invocation of another execution. The practices below prevent the harm. They are also
+correct on Lambda (default). [Make steps idempotent](#make-steps-idempotent),
+[Do not rely on abandoned items](#do-not-rely-on-abandoned-items) and
+[Race operations inside a child context](#race-operations-inside-a-child-context) cover
+code that keeps running after its result is decided. Plugin writers also read
+[A plugin ignores work that settles after onInvocationEnd](#a-plugin-ignores-work-that-settles-after-oninvocationend).
+Client writers read [Write a custom client](#write-a-custom-client).
+
+### Keep each step far below the function timeout
+
+The SDK ends an invocation when no step is running and an operation waits for the
+service (section 2.5). Code outside steps does no I/O
+([Do all I/O inside steps](#do-all-io-inside-steps)), so it runs only briefly.
+
+1. So the invocation's deadline passes while user code runs only when it passes during
+   a step's `fn`.
+2. On LMI, Lambda then marks the invocation as failed, and `fn` keeps running.
+3. The service invokes the function again. The new invocation finds no saved outcome
+   for the step. An at-least-once step runs `fn` again. An at-most-once step finds its
+   record `STARTED` and asks its retry strategy, which can start a new attempt.
+4. So two runs of the same step can overlap.
+5. So keep the longest run of each step far below the function timeout. Split long work
+   into several steps. Each step saves its result, so a retry repeats only the step
+   that did not finish.
+
+### Give every I/O call in a step a timeout
+
+A network call without a timeout can wait longer than the invocation. Then the step
+runs past the deadline (see the previous practice).
+
+1. So give every I/O call in a step a timeout that is shorter than the time left in the
+   invocation.
+2. The workflow receives `lambdaContext`. `lambdaContext.getRemainingTimeInMillis()`
+   returns the time left in milliseconds. Read it inside `fn`, when the call starts.
+3. Leave a margin for the checkpoint that saves the step's result.
+
+```js
+export const handler = withDurableExecution(async ({ event, ctx, lambdaContext }) => {
+  // The time left, minus 2 seconds for the checkpoint. Never negative.
+  const timeLeft = () =>
+    Math.max(0, lambdaContext.getRemainingTimeInMillis() - 2000);
+  return ctx.step({
+    name: "quote",
+    fn: async () => {
+      const res = await fetch(event.quoteUrl, {
+        signal: AbortSignal.timeout(Math.min(10_000, timeLeft())),
+      });
+      return res.json();
+    },
+  });
+});
+```
+
+### Do not rely on finally around a durable operation
+
+When the invocation suspends, the promise of the blocked operation never resolves
+(section 2.5).
+
+1. So the code that awaits it never continues in that invocation, and a `finally`
+   around it never runs there.
+2. A later invocation replays the workflow. It runs the `finally` only when the
+   operation completes in that invocation.
+3. On LMI, the environment keeps running. So a socket, a timer or a connection that the
+   `finally` would close stays open for the life of the environment.
+4. So do not keep a resource open across a durable operation. Open and close it inside
+   one step, with `try` and `finally` inside `fn`.
+
+### Keep no per-invocation state in module-level variables
+
+Concurrent invocations in one worker thread share module-level variables. Each `await`
+lets another invocation run.
+
+1. So a module-level variable that one invocation sets can hold another invocation's
+   value after an `await`.
+2. The environment also keeps the variable for later invocations, of this execution and
+   of others.
+3. So keep the values of one invocation in local variables of the workflow function,
+   or in step results. Keep only values that every invocation shares at module level,
+   such as a client or a configuration.
+
+```js
+// Wrong: two concurrent invocations overwrite each other's order.
+let currentOrder;
+const wrong = async ({ event, ctx }) => {
+  currentOrder = event.order;
+  await ctx.step({ name: "reserve", fn: () => reserve(currentOrder) });
+};
+
+// Right: the value lives in the invocation's own scope.
+const right = async ({ event, ctx }) => {
+  const order = event.order;
+  await ctx.step({ name: "reserve", fn: () => reserve(order) });
+};
+```
+
+### Avoid long synchronous CPU work
+
+Concurrent invocations in one worker thread run on one event loop.
+
+1. A synchronous loop holds the thread until it returns. Meanwhile no other invocation
+   on the thread runs. No checkpoint response and no timer of any invocation is
+   handled, including those of this invocation.
+2. An invocation timeout does not stop the loop. `AbortSignal.timeout` does not stop
+   it either, because its timer cannot fire while the thread is busy.
+3. So keep each synchronous section short. Split CPU-heavy work into several steps that
+   each process one part.
 
 ### Keep plugin hooks fast, and do not throw from them
 
@@ -1120,13 +1260,20 @@ The SDK awaits only `onInvocationEnd`. It does not await `onOperationChange` or 
 beyond `fn`.
 
 1. So a network call that starts in another hook can still run when the handler returns.
-   Lambda then freezes the sandbox, and the call can fail or arrive late.
+   On Lambda (default), Lambda then freezes the sandbox, and the call can fail or arrive
+   late. On Lambda Managed Instances, the call keeps running next to later invocations.
 2. So collect the data on the plugin object, and send it in `onInvocationEnd`.
 3. The handler returns only after `onInvocationEnd` settles. A slow exporter delays the
    handler and costs Lambda time. So give every network call a timeout, for example with
    `AbortSignal.timeout(ms)`.
 4. A rejection from `onInvocationEnd` makes the handler throw, and Lambda invokes again.
    So catch the exporter's errors when a lost export is acceptable.
+5. `onInvocationEnd` finishes before the invocation's deadline.
+   `info.lambdaContext.getRemainingTimeInMillis()` returns the time left. Keep every
+   timeout of the hook below it.
+6. `onInvocationEnd` starts no work that needs the invocation to keep running: no
+   export, timer or retry that it does not await. On Lambda Managed Instances, such work
+   keeps running after the handler returned.
 
 ### Keep plugin state on the plugin object
 
@@ -1135,9 +1282,13 @@ invocations in one process at the same time.
 
 1. So keep per-invocation state, such as open spans and buffers, on the object that the
    factory returns, or in variables inside the factory call.
-2. Keep shared state, such as an HTTP client or an exporter, in the closure that creates
+2. So the factory returns a new object in every call. It never returns a cached object,
+   or an object that another invocation uses. The SDK calls the object's hooks with the
+   data of one invocation. A shared object would mix the data of concurrent invocations.
+3. Keep shared state, such as an HTTP client or an exporter, in the closure that creates
    the factory. Create it once, outside the factory call.
-3. Do not keep per-invocation state in module-level variables.
+4. Do not keep per-invocation state in module-level variables, for example in a map
+   keyed by the execution ARN.
 
 ```js
 const exporter = createExporter(); // shared by every invocation
@@ -1159,6 +1310,30 @@ const tracing = ({ requestId }) => {
   };
 };
 ```
+
+### A plugin ignores work that settles after onInvocationEnd
+
+The SDK calls `onOperationChange` from `flush`, after a checkpoint response (section
+2.12, call point 2). `flush` checks the execution's `done` flag before the request and
+after the response. The SDK sets `done` when the invocation suspends. It also sets it
+when the SDK itself ends the invocation: a checkpoint error, a serdes error, a hook
+error or a replay mismatch.
+
+1. So after such an end, the SDK calls no `onOperationChange`.
+2. When the workflow returns or throws, the SDK does not set `done`. A branch that
+   still runs, for example a losing branch of a `Promise.race`, can then save a
+   checkpoint. So `onOperationChange` can arrive after `onInvocationEnd` started.
+3. A `fn` that `wrap` started settles when it settles. Examples: an at-least-once step
+   whose `fn` still runs when the invocation ends, a step of an abandoned item (see
+   [Do not rely on abandoned items](#do-not-rely-on-abandoned-items)), and a step that
+   runs past the deadline on Lambda Managed Instances. So a handler that `wrap`
+   attached to `fn`'s promise can run after `onInvocationEnd`.
+4. So once `onInvocationEnd` started, a plugin changes nothing in reaction to a hook or
+   to a settled `fn`. It adds no data, and it starts no export. A flag that
+   `onInvocationEnd` sets first is enough.
+5. A plugin never changes the data of another invocation. Its hooks use only the state
+   of their own object (see
+   [Keep plugin state on the plugin object](#keep-plugin-state-on-the-plugin-object)).
 
 ### Write a custom client
 
@@ -1207,6 +1382,23 @@ export const handler = withDurableExecution(workflow, {
   },
 });
 ```
+
+Set a timeout on every `checkpoint` and `getExecutionState` request.
+
+1. A request without a timeout can wait after the invocation's deadline. On Lambda
+   Managed Instances, the environment keeps running. So the request keeps the
+   invocation's socket, timers and memory alive after the invocation ended.
+2. So make each request's timeout shorter than the time left in the invocation. The SDK
+   does not pass the Lambda context to the client. So use a fixed timeout far below the
+   function timeout, for example by passing
+   `{ abortSignal: AbortSignal.timeout(10_000) }` as the second argument of
+   `lambda.send`.
+3. A request that times out throws an error without `status`. So Lambda invokes again
+   (rule 2 above).
+
+The built-in client sets a timeout of 55 seconds per attempt, with up to 3 attempts
+(section 2.2). It does not bound the timeout by the time left in the invocation. That
+bound is under design.
 
 ## Differences from @aws/durable-execution-sdk-js
 
