@@ -20,6 +20,8 @@ describe("assertReadOnly: allows legitimate read-only queries", () => {
     ok("SELECT REPLACE (functionName, 'a', 'b') FROM t"));
   it("column names that merely contain keywords", () =>
     ok("SELECT deleted_at, created_at, updated_at FROM t"));
+  it("column names that end in a keyword", () =>
+    ok("SELECT last_update, autocreate FROM t"));
   it("a keyword only inside a string literal", () =>
     ok("SELECT * FROM t WHERE status = 'DELETED'"));
   it("a keyword only inside a line comment", () =>
@@ -124,6 +126,11 @@ describe("assertReadOnly: rejects lexing differences that hide a write", () => {
     pg.rejected("SELECT 'abc FROM t"));
   it("an unterminated block comment is rejected", () =>
     pg.rejected("SELECT 1 /* never closed"));
+  // PostgreSQL 13 and 14 read `1INTO` as the number 1 followed by the keyword INTO.
+  it("a digit directly before INTO still hides SELECT ... INTO", () =>
+    pg.rejected("SELECT 1INTO copied FROM durable_execution_telemetry"));
+  it("a digit directly before INTO is rejected on Redshift", () =>
+    redshift.rejected("SELECT 1INTO copied FROM durable_execution_telemetry"));
 
   it("Athena: a backslash inside a literal is an ordinary character", () =>
     athena.ok("SELECT * FROM t WHERE regexp_like(functionname, '\\d+')"));

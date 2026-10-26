@@ -60,6 +60,16 @@ export interface MicrovmJobRequest<TInput = unknown>
    * arrives, the worker takes it from the first job request that has one.
    */
   microvmId?: string;
+  /**
+   * Suspend the MicroVM after this job. Only a session job sets it, and only
+   * when it is `true`. The worker treats only the JSON value `true` as on,
+   * and ignores any other value.
+   *
+   * The worker acknowledges the field with the header
+   * `X-Microvm-Suspend-After: accepted` on its 202 answer. An older worker
+   * ignores the field and sends no such header.
+   */
+  suspendAfter?: boolean;
 }
 
 /**

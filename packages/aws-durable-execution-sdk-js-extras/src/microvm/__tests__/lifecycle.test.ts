@@ -71,6 +71,62 @@ describe("ensureRunning", () => {
     await expect(ensureRunning(options(client))).resolves.toBe("mvm-1.example");
   });
 
+  it("resumes again at the next SUSPENDED answer after a conflict", async () => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [state("SUSPENDED")];
+    // The MicroVM stays SUSPENDED until a resume is accepted.
+    client.microvmState = "SUSPENDED";
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+    // Each sleep advances the clock. So a wait that never resumes ends at
+    // maxWaitMs.
+    let clock = 1_000_000;
+    const now = jest.spyOn(Date, "now");
+    now.mockImplementation(() => clock);
+    const opts = {
+      ...options(client),
+      sleep: jest.fn(async (ms: number) => {
+        clock += ms;
+      }),
+    };
+
+    try {
+      await expect(ensureRunning(opts)).resolves.toBe(
+        "mvm-1.lambda-microvm.us-east-1.on.aws",
+      );
+      expect(client.events).toEqual([
+        "get:SUSPENDED",
+        "resume",
+        "get:SUSPENDED",
+        "resume",
+        "get:RUNNING",
+      ]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("does not return PENDING after a resume that conflicted", async () => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [
+      state("SUSPENDED"),
+      state("PENDING"),
+      state("RUNNING"),
+    ];
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+
+    await expect(ensureRunning(options(client))).resolves.toBe("mvm-1.example");
+    expect(client.events).toEqual([
+      "get:SUSPENDED",
+      "resume",
+      "get:PENDING",
+      "get:RUNNING",
+    ]);
+  });
+
   it("returns at once for a new MicroVM that is still booting", async () => {
     const client = new FakeMicrovmsClient();
     client.getResponses = [state("PENDING")];

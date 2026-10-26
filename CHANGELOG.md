@@ -623,6 +623,24 @@ below describe each change in detail.
   `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
   that the MicroVM endpoint forwarded to one of these hook paths.
 
+- `MicrovmInvokeOptions.suspendAfter` in `@aws/durable-execution-sdk-js-extras`. A session job
+  with `suspendAfter: true` asks the worker to suspend the MicroVM after the job, with or
+  without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
+  version 1. The session sets the flag before the job starts. So the job itself and each later
+  job of the session handle check the MicroVM state before delivery, and resume a suspended
+  MicroVM. The worker acknowledges the field with the header
+  `X-Microvm-Suspend-After: accepted`. Without that header, the session logs a warning once per
+  session in each execution environment: `the worker in MicroVM <id> does not support
+  suspendAfter. The MicroVM keeps running after the job.` `microvm` rejects `suspendAfter` in
+  `config.request` with a `TypeError`, and both operations reject a value that is not a
+  boolean, before any durable operation starts. The function's role needs `lambda:GetMicrovm`
+  and `lambda:ResumeMicrovm`, and the MicroVM's role needs `lambda:SuspendMicrovm` on the image.
+  The handle keeps that record in memory only. So every session job also checks the state after
+  an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer,
+  at most once per 2 seconds. It resumes a suspending or suspended MicroVM, and sends the job
+  again. A denied GetMicrovm logs one warning per job, and the job keeps its retries. A denied
+  ResumeMicrovm for a suspended MicroVM fails the job at once with `MicrovmDeliveryError`.
+
 - **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
   `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
   `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
