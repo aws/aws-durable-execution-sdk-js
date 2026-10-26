@@ -413,8 +413,8 @@ add to them or replace them for this package:
    failure, and `onInvocationEnd` waits at most `exportTimeoutMs` in total. This is the
    one safeguard that the package adds. Other misuse is documented, not checked.
 6. A callback that arrives after `onInvocationEnd` started changes nothing and is never
-   exported. Examples: an attempt whose `fn` settles later, and an `onOperationChange`
-   after the end. The lite SDK can deliver both (see
+   exported. Example: an attempt whose `fn` settles later. The lite SDK can deliver it,
+   and it calls no `onOperationChange` after the outcome is decided (see
    [A plugin ignores work that settles after onInvocationEnd](../aws-durable-execution-sdk-js-lite/README.md#a-plugin-ignores-work-that-settles-after-oninvocationend)).
    The `ended` flag in `src/index.js` holds this rule. A test in `test/hooks.test.js`
    fails without it. Another test there checks that two plugin objects of concurrent

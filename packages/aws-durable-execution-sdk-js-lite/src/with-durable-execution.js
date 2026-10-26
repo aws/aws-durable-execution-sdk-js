@@ -42,14 +42,19 @@ export function withDurableExecution(handler, { client, plugins } = {}) {
       traceHeader: hooks?.traceHeader,
     });
     const ctx = createContext({ execution });
-    if (!hooks) {
-      return (await run(handler, { execution, ctx, input, lambdaContext }))
-        .output;
-    }
+    // run settles after the last checkpoint is saved. A losing branch of a race can
+    // still run then. finish makes it save nothing and start no step fn (README 2.3).
+    const result = run(handler, {
+      execution,
+      ctx,
+      input,
+      lambdaContext,
+    }).finally(execution.finish);
+    if (!hooks) return (await result).output;
 
     let outcome;
     try {
-      outcome = await run(handler, { execution, ctx, input, lambdaContext });
+      outcome = await result;
     } catch (error) {
       // The handler throws, so Lambda invokes again.
       await hooks.onInvocationEnd({

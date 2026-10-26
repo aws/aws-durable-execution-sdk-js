@@ -268,6 +268,9 @@ export function createExecution({
     abort(error) {
       terminate({ kind: "throw", error });
     },
+    // The output is decided and every checkpoint is saved. Code that still runs gets the
+    // same treatment as after terminate: no checkpoint, no hook, no new step fn.
+    finish: () => terminate(),
   };
 }
 

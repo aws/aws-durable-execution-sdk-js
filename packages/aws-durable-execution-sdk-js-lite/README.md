@@ -1023,7 +1023,8 @@ operations.
 
 1. The losing branches keep running in the same invocation.
 2. The SDK still saves their operations in checkpoints, after the child context has its
-   result.
+   result. It stops when the invocation's outcome is decided. After that, it saves no
+   checkpoint, and a step of a losing branch does not start `fn` (section 2.3, step 10).
 3. So a losing branch must not start more side effects after it loses. Make each branch one
    step. Or set a flag when the winner finishes, and check the flag in the loser before its
    next step.
@@ -1079,8 +1080,10 @@ its retry starts (see
    at-most-once step generated earlier is stable too, because that step returns only
    after its result is saved.
 
-The SDK does not start `fn` after the invocation suspended (section 2.9, step 5). A
-`fn` that already runs then continues until it settles. Its result is not saved.
+The SDK does not start `fn` after the invocation's outcome is decided: after it
+suspended, after it ended with an error, and after the workflow's output is saved
+(section 2.9, step 5). A `fn` that already runs then continues until it settles. Its
+result is not saved.
 
 ### Check errorType, not the error class
 
@@ -1315,23 +1318,24 @@ const tracing = ({ requestId }) => {
 
 The SDK calls `onOperationChange` from `flush`, after a checkpoint response (section
 2.12, call point 2). `flush` checks the execution's `done` flag before the request and
-after the response. The SDK sets `done` when the invocation suspends. It also sets it
-when the SDK itself ends the invocation: a checkpoint error, a serdes error, a hook
-error or a replay mismatch.
+after the response. The SDK sets `done` once the invocation's outcome is decided, on
+every path: the invocation suspends, the SDK ends it with an error (a checkpoint error,
+a serdes error, a hook error or a replay mismatch), or the workflow returned or threw
+and the SDK saved the last checkpoint (section 2.3, step 10). The SDK sets `done`
+before it calls `onInvocationEnd`.
 
-1. So after such an end, the SDK calls no `onOperationChange`.
-2. When the workflow returns or throws, the SDK does not set `done`. A branch that
-   still runs, for example a losing branch of a `Promise.race`, can then save a
-   checkpoint. So `onOperationChange` can arrive after `onInvocationEnd` started.
-3. A `fn` that `wrap` started settles when it settles. Examples: an at-least-once step
+1. So after the outcome is decided, the SDK saves no checkpoint and calls no
+   `onOperationChange`. A branch that still runs, for example a losing branch of a
+   `Promise.race`, saves nothing then, and its steps do not start `fn`.
+2. A `fn` that `wrap` started settles when it settles. Examples: an at-least-once step
    whose `fn` still runs when the invocation ends, a step of an abandoned item (see
    [Do not rely on abandoned items](#do-not-rely-on-abandoned-items)), and a step that
    runs past the deadline on Lambda Managed Instances. So a handler that `wrap`
    attached to `fn`'s promise can run after `onInvocationEnd`.
-4. So once `onInvocationEnd` started, a plugin changes nothing in reaction to a hook or
-   to a settled `fn`. It adds no data, and it starts no export. A flag that
-   `onInvocationEnd` sets first is enough.
-5. A plugin never changes the data of another invocation. Its hooks use only the state
+3. So once `onInvocationEnd` started, a plugin changes nothing in reaction to a settled
+   `fn`. It adds no data, and it starts no export. A flag that `onInvocationEnd` sets
+   first is enough. The same flag also ignores any other hook call after the end.
+4. A plugin never changes the data of another invocation. Its hooks use only the state
    of their own object (see
    [Keep plugin state on the plugin object](#keep-plugin-state-on-the-plugin-object)).
 
@@ -1668,6 +1672,14 @@ Rules for the client:
 9. If the SDK throws from the Lambda handler, Lambda records an invocation error and the
    service invokes the function again. The SDK throws only for errors that a new invocation
    can fix (section 2.8).
+10. The workflow returns or throws. The SDK then saves the remaining checkpoints, and the
+   large result of step 7. Then the output is final. A losing branch of a race can still
+   run then. So the SDK calls `execution.finish` before step 8. `finish` calls
+   `terminate` and sets `done`. After it, as after any outcome, `checkpoint` returns a
+   promise that never resolves, `flush` sends nothing and calls no hook, and a step does
+   not start `fn` (section 2.5, suspension step 10). The call is in a `finally`, so it
+   also runs when `run` rejects. `terminate` then has already set `done`, and the call
+   does nothing.
 
 #### 2.4 Operation ids
 
@@ -1741,10 +1753,13 @@ Suspension:
 9. The SDK checks the condition again after one `setImmediate`. This lets already-resolved
    promises start the next operation first. If it still holds, the invocation returns PENDING.
 10. After the SDK decides to return PENDING, every later `checkpoint` call returns a promise that
-   never resolves. So user code cannot run more side effects in this invocation.
+   never resolves. So user code cannot run more side effects in this invocation. The same
+   holds after every other outcome: a terminate with an error, and the final output
+   (section 2.3, step 10).
 11. After the handler returns or throws, the execution never suspends. An un-awaited blocked
    operation must not turn a finished handler into PENDING. So the SDK counts the finished
-   handler as running while it saves the remaining checkpoints.
+   handler as running while it saves the remaining checkpoints. Then it calls
+   `execution.finish` (section 2.3, step 10).
 12. The invocation must never return PENDING while a blocked operation's latest record says
    that it can proceed. The SDK has no timers and does not poll. So a branch whose wait ends while another
    branch runs a step continues when the next checkpoint response reports the end
@@ -1846,7 +1861,8 @@ Steps:
    needs the string. An at-least-once step still does not wait for the checkpoint.
 5. Code that did not wait for a checkpoint can keep running after the invocation's outcome is
    decided. So a step checks `execution.done` before it runs `fn`, and never runs `fn` after
-   that.
+   that. `done` is true after every outcome: suspension, a terminate with an error, and
+   the final output (section 2.3, step 10).
 
 Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
 
@@ -2031,14 +2047,17 @@ The call points:
 8. `onInvocationEnd`: `withDurableExecution`, after `run` resolves or rejects. `run`
    resolves after `drain`, and after the large-result checkpoint (2.3 step 7). `flush`
    stores the records before it resolves the updates' promises. So the snapshot holds the
-   final records. A rejection of `run` gives `"RETRYING"`, and the handler throws the
-   same error after the hooks.
+   final records. `execution.finish` runs before the hook (2.3 step 10). So no
+   `onOperationChange` and no checkpoint follow `onInvocationEnd`. A rejection of `run`
+   gives `"RETRYING"`, and the handler throws the same error after the hooks.
 
 Rules:
 
-1. After `terminate`, the SDK sends no checkpoint. A request that is in flight then is
-   not awaited, and its response is not stored (section 2.5). So `onInvocationEnd` can run
-   before that response arrives. Its snapshot then does not hold those records.
+1. After `terminate`, the SDK sends no checkpoint. `finish` calls `terminate` too. A
+   request that is in flight after an error terminate is not awaited, and its response
+   is not stored (section 2.5). So `onInvocationEnd` can run before that response
+   arrives. Its snapshot then does not hold those records. `finish` runs only after the
+   last request succeeded, so no request is in flight then.
 2. `wrap` composes once per invocation. `reduceRight` builds the chain from the
    original `fn` outward, so the first plugin is the outermost.
 3. The hooks receive the stored records, not copies. A copy per operation would cost

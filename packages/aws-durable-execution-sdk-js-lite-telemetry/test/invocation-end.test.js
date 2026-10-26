@@ -9,11 +9,11 @@ import { withDurableExecution } from "../../aws-durable-execution-sdk-js-lite/sr
 import { createTelemetryPlugin } from "../src/index.js";
 import { ARN, fakeExporter, runDurable } from "./helpers.js";
 
-test("no record after onInvocationEnd, even when a losing race branch checkpoints later", async () => {
-  // The workflow returns while the losing branch's step still runs. The SDK does not
-  // mark the execution as done when the workflow returns. So the branch's SUCCEED
-  // reaches the service, and the SDK calls onOperationChange for its response. The
-  // final export is slow, so that response arrives while onInvocationEnd waits.
+test("no record after onInvocationEnd when a losing race branch settles later", async () => {
+  // The workflow returns while the losing branch's step still runs. The SDK marks the
+  // execution as done once the output is decided. So the branch's SUCCEED is never
+  // sent, the step's record stays STARTED, and the SDK calls no onOperationChange
+  // for it. The final export is slow, so the step settles while onInvocationEnd waits.
   const exporter = fakeExporter({
     async export(record) {
       if (record.status === "SUCCEEDED") await sleep(60);
@@ -35,7 +35,7 @@ test("no record after onInvocationEnd, even when a losing race branch checkpoint
       }),
   });
   assert.equal(result.status, "SUCCEEDED");
-  assert.equal(result.getOperation("slow").Status, "SUCCEEDED");
+  assert.equal(result.getOperation("slow").Status, "STARTED");
   await sleep(100);
   const statuses = exporter.records.map((r) => r.status);
   assert.equal(statuses.at(-1), "SUCCEEDED", statuses.join(","));

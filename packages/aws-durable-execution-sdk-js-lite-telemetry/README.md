@@ -1225,10 +1225,8 @@ record. So do not put secrets in error messages.
   names it `prefix`.
 - No export scheduler. The lite SDK creates one plugin per invocation, calls
   `onOperationChange` synchronously from `flush`, and calls `onInvocationEnd` once,
-  after the last checkpoint response. After the workflow returns, a branch that still
-  runs can save a checkpoint, and the SDK then calls `onOperationChange` again. The
-  plugin ignores that call (Design, item 8). Within one invocation, the plugin chains
-  the exports of each exporter.
+  after the last checkpoint response. The SDK calls no hook after the outcome is
+  decided. Within one invocation, the plugin chains the exports of each exporter.
 - No `flush` on exporters, and no `render`. The plugin measures the record with the
   `operations` array. The full SDK measures the rendered record. So with
   `operationsFormat: "both"`, set `maxRecordBytes` with room for `operationsByName`.
@@ -1314,11 +1312,12 @@ change any file here.
 5. Telemetry never fails the workflow. Catch every error of an exporter and of record
    building. Log one `console.warn` line.
 6. A callback that arrives after `onInvocationEnd` started changes nothing and is never
-   exported. The lite SDK can call `onOperationChange` then (see
+   exported (see
    [A plugin ignores work that settles after onInvocationEnd](../aws-durable-execution-sdk-js-lite/README.md#a-plugin-ignores-work-that-settles-after-oninvocationend)).
    A record built then would be newer than the final record, and an upserting exporter
-   would keep it. `test/invocation-end.test.js` fails without this rule. It also checks
-   that two plugin objects of concurrent invocations never mix records.
+   would keep it. `test/invocation-end.test.js` checks that a step that settles after
+   the end produces no record. It also checks that two plugin objects of concurrent
+   invocations never mix records.
 7. Keep the record compatible with the full SDK's `DurableExecutionTelemetryRecord`, and
    the table with its schema. A new field must exist there first.
 8. Before a commit, run `npm test` in this folder and
@@ -1377,7 +1376,7 @@ test/types.check.ts             compile-time check against the lite SDK's plugin
    package's types resolve without it. `test/types.check.ts` checks that the factory is
    assignable to the lite SDK's `DurablePluginFactory`.
 8. `onInvocationEnd` sets the flag `ended` first. `onOperationChange` emits nothing
-   once `ended` is set. The lite SDK can call `onOperationChange` after the end of an
-   invocation whose workflow returned (rule 6). Each record gets a larger `emittedAt`
-   than the previous one. So without the flag, a RUNNING record would follow the final
-   record, and the Aurora and Redshift upserts would keep the RUNNING record.
+   once `ended` is set. The lite SDK calls no `onOperationChange` after the outcome is
+   decided. The flag keeps rule 6 for any caller that does. Each record gets a larger
+   `emittedAt` than the previous one. So without the flag, a RUNNING record would follow
+   the final record, and the Aurora and Redshift upserts would keep the RUNNING record.

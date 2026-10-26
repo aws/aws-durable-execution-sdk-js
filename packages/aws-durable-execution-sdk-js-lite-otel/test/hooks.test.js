@@ -271,8 +271,8 @@ test("an attempt that settles after onInvocationEnd adds no span and starts no e
   rejected.reject(new Error("late"));
   await p1;
   await assert.rejects(p2);
-  // The SDK can also call onOperationChange after the end (README of the lite SDK, "A
-  // plugin ignores work that settles after onInvocationEnd").
+  // The lite SDK calls no onOperationChange after the outcome is decided. A call after
+  // the end still changes nothing (README, Contributing, rule 6).
   plugin.onOperationChange({
     updated: [stepRecord("op-3", "late-record")],
     operations: [],

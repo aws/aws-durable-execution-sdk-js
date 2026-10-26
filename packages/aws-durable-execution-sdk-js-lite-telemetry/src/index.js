@@ -42,9 +42,9 @@ export function createTelemetryPlugin({
     // of this invocation with an older one. The chains are independent. So a slow
     // exporter does not delay the records of the other exporters.
     let chains = exporters.map(() => Promise.resolve());
-    // The lite SDK can call onOperationChange after onInvocationEnd started: after the
-    // workflow returns, a branch that still runs can save a checkpoint. A record built
-    // then would be newer than the final record. An upserting exporter would keep it.
+    // A record built after onInvocationEnd started would be newer than the final
+    // record. An upserting exporter would keep it. The lite SDK calls no hook after the
+    // outcome is decided. The flag keeps this rule for any caller (README rule 6).
     // So the plugin emits nothing after onInvocationEnd started.
     let ended = false;
 
