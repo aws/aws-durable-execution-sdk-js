@@ -214,15 +214,34 @@ describe("suspend after a job", () => {
       });
     });
 
-    it("answers a second delivery without the field with no header", async () => {
+    it("acknowledges a second delivery by what the first request carried, not by the resend", async () => {
       const worker = start();
       await runHook(worker);
-      await job(worker, "cb-1", {});
+      await job(worker, "cb-on");
+      await job(worker, "cb-off", {});
 
-      const again = await job(worker, "cb-1", {});
+      // While the jobs run.
+      const onWithout = await job(worker, "cb-on", {});
+      const offWith = await job(worker, "cb-off");
+      expect(onWithout).toEqual({
+        status: 202,
+        headers: expect.objectContaining(ACK),
+      });
+      expect(offWith.status).toBe(202);
+      expect(offWith.headers).not.toHaveProperty("X-Microvm-Suspend-After");
 
-      expect(again.status).toBe(202);
-      expect(again.headers).not.toHaveProperty("X-Microvm-Suspend-After");
+      // After the jobs ended, from the finished record.
+      await finishJob("cb-off");
+      await finishJob("cb-on");
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      const onAfter = await job(worker, "cb-on", {});
+      const offAfter = await job(worker, "cb-off");
+      expect(onAfter).toEqual({
+        status: 202,
+        headers: expect.objectContaining(ACK),
+      });
+      expect(offAfter.status).toBe(202);
+      expect(offAfter.headers).not.toHaveProperty("X-Microvm-Suspend-After");
     });
 
     it("refuses a job with suspendAfter while it suspends, and records no suspend for it", async () => {
@@ -450,6 +469,84 @@ describe("suspend after a job", () => {
       expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
       expect(microvms.maxRunning).toBe(1);
     });
+  });
+
+  describe("a request that meets a refusal", () => {
+    /** Starts a failure report in the background that stays pending. */
+    const holdFailureReport = async (
+      worker: MicrovmWorkerListener,
+    ): Promise<void> => {
+      lambda.hold = true;
+      const invalid = await job(worker, "cb-bad", {
+        heartbeatTimeoutSeconds: 0,
+      });
+      expect(invalid.status).toBe(400);
+      lambda.hold = false;
+    };
+
+    it("is dropped by the idle suspend, so a later plain job does not suspend", async () => {
+      const worker = start();
+      await runHook(worker, IDLE_SECONDS);
+      await job(worker, "cb-1");
+      await holdFailureReport(worker);
+      // The report blocks the suspend after the job. The idle time does not
+      // count reports.
+      await finishJob("cb-1");
+      expect(microvms.suspended).toEqual([]);
+
+      await advance(IDLE_MS);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      lambda.release();
+      await advance(0);
+      await hook(worker, "resume");
+      expect((await job(worker, "cb-2", {})).status).toBe(202);
+      await finishJob("cb-2");
+
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      expect(infoMessages()).not.toContain(
+        "suspending the MicroVM after a job",
+      );
+    });
+
+    it("is dropped by a suspend hook, so a later plain job does not suspend", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+      await holdFailureReport(worker);
+      await finishJob("cb-1");
+
+      await hook(worker, "suspend");
+      lambda.release();
+      await advance(0);
+      await hook(worker, "resume");
+      expect((await job(worker, "cb-2", {})).status).toBe(202);
+      await finishJob("cb-2");
+      await advance(GRACE_MS);
+
+      expect(microvms.suspended).toEqual([]);
+    });
+
+    it.each<[string, (worker: MicrovmWorkerListener) => Promise<unknown>]>([
+      ["the resume hook", (worker) => hook(worker, "resume")],
+      ["the end of the 30 seconds", () => advance(GRACE_MS)],
+    ])(
+      "is not recorded by a job that ends during a suspend hook refusal, which %s ends",
+      async (_label, endRefusal) => {
+        const worker = start();
+        await runHook(worker);
+        await job(worker, "cb-1");
+        await hook(worker, "suspend");
+
+        await finishJob("cb-1");
+        expect(microvms.suspended).toEqual([]);
+        await endRefusal(worker);
+        expect((await job(worker, "cb-2", {})).status).toBe(202);
+        await finishJob("cb-2");
+        await advance(GRACE_MS);
+
+        expect(microvms.suspended).toEqual([]);
+      },
+    );
   });
 
   describe("auto-suspend together with suspendAfter", () => {
