@@ -2,17 +2,22 @@
 
 A telemetry plugin for [`@aws/durable-execution-sdk-js-lite`](../aws-durable-execution-sdk-js-lite/README.md).
 It builds one record per execution: the status, the times, the input, the output, the
-error and the operations. It sends the record to your own exporter or to one of eight
+error and the operations. It sends the record to your own exporter or to one of 13
 built-in exporters:
 
 - Amazon CloudWatch Logs
-- Amazon Aurora PostgreSQL
+- the Lambda function's own log
+- Amazon Aurora, PostgreSQL and MySQL
 - Amazon DynamoDB
 - Amazon S3
 - Amazon SQS
 - Amazon Data Firehose
 - Amazon EventBridge
 - Amazon Redshift
+- Amazon OpenSearch Service
+- OpenTelemetry logs
+- HTTP
+- a file
 
 The record has the JSON shape of the records of
 [`@aws/durable-execution-sdk-js-telemetry-exporter`](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-telemetry-exporter).
@@ -30,8 +35,8 @@ This package is an alpha. It is private and not published to npm. Its API can ch
 - Node.js 22.12 or later.
 - `@aws/durable-execution-sdk-js-lite`.
 
-The package has no dependencies. The exporters do not use the AWS SDK. They sign and
-send their own requests. See [AWS requests](#aws-requests).
+The package has no dependencies. The exporters for AWS services do not use the AWS SDK.
+They sign and send their own requests. See [AWS requests](#aws-requests).
 
 ## Usage
 
@@ -67,7 +72,12 @@ import { createAuroraExporter } from "@aws/durable-execution-sdk-js-lite-telemet
 import { createCloudWatchLogsExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/cloudwatch-logs";
 import { createDynamoDBExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/dynamodb";
 import { createEventBridgeExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/eventbridge";
+import { createFileExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/file";
 import { createFirehoseExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/firehose";
+import { createHttpExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/http";
+import { createLambdaLogExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/lambda-log";
+import { createOpenSearchExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/opensearch";
+import { createOtelLogsExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/otel-logs";
 import { createRedshiftExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/redshift";
 import { createS3Exporter } from "@aws/durable-execution-sdk-js-lite-telemetry/s3";
 import { createSQSExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/sqs";
@@ -79,7 +89,7 @@ import { createSQSExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/
 
 | Option | Default | Meaning |
 |---|---|---|
-| `exporters` | required | An array of exporters. Each one receives every record. |
+| `exporters` | required | An array of exporters. Each one receives every record. For the function's own log, pass `createLambdaLogExporter()`. See [Lambda log](#lambda-log). |
 | `emitMode` | `"on-complete"` | When records are sent. See [Emit modes](#emit-modes). |
 | `operations` | `"top-level"` | `"top-level"`: operations without a parent. `"all"`: every operation. `"none"`: no operations. |
 | `includeInput` | `true` | Put the execution input in the record. |
@@ -150,16 +160,18 @@ exported for tests and custom exporters.
 
 ## Operations format
 
-The SQS, Firehose and EventBridge exporters have the option `operationsFormat`. It sets
-how the sent JSON holds the operations, as in the full SDK:
+The SQS, Firehose, EventBridge, OpenTelemetry logs, HTTP and file exporters have the
+option `operationsFormat`. It sets how the sent JSON holds the operations, as in the
+full SDK:
 
 - `"array"` (default): the record unchanged, with the `operations` array.
 - `"by-name"`: `operationsByName` instead of `operations`. `operationsByName` maps each
   operation name to a summary. [CloudWatch Logs](#cloudwatch-logs) describes the summary.
 - `"both"`: the `operations` array, and `operationsByName` added as the last field.
 
-Any other value sends the record unchanged. The CloudWatch Logs and DynamoDB exporters
-always send the `"by-name"` form. The other exporters always send the `"array"` form.
+Any other value sends the record unchanged. The CloudWatch Logs, Lambda log and DynamoDB
+exporters always send the `"by-name"` form. The other exporters always send the
+`"array"` form.
 
 The plugin measures the record with the `operations` array, before the exporter adds
 `operationsByName`. With `"both"`, the sent JSON is larger than the measured record. So
@@ -214,16 +226,50 @@ log group:
 }
 ```
 
-### Aurora PostgreSQL
+### Lambda log
 
-`createAuroraExporter({ resourceArn, secretArn, database, table, region, endpoint, client, maxRecordBytes })`
-keeps one row per execution. It uses the RDS Data API, so the function needs no VPC
-access and no database driver.
+`createLambdaLogExporter({ maxRecordBytes })` writes each record with `console.log`.
+Lambda sends the function's stdout to the function's own log group. So the exporter
+needs no IAM permission, no client and no setup.
 
-- `resourceArn`: the Aurora PostgreSQL cluster. The cluster must have the Data API
-  enabled.
+- `maxRecordBytes` (default `256_000`): CloudWatch Logs limits an event to 256 KiB.
+  Lambda adds a prefix to each line. The default leaves room for it.
+
+Each export writes one line: the record as JSON, with `operationsByName` instead of
+`operations`, as the [CloudWatch Logs](#cloudwatch-logs) exporter writes it. The line has
+no newline inside. So it is one log event. Logs Insights can then read fields such as
+`operationsByName.charge.status`.
+
+The export rejects only when `JSON.stringify` throws, for example for a `BigInt`, as in
+the other exporters.
+
+The line goes to the log group of the function, together with the function's other log
+lines. To select the records, filter on `recordType = "DurableExecutionTelemetry"`. To
+send the records to a separate log group, use [CloudWatch Logs](#cloudwatch-logs).
+
+The full SDK uses this exporter when `exporters` is empty or absent. In this package,
+`exporters` is required. So pass the exporter explicitly:
+
+```js
+import { createTelemetryPlugin } from "@aws/durable-execution-sdk-js-lite-telemetry";
+import { createLambdaLogExporter } from "@aws/durable-execution-sdk-js-lite-telemetry/lambda-log";
+
+const telemetry = createTelemetryPlugin({ exporters: [createLambdaLogExporter()] });
+```
+
+### Aurora
+
+`createAuroraExporter({ resourceArn, secretArn, database, engine, table, region, endpoint, client, maxRecordBytes })`
+keeps one row per execution in Aurora PostgreSQL or Aurora MySQL. It uses the RDS Data
+API, so the function needs no VPC access and no database driver.
+
+- `resourceArn`: the Aurora cluster. The cluster must have the Data API enabled. The Data
+  API supports Aurora PostgreSQL 13.11, 14.8, 15.3 and later, and Aurora MySQL 3.07 and
+  later.
 - `secretArn`: the Secrets Manager secret with the database credentials.
 - `database`: the database name.
+- `engine` (default `"postgresql"`): `"postgresql"` or `"mysql"`. It selects the SQL of
+  the upsert. Any other value means PostgreSQL.
 - `table` (default `"durable_execution_telemetry"`): letters, digits and underscores,
   not starting with a digit. The name goes into the SQL text, because the Data API
   cannot bind a table name as a parameter. So the exporter throws at creation for any
@@ -238,16 +284,30 @@ access and no database driver.
 Each export runs one `ExecuteStatement` with named parameters. The Data API uses the
 REST-JSON protocol. So the call is `POST /Execute` with a JSON body. It inserts the row, or
 updates `status`, `end_time`, `duration_ms`, `record_json` and `emitted_at` of the
-existing row. The update has the condition
-`WHERE <table>.emitted_at <= EXCLUDED.emitted_at`:
+existing row. The update keeps the row with the newer record:
 
 1. An export that times out keeps running in the background.
 2. Lambda can freeze it and continue it in a later invocation.
 3. So an older record can arrive after a newer one.
-4. So the condition keeps the row with the newer record.
+4. So the update changes the row only when the stored `emitted_at` is not later than the
+   record's `emitted_at`.
 
-`createTableSql(table)` returns the statement that creates the table. The schema is the
-full SDK's:
+PostgreSQL has the condition `WHERE <table>.emitted_at <= EXCLUDED.emitted_at` on
+`ON CONFLICT ... DO UPDATE`.
+
+MySQL has no `WHERE` on `ON DUPLICATE KEY UPDATE`. So the statement names the new row
+`excluded` (`INSERT ... VALUES (...) AS excluded`), and each assignment has the condition:
+
+```sql
+status = IF(<table>.emitted_at <= excluded.emitted_at, excluded.status, <table>.status)
+```
+
+MySQL runs the assignments from left to right. An assignment to `emitted_at` changes the
+value that the later conditions read. So `emitted_at` is assigned last.
+
+`createTableSql(table, { engine })` returns the statement that creates the table.
+`engine` has the same default as the exporter's. The PostgreSQL schema is the schema of
+the full SDK's CDK stack:
 
 ```sql
 CREATE TABLE IF NOT EXISTS durable_execution_telemetry (
@@ -263,7 +323,34 @@ CREATE TABLE IF NOT EXISTS durable_execution_telemetry (
 )
 ```
 
-Run it once, for example with `aws rds-data execute-statement`.
+The MySQL schema is the one in the full SDK's README:
+
+```sql
+CREATE TABLE IF NOT EXISTS durable_execution_telemetry (
+  execution_arn VARCHAR(512) PRIMARY KEY,
+  execution_name VARCHAR(256),
+  function_name VARCHAR(128),
+  status VARCHAR(20),
+  start_time VARCHAR(30),
+  end_time VARCHAR(30),
+  duration_ms BIGINT,
+  record_json LONGTEXT,
+  emitted_at VARCHAR(30)
+)
+```
+
+The MySQL time columns hold text:
+
+1. The exporter sends every time as `YYYY-MM-DDTHH:MM:SS.sssZ`, for both engines.
+2. Every value has the same width and the same zone.
+3. So text order equals time order, and the `emitted_at` condition compares text.
+4. So a table created from the full SDK's README works with this exporter too.
+
+To query a time as a MySQL `DATETIME(3)`, convert it:
+`STR_TO_DATE(emitted_at, '%Y-%m-%dT%H:%i:%s.%fZ')`. `record_json` is text. MySQL JSON
+functions such as `JSON_EXTRACT(record_json, '$.status')` accept it.
+
+Run the statement once, for example with `aws rds-data execute-statement`.
 
 The function's execution role needs `rds-data:ExecuteStatement` on the cluster and
 `secretsmanager:GetSecretValue` on the secret:
@@ -326,8 +413,8 @@ The sort key decides what the table keeps:
    execution. A query on the partition key returns them in `emittedAt` order.
 2. With `sortKey: ""`, each record replaces the item of its execution. So the table
    keeps the last record that arrived. An older record can arrive after a newer one.
-   See [Aurora PostgreSQL](#aurora-postgresql). PutItem has no condition, so that
-   older record then replaces the newer one.
+   See [Aurora](#aurora). PutItem has no condition, so that older record then replaces
+   the newer one.
 
 The table's key schema must match the options. Both keys are strings (`S`):
 
@@ -623,7 +710,7 @@ not a parameter.
 The update keeps the newer record. Each `SET` expression has the form
 `status = CASE WHEN <table>.emitted_at <= src.emitted_at THEN src.status ELSE <table>.status END`:
 
-1. An older record can arrive after a newer one. See [Aurora PostgreSQL](#aurora-postgresql).
+1. An older record can arrive after a newer one. See [Aurora](#aurora).
 2. Redshift `MERGE` has no condition on `WHEN MATCHED`. Its source cannot read the
    target table.
 3. So the condition is in each `SET` expression. An older record leaves every value of
@@ -696,14 +783,259 @@ Limits:
    the same time. Both then find no row, and both insert one. This can happen in
    `"on-change"` mode. Later statements update both rows.
 
+### OpenSearch
+
+`createOpenSearchExporter({ endpoint, indexName, region, client, maxRecordBytes })`
+keeps one document per execution in an Amazon OpenSearch Service domain.
+
+- `endpoint`: the domain endpoint, for example
+  `https://my-domain.us-east-1.es.amazonaws.com`. Required without `client`. Without
+  it, the built-in client sends to `https://es.REGION.amazonaws.com`. That is the
+  configuration API, not a domain. So every export fails.
+- `indexName` (default `"durable-execution-telemetry"`): the index. OpenSearch creates it
+  on the first write, with a dynamic mapping.
+- `region` (default `process.env.AWS_REGION`): the region of the domain. The client
+  signs for it.
+- `client` (default: the built-in client): an object with
+  `send({ method, path, headers, body })`. See [AWS requests](#aws-requests). With
+  `client`, the exporter ignores `endpoint` and `region`.
+- `maxRecordBytes` (default `10_000_000`): the full SDK's value. The HTTP request
+  limit of OpenSearch Service depends on the instance type. Set `maxRecordBytes` below
+  the limit of your domain.
+
+Each export makes one index call: `PUT /INDEX/_doc/ID`, with the header
+`content-type: application/json`. The body is the record as JSON, with the `operations`
+array.
+
+1. The document id is the `executionArn`, encoded with RFC 3986. So `:` is `%3A` and `/`
+   is `%2F`.
+2. The id is the same in every record of one execution. So each record replaces the
+   document, and the index holds one document per execution.
+3. The index name is sent as it is. Index names cannot hold `/`, `:`, `#`, `?` or
+   spaces.
+4. The client signs the request for the service `es`. Like every service other than
+   S3, it signs the path encoded once more. So `%3A` is signed as `%253A`.
+
+The function's execution role needs `es:ESHttpPut` on the index:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "es:ESHttpPut",
+  "Resource": "arn:aws:es:REGION:ACCOUNT:domain/DOMAIN/durable-execution-telemetry/*"
+}
+```
+
+A domain with fine-grained access control also needs the role mapped to an OpenSearch
+role that can write the index.
+
+A domain in a VPC is reachable only from that VPC. So the function must run in the VPC,
+with a security group that allows HTTPS to the domain.
+
+Limits:
+
+1. A failed request rejects with `status` and the name `UnknownError`. An OpenSearch
+   error body has `error.type` and `error.reason`, but no `message`. So the `message` is
+   the status text, for example `Bad Request`. The reason is not in the warning. An IAM
+   denial has a `message`, so its text is in the warning.
+2. An older record can arrive after a newer one. See [Aurora](#aurora). The index call
+   has no version condition. So that older record then replaces the document.
+3. The dynamic mapping takes the type of each field from the first document. A later
+   `input` or `output` of another JSON type, for example a string after an object, fails
+   with `mapper_parsing_exception`. That record is lost. To avoid it, create the index
+   first with `"enabled": false` for `input` and `output`.
+4. OpenSearch Serverless signs for the service `aoss`. The exporter always signs for
+   `es`, as in the full SDK. So it does not support OpenSearch Serverless.
+5. No basic authentication. Only IAM. The full SDK also supports a user name and a
+   password.
+
+### OpenTelemetry logs
+
+`createOtelLogsExporter({ endpoint, headers, timeoutMs, operationsFormat, maxRecordBytes, fetch })`
+sends each record as one OpenTelemetry log record. It POSTs an OTLP/HTTP request with
+JSON encoding. So any OTLP receiver accepts it: an OpenTelemetry Collector, the AWS
+Distro for OpenTelemetry (ADOT) collector, or a vendor endpoint.
+
+- `endpoint`: the OTLP/HTTP logs URL, with the path `/v1/logs`, for example
+  `http://localhost:4318/v1/logs`. The exporter adds no path.
+- `headers` (default `{}`): added to every request, for example the authorization
+  header of a vendor. A `content-type` key replaces the exporter's. `fetch` joins header
+  names that differ only in case. So a `Content-Type` key adds a second value instead.
+- `timeoutMs` (default `5_000`): the timeout of one request. See the limits below.
+- `operationsFormat` (default `"array"`): how the log body holds the operations. See
+  [Operations format](#operations-format).
+- `maxRecordBytes` (default `1_000_000`): the full SDK's value, a conservative limit for
+  one OTLP/HTTP request.
+- `fetch` (default: `globalThis.fetch` when the exporter is created): the function that
+  sends the request. Tests use it to check the requests without a network.
+
+Each export makes one `POST` to `endpoint` with the header
+`content-type: application/json`. The body is one `ExportLogsServiceRequest` with one
+resource, one scope and one log record:
+
+| OTLP field | Value |
+|---|---|
+| resource attribute `service.name` | `functionName` |
+| resource attribute `cloud.region` | `region` |
+| resource attribute `cloud.account.id` | `accountId` |
+| resource attribute `faas.name` | `functionName` |
+| resource attribute `faas.version` | `functionQualifier` |
+| `scope.name` | `"@aws/durable-execution-sdk-js-telemetry-exporter"` |
+| `scope.version` | `schemaVersion`, `"1.0"` |
+| `timeUnixNano` | `emittedAt` in nanoseconds, as a string |
+| `severityNumber` | `17` (ERROR) for FAILED, `9` (INFO) for SUCCEEDED and RUNNING |
+| `severityText` | `status` |
+| `body.stringValue` | the record as JSON, in the `operationsFormat` |
+| attribute `workflow.execution_arn` | `executionArn` |
+| attribute `workflow.execution_name` | `executionName`, or `""` |
+| attribute `workflow.status` | `status` |
+| attribute `workflow.duration_ms` | `durationMs`, or `0` in a RUNNING record, as `intValue` |
+
+OTLP/JSON encodes a 64-bit integer as a string. So `timeUnixNano` is a string, and
+`workflow.duration_ms` is `{ "intValue": "1234" }`. The scope name is the full SDK's. So
+a backend query on the scope finds the records of both packages.
+
+The attributes hold a few fields of the record. So a backend can filter on them
+without parsing the body. The full record is only in the body.
+
+Pass the credentials of a vendor in `headers`. Read the token from an environment
+variable or from Secrets Manager. Never write the token in the code:
+
+```js
+const telemetry = createTelemetryPlugin({
+  exporters: [
+    createOtelLogsExporter({
+      endpoint: process.env.OTLP_LOGS_ENDPOINT,
+      headers: { authorization: `Bearer ${process.env.OTLP_TOKEN}` },
+    }),
+  ],
+});
+```
+
+An environment variable of a Lambda function is visible to everyone who can read the
+function's configuration. So for a production token, store it in Secrets Manager. Read it
+once at module level, for example with the AWS Parameters and Secrets Lambda Extension,
+and pass it to `headers`. The execution role then needs `secretsmanager:GetSecretValue`
+on the secret. The exporter itself needs no IAM permission.
+
+To send the records to a collector:
+
+1. With an OpenTelemetry Collector or the ADOT collector as a Lambda layer, the collector
+   runs in the sandbox. Set `endpoint` to `http://localhost:4318/v1/logs`. The
+   collector's configuration needs an `otlp` receiver with the `http` protocol and a logs
+   pipeline.
+2. With a collector on another host, or a vendor endpoint, use `https`. A function in a
+   VPC then needs a route to the endpoint, for example a NAT gateway.
+
+Limits:
+
+1. A response that is not 2xx rejects. The error has `status`, and its message holds the
+   status, the status text and the first 200 characters of the response body.
+2. A 2xx response can hold `partialSuccess.rejectedLogRecords`. The exporter does not
+   read the response body of a 2xx response, as in the full SDK. So a log record that
+   the receiver rejects in a partial success is lost and not reported.
+3. The full SDK's request has no timeout. Without one, a slow request keeps running after
+   the plugin stops waiting at `exportTimeoutMs`. So each request has a timeout of
+   `timeoutMs`. A timeout rejects with a `TimeoutError`.
+4. The exporter does not retry, as in the full SDK. The plugin logs one warning for a
+   failed export, and the record is lost.
+5. Only JSON encoding. No protobuf and no gRPC.
+6. The plugin measures the record, not the request. The body is the record JSON as one
+   string, so each `"` and `\` of the record JSON is escaped once more. Then the
+   envelope adds about 1 KB. So the request is larger than `maxRecordBytes`. Set
+   `maxRecordBytes` below the receiver's request limit, with room for the escaping.
+
+### HTTP
+
+`createHttpExporter({ url, method, headers, timeoutMs, operationsFormat, maxRecordBytes, fetch })`
+sends each record as one JSON request to any URL, for example a webhook or an internal
+service.
+
+- `url`: the URL that receives each record.
+- `method` (default `"POST"`): `"POST"` or `"PUT"`. Use `"PUT"` for an endpoint that
+  replaces the resource at the URL.
+- `headers` (default: none): added to the request, for example
+  ``{ Authorization: `Bearer ${token}` }``. A `Content-Type` key replaces the default
+  `application/json`. `fetch` joins header names that differ only in case. So a
+  `content-type` key adds a second value instead.
+- `timeoutMs` (default `10_000`): the longest time one request may take, including the
+  response body.
+- `operationsFormat` (default `"array"`): how the body holds the operations. See
+  [Operations format](#operations-format).
+- `maxRecordBytes` (default: no limit): set it if the endpoint limits the request size.
+- `fetch` (default `globalThis.fetch`, read when the exporter is created): the function
+  that sends the request. Tests pass a fake.
+
+Each export sends one request with the record as JSON, in the `operationsFormat`. The
+request has the header `Content-Type: application/json`. The exporter reads the body of
+every response, so Node returns the connection to its pool.
+
+A response that is not 2xx rejects the export. The error has `status`. Its message
+holds the status, the status text and the first 200 characters of the body. A request
+that takes longer than `timeoutMs` rejects with a `TimeoutError`. A network error
+rejects with the error of `fetch`. The exporter does not retry, as in the full SDK. The
+plugin logs the rejection as one warning, and the record is lost.
+
+The exporter needs no IAM permission. Authenticate with `headers`. To call an endpoint
+inside a VPC, the function needs a VPC configuration with a route to the endpoint.
+
+Keep `timeoutMs` below `exportTimeoutMs`. Otherwise the request can keep running after
+the plugin stops waiting. Lambda can then freeze it with the sandbox.
+
+### File
+
+`createFileExporter({ directory, mode, operationsFormat, maxRecordBytes })` writes each
+record to a file in a directory.
+
+- `directory`: the directory of the files. The exporter creates it, with its parents.
+- `mode` (default `"ndjson"`):
+  1. `"ndjson"`: appends the record as one JSON line to `DIRECTORY/YYYY-MM-DD.ndjson`.
+     The date is the UTC date of `emittedAt`. So the records of one execution can be in
+     several files.
+  2. `"json"`: writes the record, pretty-printed, to `DIRECTORY/EXECUTION_NAME.json`.
+     A newer record of the same execution replaces the file. Without an execution name
+     in the ARN, the file is named by the `executionArn`.
+- `operationsFormat` (default `"array"`): how the file holds the operations. See
+  [Operations format](#operations-format).
+- `maxRecordBytes` (default: no limit).
+
+In a file name, every character other than a letter, a digit, `.`, `_` and `-` becomes
+`_`, as in the full SDK. So a name cannot point outside the directory. Two execution
+names that differ only in other characters write the same file.
+
+Each export first creates the directory, if it does not exist. A write error, for
+example `EACCES` or `ENOSPC`, rejects the export. The plugin logs it as one warning, and
+the record is lost.
+
+The `"json"` mode replaces the file with `writeFile`. A reader can see a partly written
+file during the write.
+
+On Lambda, only `/tmp` and mounted file systems are writable:
+
+1. `/tmp` belongs to one sandbox. It is lost when Lambda ends the sandbox. Each sandbox
+   has its own `/tmp`. So use `/tmp` only for tests and debugging.
+2. An Amazon EFS file system keeps the files. The function needs a VPC configuration in
+   the VPC of the file system, a file system configuration with a local mount path under
+   `/mnt`, and `elasticfilesystem:ClientMount` and `elasticfilesystem:ClientWrite` on the
+   access point. Concurrent sandboxes then append to the same `"ndjson"` file.
+
+```json
+{
+  "Effect": "Allow",
+  "Action": ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"],
+  "Resource": "arn:aws:elasticfilesystem:REGION:ACCOUNT:access-point/ACCESS_POINT_ID"
+}
+```
+
 ### AWS requests
 
-The exporters do not use the AWS SDK. A built-in client in `src/aws.js` sends each
-request:
+The exporters for AWS services do not use the AWS SDK. A built-in client in `src/aws.js`
+sends each request:
 
 1. It signs the request with Signature Version 4, for the service of the exporter:
-   `logs`, `rds-data`, `dynamodb`, `s3`, `sqs`, `firehose`, `events` or `redshift-data`.
-2. The method is `POST`. The S3 exporter sends `PUT`.
+   `logs`, `rds-data`, `dynamodb`, `s3`, `sqs`, `firehose`, `events`, `redshift-data`
+   or `es`.
+2. The method is `POST`. The S3 and OpenSearch exporters send `PUT`.
 3. The other services sign the path encoded once more. S3 signs the path as it is sent.
    So for `s3`, the caller encodes the path once, and the client signs it unchanged. For
    `s3`, the client also sends and signs the header `x-amz-content-sha256`, the hex
@@ -723,6 +1055,7 @@ request:
    `name` is `UnknownError`.
 9. The client parses only JSON. S3 sends errors as XML. So an S3 error has the name
    `UnknownError` and the status text as `message`, for example for `AccessDenied`.
+   An OpenSearch error is JSON without a `message`. See [OpenSearch](#opensearch).
 
 The IAM permissions of each exporter are the same as with the AWS SDK. The sections above
 show them as policy statements:
@@ -730,17 +1063,23 @@ show them as policy statements:
 | Exporter | Actions | Resource |
 |---|---|---|
 | CloudWatch Logs | `logs:CreateLogStream`, `logs:PutLogEvents` | the log group |
-| Aurora PostgreSQL | `rds-data:ExecuteStatement`; `secretsmanager:GetSecretValue` | the cluster; the secret |
+| Lambda log | none | none |
+| Aurora | `rds-data:ExecuteStatement`; `secretsmanager:GetSecretValue` | the cluster; the secret |
 | DynamoDB | `dynamodb:PutItem` | the table |
 | S3 | `s3:PutObject` | the key prefix |
 | SQS | `sqs:SendMessage` | the queue |
 | Firehose | `firehose:PutRecord` | the delivery stream |
 | EventBridge | `events:PutEvents` | the event bus |
 | Redshift | `redshift-data:ExecuteStatement` and one credentials action | the workgroup or the cluster |
+| OpenSearch | `es:ESHttpPut` | the index |
+| OpenTelemetry logs | none | none |
+| HTTP | none | none |
+| File | none; on EFS, the actions of [File](#file) | none; on EFS, the access point |
 
 A queue encrypted with a customer managed KMS key also needs the KMS actions of
 [SQS](#sqs). The credentials action of Redshift depends on the authentication. See
-[Redshift](#redshift).
+[Redshift](#redshift). A vendor token in Secrets Manager needs
+`secretsmanager:GetSecretValue`. See [OpenTelemetry logs](#opentelemetry-logs).
 
 The `client` option replaces the built-in client. Its `send({ method, path, headers, body })`
 receives the method (default `"POST"`), the path, the headers and the JSON body as a
@@ -773,44 +1112,9 @@ Any object with an `export(record)` method that returns a promise is an exporter
 plugin waits for that promise up to `exportTimeoutMs` and logs a rejection as one
 warning (see [Write an exporter](#write-an-exporter)).
 
-The full SDK has an HTTP exporter and a file exporter. This package has none. The two
-recipes below replace them. Change the URL, the headers and the path in the code.
-
-An HTTP exporter POSTs the record as JSON. The timeout ends a slow request. Without it,
-the request keeps running after the plugin stops waiting. A response that is not 2xx
-throws, so the plugin logs it:
-
-```js
-const http = {
-  async export(record) {
-    const res = await fetch(process.env.TELEMETRY_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(record),
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} from the telemetry endpoint`);
-  },
-};
-```
-
-Add the headers that the endpoint needs to authenticate the request.
-
-A file exporter appends the record as one JSON line. In Lambda, `/tmp` is the only
-writable path. The file lives in the sandbox, so it is lost when Lambda ends the sandbox:
-
-```js
-import { appendFile } from "node:fs/promises";
-
-const file = {
-  async export(record) {
-    await appendFile("/tmp/durable-execution-telemetry.jsonl", `${JSON.stringify(record)}\n`);
-  },
-};
-```
-
-This package has no OpenTelemetry logs exporter and no OpenSearch exporter. A recipe in
-this section or a feature request can add them.
+For an HTTP endpoint, use [HTTP](#http). For a file, use [File](#file). For an
+OpenTelemetry receiver, use [OpenTelemetry logs](#opentelemetry-logs). For any other
+destination, write an exporter.
 
 ## Record size
 
@@ -825,12 +1129,13 @@ from a copy for that exporter. It drops in this order:
 Any drop sets `truncated: true`. If the record is still too large, the plugin does not
 export it to that exporter and logs one warning.
 
-The plugin measures the record with the `operations` array. The CloudWatch Logs event
-and the DynamoDB item hold `operationsByName` instead. A summary has no `id` and no
-timestamps. So for the same operations, the event and the item are smaller than the
+The plugin measures the record with the `operations` array. The CloudWatch Logs event,
+the Lambda log line and the DynamoDB item hold `operationsByName` instead. A summary has
+no `id` and no timestamps. So for the same operations, they are smaller than the
 measured record. With `operationsFormat: "both"`, the sent JSON holds both forms. So it
 is larger than the measured record. [Operations format](#operations-format) gives the
-setting for that case.
+setting for that case. The OpenTelemetry logs request is also larger than the measured
+record. See [OpenTelemetry logs](#opentelemetry-logs).
 
 ## Failures
 
@@ -855,6 +1160,8 @@ slow destination costs time in every invocation.
    So an export can keep running in the background after the plugin stopped waiting.
    Lambda can freeze it and continue it in a later invocation. The Aurora and Redshift
    upserts keep the newer record in that case.
+3. The HTTP and OpenTelemetry logs exporters do not use the built-in client. Their
+   requests have the timeout `timeoutMs`. Keep it below `exportTimeoutMs`.
 
 ### Use on-change only when you watch running executions
 
@@ -886,7 +1193,6 @@ record. So do not put secrets in error messages.
 - The plugin does not retry a failed export. The built-in client retries only the
   failures listed in [AWS requests](#aws-requests).
 - No operation results. No transforms of the input or output.
-- Aurora PostgreSQL only. No MySQL.
 - With `operations: "all"`, a record holds the children of a finished child context only
   in the invocation that ran it. The service does not send the children of a finished
   context to later invocations. So `"all"` can list fewer operations at the end than
@@ -894,13 +1200,15 @@ record. So do not put secrets in error messages.
 
 ## Differences from @aws/durable-execution-sdk-js-telemetry-exporter
 
-- 8 of the full SDK's 12 exporters: CloudWatch Logs, Aurora PostgreSQL, DynamoDB, S3,
-  SQS, Firehose, EventBridge and Redshift. No default exporter.
-- No HTTP exporter and no file exporter. [Other destinations](#other-destinations) has a
-  recipe for each. The recipes have no options. You change the code instead.
-- No OpenTelemetry logs exporter and no OpenSearch exporter.
-- No AWS SDK dependency. The exporters sign their own requests. The `client` option is an
-  object with `send({ method, path, headers, body })`, not an AWS SDK client.
+- All 13 exporters of the full SDK: CloudWatch Logs, Lambda log, Aurora (PostgreSQL and
+  MySQL), DynamoDB, S3, SQS, Firehose, EventBridge, Redshift, OpenSearch, OpenTelemetry
+  logs, HTTP and file.
+- `exporters` is required. The full SDK uses its `LambdaLogExporter` when `exporters` is
+  empty or absent. Pass `createLambdaLogExporter()` for the same result. See
+  [Lambda log](#lambda-log).
+- No AWS SDK dependency. The exporters for AWS services sign their own requests. The
+  `client` option is an object with `send({ method, path, headers, body })`, not an AWS
+  SDK client.
 - Every exporter names its size limit `maxRecordBytes`. The full SDK names it
   `maxRecordSizeBytes`. The S3 exporter names the key prefix `keyPrefix`. The full SDK
   names it `prefix`.
@@ -922,11 +1230,41 @@ record. So do not put secrets in error messages.
   also sets them in the RUNNING record at the end of a suspended invocation.
 - Sampling hashes the ARN with SHA-256. The full SDK uses FNV-1a. So the two packages
   sample different executions at the same rate.
-- The Aurora upsert and the Redshift `MERGE` have the `emitted_at` condition. So an older
-  record never replaces a newer one. The full SDK has no such condition.
+- The Aurora upsert, for both engines, and the Redshift `MERGE` have the `emitted_at`
+  condition. So an older record never replaces a newer one. The full SDK has no such
+  condition.
+- The Aurora `engine` option defaults to `"postgresql"`. The full SDK requires it.
+- The MySQL upsert names the new row with a row alias (`AS excluded`). The full SDK uses
+  `VALUES(col)`, which MySQL 8.0.20 deprecates.
 - The full SDK's Redshift exporter throws when neither `workgroupName` nor
   `clusterIdentifier` is set. This exporter does not check it (rule 1.2). The Data API
   then rejects each statement with `ValidationException`, and the plugin logs it.
+- The OpenSearch exporter signs with IAM only. The full SDK also has `auth: "basic"`
+  with `username` and `password`. Nobody asked for basic authentication (rule 1.1).
+- The OpenSearch exporter's `region` defaults to `AWS_REGION`. The full SDK requires it.
+- An OpenSearch error rejects with the status and the status text. The full SDK's error
+  message also holds the first 500 characters of the response body.
+- The OpenSearch document id is encoded with RFC 3986. The full SDK uses
+  `encodeURIComponent`. The two differ only for `!'()*`. An execution ARN holds none of
+  them.
+- The OpenTelemetry logs exporter is `createOtelLogsExporter`, at the subpath
+  `./otel-logs`. The full SDK names it `OTelExporter`.
+- The OpenTelemetry logs exporter has no `protocol` option. The full SDK's
+  `protocol: "http/protobuf"` only throws at creation. So JSON is the only encoding in
+  both packages.
+- The OpenTelemetry logs exporter has `timeoutMs` (default 5,000 ms) and `fetch`. The
+  full SDK's request has no timeout and uses the global `fetch`.
+- The OpenTelemetry logs `severityNumber` is 9 for every status other than FAILED. The
+  full SDK maps an unknown status to 0. A record of this package has no other status. So
+  the result is the same.
+- The plugin measures the record, not the OpenTelemetry logs request. The full SDK
+  measures the rendered request. See [OpenTelemetry logs](#opentelemetry-logs).
+- The HTTP exporter has the option `fetch`. The full SDK always calls the global `fetch`.
+- The HTTP and OpenTelemetry logs exporters reject a non-2xx response with an error that
+  holds `status` and the first 200 characters of the body. The full SDK's error message
+  holds only the status and the status text.
+- The file exporter creates the directory on every export. The full SDK creates it once
+  per exporter.
 - The DynamoDB item holds the JSON values of the record. The full SDK marshals the
   record with `@aws-sdk/util-dynamodb`:
   1. That marshaller throws for `NaN`, `Infinity`, integers above
@@ -956,7 +1294,7 @@ change any file here.
 2. The package has no dependencies of any kind: no `dependencies`, no
    `devDependencies`, no `peerDependencies` and no `optionalDependencies`.
 3. `src` imports only relative paths and `node:` built-ins. It does not import
-   `@aws-sdk/*`. The exporters send their requests with `src/aws.js`.
+   `@aws-sdk/*`. The exporters for AWS services send their requests with `src/aws.js`.
 4. `src` never imports the lite SDK. Tests import it by relative path,
    `../../aws-durable-execution-sdk-js-lite/src/...`, because it is not installed in
    `node_modules`.
@@ -979,13 +1317,18 @@ src/truncate.js                 fitRecord: the drop order of Record size
 src/operations-by-name.js       the operationsByName form and applyOperationsFormat
 src/aws.js                      signRequest and createAwsClient: SigV4, S3 signing, credentials, retries
 src/exporters/cloudwatch-logs.js
-src/exporters/aurora.js
+src/exporters/lambda-log.js
+src/exporters/aurora.js         PostgreSQL and MySQL
 src/exporters/dynamodb.js
 src/exporters/s3.js
 src/exporters/sqs.js
 src/exporters/firehose.js
 src/exporters/eventbridge.js
 src/exporters/redshift.js
+src/exporters/opensearch.js
+src/exporters/otel.js           OpenTelemetry logs, exported as ./otel-logs
+src/exporters/http.js
+src/exporters/file.js
 src/*.d.ts, src/exporters/*.d.ts  hand-written types
 test/*.test.js                  tests
 test/types.check.ts             compile-time check against the lite SDK's plugin types

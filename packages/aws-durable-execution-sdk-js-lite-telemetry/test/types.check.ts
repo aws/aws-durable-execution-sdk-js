@@ -22,7 +22,12 @@ import {
 import { createCloudWatchLogsExporter } from "../src/exporters/cloudwatch-logs.js";
 import { createDynamoDBExporter } from "../src/exporters/dynamodb.js";
 import { createEventBridgeExporter } from "../src/exporters/eventbridge.js";
+import { createFileExporter } from "../src/exporters/file.js";
 import { createFirehoseExporter } from "../src/exporters/firehose.js";
+import { createHttpExporter } from "../src/exporters/http.js";
+import { createLambdaLogExporter } from "../src/exporters/lambda-log.js";
+import { createOpenSearchExporter } from "../src/exporters/opensearch.js";
+import { createOtelLogsExporter } from "../src/exporters/otel.js";
 import {
   createRedshiftExporter,
   createTableSql as createRedshiftTableSql,
@@ -74,6 +79,38 @@ const plugin = createTelemetryPlugin({
       schema: "s",
       table: "t",
     }),
+    createLambdaLogExporter(),
+    createLambdaLogExporter({ maxRecordBytes: 1000 }),
+    createAuroraExporter({
+      resourceArn: "r",
+      secretArn: "s",
+      database: "d",
+      engine: "mysql",
+      client,
+    }),
+    createOpenSearchExporter({
+      endpoint: "https://d.us-east-1.es.amazonaws.com",
+      indexName: "i",
+    }),
+    createOpenSearchExporter({ client }),
+    createOtelLogsExporter({
+      endpoint: "http://localhost:4318/v1/logs",
+      headers: { authorization: "Bearer t" },
+      timeoutMs: 1000,
+      operationsFormat: "by-name",
+      fetch: globalThis.fetch,
+    }),
+    createHttpExporter({
+      url: "https://example.com/telemetry",
+      method: "PUT",
+      headers: { Authorization: "Bearer t" },
+      timeoutMs: 1000,
+      operationsFormat: "both",
+      maxRecordBytes: 1000,
+      fetch: globalThis.fetch,
+    }),
+    createFileExporter({ directory: "/tmp/t", mode: "json" }),
+    createFileExporter({ directory: "/tmp/t", operationsFormat: "array" }),
   ],
   emitMode: "on-change",
   operations: "all",
@@ -92,7 +129,29 @@ const record: DurableExecutionTelemetryRecord = buildRecord({
   operations: [{ Id: "1", Type: "STEP", Status: "STARTED", StartTimestamp: 1 }],
 });
 const sql: string = createTableSql("t");
+const mysqlSql: string = createTableSql(undefined, { engine: "mysql" });
 const redshiftSql: string = createRedshiftTableSql({ schema: "s" });
+// The HTTP and file exporters have no default size limit.
+const httpLimit: number | undefined = createHttpExporter({
+  url: "u",
+}).maxRecordBytes;
+const fileLimit: number | undefined = createFileExporter({
+  directory: "d",
+}).maxRecordBytes;
+createAuroraExporter({
+  resourceArn: "r",
+  secretArn: "s",
+  database: "d",
+  // @ts-expect-error engine accepts only "postgresql" and "mysql".
+  engine: "oracle",
+});
+// @ts-expect-error the HTTP method is "POST" or "PUT".
+createHttpExporter({ url: "u", method: "GET" });
+// @ts-expect-error the file mode is "ndjson" or "json".
+createFileExporter({ directory: "d", mode: "csv" });
 void record;
 void sql;
+void mysqlSql;
 void redshiftSql;
+void httpLimit;
+void fileLimit;

@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-lite-telemetry",
-  "description": "Execution telemetry plugin with CloudWatch Logs, Aurora PostgreSQL, DynamoDB, S3, SQS, Firehose, EventBridge and Redshift exporters for the dependency-free lite durable execution SDK",
+  "description": "Execution telemetry plugin with CloudWatch Logs, Lambda log, Aurora PostgreSQL and MySQL, DynamoDB, S3, SQS, Firehose, EventBridge, Redshift, OpenSearch, OpenTelemetry logs, HTTP and file exporters for the dependency-free lite durable execution SDK",
   "license": "Apache-2.0",
   "version": "0.1.0",
   "private": true,
