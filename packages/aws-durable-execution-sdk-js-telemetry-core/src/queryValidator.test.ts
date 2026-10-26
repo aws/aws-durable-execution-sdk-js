@@ -61,4 +61,73 @@ describe("assertReadOnly: rejects obvious writes and bad shapes", () => {
   it("an empty query", () => rejected("   "));
   it("a write hidden after a string literal", () =>
     rejected("SELECT * FROM t WHERE name = 'a'; DELETE FROM t"));
+  it("SELECT ... INTO, which creates a table", () =>
+    rejected("SELECT * INTO copy_of_t FROM t"));
+});
+
+// Each query below is read by the database differently from a scanner that
+// only knows '...', "...", -- and /* */. The scanner would blank the DELETE as
+// string or comment content while the database runs it.
+describe("assertReadOnly: rejects lexing differences that hide a write", () => {
+  const forEngine = (engine: string) => ({
+    ok: (q: string) => expect(() => assertReadOnly(q, engine)).not.toThrow(),
+    rejected: (q: string) => expect(() => assertReadOnly(q, engine)).toThrow(),
+  });
+  const pg = forEngine("PostgreSQL");
+  const redshift = forEngine("Redshift SQL");
+  const opensearch = forEngine("OpenSearch SQL");
+  const athena = forEngine("Trino/Presto SQL");
+  const partiql = forEngine("PartiQL");
+
+  it("PostgreSQL dollar-quoting hides a second statement", () =>
+    pg.rejected("SELECT $$'$$; DELETE FROM t; --'"));
+  it("tagged dollar-quoting hides a second statement", () =>
+    pg.rejected("SELECT $x$'$x$; DELETE FROM t; --'"));
+  it("dollar-quoting hides a data-modifying CTE", () =>
+    pg.rejected(
+      "WITH a AS (SELECT $$'$$ AS q), d AS (DELETE FROM t RETURNING 1) SELECT * FROM a --'",
+    ));
+  it("dollar-quoting is rejected on every engine", () => {
+    for (const e of [redshift, opensearch, athena, partiql])
+      e.rejected("SELECT $$'$$; DELETE FROM t; --'");
+  });
+  it("a PostgreSQL E'' escape string hides a second statement", () =>
+    pg.rejected("SELECT E'\\''; DELETE FROM t; --'"));
+  it("a Redshift backslash escape hides a second statement", () =>
+    redshift.rejected("SELECT '\\''; DELETE FROM t; --'"));
+  it("an OpenSearch backslash escape hides a second statement", () =>
+    opensearch.rejected("SELECT '\\''; DELETE FROM t; --'"));
+  it("a backslash in a double-quoted literal is rejected", () =>
+    opensearch.rejected('SELECT "\\""; DELETE FROM t; --"'));
+  it("an unknown engine treats a backslash as an escape", () =>
+    expect(() =>
+      assertReadOnly("SELECT '\\''; DELETE FROM t; --'", "SomeNewEngine"),
+    ).toThrow());
+  it("PostgreSQL nested block comments hide a second statement", () =>
+    pg.rejected("SELECT 1 /* /* */ '*/ ; DELETE FROM t; --'"));
+  it("a carriage return ends a PostgreSQL line comment", () =>
+    pg.rejected("SELECT 1 --\r; DELETE FROM t"));
+  it("a MySQL-style # comment hides a quote on OpenSearch", () =>
+    opensearch.rejected("SELECT 1 # '\n; DELETE FROM t; -- '"));
+  it("a quote inside a backtick identifier does not open a string", () =>
+    opensearch.rejected("SELECT `'`; DELETE FROM t; -- '"));
+  it("OpenSearch: a backtick-quoted index name is allowed", () =>
+    opensearch.ok("SELECT * FROM `durable-execution-telemetry` LIMIT 5"));
+  it("-- without whitespace is not a comment in OpenSearch SQL", () =>
+    opensearch.rejected("SELECT 1--'\n'; DELETE FROM t; -- '"));
+  it("an unterminated string is rejected", () =>
+    pg.rejected("SELECT 'abc FROM t"));
+  it("an unterminated block comment is rejected", () =>
+    pg.rejected("SELECT 1 /* never closed"));
+
+  it("Athena: a backslash inside a literal is an ordinary character", () =>
+    athena.ok("SELECT * FROM t WHERE regexp_like(functionname, '\\d+')"));
+  it("PartiQL: a backslash inside a literal is an ordinary character", () =>
+    partiql.ok("SELECT * FROM t WHERE pk = 'a\\b'"));
+  it("PostgreSQL: the #>> JSON operator is allowed", () =>
+    pg.ok("SELECT record_json #>> '{error,message}' FROM t"));
+  it("Athena: the $path hidden column in double quotes is allowed", () =>
+    athena.ok('SELECT "$path" FROM t'));
+  it("a line comment followed by more SQL is allowed", () =>
+    pg.ok("SELECT 1 -- note\nFROM t"));
 });
