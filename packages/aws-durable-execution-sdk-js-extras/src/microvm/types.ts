@@ -366,12 +366,20 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * about 1 second of latency for the next job. The session terminates the
    * MicroVM after its last job anyway.
    *
+   * The session handle records the job in memory only. A replay of a
+   * completed `map` item, `parallel` branch, or child context does not run
+   * its `invoke` again. So every session job also checks the state after an
+   * HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request
+   * without an answer. It resumes a suspending or suspended MicroVM, and
+   * sends the job again.
+   *
    * It needs more than a session without suspending:
    *
    * 1. The image enables the `resume` hook. Without it, the next job waits
    *    up to 30 seconds of HTTP 503 answers.
    * 2. The function's role has `lambda:GetMicrovm` and
-   *    `lambda:ResumeMicrovm`.
+   *    `lambda:ResumeMicrovm`. Every session needs them, because every
+   *    session job checks the state after a sign of a suspended MicroVM.
    * 3. The MicroVM's role has `lambda:SuspendMicrovm` on the image.
    * 4. The worker supports the setting. An older worker ignores it, and the
    *    MicroVM keeps running. The session then logs one warning.
@@ -430,11 +438,13 @@ export interface MicrovmSession {
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
    * `autoSuspendOnIdle: true` or an `idlePolicy`, and after a job with
-   * `suspendAfter`. Otherwise an ended MicroVM fails the job with
+   * `suspendAfter`. A check after a sign of a suspended MicroVM reports it
+   * too. Otherwise an ended MicroVM fails the job with
    * {@link MicrovmDeliveryError} after the retries. Every session also
    * reports it when CreateMicrovmAuthToken reports the MicroVM removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
-   * retries, or the route rejects the job.
+   * retries, or the route rejects the job. A suspended MicroVM whose
+   * ResumeMicrovm is denied fails the delivery at once.
    * @throws \{TypeError\} When `name`, `path`, or `port` is invalid,
    * `suspendAfter` is not a boolean, or `JSON.stringify` cannot encode
    * `input`.

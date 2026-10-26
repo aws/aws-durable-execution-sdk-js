@@ -97,7 +97,7 @@ export class MicrovmDeliveryError extends MicrovmError {
  * {@link microvm}. The platform then terminates and removes it. A
  * TerminateMicrovm call from outside the operation ends it too.
  *
- * The request step reports this error in two cases:
+ * The request step reports this error in three cases:
  *
  * 1. A session that checks the MicroVM state before each job. It checks when
  *    `autoSuspendOnIdle` is `true`, when an `idlePolicy` is set, and after a
@@ -105,7 +105,10 @@ export class MicrovmDeliveryError extends MicrovmError {
  *    ResumeMicrovm when the MicroVM is suspended. GetMicrovm can report a
  *    terminating or terminated MicroVM. Either call can report a MicroVM
  *    that no longer exists.
- * 2. Any job that goes over HTTP, from {@link microvm} or from a session.
+ * 2. Every session job, after a request without an answer, or after an HTTP
+ *    502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step
+ *    then calls GetMicrovm once.
+ * 3. Any job that goes over HTTP, from {@link microvm} or from a session.
  *    The request step calls CreateMicrovmAuthToken before the first request,
  *    and again after a 401 or 403. The API model lists
  *    `ResourceNotFoundException` for that call. So it can report a MicroVM
@@ -123,10 +126,12 @@ export class MicrovmDeliveryError extends MicrovmError {
  * none, or when the error does not come from the Lambda MicroVMs service.
  *
  * By default, with no `idlePolicy` and no job with `suspendAfter`, the
- * session makes no GetMicrovm call.
- * The endpoint of a terminated MicroVM answers 502, and the request step
- * retries a 502 as a MicroVM that is still starting. So the job fails with
- * a plain {@link MicrovmDeliveryError}, after the retries of both tiers.
+ * session makes no GetMicrovm call before delivery. The endpoint of a
+ * terminated MicroVM answers 502. Whether that 502 carries
+ * `MICROVM_CONNECT_FAILED` is not verified. Without it, the request step
+ * retries the 502 as a MicroVM that is still starting. So the job then
+ * fails with a plain {@link MicrovmDeliveryError}, after the retries of both
+ * tiers.
  *
  * @public
  *

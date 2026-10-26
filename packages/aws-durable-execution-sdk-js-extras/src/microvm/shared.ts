@@ -21,7 +21,11 @@ import {
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
-import { ensureRunning } from "./lifecycle";
+import {
+  ensureRunning,
+  MicrovmStateCheckError,
+  resumeIfSuspended,
+} from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
 import type {
@@ -652,6 +656,13 @@ export interface DeliverJobOptions {
    * session's flag, see the current value.
    */
   resume?: boolean | (() => boolean);
+  /**
+   * Turns on the check after a sign of a suspended MicroVM, for an attempt
+   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
+   * every job. A failed GetMicrovm call in that check logs one warning per
+   * job, and the attempt keeps sending the job.
+   */
+  suspendCheck?: boolean;
   /** Adds `"suspendAfter": true` to the job request. */
   suspendAfter?: boolean;
   /**
@@ -660,6 +671,20 @@ export interface DeliverJobOptions {
    */
   claimSuspendAfterWarning?: () => boolean;
 }
+
+/**
+ * The warning, once per job, after a failed state check of a session
+ * without the resume mode.
+ */
+const STATE_CHECK_WARNING =
+  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
+
+/**
+ * The sentence that the first tier adds to its final error after a denied
+ * state check. Without it, the message names only the last HTTP failure.
+ */
+const GET_DENIED_NOTE =
+  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
 
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
@@ -688,6 +713,9 @@ export async function deliverJob(
     "input",
     job.inputJson,
   );
+  // One warning per job for a failed state check. The attempts of the step
+  // in this invocation share it.
+  let checkWarned = false;
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
@@ -728,6 +756,33 @@ export async function deliverJob(
       const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
+      let getDenied = false;
+      const checkState = async (
+        maxWaitMs: number,
+      ): Promise<string | undefined> => {
+        try {
+          return await resumeIfSuspended({
+            client,
+            microvmId: launched.microvmId,
+            maxWaitMs,
+            remainingTimeMs: remainingTime(child),
+            log,
+          });
+        } catch (error) {
+          if (!(error instanceof MicrovmStateCheckError)) {
+            throw error;
+          }
+          getDenied ||= error.denied;
+          if (!checkWarned) {
+            checkWarned = true;
+            stepContext.logger.warn(STATE_CHECK_WARNING, {
+              microvmId: launched.microvmId,
+              error: error.message,
+            });
+          }
+          return undefined;
+        }
+      };
       // The launch records an endpoint for every `http` delivery, and the
       // caller delivers over HTTP only then. So a missing endpoint is a
       // defect, not a transient failure. The error name is not retryable,
@@ -750,6 +805,9 @@ export async function deliverJob(
         remainingTimeMs: remainingTime(child),
         log,
         ...(resume && { recheck: running }),
+        ...(!resume &&
+          options.suspendCheck === true && { suspendCheck: checkState }),
+        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
         ...(options.suspendAfter === true && {
           onSuspendAfterIgnored: () => {
             if (options.claimSuspendAfterWarning?.() === true) {

@@ -611,7 +611,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   job.` `microvm` rejects `suspendAfter` in `config.request` with a `TypeError`, and both
   operations reject a value that is not a boolean, before any durable operation starts. The
   function's role needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`, and the MicroVM's role
-  needs `lambda:SuspendMicrovm` on the image.
+  needs `lambda:SuspendMicrovm` on the image. The handle keeps that record in memory only. So
+  every session job also checks the state after an HTTP 502 with
+  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
+  2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
+  GetMicrovm logs one warning per job, and the job keeps its retries. A denied ResumeMicrovm for a
+  suspended MicroVM fails the job at once with `MicrovmDeliveryError`.
 
 - **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
   `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports

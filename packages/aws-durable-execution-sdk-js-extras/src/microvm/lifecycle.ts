@@ -1,11 +1,13 @@
 // Resumes a suspended session MicroVM before the next job.
 import {
   GetMicrovmCommand,
+  type GetMicrovmCommandOutput,
   type LambdaMicrovmsClient,
   ResumeMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 import {
   addRequestId,
+  isMicrovmsServiceError,
   MicrovmStateError,
   microvmNotFound,
   withRequestId,
@@ -81,6 +83,186 @@ export interface EnsureRunningOptions {
 export async function ensureRunning(
   options: EnsureRunningOptions,
 ): Promise<string | undefined> {
+  return waitUntilRunning(options, false);
+}
+
+/**
+ * Thrown by {@link resumeIfSuspended} when its GetMicrovm call fails.
+ *
+ * The request step of a session without the resume mode runs that check
+ * only after a sign of a suspended MicroVM. The session may never have
+ * asked to suspend. So the step logs one warning per job, and keeps sending
+ * the job. `cause` is the error of the call.
+ *
+ * @internal
+ */
+export class MicrovmStateCheckError extends Error {
+  override readonly name = "MicrovmStateCheckError";
+
+  constructor(
+    message: string,
+    /** Whether the service answered `AccessDeniedException`. */
+    readonly denied: boolean,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
+
+/**
+ * Thrown when ResumeMicrovm is denied for a suspending or suspended MicroVM.
+ *
+ * Nothing else resumes the MicroVM, and a later attempt is denied the same
+ * way. So the default retry strategy does not retry it, and the job fails
+ * with `MicrovmDeliveryError` at once. The message names the permission,
+ * and ends with the request ID of the call.
+ *
+ * @internal
+ */
+export class MicrovmResumeDeniedError extends Error {
+  override readonly name = "MicrovmResumeDeniedError";
+}
+
+/**
+ * Checks the MicroVM state once, resumes a suspended MicroVM, and returns
+ * its current endpoint.
+ *
+ * @remarks
+ * The request step of a session without the resume mode calls it after a
+ * sign that the MicroVM may be suspended: an HTTP 502 from the endpoint with
+ * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer. A worker can
+ * suspend its MicroVM after a `suspendAfter` job. The session can lose the
+ * record of that job on replay. So this check runs for every session job.
+ *
+ * 1. GetMicrovm runs once. A failure other than `ResourceNotFoundException`
+ *    throws {@link MicrovmStateCheckError}. The caller then keeps sending
+ *    the job.
+ * 2. `RUNNING` or `PENDING`: the function returns at once.
+ * 3. `SUSPENDING` or `SUSPENDED`: it calls ResumeMicrovm once. The service
+ *    honors a resume during `SUSPENDING` too. It then waits for `RUNNING`,
+ *    as {@link ensureRunning} does after its own resume.
+ * 4. `TERMINATING`, `TERMINATED`, or not found: it throws
+ *    {@link MicrovmStateError}.
+ *
+ * A denied ResumeMicrovm throws {@link MicrovmResumeDeniedError}. A
+ * `ConflictException` is not an error: polling continues. Any other
+ * ResumeMicrovm error is rethrown as the same error object, as in
+ * {@link ensureRunning}. So is any error of a GetMicrovm call after the
+ * resume.
+ *
+ * @returns The endpoint that GetMicrovm reports, or `undefined` when it
+ * reports none.
+ */
+export async function resumeIfSuspended(
+  options: EnsureRunningOptions,
+): Promise<string | undefined> {
+  const started = Date.now();
+  const reserve = reserveStartsAt(options.remainingTimeMs);
+  const { microvmId } = options;
+  const unavailable = (): MicrovmEndpointUnavailableError =>
+    new MicrovmEndpointUnavailableError(
+      `MicroVM ${microvmId} did not reach RUNNING in ${Date.now() - started} ms. Last state: unknown.`,
+    );
+
+  let current: GetMicrovmCommandOutput;
+  try {
+    current = await callBeforeDeadline(
+      (sendOptions) =>
+        options.client.send(
+          new GetMicrovmCommand({ microvmIdentifier: microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      unavailable,
+    );
+  } catch (error) {
+    if (error instanceof MicrovmEndpointUnavailableError) {
+      throw error;
+    }
+    const errorName = (error as Error).name;
+    if (errorName === "ResourceNotFoundException") {
+      throw microvmNotFound(microvmId, "GetMicrovm", error);
+    }
+    throw new MicrovmStateCheckError(
+      (addRequestId("GetMicrovm", error) as Error).message,
+      errorName === "AccessDeniedException",
+      { cause: error },
+    );
+  }
+  const state = current.state;
+  throwIfEnded(microvmId, current);
+  if (state !== "SUSPENDING" && state !== "SUSPENDED") {
+    return current.endpoint;
+  }
+  try {
+    await callBeforeDeadline(
+      (sendOptions) =>
+        options.client.send(
+          new ResumeMicrovmCommand({ microvmIdentifier: microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      unavailable,
+    );
+  } catch (error) {
+    if (error instanceof MicrovmEndpointUnavailableError) {
+      throw error;
+    }
+    const errorName = (error as Error).name;
+    if (errorName === "ResourceNotFoundException") {
+      throw microvmNotFound(microvmId, "ResumeMicrovm", error);
+    }
+    if (errorName === "AccessDeniedException") {
+      throw new MicrovmResumeDeniedError(
+        withRequestId(
+          `MicroVM ${microvmId} is ${state}. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm.`,
+          "ResumeMicrovm",
+          isMicrovmsServiceError(error) ? error : undefined,
+        ),
+        { cause: error },
+      );
+    }
+    if (errorName !== "ConflictException") {
+      throw addRequestId("ResumeMicrovm", error);
+    }
+  }
+  options.log("resuming MicroVM", { state });
+  return waitUntilRunning(
+    { ...options, maxWaitMs: options.maxWaitMs - (Date.now() - started) },
+    true,
+  );
+}
+
+/**
+ * Throws {@link MicrovmStateError} for a terminating or terminated MicroVM.
+ * The GetMicrovm output carries the request ID in `$metadata`. The state
+ * fails the step, so the message names that request ID.
+ */
+function throwIfEnded(
+  microvmId: string,
+  current: { state?: string; stateReason?: string },
+): void {
+  const { state, stateReason } = current;
+  if (state === "TERMINATING" || state === "TERMINATED") {
+    throw new MicrovmStateError(
+      withRequestId(
+        `MicroVM ${microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
+        "GetMicrovm",
+        current,
+      ),
+      state,
+    );
+  }
+}
+
+/**
+ * The loop of {@link ensureRunning}. `resumeAlreadySent` states that the
+ * caller has already called ResumeMicrovm.
+ */
+async function waitUntilRunning(
+  options: EnsureRunningOptions,
+  resumeAlreadySent: boolean,
+): Promise<string | undefined> {
   const sleep =
     options.sleep ??
     ((ms: number): Promise<void> =>
@@ -94,7 +276,7 @@ export async function ensureRunning(
     reserve === undefined
       ? started + options.maxWaitMs
       : Math.min(started + options.maxWaitMs, reserve);
-  let resumeSent = false;
+  let resumeSent = resumeAlreadySent;
   let delay = INITIAL_POLL_MS;
   let lastState: string | undefined;
   const unavailable = (): MicrovmEndpointUnavailableError =>
@@ -134,7 +316,6 @@ export async function ensureRunning(
   for (;;) {
     let state: string | undefined;
     let endpoint: string | undefined;
-    let stateReason: string | undefined;
     // The GetMicrovm output carries the request ID in `$metadata`. A
     // terminating or terminated MicroVM fails the step, so its message names
     // that request ID too.
@@ -144,7 +325,6 @@ export async function ensureRunning(
       state = current.state;
       lastState = state;
       endpoint = current.endpoint;
-      stateReason = current.stateReason;
     } catch (error) {
       if ((error as Error).name === "ResourceNotFoundException") {
         throw microvmNotFound(options.microvmId, "GetMicrovm", error);
@@ -158,16 +338,7 @@ export async function ensureRunning(
       }
       return endpoint;
     }
-    if (state === "TERMINATING" || state === "TERMINATED") {
-      throw new MicrovmStateError(
-        withRequestId(
-          `MicroVM ${options.microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
-          "GetMicrovm",
-          current,
-        ),
-        state,
-      );
-    }
+    throwIfEnded(options.microvmId, current);
     if (state === "SUSPENDED" && !resumeSent) {
       try {
         await resumeMicrovm();

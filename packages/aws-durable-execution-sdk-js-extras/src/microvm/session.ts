@@ -74,7 +74,11 @@ import type {
  *
  * A job with `suspendAfter` asks the worker to suspend the MicroVM after the
  * job. Each later job of the handle then checks the state before delivery,
- * as with `autoSuspendOnIdle`. That record is kept in memory only. See
+ * as with `autoSuspendOnIdle`. That record is kept in memory only. So every
+ * job of every session also checks the state after a sign of a suspended
+ * MicroVM: no answer, or an HTTP 502 with `x-aws-proxy-error:
+ * MICROVM_CONNECT_FAILED`. A booting MicroVM gives neither sign. So a
+ * session that never suspends makes no extra call. See
  * {@link MicrovmInvokeOptions.suspendAfter}.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
@@ -173,7 +177,8 @@ export function microvmSession<TOutput = unknown>(
       // 3. So a deploy that changes autoSuspendOnIdle or idlePolicy does not
       //    change what the running MicroVM does.
       // 4. A job that skips the state check of a suspended MicroVM gets a
-      //    502. The request step retries a 502 until both retry tiers end.
+      //    502, or no answer. The request step then checks the state, and
+      //    resumes the MicroVM. That costs a failed request per job.
       // 5. So each job follows the resume mode that the launch recorded, not
       //    the current config.
       // Every session launch records a boolean. So only `true` turns the
@@ -314,7 +319,8 @@ interface SessionState {
    * The flag lives in memory only. A replay of a completed job calls
    * `invoke` again, so it sets the flag again. A replay of a completed child
    * context or `map` item does not run its function, so it does not call
-   * `invoke`, and it does not set the flag.
+   * `invoke`, and it does not set the flag. The check after a sign of a
+   * suspended MicroVM covers that case. See `resumeIfSuspended`.
    */
   maybeSuspended: boolean;
   readonly sessionId: string;
@@ -423,6 +429,7 @@ function invokeJob<TOutput, TInput>(
           measuredJob(callbackId, inputJson, options.heartbeatTimeout),
           {
             resume: () => resumeMode(state),
+            suspendCheck: true,
             suspendAfter,
             claimSuspendAfterWarning: () =>
               claimSuspendAfterWarning(state.sessionId),
