@@ -386,11 +386,20 @@ Depending on your destination:
 | CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                |
 | DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                         |
 | Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
-| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, and one of `secretsmanager:GetSecretValue`, `redshift:GetClusterCredentials`, `redshift-serverless:GetCredentials`              |
+| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                   |
 | OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                   |
 | S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
 | SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
 | Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                            |
+
+Redshift needs one credential action, chosen by how you connect:
+
+| Redshift connection                                  | Credential action                       |
+| ---------------------------------------------------- | --------------------------------------- |
+| `redshiftSecretArn` set (cluster or workgroup)       | `secretsmanager:GetSecretValue`         |
+| Cluster with `redshiftDbUser`                        | `redshift:GetClusterCredentials`        |
+| Cluster with neither (your IAM identity is the user) | `redshift:GetClusterCredentialsWithIAM` |
+| Workgroup without a secret                           | `redshift-serverless:GetCredentials`    |
 
 > **Warning: use read-only credentials.** In **Ask** and **Agent** modes a model
 > writes the query. A model can be prompt-injected, for example by text stored in

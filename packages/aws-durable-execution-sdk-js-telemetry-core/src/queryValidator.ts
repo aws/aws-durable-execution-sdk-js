@@ -117,8 +117,22 @@ const DIALECTS: Record<SqlEngine, Dialect> = {
   },
 };
 
-function refuse(engine: SqlEngine, reason: string): never {
-  throw new Error(`Refused to execute ${engine} query: ${reason}`);
+/**
+ * Throws the refusal error. The message names the position of the refused
+ * construct and quotes up to 20 characters on each side of it, so the person
+ * or model that wrote the query can see which part was refused.
+ */
+function refuse(
+  engine: SqlEngine,
+  reason: string,
+  query: string,
+  index: number,
+): never {
+  const excerpt = query.slice(Math.max(0, index - 20), index + 20);
+  throw new Error(
+    `Refused to execute ${engine} query: ${reason} ` +
+      `Near position ${index}: ${JSON.stringify(excerpt)}`,
+  );
 }
 
 /**
@@ -164,6 +178,7 @@ function blankStringsAndComments(query: string, engine: SqlEngine): string {
   const dialect = DIALECTS[engine];
   let out = "";
   let inString: string | null = null;
+  let stringStart = 0;
   for (let i = 0; i < query.length; i++) {
     const ch = query[i];
     const next = query[i + 1];
@@ -173,6 +188,8 @@ function blankStringsAndComments(query: string, engine: SqlEngine): string {
           engine,
           "a backslash inside a quoted string or identifier is not allowed, " +
             "because this engine can read it as an escape character.",
+          query,
+          i,
         );
       }
       out += ch === "\n" ? "\n" : " ";
@@ -180,7 +197,7 @@ function blankStringsAndComments(query: string, engine: SqlEngine): string {
       continue;
     }
     if (dialect.mysqlComments && (ch === "#" || (ch === "-" && next === "-"))) {
-      refuse(engine, 'line comments ("--" or "#") are not allowed.');
+      refuse(engine, 'line comments ("--" or "#") are not allowed.', query, i);
     }
     // Line comment: blank through end of line (\n or \r).
     if (ch === "-" && next === "-") {
@@ -193,27 +210,34 @@ function blankStringsAndComments(query: string, engine: SqlEngine): string {
     }
     // Block comment: blank through the closing */.
     if (ch === "/" && next === "*") {
+      const commentStart = i;
       out += "  ";
       i += 2;
       while (i < query.length && !(query[i] === "*" && query[i + 1] === "/")) {
         if (query[i] === "/" && query[i + 1] === "*") {
-          refuse(engine, "nested block comments are not allowed.");
+          refuse(engine, "nested block comments are not allowed.", query, i);
         }
         out += query[i] === "\n" ? "\n" : " ";
         i++;
       }
       if (i >= query.length) {
-        refuse(engine, "unterminated block comment.");
+        refuse(engine, "unterminated block comment.", query, commentStart);
       }
       out += "  ";
       i += 1; // for-loop's i++ consumes the second char of */
       continue;
     }
     if (ch === "`" && !dialect.backtickQuotes) {
-      refuse(engine, "backticks are not allowed outside a quoted string.");
+      refuse(
+        engine,
+        "backticks are not allowed outside a quoted string.",
+        query,
+        i,
+      );
     }
     if (ch === "'" || ch === '"' || ch === "`") {
       inString = ch;
+      stringStart = i;
       out += " ";
       continue;
     }
@@ -222,12 +246,19 @@ function blankStringsAndComments(query: string, engine: SqlEngine): string {
         engine,
         '"$" is not allowed outside a quoted string (dollar-quoted strings ' +
           "are not supported).",
+        query,
+        i,
       );
     }
     out += ch;
   }
   if (inString) {
-    refuse(engine, "unterminated quoted string or identifier.");
+    refuse(
+      engine,
+      "unterminated quoted string or identifier.",
+      query,
+      stringStart,
+    );
   }
   return out;
 }
@@ -244,10 +275,7 @@ export function assertReadOnly(query: string, engine: SqlEngine): void {
 
   // Must start with SELECT or WITH (for CTEs).
   if (!VALID_SELECT.test(trimmed)) {
-    throw new Error(
-      `Refused to execute ${engine} query: must start with SELECT or WITH. ` +
-        `Got: "${trimmed.substring(0, 40)}..."`,
-    );
+    refuse(engine, "must start with SELECT or WITH.", trimmed, 0);
   }
 
   // Blank strings/comments once, then reuse for both remaining checks. Throws
@@ -256,18 +284,24 @@ export function assertReadOnly(query: string, engine: SqlEngine): void {
 
   // Reject any data-modifying keyword anywhere in the query (including inside
   // or after a CTE), not just at the start — see DANGEROUS_KEYWORD.
-  const dangerous = sanitized.match(DANGEROUS_KEYWORD);
+  const dangerous = DANGEROUS_KEYWORD.exec(sanitized);
   if (dangerous) {
-    throw new Error(
-      `Refused to execute ${engine} query: only SELECT statements are allowed ` +
-        `(found "${dangerous[1].toUpperCase()}"). Got: "${trimmed.substring(0, 40)}..."`,
+    refuse(
+      engine,
+      `only SELECT statements are allowed (found "${dangerous[1].toUpperCase()}").`,
+      trimmed,
+      dangerous.index,
     );
   }
 
   // Reject multiple statements (semicolon followed by non-whitespace).
-  if (/;\s*\S/.test(sanitized)) {
-    throw new Error(
-      `Refused to execute ${engine} query: multiple statements not allowed.`,
+  const secondStatement = /;\s*\S/.exec(sanitized);
+  if (secondStatement) {
+    refuse(
+      engine,
+      "multiple statements not allowed.",
+      trimmed,
+      secondStatement.index,
     );
   }
 }

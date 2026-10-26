@@ -136,3 +136,79 @@ describe("assertReadOnly: rejects lexing differences that hide a write", () => {
   it("a line comment followed by more SQL is allowed", () =>
     pg.ok("SELECT 1 -- note\nFROM t"));
 });
+
+// One probe per lexical rule. Each probe is a harmless read, so the outcome
+// depends only on the rule. The expected outcomes are written out here rather
+// than read from DIALECTS. So flipping any flag in DIALECTS changes one or more
+// cells below, and the matching test fails.
+const RULE_PROBES = {
+  backslashInLiteral: "SELECT * FROM t WHERE a = 'x\\y'",
+  hashOutsideLiteral: "SELECT a # b FROM t",
+  dashDashComment: "SELECT a -- note\nFROM t",
+  backtickIdentifier: "SELECT * FROM `t`",
+};
+type Outcome = "ok" | "refused";
+const EXPECTED: Record<SqlEngine, Record<keyof typeof RULE_PROBES, Outcome>> = {
+  PostgreSQL: {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "Redshift SQL": {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "Trino/Presto SQL": {
+    backslashInLiteral: "ok",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  PartiQL: {
+    backslashInLiteral: "ok",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "OpenSearch SQL": {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "refused",
+    dashDashComment: "refused",
+    backtickIdentifier: "ok",
+  },
+};
+
+describe("assertReadOnly: each engine's lexical rules", () => {
+  const cases = Object.entries(EXPECTED).flatMap(([engine, outcomes]) =>
+    Object.entries(outcomes).map(
+      ([probe, outcome]) =>
+        [
+          engine as SqlEngine,
+          probe as keyof typeof RULE_PROBES,
+          outcome as Outcome,
+        ] as const,
+    ),
+  );
+  it.each(cases)("%s: %s is %s", (engine, probe, outcome) => {
+    const run = () => assertReadOnly(RULE_PROBES[probe], engine);
+    if (outcome === "ok") expect(run).not.toThrow();
+    else expect(run).toThrow(`Refused to execute ${engine} query`);
+  });
+});
+
+describe("assertReadOnly: refusal messages show where the query was refused", () => {
+  it("names the position and quotes the text around it", () =>
+    expect(() =>
+      assertReadOnly("SELECT a FROM t WHERE b = $$x$$", "PostgreSQL"),
+    ).toThrow('Near position 26: " a FROM t WHERE b = $$x$$"'));
+  it("points at the keyword that was found", () =>
+    expect(() =>
+      assertReadOnly(
+        "WITH d AS (DELETE FROM t RETURNING *) SELECT 1",
+        "PostgreSQL",
+      ),
+    ).toThrow("Near position 11:"));
+});
