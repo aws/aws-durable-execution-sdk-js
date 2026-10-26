@@ -1377,6 +1377,7 @@ test/types.check.ts             compile-time check against the lite SDK's plugin
    assignable to the lite SDK's `DurablePluginFactory`.
 8. `onInvocationEnd` sets the flag `ended` first. `onOperationChange` emits nothing
    once `ended` is set. The lite SDK calls no `onOperationChange` after the outcome is
-   decided. The flag keeps rule 6 for any caller that does. Each record gets a larger
+   decided. The flag keeps rule 6 for any caller that does, and a test calls the hook
+   directly to check it. Each record gets a larger
    `emittedAt` than the previous one. So without the flag, a RUNNING record would follow
    the final record, and the Aurora and Redshift upserts would keep the RUNNING record.

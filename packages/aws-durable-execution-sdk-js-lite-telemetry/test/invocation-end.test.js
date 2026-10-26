@@ -175,3 +175,26 @@ test("two concurrent plugin objects never mix records, and their chains are inde
     );
   }
 });
+
+// The lite SDK never calls onOperationChange after the outcome is decided. So only a
+// direct call can reach the ended flag. Without the flag, this call emits a RUNNING
+// record after the final SUCCEEDED record.
+test("an onOperationChange call after onInvocationEnd emits no record", async () => {
+  const exporter = fakeExporter();
+  const plugin = createTelemetryPlugin({
+    exporters: [exporter],
+    emitMode: "on-change",
+  })({ arn: ARN, input: {}, operations: [] });
+  await plugin.onInvocationEnd({
+    status: "SUCCEEDED",
+    result: 1,
+    error: undefined,
+    operations: [],
+  });
+  plugin.onOperationChange({ updated: [], operations: [] });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(
+    exporter.records.map((r) => r.status),
+    ["RUNNING", "SUCCEEDED"],
+  );
+});
