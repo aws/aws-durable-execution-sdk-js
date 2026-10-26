@@ -72,16 +72,32 @@ export function registerTools(
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
   });
-  const blockedByWriteAccess = async (): Promise<ReturnType<
-    typeof jsonResult
-  > | null> => {
+  // Returns a tool result when the call must not query, or null when it may.
+  // The gate can wait a long time for the user's answer, and several calls can
+  // share one prompt. A call the client cancelled meanwhile must not start its
+  // query once the user accepts, so `signal` is checked after the gate settles.
+  const blockedByWriteAccess = async (
+    signal: AbortSignal,
+  ): Promise<ReturnType<typeof jsonResult> | null> => {
     const blocked = await writeAccessGate();
-    return blocked
-      ? jsonResult(
-          { ...blocked, destinationType: config.destinationType },
-          true,
-        )
-      : null;
+    if (blocked) {
+      return jsonResult(
+        { ...blocked, destinationType: config.destinationType },
+        true,
+      );
+    }
+    if (signal.aborted) {
+      return jsonResult(
+        {
+          error:
+            "The request was cancelled while it waited for consent, so no " +
+            "query ran.",
+          destinationType: config.destinationType,
+        },
+        true,
+      );
+    }
+    return null;
   };
 
   server.registerTool(
@@ -209,7 +225,7 @@ export function registerTools(
           ),
       },
     },
-    async ({ sql, limit, lookbackHours }) => {
+    async ({ sql, limit, lookbackHours }, extra) => {
       // 1. Completeness check first — a missing-config finding must never make a
       //    network call (mirrors test_destination). Returns actionable
       //    DURABLE_TELEMETRY_* variable NAMES.
@@ -232,7 +248,7 @@ export function registerTools(
       }
 
       // 2. Stop until the user accepts credentials that can change data.
-      const blocked = await blockedByWriteAccess();
+      const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
 
       // 3. Execute through the single choke point. This is the ONLY place the
@@ -356,10 +372,10 @@ export function registerTools(
           ),
       },
     },
-    async ({ executionArn, year, month, day, lookbackHours }) => {
+    async ({ executionArn, year, month, day, lookbackHours }, extra) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
-      const blocked = await blockedByWriteAccess();
+      const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
       try {
         return jsonResult(
@@ -433,10 +449,13 @@ export function registerTools(
           ),
       },
     },
-    async ({ status, functionName, since, until, limit, lookbackHours }) => {
+    async (
+      { status, functionName, since, until, limit, lookbackHours },
+      extra,
+    ) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
-      const blocked = await blockedByWriteAccess();
+      const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
       try {
         return jsonResult(

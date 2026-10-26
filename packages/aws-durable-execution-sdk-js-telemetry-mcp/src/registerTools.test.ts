@@ -29,6 +29,7 @@ jest.mock("./tools", () => ({
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readConfigFromEnv } from "./config";
 import { registerTools } from "./registerTools";
 
@@ -126,6 +127,49 @@ describe("test_destination", () => {
     expect(result.isError).toBeFalsy();
     expect(payloadOf(result).writeAccess).toEqual(CAN_WRITE);
     expect(checkWriteAccess).not.toHaveBeenCalled();
+    await client.close();
+  });
+});
+
+describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
+  it("does not query for a call cancelled while it waited for consent", async () => {
+    checkWriteAccess.mockResolvedValue(CAN_WRITE);
+    const server = new McpServer({ name: "s", version: "0" });
+    registerTools(server, CONFIG, false);
+    // A client that supports the prompt, and answers it only when told to.
+    const client = new Client(
+      { name: "c", version: "0" },
+      { capabilities: { elicitation: {} } },
+    );
+    let answer: (() => void) | undefined;
+    const prompted = new Promise<void>((resolve) => {
+      client.setRequestHandler(ElicitRequestSchema, () => {
+        resolve();
+        return new Promise((reply) => {
+          answer = () =>
+            reply({ action: "accept", content: { acceptRisk: true } });
+        });
+      });
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(a), client.connect(b)]);
+
+    // Two calls share one prompt. The first is cancelled before the answer.
+    const abort = new AbortController();
+    const cancelled = client
+      .callTool({ name: tool, arguments: args }, undefined, {
+        signal: abort.signal,
+      })
+      .catch(() => "cancelled");
+    const kept = client.callTool({ name: tool, arguments: args });
+    await prompted;
+    abort.abort();
+    expect(await cancelled).toBe("cancelled");
+    answer?.();
+    const result = await kept;
+
+    expect(result.isError).toBeFalsy();
+    expect(queryPath).toHaveBeenCalledTimes(1);
     await client.close();
   });
 });
