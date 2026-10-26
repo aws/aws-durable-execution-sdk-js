@@ -73,13 +73,16 @@ import type {
  * config.
  *
  * A job with `suspendAfter` asks the worker to suspend the MicroVM after the
- * job. Each later job of the handle then checks the state before delivery,
- * as with `autoSuspendOnIdle`. That record is kept in memory only. So every
- * job of every session also checks the state after a sign of a suspended
- * MicroVM: no answer, or an HTTP 502 with `x-aws-proxy-error:
- * MICROVM_CONNECT_FAILED`. A booting MicroVM gives neither sign. So a
- * session that never suspends makes no extra call. See
- * {@link MicrovmInvokeOptions.suspendAfter}.
+ * job. That job itself and each later job of the handle then check the
+ * state before delivery, as with `autoSuspendOnIdle`. The flag is set before
+ * the job starts, so the job's own delivery reads it. That record is kept in
+ * memory only. So every job of every session also checks the state after a
+ * sign of a suspended MicroVM: no answer, or an HTTP 502 with
+ * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. A booting MicroVM gives
+ * neither sign, unless the worker takes more than 10 seconds to start
+ * listening. Then the first delivery gets no answer, and the operation makes
+ * one GetMicrovm call. So a session that never suspends makes no extra call,
+ * except in that case. See {@link MicrovmInvokeOptions.suspendAfter}.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
  * error and continue with the same MicroVM. An error that leaves the handler

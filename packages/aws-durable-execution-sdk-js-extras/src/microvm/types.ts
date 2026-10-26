@@ -357,8 +357,10 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * reported, and no other job runs. A job that ends while another job runs
    * leaves the request pending. The worker then suspends the MicroVM when
    * the last running job ends. The next job of the session resumes the
-   * MicroVM before it is delivered. The setting works with or without
-   * {@link MicrovmSessionConfig.autoSuspendOnIdle}.
+   * MicroVM before it is delivered. The `suspendAfter` job itself also
+   * checks the MicroVM state before delivery. The session sets the flag
+   * before the job starts, so the job's own delivery reads it. The setting
+   * works with or without {@link MicrovmSessionConfig.autoSuspendOnIdle}.
    *
    * Set it on the job before a long wait, such as a durable wait or a
    * callback. Do not set it on back-to-back jobs, on `map` items, or on the
@@ -382,7 +384,8 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *    session job checks the state after a sign of a suspended MicroVM.
    * 3. The MicroVM's role has `lambda:SuspendMicrovm` on the image.
    * 4. The worker supports the setting. An older worker ignores it, and the
-   *    MicroVM keeps running. The session then logs one warning.
+   *    MicroVM keeps running. The session then logs one warning, once per
+   *    session in each execution environment.
    *
    * A suspend that the service refuses for now is not retried, unless
    * {@link MicrovmSessionConfig.autoSuspendOnIdle} is `true`. Only
@@ -427,14 +430,15 @@ export interface MicrovmSession {
    * `invoke` again. The call measures that JSON text, and the request sends
    * exactly that text. The input must be the same on every replay.
    *
+   * A call with `options.suspendAfter` set to `true` asks the worker to
+   * suspend the MicroVM after the job. The call itself and each later job of
+   * the handle then check the MicroVM state before delivery, as with
+   * `autoSuspendOnIdle`. The call sets the flag before the job starts, so
+   * its own delivery reads it. See {@link MicrovmInvokeOptions.suspendAfter}.
+   *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
-   * A call with `options.suspendAfter` set to `true` asks the worker to
-   * suspend the MicroVM after the job. Each later job of the handle then
-   * checks the MicroVM state before delivery, as with `autoSuspendOnIdle`.
-   * See {@link MicrovmInvokeOptions.suspendAfter}.
-   *
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
    * `autoSuspendOnIdle: true` or an `idlePolicy`, and after a job with
