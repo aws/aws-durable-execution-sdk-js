@@ -52,6 +52,9 @@ class FakeLambda {
   }
 }
 
+const WAIT_WARNING =
+  "a job asked to suspend the MicroVM before the run hook arrived. The worker waits for the run hook to name the MicroVM.";
+
 describe("suspend after a job", () => {
   let target: MicrovmWorkerListener | undefined;
   let releases: Map<string, (fail?: boolean) => void>;
@@ -440,8 +443,10 @@ describe("suspend after a job", () => {
       );
 
       await finishJob("cb-1");
+      // The run hook is not accepted yet. So the request waits, and the
+      // worker logs the wait.
       expect(microvms.suspended).toEqual([]);
-      expect(warn).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[WAIT_WARNING, { callbackId: "cb-1" }]]);
 
       body.end(Buffer.from(JSON.stringify(runHookBody())));
       expect((await runHookAnswer).status).toBe(200);
@@ -678,6 +683,8 @@ describe("suspend after a job", () => {
       "cannot suspend the MicroVM after a job: the run hook named no MicroVM";
     const skipWarnings = () =>
       warn.mock.calls.filter(([m]) => m === SKIP_WARNING);
+    const waitWarnings = () =>
+      warn.mock.calls.filter(([m]) => m === WAIT_WARNING);
 
     it("keeps the request until the run hook arrives, then suspends the MicroVM that it names", async () => {
       const worker = start();
@@ -685,10 +692,11 @@ describe("suspend after a job", () => {
       await job(worker, "cb-1");
       await finishJob("cb-1");
 
-      // No run hook has been handled. So the request waits, without a
-      // warning.
+      // No run hook has been handled. So the request waits, and the worker
+      // logs the wait.
       expect(microvms.suspended).toEqual([]);
-      expect(warn).not.toHaveBeenCalled();
+      expect(warn.mock.calls).toEqual([[WAIT_WARNING, { callbackId: "cb-1" }]]);
+      warn.mockClear();
 
       expect(await runHook(worker)).toBe(200);
       await advance(0);
@@ -713,7 +721,7 @@ describe("suspend after a job", () => {
       const worker = start();
       await job(worker, "cb-1");
       await finishJob("cb-1");
-      expect(warn).not.toHaveBeenCalled();
+      expect(skipWarnings()).toEqual([]);
 
       await call(worker, `${HOOK_PATH_PREFIX}run`, { microvmId: "mvm-1" });
       await advance(0);
@@ -737,7 +745,32 @@ describe("suspend after a job", () => {
       await advance(0);
 
       expect(microvms.suspended).toEqual([]);
-      expect(warn).not.toHaveBeenCalled();
+      expect(skipWarnings()).toEqual([]);
+    });
+
+    it("logs the wait once for two jobs that end before the run hook", async () => {
+      const worker = start();
+      await job(worker, "cb-1");
+      await finishJob("cb-1");
+      // cb-2 ends while cb-1's request still waits. Its request waits too.
+      await job(worker, "cb-2");
+      await finishJob("cb-2");
+
+      expect(microvms.suspended).toEqual([]);
+      expect(waitWarnings()).toEqual([[WAIT_WARNING, { callbackId: "cb-1" }]]);
+    });
+
+    it("does not log the wait when the run hook came first", async () => {
+      const worker = start();
+      // The job request arrives before the run hook, and ends after it.
+      await job(worker, "cb-1");
+      expect(await runHook(worker)).toBe(200);
+
+      await finishJob("cb-1");
+      await advance(0);
+
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      expect(waitWarnings()).toEqual([]);
     });
   });
 

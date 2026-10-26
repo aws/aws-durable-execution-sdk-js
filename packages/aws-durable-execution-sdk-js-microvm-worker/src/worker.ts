@@ -648,9 +648,13 @@ export function createMicrovmWorkerListener<
   let suspendTarget: { microvmId: string; region: string } | undefined;
   // Set when a job with suspendAfter has ended, until the suspend starts. A
   // job that ends while other work runs leaves it set. So the suspend starts
-  // when that work ends. A request that comes before the first run hook
-  // waits for it, because only that hook can set suspendTarget.
+  // when that work ends. A request that comes before the first accepted run
+  // hook waits for it, because only that hook can set suspendTarget.
   let suspendAfterJob: { callbackId: string } | undefined;
+  // Set when the worker has logged that a request waits for the run hook.
+  // An image without the run hook would make every such job log it. So the
+  // worker logs it once.
+  let warnedRunHookWait = false;
   let idleTimer: NodeJS.Timeout | undefined;
   // Set from the moment the idle time ends until the MicroVM runs again.
   // While set, the listener refuses jobs.
@@ -1492,11 +1496,21 @@ export function createMicrovmWorkerListener<
         // handler succeeded or failed. So the freeze cannot stop this job's
         // own report. A terminate hook or close() drops a pending request,
         // and a job that ends after either records none. So no request is
-        // pending after them. A job that
-        // ends while the worker refuses jobs for a suspend records none:
-        // the MicroVM is suspending already, so the request is done.
+        // pending after them. A job that ends while the worker refuses jobs
+        // for a suspend records none: the MicroVM is suspending already, so
+        // the request is done. A request that comes before the first
+        // accepted run hook waits for it. An image without the run hook
+        // never ends that wait. So the worker warns the first time a
+        // request starts to wait.
         if (suspendAfter && !suspending && !terminating && !closed) {
           suspendAfterJob = { callbackId: job.callbackId };
+          if (!runHookAccepted && !warnedRunHookWait) {
+            warnedRunHookWait = true;
+            logger.warn(
+              "a job asked to suspend the MicroVM before the run hook arrived. The worker waits for the run hook to name the MicroVM.",
+              { callbackId: job.callbackId },
+            );
+          }
         }
         // A job that ran across a refusal for now ends now. Its end starts
         // the normal idle time, without the lower bound.
