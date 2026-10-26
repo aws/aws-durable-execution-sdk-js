@@ -34,9 +34,15 @@
  * function in PostgreSQL/Trino. A data-modifying STATEMENT is never written as
  * `KEYWORD(`, so requiring the keyword not to be a function call avoids
  * false-positives without weakening the check (it cannot exempt a real write).
+ *
+ * The keyword must not be preceded by a digit. A digit would be a write:
+ * PostgreSQL 13 and 14 read `1INTO` as the number 1 followed by INTO, so
+ * `SELECT 1INTO t FROM u` creates a table. Letters and underscores are safe
+ * because the engine reads `xDELETE` or `_DELETE` as one identifier, so those
+ * are not writes.
  */
 const DANGEROUS_KEYWORD =
-  /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|MERGE|REPLACE|GRANT|REVOKE|EXEC|EXECUTE|CALL|COPY|UNLOAD|INTO)\b(?!\s*\()/i;
+  /(?<![A-Za-z_])(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|MERGE|REPLACE|GRANT|REVOKE|EXEC|EXECUTE|CALL|COPY|UNLOAD|INTO)\b(?!\s*\()/i;
 const VALID_SELECT = /^\s*(SELECT|WITH)\b/i;
 
 /**
