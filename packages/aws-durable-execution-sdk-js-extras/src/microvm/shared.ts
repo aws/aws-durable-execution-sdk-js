@@ -21,7 +21,11 @@ import {
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
-import { ensureRunning } from "./lifecycle";
+import {
+  ensureRunning,
+  MicrovmStateCheckError,
+  resumeIfSuspended,
+} from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
 import type {
@@ -99,6 +103,144 @@ export function fitsRunHook(payload: string): boolean {
     }
   }
   return true;
+}
+
+/**
+ * The largest job input that {@link microvm} and {@link MicrovmSession.invoke}
+ * accept, in UTF-8 bytes of its JSON form: 6 MiB minus 8 KiB.
+ *
+ * 1. The worker refuses a job request body over 6 MiB.
+ * 2. The body holds the input's JSON and fixed fields: the version, the
+ *    Region, the MicroVM ID, the suspend-after flag, the callback ID, and the
+ *    heartbeat timeout.
+ * 3. The callback ID has at most 1,024 base64 characters. The MicroVM ID has
+ *    at most 256 characters, so at most 1,536 bytes as JSON. The other
+ *    fields take less than 200 bytes. The suspend-after flag,
+ *    `,"suspendAfter":true`, takes 20 of them.
+ * 4. So the fixed fields take less than 3 KiB. So 8 KiB covers them.
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
+
+/** The text before the input's JSON in `JSON.stringify({ input })`. */
+const INPUT_MEMBER_PREFIX = '{"input":';
+
+/**
+ * Returns the text that names a value thrown during the input's encoding.
+ *
+ * 1. A `toJSON` method or a getter of the input can throw any value, such as
+ *    `null` or a string.
+ * 2. Reading `message` of `null` throws a new `TypeError`. That error would
+ *    replace the wrapper that names the operation.
+ * 3. So an `Error` gives its message, and any other value gives `String()`
+ *    of it. A value whose conversion throws gives a fixed text.
+ */
+function thrownDetail(error: unknown): string {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "a thrown value that cannot be converted to a string";
+  }
+}
+
+/**
+ * Encodes a job input to JSON once, and rejects it when the JSON has more
+ * than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
+ *
+ * @returns The input's JSON text as measured. It is `undefined` when the
+ * input encodes to no value, such as `undefined` or a function. Then the
+ * bodies have no `input` field.
+ *
+ * Without this check, an oversized job launches a MicroVM first. The worker
+ * then refuses the body, with a 400 or a connection reset. The request step
+ * retries a reset in both retry tiers, for minutes, while the MicroVM is
+ * billed. So the caller checks the size before any durable operation starts.
+ *
+ * The check encodes the input with `JSON.stringify`, as the job body does.
+ * So a value that `JSON.stringify` cannot encode, such as a `BigInt`, also
+ * fails here. The error of `JSON.stringify` does not name the operation. So
+ * the check throws a `TypeError` that names the operation, with the error of
+ * `JSON.stringify` as its `cause`.
+ *
+ * The check encodes the input as the value of a property named `input`:
+ *
+ * 1. `JSON.stringify` passes a `toJSON` method the key of the value. The key
+ *    of a root value is `""`.
+ * 2. Every body that carries the input holds it under the key `input`. The
+ *    HTTP job request does, and so does the `job` of the run hook payload.
+ * 3. So a `toJSON` that depends on its key can return a short form at the
+ *    root and a long form under `input`.
+ * 4. So the check encodes `{ input }`, and the measured form is the form
+ *    that the bodies send.
+ *
+ * The caller sends the returned text, and never encodes the input again:
+ *
+ * 1. `JSON.stringify` calls `toJSON` on every encode.
+ * 2. A `toJSON` can return a different value on each call.
+ * 3. So a second encode can produce a larger text than the measured one.
+ *    That text could exceed the 6 MiB body limit after the check passed.
+ * 4. A JSON parse and a second encode of the measured text are also
+ *    inexact. A `Proxy` can list an object's keys in any order. A parsed
+ *    object lists integer keys first. So the second text can order the
+ *    members differently.
+ * 5. So the caller inserts the returned text into each body with
+ *    {@link withJsonMember}. Each body then holds the measured bytes.
+ *
+ * @throws \{TypeError\} When `JSON.stringify` cannot encode the input.
+ * @throws \{RangeError\} When the input is too large.
+ */
+export function validateJobInput(
+  name: string,
+  input: unknown,
+): string | undefined {
+  let json: string;
+  try {
+    json = JSON.stringify({ input });
+  } catch (error) {
+    throw new TypeError(
+      `MicroVM "${name}": the job input must be JSON-serializable: ${thrownDetail(error)}`,
+      { cause: error },
+    );
+  }
+  // 1. JSON.stringify omits a property whose value encodes to undefined.
+  //    Then the result is `{}`, and the bodies have no `input` field.
+  // 2. Any other result is `{"input":`, then the input's JSON, then `}`.
+  if (json === "{}") {
+    return undefined;
+  }
+  const inputJson = json.slice(INPUT_MEMBER_PREFIX.length, -1);
+  const bytes = Buffer.byteLength(inputJson, "utf8");
+  if (bytes > MAX_JOB_INPUT_BYTES) {
+    throw new RangeError(
+      `MicroVM "${name}": the job input is ${bytes} bytes as JSON. The limit is ${MAX_JOB_INPUT_BYTES} bytes, because the worker accepts a job body of at most 6 MiB. Pass larger data by reference, for example as an S3 key.`,
+    );
+  }
+  return inputJson;
+}
+
+/**
+ * Returns the JSON text of `fields` with one more member at the end: `key`,
+ * whose value is the JSON text `valueJson`. With `valueJson` `undefined`,
+ * it returns the JSON text of `fields` alone.
+ *
+ * The function inserts `valueJson` as it is, and does not encode it again.
+ * So the result holds the exact text that {@link validateJobInput} measured.
+ * `fields` must be a plain object without `toJSON`, so that its JSON text
+ * is an object.
+ */
+export function withJsonMember(
+  fields: object,
+  key: string,
+  valueJson: string | undefined,
+): string {
+  const json = JSON.stringify(fields);
+  if (valueJson === undefined) {
+    return json;
+  }
+  const member = `${JSON.stringify(key)}:${valueJson}`;
+  // `{}` has no member to follow, so the new member needs no comma.
+  return json === "{}" ? `{${member}}` : `${json.slice(0, -1)},${member}}`;
 }
 
 /**
@@ -220,6 +362,20 @@ function decideOnOriginalMessage(strategy: RetryStrategy): RetryStrategy {
 /**
  * Validates the fields that both operations share.
  *
+ * RunMicrovm accepts a launch without `executionRoleArn`. The MicroVM then
+ * has no role. The MicroVM reports the job result through the durable
+ * callback APIs, and those calls need the role. So a MicroVM without a role
+ * cannot complete the job. So this function throws a `TypeError` when
+ * `executionRoleArn` is not a string.
+ *
+ * The RunMicrovm model requires `imageIdentifier`. So RunMicrovm rejects a
+ * launch without it, and this function does not check it.
+ *
+ * RunMicrovm rejects an empty `imageIdentifier` or `executionRoleArn` with
+ * `ValidationException`. So this function does not check for an empty
+ * string. The default retry strategy does not retry the exception. So the
+ * operation fails with `MicrovmLaunchError` after one launch attempt.
+ *
  * @returns The timeout in seconds.
  */
 export function validateBaseConfig(
@@ -229,10 +385,7 @@ export function validateBaseConfig(
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("a MicroVM operation requires a non-empty name");
   }
-  if (!config?.imageIdentifier) {
-    throw new TypeError(`MicroVM "${name}": imageIdentifier is required`);
-  }
-  if (!config.executionRoleArn) {
+  if (typeof config?.executionRoleArn !== "string") {
     throw new TypeError(`MicroVM "${name}": executionRoleArn is required`);
   }
   return validateTimeout(name, "timeout", config.timeout);
@@ -317,6 +470,24 @@ export function validateRequest(
 
 /** The longest request retry window. */
 const MAX_REQUEST_RETRY_WINDOW_SECONDS = 10 * 60;
+
+/**
+ * Validates `suspendAfter`, and returns it. `undefined` reads as `false`.
+ *
+ * @throws \{TypeError\} When it is set and is not a boolean.
+ */
+export function validateSuspendAfter(
+  name: string,
+  suspendAfter: unknown,
+): boolean {
+  if (suspendAfter === undefined) {
+    return false;
+  }
+  if (typeof suspendAfter !== "boolean") {
+    throw new TypeError(`MicroVM "${name}": suspendAfter must be a boolean`);
+  }
+  return suspendAfter;
+}
 
 /**
  * An RFC 3986 path, section 3.3: segments of pchar characters and `%XX`
@@ -443,39 +614,108 @@ export function createJobCallback<TOutput>(
   }) as unknown as Promise<[Promise<TOutput>, string]>;
 }
 
-export function jobDocument<TInput>(
+/**
+ * One job before delivery: the job document's fields other than `input`,
+ * and the input's JSON text from {@link validateJobInput}. Each body
+ * inserts that text with {@link withJsonMember}. So no body encodes the
+ * input again.
+ */
+export interface MeasuredJob {
+  fields: Omit<MicrovmJobDocument, "input">;
+  /** `undefined` when the input encodes to no value. */
+  inputJson: string | undefined;
+}
+
+export function measuredJob(
   callbackId: string,
-  input: TInput,
+  inputJson: string | undefined,
   heartbeatTimeout: Duration | undefined,
-): MicrovmJobDocument<TInput> {
+): MeasuredJob {
   return {
-    callbackId,
-    ...(heartbeatTimeout !== undefined && {
-      heartbeatTimeoutSeconds: durationToSeconds(heartbeatTimeout),
-    }),
-    input,
+    fields: {
+      callbackId,
+      ...(heartbeatTimeout !== undefined && {
+        heartbeatTimeoutSeconds: durationToSeconds(heartbeatTimeout),
+      }),
+    },
+    inputJson,
   };
 }
+
+/** Returns the JSON text of the job document, with the measured input. */
+export function jobDocumentJson(job: MeasuredJob): string {
+  return withJsonMember(job.fields, "input", job.inputJson);
+}
+
+/** The options of {@link deliverJob}. */
+export interface DeliverJobOptions {
+  /**
+   * Whether each attempt first makes sure the MicroVM runs, and resumes a
+   * suspended one. A function is read at the start of each attempt. So a
+   * step retry, and a `map` item that starts after a sibling set the
+   * session's flag, see the current value.
+   */
+  resume?: boolean | (() => boolean);
+  /**
+   * Turns on the check after a sign of a suspended MicroVM, for an attempt
+   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
+   * every job. A failed GetMicrovm call in that check logs one warning per
+   * job, and the attempt keeps sending the job.
+   */
+  suspendCheck?: boolean;
+  /** Adds `"suspendAfter": true` to the job request. */
+  suspendAfter?: boolean;
+  /**
+   * Returns `true` when the job may log the warning about a worker that
+   * ignores `suspendAfter`. The session returns `true` once per session.
+   */
+  claimSuspendAfterWarning?: () => boolean;
+}
+
+/**
+ * The warning, once per job, after a failed state check of a session
+ * without the resume mode.
+ */
+const STATE_CHECK_WARNING =
+  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
+
+/**
+ * The sentence that the first tier adds to its final error after a denied
+ * state check. Without it, the message names only the last HTTP failure.
+ */
+const GET_DENIED_NOTE =
+  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
 
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
  */
-export async function deliverJob<TInput>(
+export async function deliverJob(
   child: DurableContext,
   scope: OperationScope,
   jobName: string,
   launched: LaunchResult,
   request: MicrovmRequestConfig,
-  job: MicrovmJobDocument<TInput>,
-  options: { resume?: boolean } = {},
+  job: MeasuredJob,
+  options: DeliverJobOptions = {},
 ): Promise<void> {
-  const body: MicrovmJobRequest<TInput> = {
-    version: 1,
-    region: scope.region,
-    microvmId: launched.microvmId,
-    ...job,
-  };
+  // The body ends with the input's measured JSON text. So it has the size
+  // that validateJobInput checked. The field `suspendAfter` is present only
+  // when it is true, so other jobs keep the same body.
+  const body = withJsonMember(
+    {
+      version: 1,
+      region: scope.region,
+      microvmId: launched.microvmId,
+      ...(options.suspendAfter === true && { suspendAfter: true }),
+      ...job.fields,
+    } satisfies Omit<MicrovmJobRequest, "input">,
+    "input",
+    job.inputJson,
+  );
+  // One warning per job for a failed state check. The attempts of the step
+  // in this invocation share it.
+  let checkWarned = false;
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
@@ -487,6 +727,10 @@ export async function deliverJob<TInput>(
       const client = getClient(scope.config, scope.region);
       const log = (message: string, data: Record<string, unknown>): void =>
         stepContext.logger.info(`MicroVM "${jobName}": ${message}`, data);
+      const resume =
+        typeof options.resume === "function"
+          ? options.resume()
+          : options.resume === true;
       const retryWindowMs =
         request.retryWindow === undefined
           ? DEFAULT_REQUEST_RETRY_WINDOW_MS
@@ -509,9 +753,36 @@ export async function deliverJob<TInput>(
           remainingTimeMs: remainingTime(child),
           log,
         });
-      const endpoint = options.resume
+      const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
+      let getDenied = false;
+      const checkState = async (
+        maxWaitMs: number,
+      ): Promise<string | undefined> => {
+        try {
+          return await resumeIfSuspended({
+            client,
+            microvmId: launched.microvmId,
+            maxWaitMs,
+            remainingTimeMs: remainingTime(child),
+            log,
+          });
+        } catch (error) {
+          if (!(error instanceof MicrovmStateCheckError)) {
+            throw error;
+          }
+          getDenied ||= error.denied;
+          if (!checkWarned) {
+            checkWarned = true;
+            stepContext.logger.warn(STATE_CHECK_WARNING, {
+              microvmId: launched.microvmId,
+              error: error.message,
+            });
+          }
+          return undefined;
+        }
+      };
       // The launch records an endpoint for every `http` delivery, and the
       // caller delivers over HTTP only then. So a missing endpoint is a
       // defect, not a transient failure. The error name is not retryable,
@@ -528,12 +799,25 @@ export async function deliverJob<TInput>(
         endpoint,
         path: request.path ?? DEFAULT_MICROVM_JOB_PATH,
         port: request.port ?? DEFAULT_MICROVM_PORT,
-        body: JSON.stringify(body),
+        body,
         retryWindowMs,
         windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(options.resume && { recheck: running }),
+        ...(resume && { recheck: running }),
+        ...(!resume &&
+          options.suspendCheck === true && { suspendCheck: checkState }),
+        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
+        ...(options.suspendAfter === true && {
+          onSuspendAfterIgnored: () => {
+            if (options.claimSuspendAfterWarning?.() === true) {
+              stepContext.logger.warn(
+                `the worker in MicroVM ${launched.microvmId} does not support suspendAfter. The MicroVM keeps running after the job.`,
+                { microvmId: launched.microvmId },
+              );
+            }
+          },
+        }),
       });
     },
     {
@@ -627,10 +911,17 @@ export function sha256Hex(value: string): string {
  * milliseconds. The first retry tier uses it to stop before the invocation
  * times out.
  *
- * AWS Lambda's context has `getRemainingTimeInMillis()`. The context of
- * another compute may lack it, or its implementation may throw or return no
- * finite number. The function returns `undefined` in each of these cases. So
- * the caller falls back to its own time limit, and nothing fails.
+ * AWS Lambda's context has `getRemainingTimeInMillis()`. A local or test
+ * runner can pass no Lambda context, or one without that function. The
+ * returned function then returns `undefined`, and the caller applies only its
+ * own time limit.
+ *
+ * Otherwise the returned function passes on the value of
+ * `getRemainingTimeInMillis()` unchanged. `reserveStartsAt` and
+ * `assertTimeToDeliver` read it, and both treat a value that is not a finite
+ * number as no deadline. A `getRemainingTimeInMillis()` that throws fails the
+ * step that reads it. One that returns a value that is not a finite number
+ * turns the reserve off.
  */
 export function remainingTime(
   context: DurableContext,
@@ -642,17 +933,7 @@ export function remainingTime(
   if (typeof read !== "function") {
     return (): undefined => undefined;
   }
-  return (): number | undefined => {
-    let value: unknown;
-    try {
-      value = read.call(lambdaContext);
-    } catch {
-      return undefined;
-    }
-    return typeof value === "number" && Number.isFinite(value)
-      ? value
-      : undefined;
-  };
+  return () => read.call(lambdaContext) as number | undefined;
 }
 
 /**

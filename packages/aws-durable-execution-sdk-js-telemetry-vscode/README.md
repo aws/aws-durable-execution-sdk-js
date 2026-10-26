@@ -386,9 +386,39 @@ Depending on your destination:
 | CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                |
 | DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                         |
 | Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
+| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                   |
+| OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                   |
 | S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
 | SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
 | Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                            |
+
+Redshift needs one credential action, chosen by how you connect:
+
+| Redshift connection                                  | Credential action                       |
+| ---------------------------------------------------- | --------------------------------------- |
+| `redshiftSecretArn` set (cluster or workgroup)       | `secretsmanager:GetSecretValue`         |
+| Cluster with `redshiftDbUser`                        | `redshift:GetClusterCredentials`        |
+| Cluster with neither (your IAM identity is the user) | `redshift:GetClusterCredentialsWithIAM` |
+| Workgroup without a secret                           | `redshift-serverless:GetCredentials`    |
+
+> **Warning: use read-only credentials.** In **Ask** and **Agent** modes a model
+> writes the query. A model can be prompt-injected, for example by text stored in
+> an execution payload. The extension checks every SQL query with a read-only
+> validator before it runs. That validator is a text check, not a guarantee. So
+> the permissions of the identity you configure are what actually prevent writes.
+>
+> - Grant only the actions in the table above. Do not use an administrator role
+>   or profile.
+> - For Aurora and Redshift, IAM permission to call the Data API does not limit
+>   what SQL can do. The database user decides that. Configure a secret or DB
+>   user that has only `SELECT` on the telemetry table. Do not reuse the user that
+>   the exporter writes with.
+> - For OpenSearch, map the identity to a role with read-only index permissions
+>   on the telemetry index.
+> - The S3 + Athena row includes `glue:CreateTable`, `glue:BatchCreatePartition`
+>   and `s3:PutObject`. The extension uses them to create the Glue table on first
+>   save and to write Athena results. Scope `s3:PutObject` to the results bucket.
+>   If the Glue table already exists, omit the two Glue write actions.
 
 ## How Queries Are Generated
 

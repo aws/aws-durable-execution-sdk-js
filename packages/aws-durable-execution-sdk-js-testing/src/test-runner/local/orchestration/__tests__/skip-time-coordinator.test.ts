@@ -1,10 +1,14 @@
 import { Clock, install } from "@sinonjs/fake-timers";
+import { realSetImmediate } from "../../real-timers/real-timers";
 import {
   DURABLE_INVOKE_HOLD_MS,
   NON_DURABLE_INVOKE_HOLD_MS,
   SkipTimeCoordinator,
   SkipTimeParticipant,
 } from "../skip-time-coordinator";
+
+/** Every mock participant a test created, so teardown can unregister it. */
+const created: SkipTimeParticipant[] = [];
 
 function participant(
   overrides: Partial<{
@@ -15,7 +19,7 @@ function participant(
   }> = {},
 ): jest.Mocked<SkipTimeParticipant> & { state: typeof overrides } {
   const state = { ...overrides };
-  return {
+  const mock = {
     state,
     isBusy: jest.fn(() => state.busy ?? false),
     // A busy participant runs invocation 1 unless the test says otherwise.
@@ -26,9 +30,16 @@ function participant(
       () => state.pendingWork ?? state.deadline !== undefined,
     ),
     earliestDeadline: jest.fn(() => state.deadline),
-    applyDeadline: jest.fn(),
+    // A real participant consumes the end it applies, as the orchestrator does.
+    applyDeadline: jest.fn((deadlineMs: number) => {
+      if (state.deadline === deadlineMs) {
+        state.deadline = undefined;
+      }
+    }),
     onClockAdvanced: jest.fn(),
   };
+  created.push(mock);
+  return mock;
 }
 
 describe("SkipTimeCoordinator", () => {
@@ -42,7 +53,13 @@ describe("SkipTimeCoordinator", () => {
     coordinator = SkipTimeCoordinator.forClock(clock);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Unregister every participant, then let any pass scheduled on the real event loop
+    // run. So no pass outlives its test.
+    for (const each of created.splice(0)) {
+      coordinator.unregister(each);
+    }
+    await new Promise((resolve) => realSetImmediate(resolve));
     clock.uninstall();
   });
 
@@ -190,7 +207,8 @@ describe("SkipTimeCoordinator", () => {
   });
 
   it("holds a returned function's result until the caller resumes, even after the hold time", async () => {
-    coordinator.register(participant({ deadline: 3000 }));
+    const waiting = participant({ deadline: 3000 });
+    coordinator.register(waiting);
     const caller = participant();
     coordinator.register(caller);
     let returnResult!: () => void;
@@ -204,9 +222,11 @@ describe("SkipTimeCoordinator", () => {
     await new Promise((resolve) =>
       setTimeout(resolve, NON_DURABLE_INVOKE_HOLD_MS + 100),
     );
-    // The hold time has passed, so the clock advanced. Reset it to check the next hold.
+    // The hold time has passed, so the clock advanced and the end was applied. Reset the
+    // clock and the end to check the next hold.
     expect(Date.now()).toBe(3000);
     clock.setSystemTime(0);
+    waiting.state.deadline = 3000;
 
     returnResult();
     await Promise.resolve();
@@ -310,6 +330,69 @@ describe("SkipTimeCoordinator", () => {
     );
 
     expect(Date.now()).toBe(0);
+  });
+
+  it("advances again after applying an end of a runner past its hold", async () => {
+    // The owner of the earliest end stays busy, past its hold, and never calls advance().
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ busy: true, deadline: 1000 });
+    startInvoke(child, caller)();
+    const other = participant({ deadline: 2000 });
+    coordinator.register(other);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+    // The hold timer queues the next pass with realSetImmediate. If the event loop was
+    // delayed past both timers, this timeout resolves in the same timers phase, before that
+    // pass runs. So wait for one check phase before asserting.
+    await new Promise((resolve) => realSetImmediate(resolve));
+
+    expect(child.applyDeadline).toHaveBeenCalledWith(1000);
+    expect(other.applyDeadline).toHaveBeenCalledWith(2000);
+    expect(Date.now()).toBe(2000);
+  });
+
+  it("does not schedule another pass for an end its owner did not consume", async () => {
+    // A participant that keeps reporting the end it was given would otherwise make every
+    // scheduled pass apply the same end again.
+    const stuck = participant({ deadline: 1000 });
+    stuck.applyDeadline.mockImplementation(() => undefined);
+    coordinator.register(stuck);
+
+    coordinator.advance();
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => realSetImmediate(resolve));
+    }
+
+    expect(stuck.applyDeadline).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a scheduled pass advance while the owner of the applied end is busy", async () => {
+    // A runner that was not invoked becomes busy when it applies an end, as the
+    // orchestrator does. It stops the clock until its invocation has run.
+    const owner = participant({ deadline: 1000 });
+    owner.applyDeadline.mockImplementation(() => {
+      owner.state.deadline = undefined;
+      owner.state.busy = true;
+    });
+    coordinator.register(owner);
+    const other = participant({ deadline: 2000 });
+    coordinator.register(other);
+
+    coordinator.advance();
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => realSetImmediate(resolve));
+    }
+
+    expect(Date.now()).toBe(1000);
+    expect(other.applyDeadline).not.toHaveBeenCalled();
+
+    owner.state.busy = false;
+    coordinator.advance();
+
+    expect(Date.now()).toBe(2000);
   });
 
   it("forgets a detached child once it unregisters", () => {

@@ -7,12 +7,16 @@ import {
   createScope,
   deliverJob,
   fitsRunHook,
-  jobDocument,
+  jobDocumentJson,
   launch,
+  measuredJob,
   type OperationScope,
   terminate,
   validateBaseConfig,
+  validateJobInput,
   validateRequest,
+  validateSuspendAfter,
+  withJsonMember,
 } from "./shared";
 import { inStage, microvmErrorMapper } from "./errors";
 import { MicrovmOperationSubType } from "./subtypes";
@@ -69,15 +73,24 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * @param name - The child context name. It also prefixes the inner
  * operation names.
  * @param input - The job input. It must be JSON-serializable, and it must be
- * the same on every replay. Its size selects the delivery.
+ * the same on every replay. The operation encodes it with `JSON.stringify`
+ * once, when `microvm` is called. So a `toJSON` method runs once per call,
+ * and each replay calls `microvm` again. The operation measures that JSON
+ * text, and every payload sends exactly that text. Its size selects the
+ * delivery. It must have at most {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  * @param config - The MicroVM, delivery, and callback configuration.
  * @returns The value that the MicroVM passed to
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
- * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
- * `request` is invalid.
+ * @throws \{TypeError\} When `name` or `request` is invalid,
+ * `executionRoleArn` is missing, or `JSON.stringify` cannot encode `input`.
+ * A `request` with `suspendAfter` set is invalid, because only a session job
+ * can suspend its MicroVM after the job.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
- * or `request.retryWindow` is not between 1 second and 10 minutes.
+ * `request.retryWindow` is not between 1 second and 10 minutes, or the JSON
+ * form of `input` has more than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
  * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.
+ * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
+ * `RunMicrovm` rejects it with `ValidationException`.
  * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
  * or the route rejects the job. Its subclass `MicrovmNotRunningError` means
  * that CreateMicrovmAuthToken reported the MicroVM removed.
@@ -96,11 +109,27 @@ export function microvm<TOutput = unknown, TInput = unknown>(
 ): DurablePromise<TOutput> {
   let timeoutSeconds: number;
   let scope: OperationScope;
+  let inputJson: string | undefined;
   try {
     timeoutSeconds = validateBaseConfig(name, config);
     if (config.request !== undefined) {
       validateRequest(name, config.request);
     }
+    // MicrovmInvokeOptions extends MicrovmRequestConfig. So a session job's
+    // options pass as `config.request`. microvm() terminates its MicroVM
+    // after its one job, so a suspend after the job would only delay that.
+    if (
+      validateSuspendAfter(
+        name,
+        (config.request as { suspendAfter?: unknown } | null | undefined)
+          ?.suspendAfter,
+      )
+    ) {
+      throw new TypeError(
+        `MicroVM "${name}": suspendAfter applies only to a session job. microvm() terminates its MicroVM after the job.`,
+      );
+    }
+    inputJson = validateJobInput(name, input);
     scope = createScope(context, name, config);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
@@ -117,7 +146,9 @@ export function microvm<TOutput = unknown, TInput = unknown>(
         config.timeout,
         config.heartbeatTimeout,
       );
-      const job = jobDocument(callbackId, input, config.heartbeatTimeout);
+      // The job holds the input's JSON text from validateJobInput. Every
+      // payload below sends that text. So `input` is encoded once per call.
+      const job = measuredJob(callbackId, inputJson, config.heartbeatTimeout);
 
       // The operation can deliver the job to the MicroVM in two ways:
       //
@@ -146,11 +177,14 @@ export function microvm<TOutput = unknown, TInput = unknown>(
       // is deterministic: the callback ID comes from the checkpoint on
       // replay, and the input must be the same on every replay. So every
       // replay picks the same delivery as the first attempt.
-      const withJob = JSON.stringify({
-        version: 1,
-        region: scope.region,
-        job,
-      } satisfies MicrovmRunHookPayload<TInput>);
+      const withJob = withJsonMember(
+        {
+          version: 1,
+          region: scope.region,
+        } satisfies MicrovmRunHookPayload,
+        "job",
+        jobDocumentJson(job),
+      );
       const overHttp = request?.path !== undefined || !fitsRunHook(withJob);
       // The worker rejects a run hook payload without `version` and
       // `region`. So the HTTP delivery still sends those two fields, and
@@ -159,7 +193,7 @@ export function microvm<TOutput = unknown, TInput = unknown>(
         ? JSON.stringify({
             version: 1,
             region: scope.region,
-          } satisfies MicrovmRunHookPayload<TInput>)
+          } satisfies MicrovmRunHookPayload)
         : withJob;
 
       const launched = await inStage(name, "launch", () =>

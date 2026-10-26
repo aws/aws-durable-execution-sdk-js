@@ -1,7 +1,9 @@
 # SDK internals: rules for changing this package
 
 This file is for people and coding agents who change the SDK itself. The repository root
-`AGENTS.md` is for customers who write durable functions.
+`AGENTS.md` is for customers who write durable functions. The
+[rules for every change](../../CONTRIBUTING.md#rules-for-every-change) in `CONTRIBUTING.md`
+apply too.
 
 ## Invariants
 
@@ -14,7 +16,11 @@ gives the reasons and the measurements.
 1. An operation stays `EXECUTING` until its result is ready for the caller. This includes
    serializing, checkpointing, the synchronous part of plugin hooks, and deserializing, on the
    execution and the replay path. Use `completeAfter` (`src/utils/checkpoint/complete-after.ts`).
-   Never mark an operation `COMPLETED` and then await more work for it.
+   Never mark an operation `COMPLETED` and then await more work for it. One exception: when the
+   checkpoint manager drops an awaited `SUCCEED`, `FAIL` or `RETRY` checkpoint of a non-context
+   operation because an ancestor finished, it marks the operation `COMPLETED`. The caller never
+   resumes, so no SDK work runs after the mark.
+   [ADR 0002](../../docs/adr/0002-abandoned-operations-stop-executing.md) defines it.
 2. A child context is `EXECUTING` from the moment its function returns or throws until it
    settles, also while a `wrapChildContextFn` hook still runs after the function settled. It is
    not `EXECUTING` while its function runs.
@@ -35,7 +41,11 @@ gives the reasons and the measurements.
 - `src/context/execution-context/execution-context.test.ts`: the cases named "reports the
   remaining time as Infinity" guard the deadline reading in rule 4. The rest of that file is
   ordinary unit tests.
+- `src/utils/checkpoint/checkpoint-ancestor.test.ts`: the cases that drop a checkpoint for a
+  finished ancestor guard the rule 1 exception
+  ([ADR 0002](../../docs/adr/0002-abandoned-operations-stop-executing.md)). The rest of that
+  file is ordinary unit tests.
 
 If a change makes one of these cases fail, the change breaks an invariant. Do not edit, skip or
-delete the case to make the change pass. To change an invariant, write a new ADR that supersedes
-ADR 0001 first, and get a maintainer's approval for it.
+delete the case to make the change pass. To change an invariant, write a new ADR that supersedes or
+amends ADR 0001 first, and get a maintainer's approval for it.

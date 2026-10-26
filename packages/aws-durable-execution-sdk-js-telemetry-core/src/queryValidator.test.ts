@@ -1,4 +1,4 @@
-import { assertReadOnly } from "./queryValidator";
+import { assertReadOnly, type SqlEngine } from "./queryValidator";
 
 const ok = (q: string) =>
   expect(() => assertReadOnly(q, "PostgreSQL")).not.toThrow();
@@ -20,6 +20,8 @@ describe("assertReadOnly: allows legitimate read-only queries", () => {
     ok("SELECT REPLACE (functionName, 'a', 'b') FROM t"));
   it("column names that merely contain keywords", () =>
     ok("SELECT deleted_at, created_at, updated_at FROM t"));
+  it("column names that end in a keyword", () =>
+    ok("SELECT last_update, autocreate FROM t"));
   it("a keyword only inside a string literal", () =>
     ok("SELECT * FROM t WHERE status = 'DELETED'"));
   it("a keyword only inside a line comment", () =>
@@ -61,4 +63,159 @@ describe("assertReadOnly: rejects obvious writes and bad shapes", () => {
   it("an empty query", () => rejected("   "));
   it("a write hidden after a string literal", () =>
     rejected("SELECT * FROM t WHERE name = 'a'; DELETE FROM t"));
+  it("SELECT ... INTO, which creates a table", () =>
+    rejected("SELECT * INTO copy_of_t FROM t"));
+});
+
+// Each query below is read by the database differently from a scanner that
+// only knows '...', "...", -- and /* */. The scanner would blank the DELETE as
+// string or comment content while the database runs it.
+describe("assertReadOnly: rejects lexing differences that hide a write", () => {
+  // Match the refusal message, so an unrelated error (for example a TypeError)
+  // cannot make a rejection test pass.
+  const forEngine = (engine: SqlEngine) => ({
+    ok: (q: string) => expect(() => assertReadOnly(q, engine)).not.toThrow(),
+    rejected: (q: string) =>
+      expect(() => assertReadOnly(q, engine)).toThrow(
+        `Refused to execute ${engine} query`,
+      ),
+  });
+  const pg = forEngine("PostgreSQL");
+  const redshift = forEngine("Redshift SQL");
+  const opensearch = forEngine("OpenSearch SQL");
+  const athena = forEngine("Trino/Presto SQL");
+  const partiql = forEngine("PartiQL");
+
+  it("PostgreSQL dollar-quoting hides a second statement", () =>
+    pg.rejected("SELECT $$'$$; DELETE FROM t; --'"));
+  it("tagged dollar-quoting hides a second statement", () =>
+    pg.rejected("SELECT $x$'$x$; DELETE FROM t; --'"));
+  it("dollar-quoting hides a data-modifying CTE", () =>
+    pg.rejected(
+      "WITH a AS (SELECT $$'$$ AS q), d AS (DELETE FROM t RETURNING 1) SELECT * FROM a --'",
+    ));
+  it("dollar-quoting is rejected on every engine", () => {
+    for (const e of [redshift, opensearch, athena, partiql])
+      e.rejected("SELECT $$'$$; DELETE FROM t; --'");
+  });
+  it("a PostgreSQL E'' escape string hides a second statement", () =>
+    pg.rejected("SELECT E'\\''; DELETE FROM t; --'"));
+  it("a Redshift backslash escape hides a second statement", () =>
+    redshift.rejected("SELECT '\\''; DELETE FROM t; --'"));
+  it("an OpenSearch backslash escape hides a second statement", () =>
+    opensearch.rejected("SELECT '\\''; DELETE FROM t; --'"));
+  it("a backslash in a double-quoted literal is rejected", () =>
+    opensearch.rejected('SELECT "\\""; DELETE FROM t; --"'));
+  it("PostgreSQL nested block comments hide a second statement", () =>
+    pg.rejected("SELECT 1 /* /* */ '*/ ; DELETE FROM t; --'"));
+  it("a carriage return ends a PostgreSQL line comment", () =>
+    pg.rejected("SELECT 1 --\r; DELETE FROM t"));
+  it("a MySQL-style # comment hides a quote on OpenSearch", () =>
+    opensearch.rejected("SELECT 1 # '\n; DELETE FROM t; -- '"));
+  it("a quote inside a backtick identifier does not open a string", () =>
+    opensearch.rejected("SELECT `'`; DELETE FROM t; -- '"));
+  it("OpenSearch: a backtick-quoted index name is allowed", () =>
+    opensearch.ok("SELECT * FROM `durable-execution-telemetry` LIMIT 5"));
+  it("OpenSearch: any -- comment is rejected, because an identifier can contain --", () =>
+    opensearch.rejected("SELECT abc-- '\n'; DELETE FROM t; -- '"));
+  it("PostgreSQL: a -- comment with no space after it is allowed", () =>
+    pg.ok("SELECT 1 --comment\nFROM t"));
+  it("PartiQL: a backtick (Ion literal) is rejected", () =>
+    partiql.rejected("SELECT * FROM t WHERE a = `1`"));
+  it("an unterminated string is rejected", () =>
+    pg.rejected("SELECT 'abc FROM t"));
+  it("an unterminated block comment is rejected", () =>
+    pg.rejected("SELECT 1 /* never closed"));
+  // PostgreSQL 13 and 14 read `1INTO` as the number 1 followed by the keyword INTO.
+  it("a digit directly before INTO still hides SELECT ... INTO", () =>
+    pg.rejected("SELECT 1INTO copied FROM durable_execution_telemetry"));
+  it("a digit directly before INTO is rejected on Redshift", () =>
+    redshift.rejected("SELECT 1INTO copied FROM durable_execution_telemetry"));
+
+  it("Athena: a backslash inside a literal is an ordinary character", () =>
+    athena.ok("SELECT * FROM t WHERE regexp_like(functionname, '\\d+')"));
+  it("PartiQL: a backslash inside a literal is an ordinary character", () =>
+    partiql.ok("SELECT * FROM t WHERE pk = 'a\\b'"));
+  it("PostgreSQL: the #>> JSON operator is allowed", () =>
+    pg.ok("SELECT record_json #>> '{error,message}' FROM t"));
+  it("Athena: the $path hidden column in double quotes is allowed", () =>
+    athena.ok('SELECT "$path" FROM t'));
+  it("a line comment followed by more SQL is allowed", () =>
+    pg.ok("SELECT 1 -- note\nFROM t"));
+});
+
+// One probe per lexical rule. Each probe is a harmless read, so the outcome
+// depends only on the rule. The expected outcomes are written out here rather
+// than read from DIALECTS. So flipping any flag in DIALECTS changes one or more
+// cells below, and the matching test fails.
+const RULE_PROBES = {
+  backslashInLiteral: "SELECT * FROM t WHERE a = 'x\\y'",
+  hashOutsideLiteral: "SELECT a # b FROM t",
+  dashDashComment: "SELECT a -- note\nFROM t",
+  backtickIdentifier: "SELECT * FROM `t`",
+};
+type Outcome = "ok" | "refused";
+const EXPECTED: Record<SqlEngine, Record<keyof typeof RULE_PROBES, Outcome>> = {
+  PostgreSQL: {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "Redshift SQL": {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "Trino/Presto SQL": {
+    backslashInLiteral: "ok",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  PartiQL: {
+    backslashInLiteral: "ok",
+    hashOutsideLiteral: "ok",
+    dashDashComment: "ok",
+    backtickIdentifier: "refused",
+  },
+  "OpenSearch SQL": {
+    backslashInLiteral: "refused",
+    hashOutsideLiteral: "refused",
+    dashDashComment: "refused",
+    backtickIdentifier: "ok",
+  },
+};
+
+describe("assertReadOnly: each engine's lexical rules", () => {
+  const cases = Object.entries(EXPECTED).flatMap(([engine, outcomes]) =>
+    Object.entries(outcomes).map(
+      ([probe, outcome]) =>
+        [
+          engine as SqlEngine,
+          probe as keyof typeof RULE_PROBES,
+          outcome as Outcome,
+        ] as const,
+    ),
+  );
+  it.each(cases)("%s: %s is %s", (engine, probe, outcome) => {
+    const run = () => assertReadOnly(RULE_PROBES[probe], engine);
+    if (outcome === "ok") expect(run).not.toThrow();
+    else expect(run).toThrow(`Refused to execute ${engine} query`);
+  });
+});
+
+describe("assertReadOnly: refusal messages show where the query was refused", () => {
+  it("names the position and quotes the text around it", () =>
+    expect(() =>
+      assertReadOnly("SELECT a FROM t WHERE b = $$x$$", "PostgreSQL"),
+    ).toThrow('Near position 26: " a FROM t WHERE b = $$x$$"'));
+  it("points at the keyword that was found", () =>
+    expect(() =>
+      assertReadOnly(
+        "WITH d AS (DELETE FROM t RETURNING *) SELECT 1",
+        "PostgreSQL",
+      ),
+    ).toThrow("Near position 11:"));
 });

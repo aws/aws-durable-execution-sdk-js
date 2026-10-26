@@ -341,8 +341,59 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * Set it on every job. A MicroVM that ends while suspended, or whose image
    * disables the `terminate` hook, reports nothing. The heartbeat timeout is
    * then the only way that the job fails soon after the MicroVM ends.
+   *
+   * A job after a {@link suspendAfter} job waits for the resume of the
+   * MicroVM. The worker can refuse it with HTTP 503 for up to 30 seconds
+   * before that. So set the heartbeat timeout of such a job to at least the
+   * `retryWindow` plus 30 seconds.
    */
   heartbeatTimeout?: Duration;
+
+  /**
+   * Whether the worker suspends the MicroVM after this job. Defaults to
+   * `false`.
+   *
+   * The worker suspends the MicroVM when the job has ended and its outcome is
+   * reported, and no other job runs. A job that ends while another job runs
+   * leaves the request pending. The worker then suspends the MicroVM when
+   * the last running job ends. The next job of the session resumes the
+   * MicroVM before it is delivered. The `suspendAfter` job itself also
+   * checks the MicroVM state before delivery. The session sets the flag
+   * before the job starts, so the job's own delivery reads it. The setting
+   * works with or without {@link MicrovmSessionConfig.autoSuspendOnIdle}.
+   *
+   * Set it on the job before a long wait, such as a durable wait or a
+   * callback. Do not set it on back-to-back jobs, on `map` items, or on the
+   * last job of the session. Each suspend and resume costs a snapshot and
+   * about 1 second of latency for the next job. The session terminates the
+   * MicroVM after its last job anyway.
+   *
+   * The session handle records the job in memory only. A replay of a
+   * completed `map` item, `parallel` branch, or child context does not run
+   * its `invoke` again. So every session job also checks the state after an
+   * HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request
+   * without an answer. It resumes a suspending or suspended MicroVM, and
+   * sends the job again.
+   *
+   * It needs more than a session without suspending:
+   *
+   * 1. The image enables the `resume` hook. Without it, the next job waits
+   *    up to 30 seconds of HTTP 503 answers.
+   * 2. The function's role has `lambda:GetMicrovm` and
+   *    `lambda:ResumeMicrovm`. Every session needs them, because every
+   *    session job checks the state after a sign of a suspended MicroVM.
+   * 3. The MicroVM's role has `lambda:SuspendMicrovm` on the image.
+   * 4. The worker supports the setting. An older worker ignores it, and the
+   *    MicroVM keeps running. The session then logs one warning, once per
+   *    session in each execution environment.
+   *
+   * A suspend that the service refuses for now is not retried, unless
+   * {@link MicrovmSessionConfig.autoSuspendOnIdle} is `true`. Only
+   * {@link MicrovmSession.invoke} accepts it. {@link microvm} throws a
+   * `TypeError` for it in `config.request`. A value that is not a boolean
+   * throws a `TypeError` too.
+   */
+  suspendAfter?: boolean;
 }
 
 /**
@@ -369,22 +420,41 @@ export interface MicrovmSession {
    * context that the call runs in, as for {@link microvm}: the session's
    * child context, or a nested one, such as a `map` item's context. A durable
    * operation created in a parent context from inside a child context fails
-   * the execution.
+   * the execution. `invoke` checks `name`, `options`, and `input` first, and
+   * then calls `context.runInChildContext`. So a `context` without that
+   * function makes `invoke` throw a `TypeError` itself, instead of returning
+   * a rejected promise. No job operation is created then.
+   *
+   * The call encodes `input` with `JSON.stringify` once, when `invoke` is
+   * called. So a `toJSON` method runs once per call, and each replay calls
+   * `invoke` again. The call measures that JSON text, and the request sends
+   * exactly that text. The input must be the same on every replay.
+   *
+   * A call with `options.suspendAfter` set to `true` asks the worker to
+   * suspend the MicroVM after the job. The call itself and each later job of
+   * the handle then check the MicroVM state before delivery, as with
+   * `autoSuspendOnIdle`. The call sets the flag before the job starts, so
+   * its own delivery reads it. See {@link MicrovmInvokeOptions.suspendAfter}.
    *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
-   * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
-   * fails the job with {@link MicrovmDeliveryError} after the retries. Every
-   * session also reports it when CreateMicrovmAuthToken reports the MicroVM
-   * removed.
+   * `autoSuspendOnIdle: true` or an `idlePolicy`, and after a job with
+   * `suspendAfter`. A check after a sign of a suspended MicroVM reports it
+   * too. Otherwise an ended MicroVM fails the job with
+   * {@link MicrovmDeliveryError} after the retries. Every session also
+   * reports it when CreateMicrovmAuthToken reports the MicroVM removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
-   * retries, or the route rejects the job.
-   * @throws \{TypeError\} When `context` is not a durable context, or
-   * `name`, `path`, or `port` is invalid.
-   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range.
+   * retries, or the route rejects the job. A suspended MicroVM whose
+   * ResumeMicrovm is denied fails the delivery at once.
+   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid,
+   * `suspendAfter` is not a boolean, or `JSON.stringify` cannot encode
+   * `input`.
+   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range,
+   * or the JSON form of `input` has more than {@link MAX_JOB_INPUT_BYTES}
+   * UTF-8 bytes.
    */
   invoke<TOutput = unknown, TInput = unknown>(
     context: DurableContext,
@@ -433,6 +503,9 @@ export interface MicrovmJobDocument<TInput = unknown> {
  * `@aws/durable-execution-sdk-js-microvm-worker`. The two packages do not
  * depend on each other, because one runs in the function and the other in
  * the MicroVM. So a change to one declaration must be made in the other too.
+ *
+ * The payload never carries `suspendAfter`. Only a session job can set it,
+ * and every session job goes over HTTP.
  *
  * @public
  *
@@ -483,4 +556,16 @@ export interface MicrovmJobRequest<TInput = unknown>
    * arrives, the worker takes it from the first job request that has one.
    */
   microvmId?: string;
+
+  /**
+   * Suspend the MicroVM after this job. Only a session job sets it, and only
+   * when it is `true`. The field is omitted otherwise. An older worker
+   * ignores a field that it does not know. So the version stays 1, because a
+   * new version would make every older worker fail the job.
+   *
+   * The worker acknowledges the field with the header
+   * `X-Microvm-Suspend-After: accepted` on its 202 answer. An older worker
+   * ignores the field and sends no such header.
+   */
+  suspendAfter?: boolean;
 }

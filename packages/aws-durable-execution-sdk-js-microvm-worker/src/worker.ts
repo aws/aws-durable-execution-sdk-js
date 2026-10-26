@@ -104,6 +104,25 @@ const SUSPEND_GRACE_MS = 30_000;
 const TERMINATE_REPORT_BUDGET_MS = 5_000;
 
 /**
+ * The header that acknowledges `suspendAfter` on the 202 answer to a job
+ * request. Its value is {@link SUSPEND_AFTER_ACCEPTED}. An older worker
+ * ignores the field and sends no such header. So the durable function can
+ * tell the two apart, and warns when the header is missing. The extras
+ * package reads the same header name.
+ */
+const SUSPEND_AFTER_HEADER = "X-Microvm-Suspend-After";
+const SUSPEND_AFTER_ACCEPTED = "accepted";
+
+/** The headers of a 202 answer, with the acknowledgement when it applies. */
+function acknowledgement(
+  suspendAfter: boolean,
+): Record<string, string> | undefined {
+  return suspendAfter
+    ? { [SUSPEND_AFTER_HEADER]: SUSPEND_AFTER_ACCEPTED }
+    : undefined;
+}
+
+/**
  * The error that the worker reports for a job that the `terminate` hook
  * stopped: a job that was running, a `run` hook job whose body arrived after
  * the hook, and a `run` hook job that a `suspend` hook deferred. A running
@@ -255,11 +274,28 @@ export interface MicrovmWorkerOptions<TInput = unknown, TOutput = unknown> {
    */
   createClient?: (region: string) => LambdaClient;
   /**
-   * Creates the Lambda MicroVMs client that suspends this MicroVM when it is
-   * idle. Defaults to a client that uses the default credential chain.
-   * Called only when the session asks the worker to suspend when idle. The
-   * worker never destroys a client that this function returns; it destroys
-   * only the default clients it creates itself.
+   * Creates the Lambda MicroVMs client that suspends this MicroVM. Defaults
+   * to a client that uses the default credential chain and makes one
+   * attempt per call. Called only when the worker suspends the MicroVM:
+   * when the session asks it to suspend when idle, and after a job that
+   * sets `suspendAfter`. The worker never destroys a client that this
+   * function returns; it destroys only the default clients it creates
+   * itself.
+   *
+   * Use a client with `maxAttempts: 1`. SuspendMicrovm succeeds on a
+   * MicroVM that is already suspending or suspended, so a retry gains
+   * nothing. A retry can also suspend the next job:
+   *
+   * 1. An attempt suspends the MicroVM, and its answer is lost across the
+   *    freeze.
+   * 2. The durable function resumes the MicroVM. The `resume` hook ends the
+   *    worker's refusal, and the next job starts.
+   * 3. The client then retries. The retry suspends the MicroVM with the job
+   *    inside, and nothing resumes it.
+   *
+   * So the worker aborts the call when the `resume` hook arrives while the
+   * call runs. The client then sends no later attempt. An attempt that the
+   * client sent before the abort can still reach the service.
    *
    * A client that retries must set `$metadata.attempts` on the error that it
    * throws, as the AWS SDK does. The worker counts an error without it as a
@@ -305,9 +341,10 @@ export interface MicrovmWorkerListener {
    */
   idle(): Promise<void>;
   /**
-   * Stops the idle time. The listener then never suspends the MicroVM again.
-   * Running jobs continue. A refusal that a suspend started still ends on
-   * the `resume` hook or after 30 seconds.
+   * Stops the idle time, and drops a pending suspend after a job. The
+   * listener then never suspends the MicroVM again. Running jobs continue. A
+   * refusal that a suspend started still ends on the `resume` hook or after
+   * 30 seconds.
    */
   close(): void;
 }
@@ -339,12 +376,22 @@ export interface MicrovmWorkerListener {
  * listener completes the job's callback with the result, or fails it with
  * the error.
  *
- * A second delivery of a callback ID is answered like the first and ignored,
- * while that job runs and after it ended. The listener remembers the last
- * 1,000 finished callback IDs. When a job ends and the listener already holds
- * 1,000 IDs, it removes the oldest one. So a retried delivery runs a job once,
- * unless at least 1,000 other jobs ended in between, or the worker process
- * restarted.
+ * A second delivery of a callback ID starts no job. The listener answers it
+ * this way:
+ *
+ * - A finished job gets HTTP 202 in every state. Its outcome is reported. A
+ *   503 would make the durable function resume the MicroVM for nothing.
+ * - A running job gets HTTP 202 while the listener runs normally or the
+ *   MicroVM terminates.
+ * - A running job gets HTTP 503 while the listener refuses jobs for a
+ *   suspend. The job can freeze with the MicroVM. A 202 would end the
+ *   delivery, and nothing would resume the MicroVM. The 503 makes the
+ *   durable function check the state and resume the MicroVM.
+ *
+ * The listener remembers the last 1,000 finished callback IDs. When a job
+ * ends and the listener already holds 1,000 IDs, it removes the oldest one.
+ * So a retried delivery runs a job once, unless at least 1,000 other jobs
+ * ended in between, or the worker process restarted.
  *
  * A document that does not match the contract gets HTTP 400. If the document
  * still names a callback, the listener fails that callback. So the durable
@@ -362,15 +409,19 @@ export interface MicrovmWorkerListener {
  *    MicroVM's own ID. The call returns before the MicroVM freezes. The
  *    MicroVM keeps its memory and files, and the durable function resumes it
  *    before the next job.
- * 4. From the moment the idle time ends, the listener answers every job with
- *    HTTP 503 and does not start it. A job accepted then would freeze with
- *    the MicroVM. After a 503, the durable function checks the MicroVM's
- *    state, resumes it, and delivers the job again.
+ * 4. From the moment the idle time ends, the listener answers every new job
+ *    with HTTP 503 and does not start it. A job accepted then would freeze
+ *    with the MicroVM. After a 503, the durable function checks the
+ *    MicroVM's state, resumes it, and delivers the job again. No job runs
+ *    then. So a second delivery belongs to a finished job, and gets HTTP
+ *    202, because it starts no job.
  * 5. The refusal ends when the `resume` lifecycle hook arrives, or 30 seconds
  *    after the call returned. The 30-second case covers an image without the
  *    `resume` hook. In both cases the idle time then starts again. At most
  *    one call runs at a time. So a `resume` hook or a job end during the call
- *    starts the idle time when the call ends, not at once.
+ *    starts the idle time when the call ends, not at once. A `resume` hook
+ *    during the call also aborts the call. So the client sends no later
+ *    attempt, which could suspend the MicroVM with the next job inside.
  * 6. A call that the service rejected on its first attempt, for example for a
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
@@ -391,35 +442,80 @@ export interface MicrovmWorkerListener {
  *    next idle time. That idle time lasts at least 30 seconds, unless a job
  *    or a `resume` hook starts the idle time again. A `resume` hook or a job
  *    that ends during the call does not shorten the wait, because the
- *    refused outcome arrives after it. With the default client, this item
- *    covers expired credentials and a signature error without clock skew.
- *    It covers a throttle, a clock-skew error, and HTTP 429 only from a
- *    client that does not retry, for example a client from
- *    `createMicrovmsClient` with `maxAttempts: 1`. A `suspend` hook whose
- *    refusal is still in effect when the call ends is the exception, as in
- *    item 6. Its refusal stays, and the idle time starts when it ends.
- * 8. A call whose outcome is unknown, such as a timeout, a conflict, or a
- *    server error, is handled like a successful call. The service may have
- *    suspended the MicroVM anyway. An error after the client retried an
- *    earlier attempt also counts as unknown, because the earlier attempt may
- *    have suspended the MicroVM. The default client retries a throttle and a
- *    clock-skew error itself. So with the default client, these errors
- *    usually end here. When the refusal ends, the idle time starts again, so
- *    the worker tries the call again. A `resume` hook during the call, or
- *    the end of a `suspend` hook's 30 seconds during the call, has already
- *    ended the refusal. The worker then accepts jobs at once, and tries the
- *    call again one idle time after the call and every job end.
+ *    refused outcome arrives after it. The default client makes one attempt.
+ *    So this item covers expired credentials, a signature error, a
+ *    clock-skew error, a throttle, and HTTP 429. A client from
+ *    `createMicrovmsClient` that retries reports a throttle or a clock-skew
+ *    error after a retried attempt, and item 8 then applies. A `suspend` hook
+ *    whose refusal is still in effect when the call ends is the exception,
+ *    as in item 6. Its refusal stays, and the idle time starts when it ends.
+ * 8. A call whose outcome is unknown, such as a timeout, an abort, a
+ *    conflict, a server error, or a dropped connection, is handled like a
+ *    successful call. The service may have suspended the MicroVM anyway. An
+ *    error after the client retried an earlier attempt also counts as
+ *    unknown, because the earlier attempt may have suspended the MicroVM.
+ *    With one attempt, a server error or a dropped connection on the first
+ *    attempt counts as unknown. So the worker can refuse jobs for up to 30
+ *    seconds on a MicroVM that did not suspend. That is the accepted cost,
+ *    because a retry could suspend the MicroVM with the next job inside.
+ *    When the refusal ends, the idle time starts again, so the worker tries
+ *    the call again. A `resume` hook during the call, or the end of a
+ *    `suspend` hook's 30 seconds during the call, has already ended the
+ *    refusal. The worker then accepts jobs at once, and tries the call again
+ *    one idle time after the call and every job end. This covers the call
+ *    that the `resume` hook aborted.
  * 9. The listener logs one warning for each failed call. The message names
  *    the outcome. The fields are, in order, `microvmId`, `error`,
- *    `outcome`, `suspendHookArrived`, `terminating`, `closed`, and
- *    `refusingJobs`. `microvmId` is the MicroVM ID of the call. `error`
- *    holds the name and the message of the error. `outcome` is `rejected`,
- *    `refusedForNow`, or `unknown`. `suspendHookArrived` states whether a
- *    `suspend` hook arrived since the idle time ended. `terminating` states
- *    whether a `terminate` hook came before the listener acted on the
- *    outcome. `closed` states whether `close()` came before the listener
- *    acted on the outcome. `refusingJobs` states whether the listener
- *    answers jobs with HTTP 503 after it has acted on the outcome.
+ *    `outcome`, `suspendHookArrived`, `terminating`, `closed`,
+ *    `refusingJobs`, and `trigger`. `microvmId` is the MicroVM ID of the
+ *    call. `error` holds the name and the message of the error. `outcome` is
+ *    `rejected`, `refusedForNow`, or `unknown`. `suspendHookArrived` states
+ *    whether a `suspend` hook arrived since the listener decided to suspend.
+ *    `terminating` states whether a `terminate` hook came before the
+ *    listener acted on the outcome. `closed` states whether `close()` came
+ *    before the listener acted on the outcome. `refusingJobs` states whether
+ *    the listener answers jobs with HTTP 503 after it has acted on the
+ *    outcome. `trigger` is `idle` for a suspend after the idle time, and
+ *    `job` for a suspend after a job that set `suspendAfter`.
+ *
+ * A job request can set `suspendAfter: true`. Only a session job sets it.
+ * The listener then suspends its own MicroVM after that job, also in a
+ * session without auto-suspend:
+ *
+ * 1. The 202 answer to such a request carries the header
+ *    `X-Microvm-Suspend-After: accepted`. So does the 202 answer to a
+ *    second delivery of a job whose first request carried the field. What
+ *    the second delivery carries does not count, because only the first
+ *    request decides the suspend. The listener treats only the JSON value
+ *    `true` as on, and ignores any other value.
+ * 2. The listener keeps the MicroVM ID and the Region of every accepted
+ *    `run` hook that has a payload. It suspends that MicroVM, never the one
+ *    that a job request names. SuspendMicrovm authorizes on the image, so a
+ *    forged job request could otherwise suspend another MicroVM of the
+ *    image. When the `run` hook named no MicroVM, the listener logs a
+ *    warning and does not suspend.
+ * 3. When the job's outcome reports end, the listener records a pending
+ *    suspend. This holds whether the handler succeeded or failed.
+ * 4. The pending suspend starts when no job runs, no background failure
+ *    report runs, no `run` hook is being handled, no SuspendMicrovm call
+ *    runs, and the listener neither terminates nor is closed. The listener
+ *    checks this when a job ends, when a failure report ends, when a `run`
+ *    hook ends, and when a SuspendMicrovm call ends.
+ * 5. The start clears the pending suspend, before the call. A `resume` hook
+ *    never records it again. The start also stops the idle time of
+ *    auto-suspend.
+ * 6. The call follows items 3 to 9 above: the refusal from the moment of
+ *    the decision, the `suspend` and `resume` hooks, one attempt, the abort
+ *    on a `resume` hook, the outcome classes, and the 30-second limit.
+ * 7. A call that the service refused for now is not retried without
+ *    auto-suspend. With auto-suspend, item 7 applies: the next idle time
+ *    retries it.
+ * 8. A `terminate` hook and `close()` drop the pending suspend.
+ * 9. A request that meets a refusal of jobs for a suspend is done. Each
+ *    refusal follows a suspend that has already started. So the idle
+ *    suspend and a `suspend` hook drop the pending suspend. A job that ends
+ *    while the listener refuses jobs for a suspend records none. This covers
+ *    the listener's own call, the 30 seconds after it, and a `suspend` hook.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -432,11 +528,12 @@ export interface MicrovmWorkerListener {
  * - `suspend`: Lambda is about to freeze the MicroVM, for example after
  *   SuspendMicrovm or the idle policy. The listener answers HTTP 200 at once,
  *   because a suspend hook that runs past its timeout terminates the
- *   MicroVM. It then refuses jobs with HTTP 503, as after its own suspend,
- *   until the `resume` hook or for 30 seconds. Running jobs freeze with the
- *   MicroVM, and continue after a resume. A `run` hook job that arrives
- *   during the refusal starts when the refusal ends, because the durable
- *   function cannot deliver it again.
+ *   MicroVM. It then refuses new jobs with HTTP 503, as after its own
+ *   suspend, until the `resume` hook or for 30 seconds. A second delivery of
+ *   a running job gets HTTP 503 too. Running jobs freeze with the MicroVM,
+ *   and continue after a resume. A `run` hook job that
+ *   arrives during the refusal starts when the refusal ends, because the
+ *   durable function cannot deliver it again.
  * - `terminate`: Lambda is about to end the MicroVM, after TerminateMicrovm
  *   or at the end of `maximumDurationInSeconds`. The listener aborts each
  *   running job's `context.signal` and fails its callback with
@@ -445,7 +542,7 @@ export interface MicrovmWorkerListener {
  *   answer also waits for jobs that report their own outcome, for `run` hook
  *   requests in flight, and for the failure reports of invalid requests.
  *   From
- *   then on it refuses jobs with HTTP 503, and fails the callback of a
+ *   then on it refuses new jobs with HTTP 503, and fails the callback of a
  *   `run` hook job instead of starting it. Lambda does not call the hook
  *   when it terminates a suspended MicroVM, because the process is frozen.
  *
@@ -504,13 +601,16 @@ export function createMicrovmWorkerListener<
   // task. An unhandled rejection would end the worker process.
   const logger = safeLogger(options.logger ?? jsonLogger);
   const jobs = new Map<string, Promise<void>>();
-  // Callback IDs of jobs that ended, oldest first. A Set keeps insertion
-  // order, so the first entry is the oldest.
-  const finished = new Set<string>();
-  const remember = (callbackId: string): void => {
-    finished.add(callbackId);
+  // The running jobs whose request carried `"suspendAfter": true`.
+  const suspendAfterJobs = new Set<string>();
+  // Callback IDs of jobs that ended, oldest first, each with whether its
+  // request carried `"suspendAfter": true`. A Map keeps insertion order, so
+  // the first entry is the oldest.
+  const finished = new Map<string, boolean>();
+  const remember = (callbackId: string, suspendAfter: boolean): void => {
+    finished.set(callbackId, suspendAfter);
     if (finished.size > MAX_FINISHED_JOBS) {
-      const oldest = finished.values().next().value;
+      const oldest = finished.keys().next().value;
       if (oldest !== undefined) {
         finished.delete(oldest);
       }
@@ -519,6 +619,13 @@ export function createMicrovmWorkerListener<
   /** Whether a job with this callback ID runs now, or ran recently. */
   const isKnownJob = (callbackId: string): boolean =>
     jobs.has(callbackId) || finished.has(callbackId);
+  /**
+   * Whether the request of a known job carried `"suspendAfter": true`. Only
+   * the first request decides the suspend, so a duplicate 202 acknowledges
+   * what that request carried, not what the resend carries.
+   */
+  const carriedSuspendAfter = (callbackId: string): boolean =>
+    suspendAfterJobs.has(callbackId) || finished.get(callbackId) === true;
   const background = new Set<Promise<void>>();
   // Set by the run hook. A job request that arrives first sets it too.
   let microvmId = "unknown";
@@ -535,6 +642,14 @@ export function createMicrovmWorkerListener<
   let autoSuspend:
     | { idleMs: number; region: string; microvmId: string }
     | undefined;
+  // The MicroVM that a suspend after a job targets. It is set from every
+  // accepted run hook that has a payload, with or without auto-suspend. Like
+  // autoSuspend, it holds the run hook's ID, never an ID from a job request.
+  let suspendTarget: { microvmId: string; region: string } | undefined;
+  // Set when a job with suspendAfter has ended, until the suspend starts. A
+  // job that ends while other work runs leaves it set. So the suspend starts
+  // when that work ends.
+  let suspendAfterJob: { callbackId: string } | undefined;
   let idleTimer: NodeJS.Timeout | undefined;
   // Set from the moment the idle time ends until the MicroVM runs again.
   // While set, the listener refuses jobs.
@@ -542,6 +657,12 @@ export function createMicrovmWorkerListener<
   // Set while the worker's own SuspendMicrovm call runs. At most one call
   // runs at a time.
   let suspendCallRunning = false;
+  // Aborts the running SuspendMicrovm call. The resume hook uses it. Set
+  // only while suspendCallRunning is set. `microvmId` is the call's target,
+  // the run hook's ID, so the resume hook logs the same ID as the call.
+  let suspendCallAbort:
+    | { controller: AbortController; microvmId: string }
+    | undefined;
   // Set when the idle time could not start because a call was running, for
   // example after a resume hook during the call. The idle time then starts
   // when the call ends.
@@ -629,12 +750,17 @@ export function createMicrovmWorkerListener<
       // A job that started after the timer was set cancels it. This check
       // covers a job that started in the same event loop turn.
       if (jobs.size === 0 && !closed) {
+        // The call suspends the MicroVM either way. So a suspend after a job
+        // that is still pending is done, and must not fire after the resume.
+        suspendAfterJob = undefined;
         suspending = true;
         suspendCallRunning = true;
         track(
-          suspendSelf(region, idleMs, delayMs, target).finally(
-            suspendCallEnded,
-          ),
+          suspendSelf(region, target, {
+            trigger: "idle",
+            idleMs,
+            waitedMs: delayMs,
+          }).finally(suspendCallEnded),
         );
       }
     }, delayMs);
@@ -650,7 +776,8 @@ export function createMicrovmWorkerListener<
   /**
    * Marks the SuspendMicrovm call as ended, and starts the idle time that a
    * resume hook or a job end asked for during the call. startIdleTime checks
-   * again that no job runs and that no refusal is in effect.
+   * again that no job runs and that no refusal is in effect. A suspend after
+   * a job that ended during the call starts now, if nothing else blocks it.
    */
   function suspendCallEnded(): void {
     suspendCallRunning = false;
@@ -658,6 +785,57 @@ export function createMicrovmWorkerListener<
       idleAfterCall = false;
       startIdleTime();
     }
+    suspendAfterJobIfDue();
+  }
+
+  /**
+   * Starts the suspend that a job with suspendAfter asked for, when nothing
+   * blocks it. Every event that can remove a block calls this function: a
+   * job end, a failure report end, a run hook end, and a call end.
+   *
+   * The start clears the request before the call. A request that stays set
+   * until the call succeeds would start a new suspend after the resume hook
+   * of the next job. That job would then get 503 answers until its delivery
+   * gave up. The start also stops the idle time, because the call replaces
+   * the idle suspend.
+   *
+   * A request is never pending while the worker refuses jobs for a suspend.
+   * A job that ends during a refusal records none. Every start of a refusal
+   * clears it: this function, the idle timer, and the suspend hook. So this
+   * function needs no check of `suspending`.
+   */
+  function suspendAfterJobIfDue(): void {
+    if (
+      suspendAfterJob === undefined ||
+      jobs.size > 0 ||
+      callbackReports.size > 0 ||
+      runHooks.size > 0 ||
+      terminating ||
+      closed ||
+      suspendCallRunning
+    ) {
+      return;
+    }
+    const { callbackId } = suspendAfterJob;
+    suspendAfterJob = undefined;
+    if (suspendTarget === undefined) {
+      // A job request names a MicroVM, but the worker never suspends that
+      // one. See suspendTarget.
+      logger.warn(
+        "cannot suspend the MicroVM after a job: the run hook named no MicroVM",
+        { callbackId },
+      );
+      return;
+    }
+    stopIdleTime();
+    suspending = true;
+    suspendCallRunning = true;
+    track(
+      suspendSelf(suspendTarget.region, suspendTarget.microvmId, {
+        trigger: "job",
+        callbackId,
+      }).finally(suspendCallEnded),
+    );
   }
 
   /**
@@ -693,9 +871,8 @@ export function createMicrovmWorkerListener<
 
   async function suspendSelf(
     region: string,
-    idleMs: number,
-    waitedMs: number,
     target: string,
+    cause: SuspendCause,
   ): Promise<void> {
     let client: LambdaMicrovmsClient;
     // The worker destroys only a client that it created itself. A client
@@ -704,7 +881,11 @@ export function createMicrovmWorkerListener<
     try {
       const provided = options.createMicrovmsClient?.(region);
       ownsClient = provided === undefined;
-      client = provided ?? new LambdaMicrovmsClient({ region });
+      // SuspendMicrovm succeeds on a MicroVM that is already suspending or
+      // suspended. So a retry gains nothing. A retry can also arrive after
+      // the resume, when the next job runs, and suspend the MicroVM with that
+      // job inside. So the worker's own client makes one attempt.
+      client = provided ?? new LambdaMicrovmsClient({ region, maxAttempts: 1 });
     } catch (error) {
       // No call was made. So jobs can run again at once.
       logger.error("could not create the Lambda MicroVMs client", {
@@ -715,22 +896,41 @@ export function createMicrovmWorkerListener<
       startDeferredJobs();
       return;
     }
-    // waitedMs differs from idleMs after a refusal for now, because that
-    // idle time lasts at least SUSPEND_GRACE_MS.
-    logger.info("suspending the idle MicroVM", {
-      microvmId: target,
-      idleMs,
-      waitedMs,
-    });
-    // The idle timer callback set `suspending` and called this function. No
-    // await runs between that line and this one. A suspend hook counts in
-    // its own HTTP request event. So this count covers the time since the
-    // idle time ended, as in the Python worker.
+    if (cause.trigger === "idle") {
+      // waitedMs differs from idleMs after a refusal for now, because that
+      // idle time lasts at least SUSPEND_GRACE_MS.
+      logger.info("suspending the idle MicroVM", {
+        microvmId: target,
+        idleMs: cause.idleMs,
+        waitedMs: cause.waitedMs,
+      });
+    } else {
+      logger.info("suspending the MicroVM after a job", {
+        microvmId: target,
+        callbackId: cause.callbackId,
+      });
+    }
+    // The idle timer callback or suspendAfterJobIfDue set `suspending` and
+    // called this function. No await runs between that line and this one. A
+    // suspend hook counts in its own HTTP request event. So this count
+    // covers the time since the worker decided to suspend, as in the Python
+    // worker.
     const hooksBefore = suspendHooks;
+    // The resume hook aborts the call through this controller. A client from
+    // createMicrovmsClient can retry. After the resume, the next job can run.
+    // A retry then would suspend the MicroVM with that job inside. An aborted
+    // call sends no later attempt.
+    const resumed = new AbortController();
+    suspendCallAbort = { controller: resumed, microvmId: target };
     try {
       await client.send(
         new SuspendMicrovmCommand({ microvmIdentifier: target }),
-        { abortSignal: AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS) },
+        {
+          abortSignal: AbortSignal.any([
+            AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS),
+            resumed.signal,
+          ]),
+        },
       );
     } catch (error) {
       const outcome = classifySuspendError(error);
@@ -740,6 +940,9 @@ export function createMicrovmWorkerListener<
         // attempt does not show whether the service suspended the MicroVM.
         // So the refusal continues, as after a successful call. A resume
         // hook that arrived during the call has already ended the refusal.
+        // That hook also aborted the call, and the abort error is unknown
+        // too. `suspending` is then false, unless a later suspend hook set
+        // it. So an aborted call starts no grace period of its own.
         if (suspending) {
           startGrace();
         }
@@ -755,14 +958,16 @@ export function createMicrovmWorkerListener<
         // job ends. A refusal for now, such as expired credentials, can
         // clear. So it is retried after the next idle time. That idle time
         // lasts at least SUSPEND_GRACE_MS, because the same error can
-        // repeat on every call.
+        // repeat on every call. Without auto-suspend, no idle time starts,
+        // so a refusal for now after a job is not retried.
         if (outcome === "refusedForNow") {
           idleAfterRefusalForNow = true;
           startIdleTime();
         }
       }
       // The worker has acted on the outcome. So the fields show the state
-      // that follows from the outcome.
+      // that follows from the outcome. `trigger` comes last, so the order
+      // of the other fields stays as documented before it existed.
       logger.warn(FAILED_SUSPEND_MESSAGES[outcome], {
         microvmId: target,
         error: describe(error),
@@ -772,9 +977,11 @@ export function createMicrovmWorkerListener<
         closed,
         // The job path refuses a job with HTTP 503 in both states.
         refusingJobs: terminating || suspending,
+        trigger: cause.trigger,
       });
       return;
     } finally {
+      suspendCallAbort = undefined;
       // Each suspend creates its own client. Destroying it releases its
       // connections, as CallbackReporter does for its clients.
       if (ownsClient) {
@@ -812,6 +1019,9 @@ export function createMicrovmWorkerListener<
           await work;
         } finally {
           runHooks.delete(work);
+          // A run hook in flight blocks a suspend after a job. It can also
+          // set the suspend target.
+          suspendAfterJobIfDue();
         }
         return;
       }
@@ -842,12 +1052,29 @@ export function createMicrovmWorkerListener<
         // a suspend hook that runs past its timeout terminates the MicroVM.
         suspendHooks++;
         stopIdleTime();
+        // Lambda freezes the MicroVM either way. So a suspend after a job
+        // that is still pending is done, and must not fire after the resume.
+        suspendAfterJob = undefined;
         suspending = true;
         startGrace();
       } else if (hook === "resume") {
         // The MicroVM runs again. So jobs can run again. A resume without
         // a job would otherwise leave the MicroVM running until the next
         // job ends.
+        if (suspendCallAbort && !suspendCallAbort.controller.signal.aborted) {
+          // The worker's own call has not returned. The client could retry
+          // it after the next job starts, and freeze that job. So the worker
+          // aborts the call before it ends the refusal. A second resume hook
+          // during the same call finds the signal aborted, so it neither
+          // aborts nor logs again.
+          logger.info(
+            "stopping the suspend call: the MicroVM resumed during it",
+            { microvmId: suspendCallAbort.microvmId },
+          );
+          suspendCallAbort.controller.abort(
+            new Error("the MicroVM resumed during the SuspendMicrovm call"),
+          );
+        }
         if (suspending) {
           endSuspending();
         } else {
@@ -892,6 +1119,7 @@ export function createMicrovmWorkerListener<
   async function terminate(): Promise<void> {
     terminating = true;
     stopIdleTime();
+    suspendAfterJob = undefined;
     // A job whose handler has settled reports its own outcome. The answer
     // waits for that report too.
     const reports: Promise<void>[] = [...jobs]
@@ -989,6 +1217,9 @@ export function createMicrovmWorkerListener<
       respond(response, 200, {});
       return;
     }
+    // Every session job can ask for a suspend after it, with or without
+    // auto-suspend. So the target comes from every run hook with a payload.
+    suspendTarget = { microvmId: parsed.microvmId, region: payload.region };
     if (payload.autoSuspendIdleSeconds !== undefined) {
       autoSuspend = {
         idleMs: Math.round(payload.autoSuspendIdleSeconds * 1_000),
@@ -1077,6 +1308,41 @@ export function createMicrovmWorkerListener<
       // hook. The run hook sets the same identifier when it arrives.
       microvmId = job.microvmId;
     }
+    // Only the JSON value `true` turns it on. The 202 answer acknowledges
+    // it, so the durable function can tell this worker from an older one.
+    const suspendAfter = job.suspendAfter === true;
+    // A known callback ID belongs to a job that runs now or already ended.
+    // The durable function sent it again because it lost the first 202, or
+    // because its request step ran again on replay. The answer starts no
+    // job. Three cases follow:
+    //
+    // 1. A finished job gets 202 in every state. Its outcome is reported. A
+    //    503 would make the durable function resume the MicroVM for nothing.
+    // 2. A known job gets 202 while the MicroVM terminates. A running job
+    //    reports its outcome, or the terminate hook fails its callback.
+    // 3. A running job gets 503 while the worker refuses jobs for a suspend.
+    //    The job can freeze with the MicroVM. A 202 would end the delivery,
+    //    and nothing would resume the MicroVM. The 503 makes the durable
+    //    function check the state and resume the MicroVM.
+    //
+    // Only the first request decides the suspend. So a duplicate 202
+    // acknowledges what the first request carried, whatever the resend
+    // carries. Case 3 falls through to the refusal below, whose 503 carries
+    // no acknowledgement.
+    const running = jobs.has(job.callbackId);
+    if (
+      finished.has(job.callbackId) ||
+      (running && (terminating || !suspending))
+    ) {
+      logger.warn("duplicate job ignored", { microvmId });
+      respond(
+        response,
+        202,
+        {},
+        acknowledgement(carriedSuspendAfter(job.callbackId)),
+      );
+      return;
+    }
     if (terminating) {
       // The MicroVM is about to end. The job could not finish.
       logger.info("job refused: the MicroVM is terminating", { microvmId });
@@ -1090,12 +1356,8 @@ export function createMicrovmWorkerListener<
       respond(response, 503, { error: "the MicroVM is suspending" });
       return;
     }
-    respond(response, 202, {});
-    if (isKnownJob(job.callbackId)) {
-      logger.warn("duplicate job ignored", { microvmId });
-      return;
-    }
-    startJob(handler, job, job.region);
+    respond(response, 202, {}, acknowledgement(suspendAfter));
+    startJob(handler, job, job.region, suspendAfter);
   }
 
   /**
@@ -1135,6 +1397,9 @@ export function createMicrovmWorkerListener<
     callbackReports.add(report);
     const remove = (): void => {
       callbackReports.delete(report);
+      // A failure report in flight blocks a suspend after a job, because
+      // the freeze could stop the report.
+      suspendAfterJobIfDue();
     };
     // Both callbacks are handled, so this chain cannot reject unhandled.
     void report.then(remove, remove);
@@ -1187,10 +1452,16 @@ export function createMicrovmWorkerListener<
     });
   }
 
+  /**
+   * Runs a job, and tracks it in `jobs` until its outcome reports end.
+   * With `suspendAfter`, the job's end records a pending suspend after the
+   * job. See suspendAfterJobIfDue.
+   */
   function startJob(
     handler: MicrovmJobHandler<TInput, TOutput>,
     job: MicrovmJobDocument<TInput>,
     region: string,
+    suspendAfter = false,
   ): void {
     stopIdleTime();
     const run = runJob(handler, job, region)
@@ -1202,16 +1473,31 @@ export function createMicrovmWorkerListener<
       )
       .finally(() => {
         jobs.delete(job.callbackId);
-        remember(job.callbackId);
+        suspendAfterJobs.delete(job.callbackId);
+        remember(job.callbackId, suspendAfter);
+        // runJob resolves after the outcome reports end, whether the
+        // handler succeeded or failed. So the freeze cannot stop this job's
+        // own report. A terminate hook or close() has already dropped any
+        // request, and nothing can start a suspend after them. A job that
+        // ends while the worker refuses jobs for a suspend records none:
+        // the MicroVM is suspending already, so the request is done.
+        if (suspendAfter && !suspending && !terminating && !closed) {
+          suspendAfterJob = { callbackId: job.callbackId };
+        }
         // A job that ran across a refusal for now ends now. Its end starts
         // the normal idle time, without the lower bound.
         idleAfterRefusalForNow = false;
         startIdleTime();
+        // A suspend after a job that starts now stops the idle time again.
+        suspendAfterJobIfDue();
       })
       // A last guard: nothing above should reject, and a rejection here
       // would end the process.
       .catch(() => undefined);
     jobs.set(job.callbackId, run);
+    if (suspendAfter) {
+      suspendAfterJobs.add(job.callbackId);
+    }
   }
 
   async function runJob(
@@ -1344,6 +1630,7 @@ export function createMicrovmWorkerListener<
     close: (): void => {
       closed = true;
       stopIdleTime();
+      suspendAfterJob = undefined;
     },
   };
 }
@@ -1364,8 +1651,9 @@ export interface MicrovmWorker {
    */
   idle(): Promise<void>;
   /**
-   * Stops accepting connections and stops the idle time. Running jobs
-   * continue, and the worker no longer suspends the MicroVM.
+   * Stops accepting connections, stops the idle time, and drops a pending
+   * suspend after a job. Running jobs continue, and the worker no longer
+   * suspends the MicroVM.
    */
   close(): Promise<void>;
 }
@@ -1752,8 +2040,12 @@ function respond(
   response: ServerResponse,
   status: number,
   body: Record<string, unknown>,
+  headers: Record<string, string> = {},
 ): void {
-  response.writeHead(status, { "content-type": "application/json" });
+  response.writeHead(status, {
+    "content-type": "application/json",
+    ...headers,
+  });
   response.end(JSON.stringify(body));
 }
 
@@ -1779,6 +2071,15 @@ const REJECTION_NAMES = new Set([
 type SuspendOutcome = "rejected" | "refusedForNow" | "unknown";
 
 /**
+ * Why the worker suspends its MicroVM. `idle`: the idle time of auto-suspend
+ * ended. `job`: a job that set `suspendAfter` ended. The failed-call warning
+ * names it in its `trigger` field.
+ */
+type SuspendCause =
+  | { trigger: "idle"; idleMs: number; waitedMs: number }
+  | { trigger: "job"; callbackId: string };
+
+/**
  * The warning message for each outcome of a failed SuspendMicrovm call. The
  * Python worker logs the same messages.
  */
@@ -1795,12 +2096,12 @@ const FAILED_SUSPEND_MESSAGES: Record<SuspendOutcome, string> = {
  * worker's `classify_suspend_error`.
  *
  * 1. A value that is not an `Error` is `unknown`.
- * 2. The client retries a 5xx, a throttle, a clock-skew error, and a network
- *    error, and reports only the last attempt's error. An earlier attempt
- *    may have suspended the MicroVM before its response was lost. So any
- *    error after more than one attempt is `unknown`. The worker's default
- *    client retries a throttle and a clock-skew error itself. So with the
- *    default client, these errors usually end here.
+ * 2. A client that retries a 5xx, a throttle, a clock-skew error, or a
+ *    network error reports only the last attempt's error. An earlier
+ *    attempt may have suspended the MicroVM before its response was lost.
+ *    So any error after more than one attempt is `unknown`. The worker's
+ *    default client makes one attempt. So only a client from
+ *    `createMicrovmsClient` that retries reaches this rule.
  * 3. A known rejection name is `rejected`. Missing credentials count as a
  *    rejection. A later call in the same MicroVM most likely finds no
  *    credentials either.
@@ -1809,15 +2110,16 @@ const FAILED_SUSPEND_MESSAGES: Record<SuspendOutcome, string> = {
  * 5. A name in `TRANSIENT_4XX_NAMES` is `refusedForNow`, whatever its
  *    status. The set covers expired credentials, clock-skew and signature
  *    errors, and throttles. The service answers them before it acts. Some
- *    services answer a throttle with HTTP 400. With the default client, a
- *    first attempt reaches this rule for expired credentials and for a
- *    signature error without clock skew. A throttle or a clock-skew error
- *    reaches it from a client that does not retry, for example a client
- *    from `createMicrovmsClient` with `maxAttempts: 1`.
+ *    services answer a throttle with HTTP 400. The default client makes one
+ *    attempt. So each of these errors from the default client reaches this
+ *    rule.
  * 6. HTTP 429 is `refusedForNow`.
  * 7. Any other 4xx except 408 and 409 is `rejected`.
- * 8. Any other error, such as a timeout, a dropped connection, a 408, or a
- *    server error, is `unknown`.
+ * 8. Any other error, such as a timeout, an abort, a dropped connection, a
+ *    408, or a server error, is `unknown`. The AWS SDK reports an abort as
+ *    an `AbortError` without an HTTP status. The `resume` hook aborts a
+ *    running call. That hook has already ended the refusal, so the outcome
+ *    starts no new one.
  *
  * Python checks missing credentials before the attempt count. This function
  * checks the attempt count first. The difference is defensive only. The SDK

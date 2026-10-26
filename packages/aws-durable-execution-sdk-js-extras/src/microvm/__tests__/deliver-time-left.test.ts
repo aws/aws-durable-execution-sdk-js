@@ -43,7 +43,7 @@ const deliver = (
     "build",
     { microvmId: "mvm-1", endpoint: "mvm-1.example", delivery: "http" },
     { path: "/job" },
-    { callbackId: "cb-1", input: {} },
+    { fields: { callbackId: "cb-1" }, inputJson: "{}" },
     { resume },
   );
 };

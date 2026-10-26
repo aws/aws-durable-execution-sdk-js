@@ -131,3 +131,52 @@ export const call = (
 /** Advances fake time, and lets the promises that it releases settle. */
 export const advance = (ms: number): Promise<void> =>
   jest.advanceTimersByTimeAsync(ms);
+
+/**
+ * Sends one request to the listener, and resolves with the status and the
+ * headers of the answer. `body` is a stream, so a test can hold the body
+ * back. The request carries Lambda's hook headers unless `headers` replaces
+ * them.
+ */
+export const callWithStream = (
+  target: MicrovmWorkerListener,
+  path: string,
+  body: Readable,
+  headers: IncomingHttpHeaders = LAMBDA_HEADERS,
+): Promise<{ status: number; headers: Record<string, string> }> =>
+  new Promise((resolve) => {
+    const request = Object.assign(body, { url: path, method: "POST", headers });
+    let status = 0;
+    let answerHeaders: Record<string, string> = {};
+    const response = {
+      headersSent: false,
+      writeHead(code: number, written: Record<string, string> = {}) {
+        status = code;
+        answerHeaders = written;
+        this.headersSent = true;
+        return this;
+      },
+      end() {
+        resolve({ status, headers: answerHeaders });
+        return this;
+      },
+    };
+    target.listener(
+      request as unknown as IncomingMessage,
+      response as unknown as ServerResponse,
+    );
+  });
+
+/** Like {@link call}, but resolves with the status and the headers. */
+export const callWithHeaders = (
+  target: MicrovmWorkerListener,
+  path: string,
+  body: unknown,
+  headers: IncomingHttpHeaders = LAMBDA_HEADERS,
+): Promise<{ status: number; headers: Record<string, string> }> =>
+  callWithStream(
+    target,
+    path,
+    Readable.from([Buffer.from(JSON.stringify(body))]),
+    headers,
+  );
