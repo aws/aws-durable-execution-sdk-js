@@ -138,8 +138,9 @@ session, the server checks whether queries could change data:
   `SELECT` can write through such a function on these engines.
 - **S3 + Athena:** it checks whether the Athena result location is inside the
   table's data location. If it is, each query writes result files that the table
-  then reads as records. The check is skipped when the workgroup chooses the
-  result location.
+  then reads as records. It reads the workgroup with `athena:GetWorkGroup`,
+  because a workgroup that enforces its configuration replaces the configured
+  result location. Without that permission the check cannot run.
 - **Other destinations:** no check. A single read-only query cannot change data
   there.
 

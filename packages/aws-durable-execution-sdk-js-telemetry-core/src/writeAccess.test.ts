@@ -1,13 +1,16 @@
 jest.mock("./aurora", () => ({ runAuroraQuery: jest.fn() }));
 jest.mock("./redshift", () => ({ runRedshiftQuery: jest.fn() }));
-jest.mock("./athena", () => ({ getTableLocation: jest.fn() }));
+jest.mock("./athena", () => ({
+  getTableLocation: jest.fn(),
+  getWorkGroupOutput: jest.fn(),
+}));
 jest.mock("./configCore", () => ({ resolveCredentials: jest.fn(() => ({})) }));
 
 import type { TelemetryConfig } from "./configCore";
 import { checkWriteAccess } from "./writeAccess";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
-import { getTableLocation } from "./athena";
+import { getTableLocation, getWorkGroupOutput } from "./athena";
 
 function cfg(overrides: Partial<TelemetryConfig>): TelemetryConfig {
   return {
@@ -109,11 +112,64 @@ describe.each([
 
 describe("checkWriteAccess — s3", () => {
   const location = getTableLocation as jest.Mock;
+  const workgroup = getWorkGroupOutput as jest.Mock;
+  // Most cases: a workgroup that does not enforce its own location.
+  beforeEach(() => workgroup.mockResolvedValue({ enforced: false }));
 
-  it("is not checked when the workgroup chooses the result location", async () => {
+  it("is not checked when neither the settings nor the workgroup set a result location", async () => {
     const r = await checkWriteAccess(cfg({ destinationType: "s3" }));
     expect(r.status).toBe("not-checked");
     expect(location).not.toHaveBeenCalled();
+  });
+
+  it("reads the primary workgroup when none is configured", async () => {
+    await checkWriteAccess(cfg({ destinationType: "s3" }));
+    expect(workgroup).toHaveBeenCalledWith(
+      expect.objectContaining({ workgroup: "primary" }),
+    );
+  });
+
+  it("uses the workgroup's location when the settings set none", async () => {
+    workgroup.mockResolvedValue({
+      enforced: false,
+      outputLocation: "s3://bucket/telemetry/results/",
+    });
+    location.mockResolvedValue("s3://bucket/telemetry/");
+    const r = await checkWriteAccess(cfg({ destinationType: "s3" }));
+    expect(r.status).toBe("can-write");
+  });
+
+  it("uses an enforced workgroup location instead of the configured one", async () => {
+    workgroup.mockResolvedValue({
+      enforced: true,
+      outputLocation: "s3://bucket/telemetry/results/",
+    });
+    location.mockResolvedValue("s3://bucket/telemetry/");
+    const r = await checkWriteAccess(
+      cfg({
+        destinationType: "s3",
+        athenaWorkgroup: "team",
+        athenaOutputLocation: "s3://elsewhere/results/",
+      }),
+    );
+    expect(r.status).toBe("can-write");
+    expect(workgroup).toHaveBeenCalledWith(
+      expect.objectContaining({ workgroup: "team" }),
+    );
+  });
+
+  it("returns unknown when the workgroup cannot be read", async () => {
+    workgroup.mockRejectedValue(new Error("AccessDenied: athena:GetWorkGroup"));
+    const r = await checkWriteAccess(
+      cfg({
+        destinationType: "s3",
+        athenaOutputLocation: "s3://elsewhere/results/",
+      }),
+    );
+    expect(r).toEqual({
+      status: "unknown",
+      reason: "AccessDenied: athena:GetWorkGroup",
+    });
   });
 
   it("reports result files written inside the table's data location", async () => {
@@ -162,6 +218,26 @@ describe("checkWriteAccess — s3", () => {
     );
     expect(r.status).toBe("not-checked");
   });
+});
+
+describe("checkWriteAccess — emitted catalog SQL", () => {
+  // Redshift reads a backslash in a string literal as an escape, so a LIKE
+  // pattern such as 'pg\_%' would reach LIKE as 'pg_%' and skip schemas such
+  // as pgdata. The schema filter must therefore not depend on a backslash.
+  it.each([
+    ["aurora", runAuroraQuery as jest.Mock],
+    ["redshift", runRedshiftQuery as jest.Mock],
+  ] as const)(
+    "%s: no query contains a backslash or a LIKE",
+    async (destinationType, runner) => {
+      catalog(runner, "false", []);
+      await checkWriteAccess(cfg({ destinationType }));
+      for (const [opts] of runner.mock.calls) {
+        expect(opts.sql).not.toMatch(/\\/);
+        expect(opts.sql).not.toMatch(/\bLIKE\b/i);
+      }
+    },
+  );
 });
 
 describe("checkWriteAccess — destinations where one SELECT cannot write", () => {

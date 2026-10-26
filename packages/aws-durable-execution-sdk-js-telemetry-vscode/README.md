@@ -424,8 +424,10 @@ Redshift needs one credential action, chosen by how you connect:
 > asks the database whether its user is a superuser, can write any table, or can
 > call a function that runs with another role's privileges. On
 > S3 + Athena it checks whether the query result location is inside the table's
-> data location, where every query would add rows. If it finds either, a warning
-> lists what it found. The warning does not stop you from saving.
+> data location, where every query would add rows. For that it also reads the
+> Athena workgroup, which needs `athena:GetWorkGroup`; without it, the warning
+> says the check could not run. If it finds either, a warning lists what it
+> found. The warning does not stop you from saving.
 
 ## How Queries Are Generated
 

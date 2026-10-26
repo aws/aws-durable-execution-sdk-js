@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import { RECOMMENDED_BEDROCK_MODELS } from "./types";
 import { postMessage } from "./hostBridge";
+import { WriteAccessWarning } from "./WriteAccessWarning";
 
 interface Props {
   visible: boolean;
@@ -555,35 +556,7 @@ export function SettingsModal({
                       )}
                     </Alert>
                   )}
-                  {testResult?.writeAccess?.status === "can-write" && (
-                    <Alert
-                      type="warning"
-                      header="These credentials can change data"
-                    >
-                      <SpaceBetween size="xxs">
-                        <Box>
-                          Queries here are written by a model. The explorer
-                          refuses queries that are not read-only, but that check
-                          reads query text and cannot block every write. Use
-                          credentials that can only read. See "Required IAM
-                          Permissions" in the README.
-                        </Box>
-                        {testResult.writeAccess.findings.map((f) => (
-                          <Box key={f} variant="span">
-                            • {f}
-                          </Box>
-                        ))}
-                      </SpaceBetween>
-                    </Alert>
-                  )}
-                  {testResult?.writeAccess?.status === "unknown" && (
-                    <Alert
-                      type="warning"
-                      header="Could not check whether these credentials can change data"
-                    >
-                      {testResult.writeAccess.reason}
-                    </Alert>
-                  )}
+                  <WriteAccessWarning writeAccess={testResult?.writeAccess} />
                 </SpaceBetween>
               </SpaceBetween>
             ),

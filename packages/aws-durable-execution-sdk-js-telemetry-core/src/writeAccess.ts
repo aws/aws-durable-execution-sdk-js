@@ -24,7 +24,7 @@ import type { TelemetryConfig } from "./configCore";
 import { resolveCredentials } from "./configCore";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
-import { getTableLocation } from "./athena";
+import { getTableLocation, getWorkGroupOutput } from "./athena";
 
 export type WriteAccessResult =
   /** The check ran and found no way for a query to change data. */
@@ -60,6 +60,12 @@ const REDSHIFT_SUPERUSER_SQL =
   "SELECT usesuper FROM pg_user WHERE usename = current_user";
 
 /**
+ * System schemas are skipped with `LEFT(schemaname, 3) <> 'pg_'`, not with
+ * `NOT LIKE 'pg\_%'`. Redshift reads a backslash in a string literal as an
+ * escape, so `\_` reaches LIKE as `_`, a wildcard, and a schema such as
+ * `pgdata` would be skipped. The LEFT comparison needs no escape on either
+ * engine.
+ *
  * Unverified against a live Redshift cluster; tested on PostgreSQL 16, whose
  * catalog functions Redshift inherits. Redshift's `has_table_privilege` takes a
  * table name, and resolving a name in a schema without USAGE raises "permission
@@ -69,7 +75,7 @@ const REDSHIFT_SUPERUSER_SQL =
 const REDSHIFT_WRITABLE_TABLES_SQL = `SELECT schemaname || '.' || tablename
 FROM pg_tables
 WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-  AND schemaname NOT LIKE 'pg\\_%'
+  AND LEFT(schemaname, 3) <> 'pg_'
   AND CASE WHEN has_schema_privilege(schemaname, 'USAGE')
     THEN has_table_privilege(quote_ident(schemaname) || '.' || quote_ident(tablename), 'INSERT')
       OR has_table_privilege(quote_ident(schemaname) || '.' || quote_ident(tablename), 'UPDATE')
@@ -105,7 +111,7 @@ FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   JOIN pg_language l ON l.oid = p.prolang
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname NOT LIKE 'pg\\_%'
+  AND LEFT(n.nspname, 3) <> 'pg_'
   AND (l.lanname = 'exfunc'
     OR (p.prosecdef AND p.proowner <> (SELECT usesysid FROM pg_user WHERE usename = current_user)))
 LIMIT ${MAX_LISTED_TABLES}`;
@@ -146,16 +152,37 @@ function withTrailingSlash(uri: string): string {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 
+/**
+ * The location Athena actually writes results to. A workgroup with
+ * EnforceWorkGroupConfiguration replaces the location a query submits, so the
+ * workgroup is read even when `athenaOutputLocation` is set. Athena uses the
+ * `primary` workgroup when none is configured. Reading the workgroup needs
+ * `athena:GetWorkGroup`; if that fails, the error reaches `checkWriteAccess`,
+ * which returns `unknown`.
+ */
+async function effectiveOutputLocation(
+  cfg: TelemetryConfig,
+  credentials: ReturnType<typeof resolveCredentials>,
+): Promise<string | undefined> {
+  const workgroup = await getWorkGroupOutput({
+    region: cfg.region,
+    credentials,
+    workgroup: cfg.athenaWorkgroup || "primary",
+  });
+  if (workgroup.enforced) return workgroup.outputLocation;
+  return cfg.athenaOutputLocation || workgroup.outputLocation;
+}
+
 async function checkAthena(
   cfg: TelemetryConfig,
   credentials: ReturnType<typeof resolveCredentials>,
 ): Promise<WriteAccessResult> {
-  if (!cfg.athenaOutputLocation) {
+  const outputLocation = await effectiveOutputLocation(cfg, credentials);
+  if (!outputLocation) {
     return {
       status: "not-checked",
       reason:
-        "No query result location is set, so the Athena workgroup chooses it. " +
-        "Reading the workgroup needs athena:GetWorkGroup, which these tools do not use.",
+        "Neither the settings nor the Athena workgroup set a result location.",
     };
   }
   const tableLocation = await getTableLocation({
@@ -171,13 +198,13 @@ async function checkAthena(
       reason: "The table does not exist and no S3 data location is set.",
     };
   }
-  const results = withTrailingSlash(cfg.athenaOutputLocation);
+  const results = withTrailingSlash(outputLocation);
   const data = withTrailingSlash(dataLocation);
   if (results.startsWith(data)) {
     return {
       status: "can-write",
       findings: [
-        `Athena writes query results to ${cfg.athenaOutputLocation}, which is ` +
+        `Athena writes query results to ${outputLocation}, which is ` +
           `inside the table's data location ${dataLocation}. The table reads ` +
           `those result files as records, so every query adds rows. Move the ` +
           `result location outside the data location.`,

@@ -1,5 +1,6 @@
 import {
   AthenaClient,
+  GetWorkGroupCommand,
   StartQueryExecutionCommand,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
@@ -364,6 +365,29 @@ export async function tableExists(opts: {
     }
     throw err;
   }
+}
+
+/**
+ * The result settings of an Athena workgroup. When `enforced` is true, the
+ * workgroup's `outputLocation` replaces any location a query submits.
+ */
+export async function getWorkGroupOutput(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  workgroup: string;
+}): Promise<{ enforced: boolean; outputLocation?: string }> {
+  const client = new AthenaClient({
+    region: opts.region,
+    credentials: opts.credentials,
+  });
+  const out = await client.send(
+    new GetWorkGroupCommand({ WorkGroup: opts.workgroup }),
+  );
+  const config = out.WorkGroup?.Configuration;
+  return {
+    enforced: config?.EnforceWorkGroupConfiguration === true,
+    outputLocation: config?.ResultConfiguration?.OutputLocation || undefined,
+  };
 }
 
 /**
