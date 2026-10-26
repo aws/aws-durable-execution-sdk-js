@@ -341,8 +341,48 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * Set it on every job. A MicroVM that ends while suspended, or whose image
    * disables the `terminate` hook, reports nothing. The heartbeat timeout is
    * then the only way that the job fails soon after the MicroVM ends.
+   *
+   * A job after a {@link suspendAfter} job waits for the resume of the
+   * MicroVM. The worker can refuse it with HTTP 503 for up to 30 seconds
+   * before that. So set the heartbeat timeout of such a job to at least the
+   * `retryWindow` plus 30 seconds.
    */
   heartbeatTimeout?: Duration;
+
+  /**
+   * Whether the worker suspends the MicroVM after this job. Defaults to
+   * `false`.
+   *
+   * The worker suspends the MicroVM when the job has ended and its outcome is
+   * reported, and no other job runs. A job that ends while another job runs
+   * leaves the request pending. The worker then suspends the MicroVM when
+   * the last running job ends. The next job of the session resumes the
+   * MicroVM before it is delivered. The setting works with or without
+   * {@link MicrovmSessionConfig.autoSuspendOnIdle}.
+   *
+   * Set it on the job before a long wait, such as a durable wait or a
+   * callback. Do not set it on back-to-back jobs, on `map` items, or on the
+   * last job of the session. Each suspend and resume costs a snapshot and
+   * about 1 second of latency for the next job. The session terminates the
+   * MicroVM after its last job anyway.
+   *
+   * It needs more than a session without suspending:
+   *
+   * 1. The image enables the `resume` hook. Without it, the next job waits
+   *    up to 30 seconds of HTTP 503 answers.
+   * 2. The function's role has `lambda:GetMicrovm` and
+   *    `lambda:ResumeMicrovm`.
+   * 3. The MicroVM's role has `lambda:SuspendMicrovm` on the image.
+   * 4. The worker supports the setting. An older worker ignores it, and the
+   *    MicroVM keeps running. The session then logs one warning.
+   *
+   * A suspend that the service refuses for now is not retried, unless
+   * {@link MicrovmSessionConfig.autoSuspendOnIdle} is `true`. Only
+   * {@link MicrovmSession.invoke} accepts it. {@link microvm} throws a
+   * `TypeError` for it in `config.request`. A value that is not a boolean
+   * throws a `TypeError` too.
+   */
+  suspendAfter?: boolean;
 }
 
 /**
@@ -382,16 +422,22 @@ export interface MicrovmSession {
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
+   * A call with `options.suspendAfter` set to `true` asks the worker to
+   * suspend the MicroVM after the job. Each later job of the handle then
+   * checks the MicroVM state before delivery, as with `autoSuspendOnIdle`.
+   * See {@link MicrovmInvokeOptions.suspendAfter}.
+   *
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
-   * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
-   * fails the job with {@link MicrovmDeliveryError} after the retries. Every
-   * session also reports it when CreateMicrovmAuthToken reports the MicroVM
-   * removed.
+   * `autoSuspendOnIdle: true` or an `idlePolicy`, and after a job with
+   * `suspendAfter`. Otherwise an ended MicroVM fails the job with
+   * {@link MicrovmDeliveryError} after the retries. Every session also
+   * reports it when CreateMicrovmAuthToken reports the MicroVM removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
-   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid, or
-   * `JSON.stringify` cannot encode `input`.
+   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid,
+   * `suspendAfter` is not a boolean, or `JSON.stringify` cannot encode
+   * `input`.
    * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range,
    * or the JSON form of `input` has more than {@link MAX_JOB_INPUT_BYTES}
    * UTF-8 bytes.
@@ -444,6 +490,9 @@ export interface MicrovmJobDocument<TInput = unknown> {
  * depend on each other, because one runs in the function and the other in
  * the MicroVM. So a change to one declaration must be made in the other too.
  *
+ * The payload never carries `suspendAfter`. Only a session job can set it,
+ * and every session job goes over HTTP.
+ *
  * @public
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -493,4 +542,16 @@ export interface MicrovmJobRequest<TInput = unknown>
    * arrives, the worker takes it from the first job request that has one.
    */
   microvmId?: string;
+
+  /**
+   * Suspend the MicroVM after this job. Only a session job sets it, and only
+   * when it is `true`. The field is omitted otherwise. An older worker
+   * ignores a field that it does not know. So the version stays 1, because a
+   * new version would make every older worker fail the job.
+   *
+   * The worker acknowledges the field with the header
+   * `X-Microvm-Suspend-After: accepted` on its 202 answer. An older worker
+   * ignores the field and sends no such header.
+   */
+  suspendAfter?: boolean;
 }

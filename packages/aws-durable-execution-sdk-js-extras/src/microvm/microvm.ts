@@ -15,6 +15,7 @@ import {
   validateBaseConfig,
   validateJobInput,
   validateRequest,
+  validateSuspendAfter,
   withJsonMember,
 } from "./shared";
 import { inStage, microvmErrorMapper } from "./errors";
@@ -82,6 +83,8 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
  * @throws \{TypeError\} When `name` or `request` is invalid,
  * `executionRoleArn` is missing, or `JSON.stringify` cannot encode `input`.
+ * A `request` with `suspendAfter` set is invalid, because only a session job
+ * can suspend its MicroVM after the job.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * `request.retryWindow` is not between 1 second and 10 minutes, or the JSON
  * form of `input` has more than {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
@@ -111,6 +114,20 @@ export function microvm<TOutput = unknown, TInput = unknown>(
     timeoutSeconds = validateBaseConfig(name, config);
     if (config.request !== undefined) {
       validateRequest(name, config.request);
+    }
+    // MicrovmInvokeOptions extends MicrovmRequestConfig. So a session job's
+    // options pass as `config.request`. microvm() terminates its MicroVM
+    // after its one job, so a suspend after the job would only delay that.
+    if (
+      validateSuspendAfter(
+        name,
+        (config.request as { suspendAfter?: unknown } | null | undefined)
+          ?.suspendAfter,
+      )
+    ) {
+      throw new TypeError(
+        `MicroVM "${name}": suspendAfter applies only to a session job. microvm() terminates its MicroVM after the job.`,
+      );
     }
     inputJson = validateJobInput(name, input);
     scope = createScope(context, name, config);

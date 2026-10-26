@@ -16,6 +16,7 @@ import {
   validateBaseConfig,
   validateJobInput,
   validateRequest,
+  validateSuspendAfter,
   validateTimeout,
 } from "./shared";
 import { inStage, microvmErrorMapper, sessionErrorMapper } from "./errors";
@@ -70,6 +71,11 @@ import type {
  * MicroVM that is still booting. The launch checkpoint records whether the
  * MicroVM can be suspended. Replay follows that record, not the current
  * config.
+ *
+ * A job with `suspendAfter` asks the worker to suspend the MicroVM after the
+ * job. Each later job of the handle then checks the state before delivery,
+ * as with `autoSuspendOnIdle`. That record is kept in memory only. See
+ * {@link MicrovmInvokeOptions.suspendAfter}.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
  * error and continue with the same MicroVM. An error that leaves the handler
@@ -176,7 +182,7 @@ export function microvmSession<TOutput = unknown>(
 
       try {
         return await handler(
-          createSession(scope, launched, resumeBeforeDelivery),
+          createSession(scope, launched, resumeBeforeDelivery, sessionId),
           child,
         );
       } finally {
@@ -269,7 +275,13 @@ function createSession(
   scope: OperationScope,
   launched: LaunchResult,
   resumeBeforeDelivery: boolean,
+  sessionId: string,
 ): MicrovmSession {
+  const state: SessionState = {
+    resumeBeforeDelivery,
+    maybeSuspended: false,
+    sessionId,
+  };
   return {
     microvmId: launched.microvmId,
     invoke: <TOutput = unknown, TInput = unknown>(
@@ -282,12 +294,73 @@ function createSession(
         context,
         scope,
         launched,
-        resumeBeforeDelivery,
+        state,
         jobName,
         input,
         options,
       ),
   };
+}
+
+/** The state of one session handle. */
+interface SessionState {
+  /** The resume mode that the launch recorded. */
+  readonly resumeBeforeDelivery: boolean;
+  /**
+   * Set by the first `suspendAfter` job of this handle. Later jobs then
+   * check the state before delivery. It only changes from `false` to
+   * `true`.
+   *
+   * The flag lives in memory only. A replay of a completed job calls
+   * `invoke` again, so it sets the flag again. A replay of a completed child
+   * context or `map` item does not run its function, so it does not call
+   * `invoke`, and it does not set the flag.
+   */
+  maybeSuspended: boolean;
+  readonly sessionId: string;
+}
+
+/**
+ * Whether a job checks the MicroVM state before delivery. The request step
+ * reads it at the start of each attempt.
+ */
+function resumeMode(state: SessionState): boolean {
+  return state.resumeBeforeDelivery || state.maybeSuspended;
+}
+
+/**
+ * The IDs of the sessions that warned about a worker that ignores
+ * `suspendAfter`, oldest first.
+ *
+ * Each invocation creates a new handle. So the record is kept per process,
+ * by session ID. A later invocation in the same execution environment then
+ * logs no second warning.
+ */
+const warnedSessions = new Set<string>();
+
+/**
+ * How many session IDs {@link warnedSessions} keeps. A session ID is a
+ * UUID, so 1,000 of them use well under 1 MB.
+ */
+const MAX_WARNED_SESSIONS = 1_000;
+
+/**
+ * Returns `true` the first time for a session, so the session warns once
+ * about a worker that does not support `suspendAfter`.
+ *
+ * @internal
+ */
+export function claimSuspendAfterWarning(sessionId: string): boolean {
+  if (warnedSessions.has(sessionId)) {
+    return false;
+  }
+  warnedSessions.add(sessionId);
+  if (warnedSessions.size > MAX_WARNED_SESSIONS) {
+    // A Set iterates in insertion order. So the first value is the oldest.
+    const oldest = warnedSessions.values().next().value as string;
+    warnedSessions.delete(oldest);
+  }
+  return true;
 }
 
 /**
@@ -302,12 +375,13 @@ function invokeJob<TOutput, TInput>(
   context: DurableContext,
   scope: OperationScope,
   launched: LaunchResult,
-  resumeBeforeDelivery: boolean,
+  state: SessionState,
   jobName: string,
   input: TInput,
   options: MicrovmInvokeOptions,
 ): DurablePromise<TOutput> {
   let inputJson: string | undefined;
+  let suspendAfter: boolean;
   try {
     if (typeof jobName !== "string" || jobName.length === 0) {
       throw new TypeError(
@@ -316,9 +390,16 @@ function invokeJob<TOutput, TInput>(
     }
     validateRequest(jobName, options);
     validateTimeout(jobName, "timeout", options.timeout);
+    suspendAfter = validateSuspendAfter(jobName, options.suspendAfter);
     inputJson = validateJobInput(jobName, input);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
+  }
+  // The flag is set before the child context. A replay of a completed job
+  // returns its result without running the child context's function. So
+  // the flag is set on every replay of this call too.
+  if (suspendAfter) {
+    state.maybeSuspended = true;
   }
 
   return context.runInChildContext<TOutput>(
@@ -340,7 +421,12 @@ function invokeJob<TOutput, TInput>(
           // The request sends the input's JSON text from
           // validateJobInput. So `input` is encoded once per call.
           measuredJob(callbackId, inputJson, options.heartbeatTimeout),
-          { resume: resumeBeforeDelivery },
+          {
+            resume: () => resumeMode(state),
+            suspendAfter,
+            claimSuspendAfterWarning: () =>
+              claimSuspendAfterWarning(state.sessionId),
+          },
         ),
       );
       return await inStage(jobName, "job", () => result);

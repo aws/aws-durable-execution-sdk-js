@@ -44,8 +44,9 @@ export interface EnsureRunningOptions {
  *
  * @remarks
  * The worker in a session MicroVM suspends its own MicroVM when no job has run
- * for the session's idle time. An idle policy can also suspend it. So the
- * next job can find the MicroVM in any of these states:
+ * for the session's idle time, and after a job with `suspendAfter`. An idle
+ * policy can also suspend it. So the next job can find the MicroVM in any of
+ * these states:
  *
  * - `RUNNING`: the function returns at once.
  * - `PENDING`: the function returns at once. A new MicroVM reports `PENDING`

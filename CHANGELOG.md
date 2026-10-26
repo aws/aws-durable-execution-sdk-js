@@ -601,6 +601,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
   that the MicroVM endpoint forwarded to one of these hook paths.
 
+- `MicrovmInvokeOptions.suspendAfter` in `@aws/durable-execution-sdk-js-extras`. A session job
+  with `suspendAfter: true` asks the worker to suspend the MicroVM after the job, with or
+  without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
+  version 1. Each later job of the session handle checks the MicroVM state before delivery,
+  and resumes a suspended MicroVM. The worker acknowledges the field with the header
+  `X-Microvm-Suspend-After: accepted`. Without that header, the session logs one warning: `the
+  worker in MicroVM <id> does not support suspendAfter. The MicroVM keeps running after the
+  job.` `microvm` rejects `suspendAfter` in `config.request` with a `TypeError`, and both
+  operations reject a value that is not a boolean, before any durable operation starts. The
+  function's role needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`, and the MicroVM's role
+  needs `lambda:SuspendMicrovm` on the image.
+
 - **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
   `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
   `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a

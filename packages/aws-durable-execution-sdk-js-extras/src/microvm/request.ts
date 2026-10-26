@@ -242,7 +242,26 @@ export interface SendJobOptions {
    * never extends the tier.
    */
   recheck?: (maxWaitMs: number) => Promise<string | undefined>;
+  /**
+   * Called when the answer that accepted the job lacks the header
+   * `X-Microvm-Suspend-After: accepted`.
+   *
+   * A `suspendAfter` job sets it. A worker that supports the field sends
+   * the header. An older worker ignores the field, and the MicroVM keeps
+   * running after the job.
+   */
+  onSuspendAfterIgnored?: () => void;
 }
+
+/**
+ * The header with which a worker acknowledges `suspendAfter` in its 202
+ * answer. Its value is {@link SUSPEND_AFTER_ACCEPTED}. The worker package
+ * and the Python SDK use the same header.
+ */
+export const SUSPEND_AFTER_HEADER = "X-Microvm-Suspend-After";
+
+/** The value of {@link SUSPEND_AFTER_HEADER} from a worker that supports it. */
+export const SUSPEND_AFTER_ACCEPTED = "accepted";
 
 /**
  * Delivers one job to a MicroVM route. It is the first retry tier: it runs
@@ -294,6 +313,11 @@ export interface SendJobOptions {
  * request for a callback ID that runs or recently ended, so the job still
  * runs once.
  *
+ * A `suspendAfter` job also reads the answer that accepted it. A worker that
+ * supports the field answers with `X-Microvm-Suspend-After: accepted`.
+ * Without that header, the function calls
+ * {@link SendJobOptions.onSuspendAfterIgnored}.
+ *
  * @returns The status that accepted the job.
  */
 export async function sendJob(options: SendJobOptions): Promise<number> {
@@ -341,6 +365,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     let status: number | undefined;
     let hasLocation = false;
     let followed = false;
+    let suspendAfterAnswer: string | null = null;
     try {
       const response = await options.fetch(url, {
         method: "POST",
@@ -358,6 +383,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       status = response.status;
       hasLocation = Boolean(response.headers.get("location"));
       followed = response.redirected;
+      suspendAfterAnswer = response.headers.get(SUSPEND_AFTER_HEADER);
       // The body is not used. Reading it releases the connection.
       await response.arrayBuffer().catch(() => undefined);
     } catch (error) {
@@ -376,6 +402,12 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     }
     if (status !== undefined && status >= 200 && status < 300) {
       options.log("job accepted", { attempt, status });
+      if (
+        options.onSuspendAfterIgnored !== undefined &&
+        suspendAfterAnswer !== SUSPEND_AFTER_ACCEPTED
+      ) {
+        options.onSuspendAfterIgnored();
+      }
       return status;
     }
     if (status !== undefined) {

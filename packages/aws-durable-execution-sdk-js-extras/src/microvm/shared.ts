@@ -107,10 +107,12 @@ export function fitsRunHook(payload: string): boolean {
  *
  * 1. The worker refuses a job request body over 6 MiB.
  * 2. The body holds the input's JSON and fixed fields: the version, the
- *    Region, the MicroVM ID, the callback ID, and the heartbeat timeout.
+ *    Region, the MicroVM ID, the suspend-after flag, the callback ID, and the
+ *    heartbeat timeout.
  * 3. The callback ID has at most 1,024 base64 characters. The MicroVM ID has
  *    at most 256 characters, so at most 1,536 bytes as JSON. The other
- *    fields take less than 200 bytes.
+ *    fields take less than 200 bytes. The suspend-after flag,
+ *    `,"suspendAfter":true`, takes 20 of them.
  * 4. So the fixed fields take less than 3 KiB. So 8 KiB covers them.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
@@ -466,6 +468,24 @@ export function validateRequest(
 const MAX_REQUEST_RETRY_WINDOW_SECONDS = 10 * 60;
 
 /**
+ * Validates `suspendAfter`, and returns it. `undefined` reads as `false`.
+ *
+ * @throws \{TypeError\} When it is set and is not a boolean.
+ */
+export function validateSuspendAfter(
+  name: string,
+  suspendAfter: unknown,
+): boolean {
+  if (suspendAfter === undefined) {
+    return false;
+  }
+  if (typeof suspendAfter !== "boolean") {
+    throw new TypeError(`MicroVM "${name}": suspendAfter must be a boolean`);
+  }
+  return suspendAfter;
+}
+
+/**
  * An RFC 3986 path, section 3.3: segments of pchar characters and `%XX`
  * escapes. The WHATWG URL parser in `fetch` leaves such a path unchanged,
  * unless it has a {@link DOT_SEGMENT}.
@@ -623,6 +643,24 @@ export function jobDocumentJson(job: MeasuredJob): string {
   return withJsonMember(job.fields, "input", job.inputJson);
 }
 
+/** The options of {@link deliverJob}. */
+export interface DeliverJobOptions {
+  /**
+   * Whether each attempt first makes sure the MicroVM runs, and resumes a
+   * suspended one. A function is read at the start of each attempt. So a
+   * step retry, and a `map` item that starts after a sibling set the
+   * session's flag, see the current value.
+   */
+  resume?: boolean | (() => boolean);
+  /** Adds `"suspendAfter": true` to the job request. */
+  suspendAfter?: boolean;
+  /**
+   * Returns `true` when the job may log the warning about a worker that
+   * ignores `suspendAfter`. The session returns `true` once per session.
+   */
+  claimSuspendAfterWarning?: () => boolean;
+}
+
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
@@ -634,15 +672,17 @@ export async function deliverJob(
   launched: LaunchResult,
   request: MicrovmRequestConfig,
   job: MeasuredJob,
-  options: { resume?: boolean } = {},
+  options: DeliverJobOptions = {},
 ): Promise<void> {
   // The body ends with the input's measured JSON text. So it has the size
-  // that validateJobInput checked.
+  // that validateJobInput checked. The field `suspendAfter` is present only
+  // when it is true, so other jobs keep the same body.
   const body = withJsonMember(
     {
       version: 1,
       region: scope.region,
       microvmId: launched.microvmId,
+      ...(options.suspendAfter === true && { suspendAfter: true }),
       ...job.fields,
     } satisfies Omit<MicrovmJobRequest, "input">,
     "input",
@@ -659,6 +699,10 @@ export async function deliverJob(
       const client = getClient(scope.config, scope.region);
       const log = (message: string, data: Record<string, unknown>): void =>
         stepContext.logger.info(`MicroVM "${jobName}": ${message}`, data);
+      const resume =
+        typeof options.resume === "function"
+          ? options.resume()
+          : options.resume === true;
       const retryWindowMs =
         request.retryWindow === undefined
           ? DEFAULT_REQUEST_RETRY_WINDOW_MS
@@ -681,7 +725,7 @@ export async function deliverJob(
           remainingTimeMs: remainingTime(child),
           log,
         });
-      const endpoint = options.resume
+      const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
       // The launch records an endpoint for every `http` delivery, and the
@@ -705,7 +749,17 @@ export async function deliverJob(
         windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(options.resume && { recheck: running }),
+        ...(resume && { recheck: running }),
+        ...(options.suspendAfter === true && {
+          onSuspendAfterIgnored: () => {
+            if (options.claimSuspendAfterWarning?.() === true) {
+              stepContext.logger.warn(
+                `the worker in MicroVM ${launched.microvmId} does not support suspendAfter. The MicroVM keeps running after the job.`,
+                { microvmId: launched.microvmId },
+              );
+            }
+          },
+        }),
       });
     },
     {
