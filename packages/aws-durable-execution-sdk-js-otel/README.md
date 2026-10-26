@@ -1047,6 +1047,9 @@ invent the future Source/Processor/Destination structures.
 
 ## Migration from the v1 provider contract
 
+Start with the [Core 3.0 / OTel 2.0 migration guide](../../docs/migration-2.x-to-3.0.md#migrate-opentelemetry-registrations)
+for the coordinated dependency upgrade and before/after registration examples.
+
 With core 3.x, legacy providers declaring `pluginApiVersion` fail with
 `PluginLoadError` for explicit and environment registration. Upgrade the OTel
 package/layer to the compatible 2.x factory implementation and use

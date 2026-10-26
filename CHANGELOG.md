@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Coordinated release summary
+
+Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
+below describe each change in detail.
+
+- Plugin factories replace plugin instances in `DurableExecutionConfig.plugins`.
+  The SDK creates one plugin per invocation. (6597e075)
+- The SDK no longer awaits operation plugin hooks. (4e4e9407)
+- OTel reports `faas.max_memory` in bytes, not MiB. (e049d07c)
+- `InvokeError.cause.name` is the invoked function's error type. (a0d310f5)
+- The idle cooldown before an invocation suspends is 3 ms, not 20 ms. (c0a7e349)
+- Telemetry Exporter and Telemetry MCP are `0.1.0-alpha.1`, and the ESLint
+  plugin is `1.2.0`. So the fixes merged after their published versions ship.
+
+
 ### Changed
 
 - **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
