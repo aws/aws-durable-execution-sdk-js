@@ -194,6 +194,8 @@ describe("auto-suspend when idle", () => {
     terminating: boolean;
     closed: boolean;
     refusingJobs: boolean;
+    /** Defaults to `idle`, the trigger of every test in this suite. */
+    trigger?: "idle" | "job";
   }
 
   /**
@@ -208,7 +210,12 @@ describe("auto-suspend when idle", () => {
   ): void => {
     expect(warn.mock.calls[index]).toEqual([
       FAILED_SUSPEND_MESSAGES[state.outcome],
-      { microvmId: "mvm-1", error: expect.anything(), ...state },
+      {
+        microvmId: "mvm-1",
+        error: expect.anything(),
+        ...state,
+        trigger: state.trigger ?? "idle",
+      },
     ]);
   };
 
@@ -1007,7 +1014,8 @@ describe("auto-suspend when idle", () => {
         error: { name: "AccessDeniedException", message: "not authorized" },
       }),
     );
-    // The Python worker logs the same fields in the same order.
+    // The Python worker logs the same fields in the same order. `trigger`
+    // comes last.
     expect(Object.keys(warn.mock.calls[0][1])).toEqual([
       "microvmId",
       "error",
@@ -1016,6 +1024,7 @@ describe("auto-suspend when idle", () => {
       "terminating",
       "closed",
       "refusingJobs",
+      "trigger",
     ]);
     expect(await job(worker, "cb-1")).toBe(202);
   });
@@ -1326,6 +1335,7 @@ describe("auto-suspend when idle", () => {
         "terminating",
         "closed",
         "refusingJobs",
+        "trigger",
       ]);
       expect(line).toEqual({
         level: "WARN",
@@ -1340,6 +1350,7 @@ describe("auto-suspend when idle", () => {
         terminating: false,
         closed: false,
         refusingJobs: false,
+        trigger: "idle",
       });
     } finally {
       warnLine.mockRestore();
