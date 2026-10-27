@@ -101,19 +101,14 @@ test("src has no TypeScript sources except the .d.ts files (README 1.4)", () => 
 
 // require(esm) fails for a module graph that uses top-level await. So a successful
 // require() shows that src has none (README 1.4).
-test("CommonJS code can require() both entry points", () => {
+test("CommonJS code can require() the entry point", () => {
   const require = createRequire(import.meta.url);
   const main = require("../src/index.js");
-  const testing = require("../src/testing/index.js");
   assert.equal(typeof main.withDurableExecution, "function");
-  assert.equal(typeof testing.runDurable, "function");
 });
 
 test("every public export has a type declaration (README 1.4)", async () => {
-  for (const [js, dts] of [
-    ["../src/index.js", "src/index.d.ts"],
-    ["../src/testing/index.js", "src/testing/index.d.ts"],
-  ]) {
+  for (const [js, dts] of [["../src/index.js", "src/index.d.ts"]]) {
     const names = Object.keys(await import(js));
     assert.ok(names.length > 0);
     const types = read(join(root, dts));

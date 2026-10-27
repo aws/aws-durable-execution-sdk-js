@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { CUSTOM_PAYLOAD, sizeBound } from "../src/execution.js";
 import { hashId } from "../src/ids.js";
-import { ARN as LOCAL_ARN } from "../src/testing/in-memory-service.js";
-import { runDurable } from "../src/testing/index.js";
+import { ARN as LOCAL_ARN } from "../../aws-durable-execution-sdk-js-lite-testing/src/in-memory-service.js";
+import { runDurable } from "./helpers/run-durable.js";
 import { ARN, createFakeClient, executionOp } from "./helpers/fake-client.js";
 import { invoke } from "./helpers/invoke.js";
 

@@ -17,10 +17,6 @@
     ".": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
-    },
-    "./testing": {
-      "types": "./src/testing/index.d.ts",
-      "default": "./src/testing/index.js"
     }
   },
   "files": [

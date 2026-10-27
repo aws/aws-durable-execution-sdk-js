@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { withDurableExecution } from "../src/index.js";
-import { runDurable } from "../src/testing/index.js";
+import { runDurable } from "./helpers/run-durable.js";
 import { createFakeClient, event, executionOp } from "./helpers/fake-client.js";
 
 const retryOnce = ({ attempt }) => ({ shouldRetry: attempt < 2 });

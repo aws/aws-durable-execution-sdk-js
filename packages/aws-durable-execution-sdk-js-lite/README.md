@@ -45,8 +45,8 @@ export const workflow = async ({ event, ctx }) => {
 export const handler = withDurableExecution(workflow);
 ```
 
-Set the Lambda handler to `handler`. Export `workflow` too. Tests run `workflow` with
-`runDurable` (see [Testing](#testing)).
+Set the Lambda handler to `handler`. Export `workflow` too. Tests build a handler from
+`workflow` with a local client (see [Testing](#testing)).
 
 A complete example is in [examples/order-workflow.js](./examples/order-workflow.js). Its test
 is [test/example.test.js](./test/example.test.js).
@@ -738,87 +738,9 @@ if (!ctx.replaying) metrics.increment("orders.started");
 
 ## Testing
 
-`runDurable` from `@aws/durable-execution-sdk-js-lite/testing` runs a workflow locally
-against an in-memory service. It needs no AWS account. It invokes the workflow again after
-each suspension, like Lambda does. It has a virtual clock: it moves time to the next wait,
-retry or callback timeout, so tests do not wait in real time.
-
-Options:
-
-- `workflow`: the workflow, not the `withDurableExecution` handler.
-- `input` (optional): the execution input.
-- `onCallback({ callbackId, name })` (optional): answers each callback. Return
-  `{ result: string }` or `{ error: { ErrorType, ErrorMessage } }`. Return `undefined` to leave
-  the callback open. The callback that `waitForCallback` creates has no name, so `name` is
-  `undefined` for it.
-- `functions` (optional): an object that maps a `functionName` to a local function for
-  `ctx.invoke`. The function receives `{ input, traceHeader }`. `input` is the parsed
-  input, or `null` without input. `traceHeader` is the `XAmznTraceId` that a plugin's
-  `traceHeader` hook set, else `undefined`. Its return value is the invoke result.
-  A thrown error fails the invoke with `ErrorType` set to the error's `name`.
-- `maxInvocations` (default 100): `runDurable` throws after this many invocations.
-- `plugins` (optional): plugin factories, as in `withDurableExecution`. Each simulated
-  invocation calls every factory again. The fake Lambda context has
-  `awsRequestId` `"request-1"`, `"request-2"` and so on. Each invocation event has
-  `UpdatedOperationIds`: the ids of the records that changed after the previous
-  invocation's last checkpoint response, for example a wait that the virtual clock ended.
-- `pageSize` (optional): serves the execution state in pages of this size, to test
-  pagination.
-- `service` (optional): a service from `createInMemoryService(options)`. The options above
-  for the service are then ignored. Pass one to change records during an invocation, as the
-  real service does. `service.advanceBy(seconds)` moves the virtual clock and ends the
-  waits and retry delays that are due. `service.boundary()` applies the callback answers
-  and invoke results. The next checkpoint response reports the changed records.
-
-`runDurable` resolves to an object with these fields:
-
-- `status`: `"SUCCEEDED"`, `"FAILED"` or `"PENDING"`. `"PENDING"` means that nothing can make
-  progress, for example a callback that `onCallback` left open.
-- `result`: the workflow result, when `status` is `"SUCCEEDED"`.
-- `error`: `{ ErrorType, ErrorMessage, ErrorData }`, when `status` is `"FAILED"`.
-- `operations`: every operation record, in start order.
-- `invocations`: the number of invocations.
-- `invocationErrors`: the invocation errors that the service would record, in order. One
-  is an error that the handler threw. The other is a `PENDING` output while no wait,
-  callback, invoke or step retry is pending. The service then invokes again, so
-  `runDurable` does too. A test can assert that this list is empty.
-- `getOperation(name)`: the first operation record with this name.
-
-The in-memory service does not simulate heartbeat timeouts.
-
-The in-memory service rejects some requests that the real service rejects. A rejected request
-fails the execution, as in AWS. It rejects:
-
-- a request body larger than 6 MiB plus 11 KiB, the service's limit on the HTTP request;
-- a member such as `Name`, `Payload` or `Error.ErrorData` that is not a string;
-- a STEP or CONTEXT `Payload` larger than 256 KiB, and a CHAINED_INVOKE `Payload` larger than
-  1 MiB;
-- a `START` for an operation that exists, unless it is a STEP in status `READY`;
-- two updates for one operation in one request, unless a STEP or CONTEXT `START` comes
-  first.
-
-```js
-import assert from "node:assert/strict";
-import { test } from "node:test";
-import { runDurable } from "@aws/durable-execution-sdk-js-lite/testing";
-import { workflow } from "../examples/order-workflow.js";
-
-test("an approved order is confirmed", async () => {
-  const run = await runDurable({
-    workflow,
-    input: { orderId: "o-1" },
-    onCallback: () => ({
-      result: JSON.stringify({ approved: true, approver: "alice" }),
-    }),
-    functions: {
-      "payment-service:live": () => ({ paymentId: "p-1" }),
-    },
-  });
-  assert.equal(run.status, "SUCCEEDED");
-  assert.equal(run.result.status, "CONFIRMED");
-  assert.equal(run.getOperation("cooling-off").Type, "WAIT");
-});
-```
+[`@aws/durable-execution-sdk-js-lite-testing`](../aws-durable-execution-sdk-js-lite-testing/README.md)
+runs a workflow locally against an in-memory service. It needs no AWS account. It is a
+separate package, so this package ships only the code that a deployed handler runs.
 
 ## Best practices
 
@@ -1510,8 +1432,8 @@ section and the full SDK disagree, this section wins inside this package.
 #### 1.4 No build step
 
 1. The source is plain ES module JavaScript (`.js`). `package.json` sets `"type": "module"`.
-2. Types are hand-written in `src/index.d.ts` and `src/testing/index.d.ts`. Update them in the
-   same change as the code they describe.
+2. Types are hand-written in `src/index.d.ts`. Update them in the same change as the code
+   they describe.
 3. Node does not strip TypeScript types inside `node_modules`. So the package cannot ship
    `.ts` files.
 4. Minimum Node version is 22.12. From that version, CommonJS code can `require()` this
@@ -1609,7 +1531,6 @@ src/plugins.js             plugin factories and hooks (section 2.12)
 src/operations/*.js        one file per operation
 src/transport/sigv4.js     SigV4 signing with node:crypto
 src/transport/lambda-client.js  HTTPS client for the two durable APIs
-src/testing/*.js           local test runner (subpath export "./testing")
 test/*.test.js             tests
 ```
 

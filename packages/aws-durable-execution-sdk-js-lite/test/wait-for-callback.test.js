@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { DurableOperationError } from "../src/errors.js";
 import { hashId } from "../src/ids.js";
 import { createRetryStrategy } from "../src/retry.js";
-import { runDurable } from "../src/testing/index.js";
+import { runDurable } from "./helpers/run-durable.js";
 
 const byId = (run, rawId) =>
   run.operations.find((op) => op.Id === hashId(rawId));

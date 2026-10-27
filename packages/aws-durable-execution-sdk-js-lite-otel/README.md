@@ -419,7 +419,8 @@ add to them or replace them for this package:
    The `ended` flag in `src/index.js` holds this rule. A test in `test/hooks.test.js`
    fails without it. Another test there checks that two plugin objects of concurrent
    invocations never mix spans.
-7. Tests use `runDurable` from the lite SDK's testing module, by a relative path.
+7. Tests use `runDurable` from the lite testing package, through the lite SDK's
+   `test/helpers/run-durable.js`, by a relative path.
 8. Before a commit, run `npm test` in this folder and `npx biome check
    packages/aws-durable-execution-sdk-js-lite-otel` from the repository root. Both must
    pass.

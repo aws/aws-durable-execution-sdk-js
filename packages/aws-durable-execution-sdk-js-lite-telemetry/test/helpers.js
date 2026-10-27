@@ -4,7 +4,7 @@
 export {
   createInMemoryService,
   runDurable,
-} from "../../aws-durable-execution-sdk-js-lite/src/testing/index.js";
+} from "../../aws-durable-execution-sdk-js-lite/test/helpers/run-durable.js";
 export { createRetryStrategy } from "../../aws-durable-execution-sdk-js-lite/src/index.js";
 
 // The ARN of the in-memory service.

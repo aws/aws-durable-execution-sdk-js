@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createRetryStrategy } from "../src/index.js";
-import { createInMemoryService, runDurable } from "../src/testing/index.js";
+import {
+  createInMemoryService,
+  runDurable as realRunDurable,
+} from "../src/index.js";
+import {
+  createRetryStrategy,
+  runDurable,
+  withDurableExecution,
+} from "./helpers.js";
 
 const T0 = 1_700_000_000;
 
@@ -15,6 +22,29 @@ async function checkpoint(service, token, ...Updates) {
   return res;
 }
 const ids = (event) => event.InitialExecutionState.Operations.map((o) => o.Id);
+
+test("runDurable runs the handler that createHandler builds with the service client", async () => {
+  const clients = [];
+  const run = await realRunDurable({
+    input: { n: 1 },
+    createHandler: (client) => {
+      clients.push(client);
+      return withDurableExecution(
+        async ({ event, ctx }) => {
+          await ctx.wait({ seconds: 1 });
+          return event.n + 1;
+        },
+        { client },
+      );
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, 2);
+  // runDurable calls createHandler once, although the execution has two invocations.
+  assert.equal(run.invocations, 2);
+  assert.equal(clients.length, 1);
+  assert.equal(typeof clients[0].checkpoint, "function");
+});
 
 test("runDurable runs steps and returns the result and operations", async () => {
   const run = await runDurable({

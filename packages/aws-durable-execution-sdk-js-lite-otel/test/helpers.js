@@ -1,6 +1,6 @@
 import { createOtelPlugin } from "../src/index.js";
 
-export { runDurable } from "../../aws-durable-execution-sdk-js-lite/src/testing/index.js";
+export { runDurable } from "../../aws-durable-execution-sdk-js-lite/test/helpers/run-durable.js";
 
 // An exporter that keeps every batch and reports success.
 export function fakeExporter() {

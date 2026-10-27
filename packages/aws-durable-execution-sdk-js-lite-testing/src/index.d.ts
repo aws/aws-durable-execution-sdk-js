@@ -1,12 +1,11 @@
-// Types for @aws/durable-execution-sdk-js-lite/testing. Keep in sync with src/testing/*.js.
+// Types for @aws/durable-execution-sdk-js-lite-testing. Keep in sync with src/*.js.
 
+// A relative path, because the lite SDK is not linked into the workspace node_modules.
 import type {
   DurableExecutionClient,
   DurableExecutionOutput,
-  DurableHandler,
-  DurablePluginFactory,
   ErrorObject,
-} from "../index.js";
+} from "../../aws-durable-execution-sdk-js-lite/src/index.js";
 
 /** An operation record as the service stores it. Timestamps are epoch seconds. */
 export interface Operation {
@@ -67,14 +66,24 @@ export interface InMemoryServiceOptions {
   pageSize?: number;
 }
 
-export interface RunDurableOptions<E, R> extends InMemoryServiceOptions {
-  /** The raw workflow, not the withDurableExecution handler. */
-  workflow: DurableHandler<E, R>;
-  input?: E;
+/** The handler that withDurableExecution returns. */
+export type DurableLambdaHandler = (
+  event: InvocationInput,
+  lambdaContext: {
+    awsRequestId: string;
+    getRemainingTimeInMillis(): number;
+  },
+) => Promise<DurableExecutionOutput>;
+
+export interface RunDurableOptions extends InMemoryServiceOptions {
+  /**
+   * Returns the handler, built with this client:
+   * `(client) => withDurableExecution(workflow, { client, plugins })`.
+   * runDurable calls it once.
+   */
+  createHandler: (client: DurableExecutionClient) => DurableLambdaHandler;
   /** Default 100. */
   maxInvocations?: number;
-  /** Passed to the handler. Each invocation calls every factory again. */
-  plugins?: readonly DurablePluginFactory<E, R>[];
   /**
    * An existing in-memory service. Pass one to call advanceBy() or boundary() during an
    * invocation. The service options above are then ignored.
@@ -100,8 +109,8 @@ export interface RunDurableResult<R> {
   getOperation(name: string): Operation | undefined;
 }
 
-export function runDurable<E = unknown, R = unknown>(
-  options: RunDurableOptions<E, R>,
+export function runDurable<R = unknown>(
+  options: RunDurableOptions,
 ): Promise<RunDurableResult<R>>;
 
 export interface InvocationInput {

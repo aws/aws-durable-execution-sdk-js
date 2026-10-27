@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hashId } from "../src/ids.js";
-import { createInMemoryService, runDurable } from "../src/testing/index.js";
+import { createInMemoryService, runDurable } from "./helpers/run-durable.js";
 import { withDurableExecution } from "../src/with-durable-execution.js";
 import { invoke } from "./helpers/invoke.js";
 

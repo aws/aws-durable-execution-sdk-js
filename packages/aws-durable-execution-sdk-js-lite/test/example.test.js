@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runDurable } from "@aws/durable-execution-sdk-js-lite/testing";
+import { runDurable } from "./helpers/run-durable.js";
 import {
   handler,
   PAYMENT_FUNCTION,

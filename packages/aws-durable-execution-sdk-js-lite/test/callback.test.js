@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DurableOperationError } from "../src/errors.js";
 import { hashId } from "../src/ids.js";
-import { runDurable } from "../src/testing/index.js";
+import { runDurable } from "./helpers/run-durable.js";
 import { createFakeClient, executionOp } from "./helpers/fake-client.js";
 import { invoke } from "./helpers/invoke.js";
 
