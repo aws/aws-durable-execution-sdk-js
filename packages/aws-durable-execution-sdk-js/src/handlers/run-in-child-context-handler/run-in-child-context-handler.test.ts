@@ -1273,6 +1273,7 @@ describe("wrapChildContextFn children-replay indicator", () => {
       },
     );
 
+    // biome-ignore lint/suspicious/noImportAssign: same pattern as the runWithContext Integration suite; see follow-up there.
     (runWithContext as jest.Mock) = jest
       .fn()
       .mockImplementation(async (_stepId, _parentId, fn) => await fn());
