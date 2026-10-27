@@ -3,11 +3,8 @@
 import { withDurableExecution } from "../../aws-durable-execution-sdk-js-lite/src/index.js";
 import { createInMemoryService, runDurable } from "../src/index.js";
 
-const workflow = async ({
-  event,
-}: {
-  event: { n: number };
-}): Promise<number> => event.n + 1;
+const workflow = async ({ event }: { event: { n: number } }): Promise<number> =>
+  event.n + 1;
 
 export async function check(): Promise<number | undefined> {
   // The handler that withDurableExecution returns fits createHandler.
