@@ -156,16 +156,16 @@ export function testChainedInvokeSuspension(
           child[1].spanContext().spanId,
         );
       }
-      expect(
-        result
-          .getHistoryEvents()
-          .filter((e) => e.EventType === "ChainedInvokeStarted"),
-      ).toHaveLength(1);
-      expect(
-        result
-          .getHistoryEvents()
-          .filter((e) => e.EventType === "ChainedInvokeSucceeded"),
-      ).toHaveLength(1);
+      expect(result.getHistoryEvents().map((event) => event.EventType)).toEqual(
+        [
+          "ExecutionStarted",
+          "ChainedInvokeStarted",
+          "InvocationCompleted",
+          "ChainedInvokeSucceeded",
+          "InvocationCompleted",
+          "ExecutionSucceeded",
+        ],
+      );
     }, 30000);
   });
 }
