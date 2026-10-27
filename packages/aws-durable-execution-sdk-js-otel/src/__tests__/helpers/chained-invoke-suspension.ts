@@ -59,6 +59,37 @@ export function testChainedInvokeSuspension(
       await LocalDurableTestRunner.teardownTestEnvironment();
     });
 
+    it.each([undefined, ""])(
+      "fails before invoking a child when the target is %p",
+      async (functionName) => {
+        const environment = jest.replaceProperty(process, "env", {
+          ...process.env,
+          OTEL_INVOKE_TARGET_FUNCTION_NAME: functionName,
+        });
+        try {
+          const runner = new LocalDurableTestRunner({
+            handlerFunction: handler,
+          });
+          const result = await runner.run({
+            payload: { scenario: "chained-invoke-suspend" },
+          });
+
+          expect(result.getStatus()).toBe("FAILED");
+          expect(result.getError()).toMatchObject({
+            errorType: "Error",
+            errorMessage: "OTEL_INVOKE_TARGET_FUNCTION_NAME is required",
+          });
+          expect(
+            result
+              .getHistoryEvents()
+              .filter((event) => event.EventType === "ChainedInvokeStarted"),
+          ).toHaveLength(0);
+        } finally {
+          environment.restore();
+        }
+      },
+    );
+
     it("keeps child wait continuation telemetry through caller completion", async () => {
       let releaseTarget!: () => void;
       const gate = new Promise<void>((resolve) => {
