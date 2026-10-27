@@ -75,7 +75,8 @@ describe("checkpoint-manager registerUpdate", () => {
     expect(result.operation.Status).toBe(OperationStatus.STARTED);
     expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
     expect(result.operation.StepDetails).toBeUndefined();
-    expect(result.operation.ContextDetails?.ReplayChildren).toBe(true);
+    // The service ignores ContextOptions on START.
+    expect(result.operation.ContextDetails).toEqual({});
 
     expect(storage.getOperationData("CONTEXT-id")).toStrictEqual(result);
   });

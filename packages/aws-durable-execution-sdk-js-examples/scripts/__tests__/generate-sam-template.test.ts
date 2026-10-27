@@ -1,8 +1,10 @@
+import yaml from "js-yaml";
 import {
   toPascalCase,
   createFunctionResource,
   generateTemplate,
   getExamplesCatalogJson,
+  serializeTemplate,
 } from "../generate-sam-template";
 
 jest.mock("fs", () => ({
@@ -29,6 +31,17 @@ jest.mock("fs", () => ({
           // Keep this different from log retention to verify they are independent.
           RetentionPeriodInDays: 30,
         },
+      },
+      {
+        name: "MicroVM Run Job",
+        description: "Runs one job in a Lambda MicroVM",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts",
+        handler: "microvm-run-job.handler",
+        durableConfig: {
+          ExecutionTimeout: 900,
+          RetentionPeriodInDays: 7,
+        },
+        usesMicrovm: true,
       },
     ]),
   ),
@@ -193,14 +206,74 @@ describe("generate-sam-template", () => {
           RetentionInDays: 7,
         },
       });
-      expect(template.Resources.StepsWithRetry.Properties.MemorySize).toBe(
-        256,
-      );
+      expect(template.Resources.StepsWithRetry.Properties.MemorySize).toBe(256);
       expect(template.Resources.StepsWithRetry.Properties.Timeout).toBe(300);
       expect(template.Resources.StepsWithRetryLogGroup.Properties).toEqual({
         LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",
         RetentionInDays: 7,
       });
+    });
+
+    test("leaves out a MicroVM example when no image is given", () => {
+      const template = generateTemplate();
+
+      expect(template.Resources.HelloWorld).toBeDefined();
+      expect(template.Resources.MicrovmRunJob).toBeUndefined();
+    });
+
+    test("sets the MicroVM image and role on a MicroVM example", () => {
+      const template = generateTemplate({
+        microvmImageArn:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        microvmExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+
+      expect(
+        template.Resources.MicrovmRunJob.Properties.Environment.Variables,
+      ).toMatchObject({
+        MICROVM_IMAGE_ARN:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        MICROVM_EXECUTION_ROLE_ARN:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+      expect(
+        template.Resources.HelloWorld.Properties.Environment.Variables
+          .MICROVM_IMAGE_ARN,
+      ).toBeUndefined();
+    });
+  });
+
+  describe("serializeTemplate", () => {
+    // js-yaml ignores dump options it does not recognize. js-yaml 5 renamed
+    // quotingType to quoteStyle, and the old option silently switched every
+    // quoted value in template.yml to single quotes. These tests fail on any
+    // change of that kind.
+    test("double-quotes the values that need quotes", () => {
+      const yamlText = serializeTemplate(generateTemplate());
+
+      expect(yamlText).toContain('AWSTemplateFormatVersion: "2010-09-09"');
+      expect(yamlText).toContain('Resource: "*"');
+      expect(yamlText).toContain('DURABLE_VERBOSE_MODE: "false"');
+      expect(yamlText).not.toMatch(/: '/);
+    });
+
+    test("loads back to the same template", () => {
+      const template = generateTemplate({
+        microvmImageArn:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        microvmExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+
+      expect(yaml.load(serializeTemplate(template))).toEqual(template);
+    });
+
+    test("does not wrap long values", () => {
+      const description = "x".repeat(200);
+      const yamlText = serializeTemplate({ Description: description });
+
+      expect(yamlText).toBe(`Description: ${description}\n`);
     });
   });
 });

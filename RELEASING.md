@@ -1,18 +1,25 @@
 # Releasing
 
-This document describes how to cut a release for packages in this monorepo and how the automated npm publishing workflow is triggered.
+This document describes how to cut releases in this monorepo.
+
+Most packages use the automated npm publishing workflow. The Durable Execution Telemetry VSCode extension is an exception: it is released as `.vsix` assets attached to GitHub Releases and does **not** follow the npm package release guidance.
 
 ## Packages
 
-This monorepo contains the following packages:
+The automated npm publishing workflow covers the following packages:
 
-| Package                                       | Path                                                  | Tag Prefix |
-| --------------------------------------------- | ----------------------------------------------------- | ---------- |
-| `@aws/durable-execution-sdk-js`               | `packages/aws-durable-execution-sdk-js`               | `sdk`      |
-| `@aws/durable-execution-sdk-js-testing`       | `packages/aws-durable-execution-sdk-js-testing`       | `test`     |
-| `@aws/durable-execution-sdk-js-eslint-plugin` | `packages/aws-durable-execution-sdk-js-eslint-plugin` | `eslint`   |
-| `@aws/durable-execution-sdk-js-otel`          | `packages/aws-durable-execution-sdk-js-otel`          | `otel`     |
-| `@aws/durable-execution-sdk-js-insight`       | `packages/aws-durable-execution-sdk-js-insight`       | `insight`  |
+| Package                                        | Path                                                  | Tag Prefix |
+| ---------------------------------------------- | ----------------------------------------------------- | ---------- |
+| `@aws/durable-execution-sdk-js`                | `packages/aws-durable-execution-sdk-js`               | `sdk`      |
+| `@aws/durable-execution-sdk-js-testing`        | `packages/aws-durable-execution-sdk-js-testing`       | `test`     |
+| `@aws/durable-execution-sdk-js-eslint-plugin`. | `packages/aws-durable-execution-sdk-js-eslint-plugin` | `eslint`   |
+| `@aws/durable-execution-sdk-js-otel`           | `packages/aws-durable-execution-sdk-js-otel`          | `otel`     |
+| `@aws/durable-execution-sdk-js-telemetry-exporter`        | `packages/aws-durable-execution-sdk-js-telemetry-exporter`       | `telemetry-exporter` |
+| `@aws/durable-execution-sdk-js-telemetry-mcp`    | `packages/aws-durable-execution-sdk-js-telemetry-mcp`   | `telemetry-mcp` |
+
+Extras and MicroVM Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
+
+The `packages/aws-durable-execution-sdk-js-telemetry-vscode` package is intentionally excluded from this table. Release it with the [Durable Execution Telemetry VSCode Extension](#durable-execution-telemetry-vscode-extension-publishing) process instead.
 
 ## Versioning
 
@@ -22,9 +29,53 @@ Each package maintains its own version in the `version` field of its `package.js
 - Testing: `packages/aws-durable-execution-sdk-js-testing/package.json`
 - ESLint plugin: `packages/aws-durable-execution-sdk-js-eslint-plugin/package.json`
 - OTel: `packages/aws-durable-execution-sdk-js-otel/package.json`
-- Insight: `packages/aws-durable-execution-sdk-js-insight/package.json`
+- Telemetry Exporter: `packages/aws-durable-execution-sdk-js-telemetry-exporter/package.json`
+- Telemetry MCP: `packages/aws-durable-execution-sdk-js-telemetry-mcp/package.json`
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
+
+### Prepared Core 3 / OTel 2 release
+
+The next coordinated release publishes these versions:
+
+| Package | Version | Publisher decision |
+| --- | --- | --- |
+| SDK | `3.0.0` | New stable version, `latest` |
+| OTel | `2.0.0` | New stable version, `latest` |
+| Testing SDK | `1.3.2` | Compatible patch with the widened Core 3 peer range, `latest` |
+| ESLint plugin | `1.2.0` | New minor version with the child-context rule, `latest` |
+| Telemetry Exporter | `0.1.0-alpha.1` | Prerelease above the published `0.1.0-alpha.0`, `beta` |
+| Telemetry MCP | `0.1.0-alpha.1` | Prerelease above the published `0.1.0-alpha.0`, `beta` |
+
+Use the tag `sdk-3.0.0` and the title `sdk-3.0.0 / otel-2.0.0 / test-1.3.2`.
+Paste [the release notes](release-notes/sdk-3.0.0.md) into the GitHub Release.
+Refresh them against the selected release commit before publishing.
+
+The published minor pairs remain Core 2.7.0 / OTel 1.2.0 and Core 2.7.1 /
+OTel 1.2.1, with Testing SDK 1.3.1. They include registration exclusivity and
+the patch telemetry corrections. They do not include the invocation-local LMI
+carrier or the factory migration. Released OTel 1.x keeps its optional
+`>=2.4.0 <3.0.0` Core peer and provider API v1. Core 3 requires matching factory
+packages and layers. Installed-package tests keep the released-pair controls and
+verify that legacy providers are rejected.
+
+The two Telemetry packages were published on 2026-10-22 outside this workflow,
+from the #924 merge commit 6597e075. The publisher skips a version that npm
+already has. So this release bumps both packages to `0.1.0-alpha.1`. That bump
+publishes the 3 exporter fixes and the 3 MCP fixes merged after 6597e075. It
+does not take the `1.0.0` bump from #1030. The ESLint plugin is bumped to
+`1.2.0` for the same reason.
+
+The manual publication left `latest` on `0.1.0-alpha.0` for both Telemetry
+packages. The publisher puts `0.1.0-alpha.1` on `beta` and does not move
+`latest`. So after the release, a maintainer must move `latest` by hand:
+
+```bash
+npm dist-tag add @aws/durable-execution-sdk-js-telemetry-exporter@0.1.0-alpha.1 latest
+npm dist-tag add @aws/durable-execution-sdk-js-telemetry-mcp@0.1.0-alpha.1 latest
+```
+
+The automatic package list and the Extras and MicroVM deferrals are unchanged.
 
 ## Cutting a Release
 
@@ -49,7 +100,8 @@ The tag should be the version of the package(s) being bumped, prepended with a d
 - Testing only: `test-<version>` (e.g., `test-1.1.3`)
 - ESLint plugin only: `eslint-<version>` (e.g., `eslint-1.0.0`)
 - OTel only: `otel-<version>` (e.g., `otel-0.1.1`)
-- Insight only: `insight-<version>` (e.g., `insight-0.1.0`)
+- Telemetry Exporter only: `telemetry-exporter-<version>` (e.g., `telemetry-exporter-0.1.0`)
+- Telemetry MCP only: `telemetry-mcp-<version>` (e.g., `telemetry-mcp-0.1.0`)
 - Multiple packages in a single release: join the sub-tags with `/` (e.g., `sdk-2.1.0/test-1.1.3/otel-0.1.1`)
 
 Examples:
@@ -59,7 +111,8 @@ sdk-2.2.0
 otel-0.1.1
 test-1.1.3
 sdk-2.1.0/test-1.1.3/otel-0.1.1
-sdk-2.2.0/insight-0.1.0
+sdk-2.2.0/telemetry-exporter-0.1.0
+telemetry-mcp-0.1.0
 ```
 
 If additional packages are added to the monorepo in the future, follow the same pattern: choose a short descriptive prefix for the package and use `<prefix>-<version>`.
@@ -77,6 +130,52 @@ Creating a GitHub Release triggers the [`npm-publish.yml`](.github/workflows/npm
 The workflow runs on the `release: [published]` event, so it fires whenever a release is published on GitHub — no manual intervention is needed beyond creating the release.
 
 > **Note:** The workflow builds and publishes all packages. Ensure the version in each package's `package.json` is correct before publishing. If only one package has a version bump, the unchanged packages are skipped (which is expected and harmless).
+
+## Durable Execution Telemetry VSCode Extension Publishing
+
+The Durable Execution Telemetry VSCode extension at [`packages/aws-durable-execution-sdk-js-telemetry-vscode`](packages/aws-durable-execution-sdk-js-telemetry-vscode) has a separate release process.
+
+> **Warning:** Running the extension workflow publishes a GitHub Release as its final step, which emits the repo-wide `release.published` event and can start automation such as the npm publish workflow. When that happens, the npm workflow checks its hardcoded package list and may publish any listed npm package whose version has not already been published. The npm workflow does not include or publish this private VS Code extension package.
+
+The VS Code extension is distributed as `.vsix` files attached to GitHub Releases for testers and customers. It is not published to npm or the VS Code Marketplace.
+
+Do not use the normal GitHub **publishing** flow for this extension. The JS SDK repo has immutable releases enabled, so assets must be attached while the release is still a draft. The manual [vscode extension release](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/vscode-extension-release.yml) workflow creates or reuses a draft release, uploads all required `.vsix` files, verifies them, and only then publishes the release.
+
+### 1. Update the Extension Version
+
+Update [`packages/aws-durable-execution-sdk-js-telemetry-vscode/package.json`](packages/aws-durable-execution-sdk-js-telemetry-vscode/package.json). The workflow input must exactly match this `version` value on the ref you run.
+
+Review, approve, and merge the version update PR before running the release workflow. The PR is the release approval.
+
+### 2. Run the GitHub Action
+
+1. Open [Actions](https://github.com/aws/aws-durable-execution-sdk-js/actions), select **vscode extension release**, and choose **Run workflow**.
+2. Select the default branch after the version update PR is merged.
+3. Enter the exact extension version from `packages/aws-durable-execution-sdk-js-telemetry-vscode/package.json`.
+4. Start the workflow.
+
+The workflow creates the release tag `telemetry-vscode-v<version>` and the release title `Durable Execution Telemetry VSCode <version> (Preview)`.
+
+### 3. Verify the Release Assets
+
+The workflow builds and uploads one `.vsix` per supported platform:
+
+| Platform            | Expected asset                                                            |
+| ------------------- | ------------------------------------------------------------------------- |
+| Apple Silicon macOS | `aws-durable-execution-sdk-js-telemetry-vscode-<version>-darwin-arm64.vsix` |
+| Windows x64         | `aws-durable-execution-sdk-js-telemetry-vscode-<version>-win32-x64.vsix`    |
+| Windows ARM64       | `aws-durable-execution-sdk-js-telemetry-vscode-<version>-win32-arm64.vsix`  |
+| Linux x64           | `aws-durable-execution-sdk-js-telemetry-vscode-<version>-linux-x64.vsix`    |
+
+After the workflow succeeds, install the newly built extension following the [install preview build](packages/aws-durable-execution-sdk-js-telemetry-vscode/README.md#install-preview-build) instructions.
+
+### 4. Recovery
+
+If the workflow fails before publication, the release is left as a draft. Fix the failed matrix leg and re-run **vscode extension release** with the same version. The workflow reuses the existing draft release for `telemetry-vscode-v<version>` and uploads rebuilt `.vsix` assets with `--clobber`, so corrected assets replace earlier draft assets.
+
+If verification finds that any expected `.vsix` asset is missing, the workflow exits without publishing and leaves the draft release in place. Re-run the workflow with the same version after fixing the issue.
+
+If the release was already published with bad assets, do not try to replace assets on that release. Published releases are immutable, and the workflow refuses to modify a non-draft release. Bump the extension version, merge the version update PR, and run **vscode extension release** again to publish a corrected release.
 
 ## Release Notes Format
 
@@ -124,4 +223,14 @@ Before publishing a release:
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
-- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `insight-X.Y.Z`, or `/`-joined)
+- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
+
+## SDK 3.x migration release order
+
+The published minor releases use testing SDK 1.3.1 with core 2.x. This major
+migration uses testing SDK 1.3.2 with its broadened `>=1.0.1 <4.0.0` peer range,
+so publication cannot skip the new range because 1.3.1 already exists. Core
+3.0.0 and OTel 2.0.0 carry the explicit factory migration. Testing remains a
+compatible patch. The Telemetry Exporter is `0.1.0-alpha.1` and requires core
+`>=3.0.0 <4.0.0` for its factory API.
+Version metadata does not authorize a merge or publication.

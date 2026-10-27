@@ -1,17 +1,16 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   Operation,
   OperationAction,
-  OperationStatus,
   OperationUpdate,
 } from "@aws/durable-execution-sdk-js";
 
-const allowedStatusToCancel: (OperationStatus | undefined)[] = [
-  OperationStatus.STARTED,
-];
-
 /**
- * Validates an CHAINED_INVOKE operation update against the current operation state.
+ * Validates a CHAINED_INVOKE operation update against the current operation state.
+ * A checkpoint can only start a CHAINED_INVOKE. The service completes it.
+ *
+ * The service also rejects a function in another account or another region.
+ * Local function names are not ARNs, so this check does not apply here.
  *
  * @param update - The operation update to validate
  * @param operation - The current operation state (if it exists)
@@ -24,25 +23,19 @@ export function validateChainedInvokeOperation(
   switch (update.Action) {
     case OperationAction.START:
       if (operation) {
-        throw new InvalidParameterValueException({
-          message: "Cannot start a CHAINED_INVOKE that already exists.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot start a CHAINED_INVOKE operation that already exists.",
+        );
       }
-      break;
-    case OperationAction.CANCEL:
-      if (!operation || !allowedStatusToCancel.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message:
-            "Cannot cancel a CHAINED_INVOKE that does not exist or has already completed.",
-          $metadata: {},
-        });
+      if (update.ChainedInvokeOptions == null) {
+        throw invalidParameterValue(
+          "Update for CHAINED_INVOKE operation requires ChainedInvokeOptions.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid CHAINED_INVOKE action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue(
+        "Invalid action for CHAINED_INVOKE operation.",
+      );
   }
 }

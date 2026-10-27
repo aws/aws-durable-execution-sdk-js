@@ -6,6 +6,7 @@
 /coverage-sdk
 *.iml
 .aws-sam/*
+.microvm-image-build/
 *.zip
 *.tsbuildinfo
 

@@ -19,6 +19,7 @@ import {
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
 import {
@@ -59,6 +60,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   parentId?: string,
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
+  // Plugin-only operation name; never checkpointed. Labels the STEP span.
+  pluginOperationName?: string,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -80,6 +83,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
     const stepId = createStepId();
     const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
+    // A custom subtype labels steps of a custom operation. It is typed as
+    // OperationSubType, like ChildConfig.subType in the child context handler.
+    const subType =
+      (options?.subType as OperationSubType) || OperationSubType.STEP;
     const serdes =
       options?.serdes ||
       (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -90,43 +97,36 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       validateReplayConsistency(
         stepId,
-        { type: OperationType.STEP, name, subType: OperationSubType.STEP },
+        { type: OperationType.STEP, name, subType },
         stepData,
         context,
       );
 
       const opInfo = {
         id: hashId(stepId),
-        name: name,
+        name: pluginOperationName ?? name,
         type: OperationType.STEP,
-        subType: OperationSubType.STEP,
+        subType,
         parentId: parentId ? hashId(parentId) : undefined,
       };
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Step already completed:", { stepId });
-        checkpoint.markOperationState(
+        const result = stepData.StepDetails?.Result;
+        return await completeAfter(
+          checkpoint,
           stepId,
-          OperationLifecycleState.COMPLETED,
-          {
-            metadata: {
+          () =>
+            safeDeserialize(
+              serdes,
+              result,
               stepId,
               name,
-              type: OperationType.STEP,
-              subType: OperationSubType.STEP,
-              parentId,
-            },
-          },
-        );
-
-        return await safeDeserialize(
-          serdes,
-          stepData.StepDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
+          { stepId, name, type: OperationType.STEP, subType, parentId },
         );
       }
 
@@ -140,7 +140,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
           },
@@ -164,7 +164,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
             endTimestamp: stepData.StepDetails?.NextAttemptTimestamp,
@@ -193,7 +193,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.FAIL,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Error: createErrorObjectFromError(error),
             Name: name,
@@ -206,7 +206,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
             },
@@ -220,7 +220,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           Id: stepId,
           ParentId: parentId,
           Action: OperationAction.RETRY,
-          SubType: OperationSubType.STEP,
+          SubType: subType,
           Type: OperationType.STEP,
           Error: createErrorObjectFromError(error),
           Name: name,
@@ -239,7 +239,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
             endTimestamp:
@@ -264,7 +264,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Name: name,
             });
@@ -282,7 +282,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Name: name,
             });
@@ -330,7 +330,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
             },
@@ -367,7 +367,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.SUCCEED,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Payload: serializedResult,
             Name: name,
@@ -394,18 +394,17 @@ export const createStepHandler = <Logger extends DurableLogger>(
             ...operationWindow,
             isReplay: false,
           });
-          checkpoint.markOperationState(
-            stepId,
-            OperationLifecycleState.COMPLETED,
-          );
 
-          return await safeDeserialize(
-            serdes,
-            serializedResult,
-            stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+          // The step stays EXECUTING (marked above) until the result is deserialized.
+          return await completeAfter(checkpoint, stepId, () =>
+            safeDeserialize(
+              serdes,
+              serializedResult,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
           );
         } catch (error) {
           if (isUnrecoverableError(error)) {
@@ -433,7 +432,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.FAIL,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Error: createErrorObjectFromError(error),
               Name: name,
@@ -477,7 +476,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.RETRY,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Error: createErrorObjectFromError(error),
             Name: name,
@@ -505,7 +504,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
               endTimestamp:

@@ -4,77 +4,112 @@ import {
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
   deriveWorkflowSpanId,
+  deriveExecutionRootSpanId,
 } from "../deterministic-id-generator";
 import * as fc from "fast-check";
 
 describe("DeterministicIdGenerator", () => {
   let generator: DeterministicIdGenerator;
+  const fallbackTraceId = "f".repeat(32);
+  const fallbackSpanId = "e".repeat(16);
 
   beforeEach(() => {
-    generator = new DeterministicIdGenerator();
+    generator = new DeterministicIdGenerator({
+      generateTraceId: jest.fn(() => fallbackTraceId),
+      generateSpanId: jest.fn(() => fallbackSpanId),
+    });
   });
 
   describe("generateTraceId", () => {
-    it("returns setTraceId value when set", () => {
+    it("returns the scoped trace ID", () => {
       const traceId = "abcdef1234567890abcdef1234567890";
-      generator.setTraceId(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
+      generator.withIds({ traceId }, () => {
+        expect(generator.generateTraceId()).toBe(traceId);
+      });
     });
 
-    it("persists setTraceId across multiple calls", () => {
+    it("keeps the trace ID for the duration of the scope", () => {
       const traceId = "1234567890abcdef1234567890abcdef";
-      generator.setTraceId(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
+      generator.withIds({ traceId }, () => {
+        expect(generator.generateTraceId()).toBe(traceId);
+        expect(generator.generateTraceId()).toBe(traceId);
+      });
     });
 
-    it("changes when setTraceId is called again", () => {
-      const traceId1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
-      const traceId2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-      generator.setTraceId(traceId1);
-      expect(generator.generateTraceId()).toBe(traceId1);
-      generator.setTraceId(traceId2);
-      expect(generator.generateTraceId()).toBe(traceId2);
-    });
+    it("delegates to the fallback outside the scope", () => {
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
 
-    it("returns a 32-char hex string as fallback when no traceId is set", () => {
-      const traceId = generator.generateTraceId();
-      expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+      generator.withIds({ traceId: "a".repeat(32) }, () => {
+        expect(generator.generateTraceId()).toBe("a".repeat(32));
+      });
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
   });
 
   describe("generateSpanId", () => {
-    it("returns setNextSpanId value on the next call (one-shot)", () => {
+    it("returns the scoped span ID on the next call", () => {
       const spanId = "abcdef1234567890";
-      generator.setNextSpanId(spanId);
-      expect(generator.generateSpanId()).toBe(spanId);
+      generator.withIds({ spanId }, () => {
+        expect(generator.generateSpanId()).toBe(spanId);
+      });
     });
 
-    it("reverts to default after one-shot is consumed", () => {
+    it("delegates to the fallback after the scoped span ID is consumed", () => {
       const spanId = "abcdef1234567890";
-      generator.setNextSpanId(spanId);
-      expect(generator.generateSpanId()).toBe(spanId);
-      // Next call should NOT return the same value
-      const nextSpanId = generator.generateSpanId();
-      expect(nextSpanId).not.toBe(spanId);
-      expect(nextSpanId).toMatch(/^[0-9a-f]{16}$/);
+      generator.withIds({ spanId }, () => {
+        expect(generator.generateSpanId()).toBe(spanId);
+        expect(generator.generateSpanId()).toBe(fallbackSpanId);
+      });
     });
 
-    it("returns a 16-char hex string as fallback when no spanId is set", () => {
-      const spanId = generator.generateSpanId();
-      expect(spanId).toMatch(/^[0-9a-f]{16}$/);
+    it("delegates to the fallback outside the scope", () => {
+      expect(generator.generateSpanId()).toBe(fallbackSpanId);
+    });
+  });
+
+  describe("scope isolation", () => {
+    it("restores the fallback after an exception", () => {
+      expect(() =>
+        generator.withIds({ traceId: "a".repeat(32) }, () => {
+          throw new Error("boom");
+        }),
+      ).toThrow("boom");
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
 
-    it("supports multiple sequential one-shot overrides", () => {
-      const spanId1 = "1111111111111111";
-      const spanId2 = "2222222222222222";
+    it("shares the active override across generator instances", () => {
+      const providerGenerator = new DeterministicIdGenerator({
+        generateTraceId: () => fallbackTraceId,
+        generateSpanId: () => fallbackSpanId,
+      });
 
-      generator.setNextSpanId(spanId1);
-      expect(generator.generateSpanId()).toBe(spanId1);
+      generator.withIds(
+        { traceId: "a".repeat(32), spanId: "1".repeat(16) },
+        () => {
+          expect(providerGenerator.generateTraceId()).toBe("a".repeat(32));
+          expect(providerGenerator.generateSpanId()).toBe("1".repeat(16));
+        },
+      );
+    });
 
-      generator.setNextSpanId(spanId2);
-      expect(generator.generateSpanId()).toBe(spanId2);
+    it("isolates concurrent async contexts", async () => {
+      const firstTraceId = "a".repeat(32);
+      const secondTraceId = "b".repeat(32);
+
+      await Promise.all([
+        generator.withIds({ traceId: firstTraceId }, async () => {
+          await Promise.resolve();
+          expect(generator.generateTraceId()).toBe(firstTraceId);
+        }),
+        generator.withIds({ traceId: secondTraceId }, async () => {
+          await Promise.resolve();
+          expect(generator.generateTraceId()).toBe(secondTraceId);
+        }),
+      ]);
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
   });
 });
@@ -118,18 +153,23 @@ describe("deriveTraceIdFromXRayRoot", () => {
 });
 
 describe("deriveTraceIdFromArn", () => {
+  const executionStart = new Date("2026-08-19T00:00:00.000Z");
+
   it("produces a 32-char lowercase hex string", () => {
     const arn =
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
-    const result = deriveTraceIdFromArn(arn);
+    const result = deriveTraceIdFromArn(arn, executionStart);
     expect(result).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  it("is deterministic (same input always produces same output)", () => {
+  it("is deterministic for the same ARN and execution start time", () => {
     const arn =
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
-    const result1 = deriveTraceIdFromArn(arn);
-    const result2 = deriveTraceIdFromArn(arn);
+    const result1 = deriveTraceIdFromArn(arn, executionStart);
+    const result2 = deriveTraceIdFromArn(
+      arn,
+      new Date(executionStart.toISOString()),
+    );
     expect(result1).toBe(result2);
   });
 
@@ -138,9 +178,26 @@ describe("deriveTraceIdFromArn", () => {
       "arn:aws:lambda:us-east-1:123456789012:function:func-a:$LATEST:exec-1";
     const arn2 =
       "arn:aws:lambda:us-east-1:123456789012:function:func-b:$LATEST:exec-2";
-    const result1 = deriveTraceIdFromArn(arn1);
-    const result2 = deriveTraceIdFromArn(arn2);
+    const result1 = deriveTraceIdFromArn(arn1, executionStart);
+    const result2 = deriveTraceIdFromArn(arn2, executionStart);
     expect(result1).not.toBe(result2);
+  });
+
+  it("produces different results for different execution start times", () => {
+    const arn =
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
+    const result1 = deriveTraceIdFromArn(arn, executionStart);
+    const result2 = deriveTraceIdFromArn(
+      arn,
+      new Date("2026-08-19T00:00:01.000Z"),
+    );
+    expect(result1).not.toBe(result2);
+  });
+
+  it("retains deterministic ARN-only derivation when start time is unavailable", () => {
+    const arn =
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
+    expect(deriveTraceIdFromArn(arn)).toBe(deriveTraceIdFromArn(arn));
   });
 });
 
@@ -268,8 +325,14 @@ describe("Bug Condition Exploration - Property-Based Tests", () => {
         (arn1, arn2, opId) => {
           fc.pre(arn1 !== arn2);
 
-          const result1 = (deriveSpanIdFromOperationId as Function)(opId, arn1);
-          const result2 = (deriveSpanIdFromOperationId as Function)(opId, arn2);
+          // Cast once, and to a concrete signature rather than `Function`: this
+          // property test deliberately calls through an untyped boundary, and
+          // `noBannedTypes` is error-level (it replaces no-unsafe-function-type).
+          const derive = deriveSpanIdFromOperationId as (
+            ...args: unknown[]
+          ) => unknown;
+          const result1 = derive(opId, arn1);
+          const result2 = derive(opId, arn2);
 
           expect(result1).not.toBe(result2);
         },
@@ -319,5 +382,44 @@ describe("deriveWorkflowSpanId", () => {
     const workflowSpanId = deriveWorkflowSpanId(TEST_ARN);
     const opSpanId = deriveSpanIdFromOperationId(TEST_ARN, TEST_ARN);
     expect(workflowSpanId).not.toBe(opSpanId);
+  });
+});
+
+describe("deriveExecutionRootSpanId", () => {
+  const TEST_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
+
+  it("produces a 16-char lowercase hex string", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("is deterministic (same input always produces same output)", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).toBe(
+      deriveExecutionRootSpanId(TEST_ARN),
+    );
+  });
+
+  it("produces different results for different ARNs", () => {
+    expect(deriveExecutionRootSpanId(`${TEST_ARN}-a`)).not.toBe(
+      deriveExecutionRootSpanId(`${TEST_ARN}-b`),
+    );
+  });
+
+  it("throws an Error for an empty string", () => {
+    expect(() => deriveExecutionRootSpanId("")).toThrow(
+      "Execution ARN must be non-empty",
+    );
+  });
+
+  it("never returns all-zeros", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).not.toBe("0000000000000000");
+  });
+
+  it("uses a distinct namespace from the Workflow and operation span IDs", () => {
+    // The "execution-root:" salt must not collide with "workflow:" or the
+    // operation span ID for the same ARN, since all three share the trace.
+    const rootId = deriveExecutionRootSpanId(TEST_ARN);
+    expect(rootId).not.toBe(deriveWorkflowSpanId(TEST_ARN));
+    expect(rootId).not.toBe(deriveSpanIdFromOperationId(TEST_ARN, TEST_ARN));
   });
 });

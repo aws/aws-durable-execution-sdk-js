@@ -99,7 +99,6 @@ export class FunctionStorage {
     error?: ErrorObject;
   }> {
     const functionData = this.functionNameMap[functionName];
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!functionData) {
       throw new Error(
         `No function found for function name ${functionName}.\n` +
@@ -110,6 +109,9 @@ export class FunctionStorage {
     const { isDurable, handler } = functionData;
 
     if (isDurable) {
+      // With skipTime, the caller's SkipTimeCoordinator identifies the invoked function as
+      // the runner that registers before this call returns. So create and start the runner
+      // before the first await.
       const invokeRunner = this.runnerFactory.createRunner({
         handlerFunction: handler,
       });

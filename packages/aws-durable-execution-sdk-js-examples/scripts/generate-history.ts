@@ -64,7 +64,9 @@ async function main() {
     console.log(
       `Found ${filteredExamples.length} example(s) matching pattern "${pattern}":`,
     );
-    filteredExamples.forEach((example) => console.log(`  - ${example.name}`));
+    filteredExamples.forEach((example) => {
+      console.log(`  - ${example.name}`);
+    });
   } else {
     console.log(
       `Generating history for all ${filteredExamples.length} examples`,

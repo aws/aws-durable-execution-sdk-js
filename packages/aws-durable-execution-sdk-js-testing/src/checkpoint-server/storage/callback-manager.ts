@@ -84,8 +84,9 @@ export class CallbackManager {
 
     this.callbackIdMap.set(callbackId, operationId);
 
-    // Set up timeout timer if specified
-    if (timeoutSeconds !== undefined) {
+    // The service treats a timeout of 0 as no timeout, as it treats an absent
+    // timeout. So a timer starts only for a positive timeout.
+    if (timeoutSeconds !== undefined && timeoutSeconds > 0) {
       this.callbackTimers.set(
         callbackId,
         setTimeout(() => {
@@ -102,8 +103,7 @@ export class CallbackManager {
       );
     }
 
-    // Set up heartbeat timeout timer if specified
-    if (heartbeatTimeoutSeconds !== undefined) {
+    if (heartbeatTimeoutSeconds !== undefined && heartbeatTimeoutSeconds > 0) {
       this.heartbeatCallbackTimers.set(
         callbackId,
         setTimeout(() => {

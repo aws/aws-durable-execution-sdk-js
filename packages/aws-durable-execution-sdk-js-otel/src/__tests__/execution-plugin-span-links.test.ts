@@ -13,8 +13,25 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { ProviderSource } from "../otel-plugin-config";
+import {
+  createExecutionOtelPluginFactory,
+  ExecutionOtelPlugin,
+} from "../execution-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): ExecutionOtelPlugin {
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
+}
+import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-123";
@@ -107,17 +124,33 @@ function findSpan(
 describe("ExecutionOtelPlugin - Span Link Construction", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
+  let explicitProviders: NodeTracerProvider[];
+  let tracerProviderFactory: TracerProviderFactory;
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
+    explicitProviders = [];
     provider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
     provider.register();
+    tracerProviderFactory = (createIdGenerator) => {
+      const explicitProvider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator: createIdGenerator(),
+      });
+      explicitProviders.push(explicitProvider);
+      return explicitProvider;
+    };
   });
 
   afterEach(async () => {
-    await provider.shutdown();
+    await Promise.all([
+      provider.shutdown(),
+      ...explicitProviders.map((explicitProvider) =>
+        explicitProvider.shutdown(),
+      ),
+    ]);
     exporter.reset();
     trace.disable();
     context.disable();
@@ -126,14 +159,12 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("buildInvocationLinks() returns link to the plugin-created Invocation_Span in default-provider mode", () => {
     /**
-     * In global-provider mode (providerSource: GLOBAL), the plugin still
+     * With the global provider, the plugin still
      * creates its own Invocation_Span (as a child of the ambient context) and
      * builds span links pointing to that plugin-created span.
      */
     it("Operation_Span has a link to the plugin-created Invocation_Span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = newPlugin({});
 
       // Create an ambient span simulating the invocation span from environment/layer
       const ambientTracer = provider.getTracer("ambient-test");
@@ -171,9 +202,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has a link to the plugin-created Invocation_Span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = newPlugin({});
 
       const ambientTracer = provider.getTracer("ambient-test");
       const ambientSpan = ambientTracer.startSpan("ambient-invocation");
@@ -224,13 +253,12 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("buildInvocationLinks() returns link to explicit Invocation_Span when not in default-provider mode", () => {
     /**
-     * In explicit-provider mode (providerSource: EXPLICIT), the plugin creates
+     * With an application-owned provider, the plugin creates
      * an explicit Invocation_Span and builds span links pointing to it.
      */
     it("Operation_Span has a link to the explicit Invocation_Span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+      const plugin = newPlugin({
+        tracerProviderFactory,
       });
 
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -257,9 +285,8 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has a link to the explicit Invocation_Span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+      const plugin = newPlugin({
+        tracerProviderFactory,
       });
 
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -303,9 +330,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
      * links should point to the Invocation span we always create.
      */
     it("Operation_Span has link to Invocation span when no ambient invocation span exists", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = newPlugin({});
 
       // Run onInvocationStart WITHOUT any ambient span in the context
       // (ROOT_CONTEXT has no span)
@@ -332,9 +357,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has link to Invocation span when no ambient invocation span exists", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = newPlugin({});
 
       await context.with(ROOT_CONTEXT, async () => {
         await plugin.onInvocationStart(makeInvocationInfo());
@@ -383,9 +406,8 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
      * from the provider, defaulting to "aws-durable-execution-sdk-js".
      */
     it("uses default instrumentationName when not specified", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+      const plugin = newPlugin({
+        tracerProviderFactory,
       });
 
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -407,9 +429,8 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
     it("uses custom instrumentationName when specified", async () => {
       const customName = "my-custom-instrumentation";
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+      const plugin = newPlugin({
+        tracerProviderFactory,
         instrumentationName: customName,
       });
 
@@ -434,9 +455,8 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     });
 
     it("single tracer instance is used for all span operations", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+      const plugin = newPlugin({
+        tracerProviderFactory,
       });
 
       await plugin.onInvocationStart(makeInvocationInfo());

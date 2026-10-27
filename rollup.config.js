@@ -60,7 +60,9 @@ export function createBuildOptions(options, mode, packageJson, extraOptions) {
         (warning.exporter?.startsWith("@aws-sdk/") ||
           warning.exporter?.startsWith("@smithy/") ||
           warning.exporter?.startsWith("@aws-crypto/") ||
-          ["crypto", "events"].includes(warning.exporter))
+          ["crypto", "events", "module", "path", "url"].includes(
+            warning.exporter,
+          ))
       ) {
         return;
       }

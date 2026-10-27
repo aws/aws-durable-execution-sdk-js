@@ -48,6 +48,7 @@ export function createTestDurableContext(options?: {
   durableExecutionMode?: DurableExecutionMode;
   existingOperations?: Operation[];
   lambdaContext?: Partial<Context>;
+  plugin?: Partial<DurableExecution["plugin"]>;
 }): {
   context: DurableContextImpl<DurableLogger>;
   storage: InMemoryStorage;
@@ -57,7 +58,9 @@ export function createTestDurableContext(options?: {
 
   // Add existing operations if provided
   if (options?.existingOperations) {
-    options.existingOperations.forEach((op) => storage.addOperation(op));
+    options.existingOperations.forEach((op) => {
+      storage.addOperation(op);
+    });
   }
 
   const stepData: Record<string, Operation> = {};
@@ -123,6 +126,7 @@ export function createTestDurableContext(options?: {
     checkpointManager: mockCheckpoint,
     stepDataEmitter: new EventEmitter(),
     setTerminating: jest.fn(),
+    plugin: options?.plugin,
   };
 
   const context = createDurableContext<DurableLogger>(

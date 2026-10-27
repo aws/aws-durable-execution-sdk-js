@@ -7,12 +7,14 @@ import {
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 import {
+  ErrorObject,
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -25,6 +27,31 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+
+/**
+ * Builds the {@link InvokeError} thrown for a failed chained invoke.
+ *
+ * The cause carries the invoked function's error type as its `name` (and its
+ * stack trace), the same way the callback handlers and
+ * `DurableOperationError.fromErrorObject` build theirs, so `error.cause.name`
+ * is the remote error's type (for example `"PaymentError"`) rather than a
+ * generic `"Error"`. A cause is created only when the remote error reported a
+ * message or a type.
+ */
+function toInvokeError(error: ErrorObject | undefined): InvokeError {
+  if (!error) return new InvokeError("Invoke failed");
+  let cause: Error | undefined;
+  if (error.ErrorMessage || error.ErrorType) {
+    cause = new Error(error.ErrorMessage);
+    cause.name = error.ErrorType || "Error";
+    cause.stack = error.StackTrace?.join("\n");
+  }
+  return new InvokeError(
+    error.ErrorMessage || "Invoke failed",
+    cause,
+    error.ErrorData,
+  );
+}
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -185,6 +212,15 @@ export const createInvokeHandler = (
           context.durableExecutionArn,
         );
 
+        // Collect only for a new START. A persisted START keeps its original
+        // propagation context on replay; an uncommitted attempt may recompute.
+        const metadata = plugin.providePropagationMetadata?.({
+          executionArn: context.durableExecutionArn,
+          operationId: opInfo.id,
+          parentOperationId: opInfo.parentId,
+          targetFunctionName: funcId,
+        });
+
         await checkpoint.checkpoint(stepId, {
           Id: stepId,
           ParentId: parentId,
@@ -196,6 +232,9 @@ export const createInvokeHandler = (
           ChainedInvokeOptions: {
             FunctionName: funcId,
             ...(config?.tenantId && { TenantId: config.tenantId }),
+            ...(metadata?.xAmznTraceId !== undefined && {
+              XAmznTraceId: metadata.xAmznTraceId,
+            }),
           },
         });
         stepData = context.getStepData(stepId);
@@ -237,30 +276,23 @@ export const createInvokeHandler = (
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           const invokeDetails = stepData.ChainedInvokeDetails;
-          return await safeDeserialize(
-            config?.resultSerdes ||
-              (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
-            invokeDetails?.Result,
-            stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+          // Phase 1 marked the invoke COMPLETED. Count it as active again
+          // while the replayed result is deserialized.
+          return await completeAfter(checkpoint, stepId, () =>
+            safeDeserialize(
+              config?.resultSerdes ||
+                (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
+              invokeDetails?.Result,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
           );
         }
 
         // Handle failure
-        const invokeDetails = stepData?.ChainedInvokeDetails;
-        if (invokeDetails?.Error) {
-          throw new InvokeError(
-            invokeDetails.Error.ErrorMessage || "Invoke failed",
-            invokeDetails.Error.ErrorMessage
-              ? new Error(invokeDetails.Error.ErrorMessage)
-              : undefined,
-            invokeDetails.Error.ErrorData,
-          );
-        } else {
-          throw new InvokeError("Invoke failed");
-        }
+        throw toInvokeError(stepData?.ChainedInvokeDetails?.Error);
       }
 
       log("🔗", "Invoke phase 2:", { stepId });
@@ -275,24 +307,23 @@ export const createInvokeHandler = (
         log("✅", "Invoke completed:", { stepId });
         checkAndUpdateReplayMode?.();
 
-        checkpoint.markOperationState(
-          stepId,
-          OperationLifecycleState.COMPLETED,
-        );
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
+        // The invoke stays EXECUTING until its result is deserialized.
+        return await completeAfter(checkpoint, stepId, async () => {
+          const operationInfo = toOperationInfo(stepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return await safeDeserialize(
-          config?.resultSerdes ||
-            (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
-          invokeDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
-        );
+          const invokeDetails = stepData.ChainedInvokeDetails;
+          return await safeDeserialize(
+            config?.resultSerdes ||
+              (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
+            invokeDetails?.Result,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+        });
       }
 
       // Handle failure
@@ -306,22 +337,9 @@ export const createInvokeHandler = (
       await plugin.onOperationEnd?.({
         ...operationInfo,
         isReplay: false,
-        error: invokeError?.ErrorMessage
-          ? new Error(invokeError.ErrorMessage)
-          : new Error("Invoke failed"),
       });
 
-      if (invokeError) {
-        throw new InvokeError(
-          invokeError.ErrorMessage || "Invoke failed",
-          invokeError.ErrorMessage
-            ? new Error(invokeError.ErrorMessage)
-            : undefined,
-          invokeError.ErrorData,
-        );
-      } else {
-        throw new InvokeError("Invoke failed");
-      }
+      throw toInvokeError(invokeError);
     });
   }
 

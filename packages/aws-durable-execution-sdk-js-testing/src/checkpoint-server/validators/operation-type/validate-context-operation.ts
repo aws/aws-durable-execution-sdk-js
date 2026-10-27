@@ -1,4 +1,4 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   Operation,
   OperationAction,
@@ -25,37 +25,28 @@ export function validateContextOperation(
   switch (update.Action) {
     case OperationAction.START:
       if (operation) {
-        throw new InvalidParameterValueException({
-          message: "Cannot start a CONTEXT that already exists.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot start a CONTEXT operation that already exists.",
+        );
       }
       break;
     case OperationAction.FAIL:
     case OperationAction.SUCCEED:
       if (operation && !allowedStatusToClose.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message: "Invalid current CONTEXT state to close.",
-          $metadata: {},
-        });
+        throw invalidParameterValue("Invalid current CONTEXT state to close.");
       }
       if (update.Action === OperationAction.FAIL && update.Payload != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide a Payload for FAIL action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide a Payload for FAIL action.",
+        );
       }
       if (update.Action === OperationAction.SUCCEED && update.Error != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide an Error for SUCCEED action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide an Error for SUCCEED action.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid CONTEXT action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue("Invalid action for CONTEXT operation.");
   }
 }

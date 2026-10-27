@@ -5,7 +5,7 @@
   "type": "module",
   "main": "test.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "NODE_PATH=../../test-fixtures/dynamic-plugin-layer/modules node test.js"
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js": "*"

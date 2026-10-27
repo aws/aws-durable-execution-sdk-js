@@ -220,7 +220,7 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     const maxDelaySeconds = durationToSeconds(finalConfig.maxDelay);
 
     const baseDelay = Math.min(
-      initialDelaySeconds * Math.pow(finalConfig.backoffRate, attemptsMade - 1),
+      initialDelaySeconds * finalConfig.backoffRate ** (attemptsMade - 1),
       maxDelaySeconds,
     );
 

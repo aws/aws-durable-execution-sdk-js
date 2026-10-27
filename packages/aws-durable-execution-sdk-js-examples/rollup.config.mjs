@@ -1,7 +1,9 @@
 // @ts-check
 
 import { defineConfig } from "rollup";
-import examplesCatalog from "./src/utils/examples-catalog.json" with { type: "json" };
+import examplesCatalog from "./src/utils/examples-catalog.json" with {
+  type: "json",
+};
 import typescript from "@rollup/plugin-typescript";
 import nodeResolve from "@rollup/plugin-node-resolve";
 import json from "@rollup/plugin-json";
@@ -41,6 +43,22 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      // src/utils/examples-catalog.d.json.ts types the generated catalog for `tsc`.
+      // @rollup/plugin-typescript resolves imports with TypeScript's resolver, which prefers
+      // that declaration to the JSON and would hand Rollup a .ts file to parse as JSON, so
+      // the import is resolved to the real file here, ahead of it.
+      name: "resolve-examples-catalog-json",
+      resolveId(source, importer) {
+        if (
+          source === "./examples-catalog.json" &&
+          importer?.endsWith(path.join("utils", "examples-catalog.ts"))
+        ) {
+          return path.resolve(path.dirname(importer), "examples-catalog.json");
+        }
+        return null;
+      },
+    },
     typescript({
       // Disable incremental build to ensure examples catalog is parsed
       incremental: false,

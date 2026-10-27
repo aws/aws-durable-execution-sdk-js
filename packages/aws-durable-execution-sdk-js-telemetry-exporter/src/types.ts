@@ -1,0 +1,357 @@
+/**
+ * Any value that can appear in execution data.
+ */
+export type JsonValue =
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined
+  | Date
+  | Buffer
+  | Uint8Array
+  | RegExp
+  | Map<string, JsonValue>
+  | Set<JsonValue>
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type ExecutionInput = JsonValue;
+
+export type ExecutionOutput = JsonValue;
+
+export type OperationResult = JsonValue;
+
+/**
+ * Per-operation override for controlling inclusion and result transformation.
+ */
+export interface OperationOverride {
+  operationName: string;
+  exclude?: boolean;
+  /**
+   * Include and transform the operation's result. Omitted by default.
+   *
+   * ⚠️ The value passed to this function is the operation's **checkpointed,
+   * serialized** result — JSON-parsed when it is valid JSON, otherwise the raw
+   * string. The plugin does NOT run your SDK `Serdes.deserialize`. If the
+   * operation uses a custom Serdes (non-JSON format, encryption, or a
+   * filesystem/overflow Serdes that checkpoints only a pointer/filepath), this
+   * function receives that serialized form or pointer — not the original
+   * deserialized value. Only enable operation results for operations that use
+   * the default JSON serialization, or whose serialized form your transform
+   * can handle.
+   */
+  result?: (result: OperationResult) => OperationResult;
+}
+
+/**
+ * Controls what data is included in emitted records.
+ */
+export interface ContentConfig {
+  input?: boolean | ((input: ExecutionInput) => ExecutionInput);
+  output?: boolean | ((output: ExecutionOutput) => ExecutionOutput);
+  operations?: {
+    /**
+     * Per-operation overrides, matched by `operationName`. If multiple entries
+     * (or multiple operations) share a name, the last matching entry wins.
+     */
+    overrides?: OperationOverride[];
+    includeErrors?: boolean;
+  };
+}
+
+/**
+ * Interface for exporting durable execution telemetry records to a destination.
+ */
+export interface TelemetryExporter {
+  export(record: DurableExecutionTelemetryRecord): Promise<void>;
+  /**
+   * Delivers whatever this exporter has buffered but not yet sent.
+   *
+   * Optional: implement it only if the exporter buffers records rather than
+   * sending each one from {@link TelemetryExporter.export | export}.
+   *
+   * - Called at sampled-in invocation end, after that invocation's own queued
+   *   records have been handed to every exporter. Late nonterminal updates can
+   *   require another export-and-flush round before the same end returns;
+   *   exporters must support repeated calls for one invocation. A sampled-in
+   *   invocation end that emits no record (an `emitMode` that skips this status)
+   *   still flushes. An execution that is sampled out neither exports nor
+   *   flushes.
+   * - Serialized with other flush calls and
+   *   {@link TelemetryExporter.export | export} across plugin instances created
+   *   by the same `durableExecutionTelemetry()` factory. Separate factories have separate
+   *   schedulers, even if they share an exporter object.
+   * - May cover records belonging to other executions running in the same
+   *   environment, so it is not a per-execution barrier. Invocation ends that
+   *   overlap may also *share* one flush: each of them has already handed its
+   *   own record to every exporter before the shared flush starts, so one flush
+   *   covers those records. Without late updates, the number of flush calls can
+   *   therefore be lower than the number of invocation ends.
+   * - Must return promptly. No invocation waiting on this flush can return until
+   *   it settles, so a slow flush is billed to the customer — not only to the
+   *   invocation that asked for it, but to every concurrent invocation whose end
+   *   is waiting on the same flush.
+   * - Sharing the flush also shares the exports that precede it. Records are
+   *   handed to {@link TelemetryExporter.export | export} one at a time, and every
+   *   record a concurrent invocation end is waiting for is exported before the
+   *   shared flush starts. In a settled burst with no late updates, those ends
+   *   return once the last export and the shared flush have settled. The time an
+   *   {@link TelemetryExporter.export | export} call takes therefore multiplies by
+   *   the number of executions ending concurrently in the environment, and each
+   *   of those executions pays the whole product, not its own share: with 20
+   *   concurrent ends, a 10 ms export and a 30 ms flush cost every one of the 20
+   *   about 250 ms — 20 exports and one flush — rather than the 40 ms a single
+   *   end would pay alone. Delivering every record is the intended trade — a
+   *   record dropped for latency is a record the customer cannot get back — but
+   *   an exporter whose `export` is slow should buffer in memory and do its
+   *   sending work in `flush`, which can be shared across the burst. Updates
+   *   arriving during that flush can require another round before return.
+   * - Failures are isolated: a rejection or a synchronous throw is swallowed —
+   *   never propagated into the execution, and never able to stop another
+   *   exporter from flushing. A failure does not itself trigger a retry; later
+   *   updates can still require another flush. The plugin logs each failure as a
+   *   `[durable-execution-telemetry]` warning; an exporter that needs more than a log line
+   *   must handle the failure itself.
+   */
+  flush?(): Promise<void>;
+  /**
+   * Maximum serialized record size, in bytes, this exporter will emit. When a
+   * record's JSON exceeds this, the plugin truncates a per-exporter copy before
+   * calling {@link TelemetryExporter.export | export} (best-effort): it first
+   * removes every error `cause` (setting `droppedCauses: true`), then drops
+   * operation `result` fields oldest-first, then whole operations oldest-first,
+   * then — only as a last resort — execution `input` and `output`. It sets
+   * `truncated: true` on the emitted record, marks each operation whose result
+   * was dropped with its own `truncated: true`, and adds the `droppedCauses`
+   * flag, the `droppedOperations` count and `droppedInput` / `droppedOutput`
+   * flags. Prefer `content.input` /
+   * `content.output` transforms to bound `input`/`output` before it comes to
+   * that; identity/timeline fields are never dropped.
+   *
+   * First-party exporters default this to their destination's practical limit;
+   * `undefined` disables truncation.
+   */
+  maxRecordSizeBytes?: number;
+  /**
+   * Maps a record to the exact value this exporter serializes/sends — e.g. the
+   * `operationsByName` expansion, or a chosen {@link OperationsFormat}. The size
+   * limiter measures this shape (not the canonical record) so a record trimmed
+   * to `maxRecordSizeBytes` reflects what is actually emitted. Defaults to the
+   * record unchanged.
+   *
+   * To avoid drift, an exporter that reshapes the record should call the same
+   * `render` from its {@link TelemetryExporter.export | export} so sizing and
+   * emission share one code path. This bounds the serialized record body only,
+   * not the destination wire envelope.
+   */
+  render?(record: DurableExecutionTelemetryRecord): unknown;
+}
+
+/**
+ * Configuration for the Durable Execution Telemetry plugin.
+ */
+export interface DurableExecutionTelemetryConfig {
+  exporters?: TelemetryExporter[];
+
+  /**
+   * Sampling rate: 0.0–1.0 (default: 1.0 = every execution). When below 1.0,
+   * only a fraction of executions emit records; the rest are skipped entirely
+   * (no records, no exporter calls).
+   *
+   * The decision is per-execution and all-or-nothing: a sampled-in execution
+   * emits all of its records, a sampled-out execution emits none. It is
+   * deterministic across replays — derived from a hash of the execution ARN,
+   * which is stable across replays — so a resumed execution never flips its
+   * decision and produces fragmented records.
+   *
+   * Out-of-range or non-numeric values are clamped/defaulted with a warning.
+   */
+  samplingRate?: number;
+
+  /**
+   * Controls when records are emitted.
+   *
+   * - `"on-change"`: emit on every operation status change and at execution
+   *   end, including while the execution is still in flight (`RUNNING`).
+   *   Highest overhead; gives real-time visibility into running executions.
+   * - `"on-complete"` (default): emit a single record when the execution
+   *   reaches a terminal status (`SUCCEEDED` or `FAILED`). No emissions on
+   *   intermediate waits/suspends.
+   * - `"on-failure"`: emit a single record only when the execution reaches a
+   *   terminal `FAILED` status. Successful executions emit nothing. Lowest
+   *   overhead; useful for error-focused alerting and triage.
+   */
+  emitMode?: "on-complete" | "on-change" | "on-failure";
+
+  /**
+   * Which operations to include in each record's `operations` array.
+   *
+   * - `"top-level"` (default): include only top-level operations (anything with
+   *   a `parentId` is dropped). This yields a consistent, resume-independent
+   *   snapshot — the same set of operations regardless of when it's emitted —
+   *   and never depends on child preservation. It's the default because
+   *   `"full-tree"` can otherwise silently under-report (see below).
+   * - `"full-tree"`: include every operation — top-level operations **and** the
+   *   children of contexts (parallel branches, map items, and their nested
+   *   operations). NOTE: children of a context that already finished in an
+   *   earlier invocation are, by default, pruned by the backend on resume — so
+   *   for an execution that suspends/resumes, a `"full-tree"` record only
+   *   contains children of contexts that were still active in the emitting
+   *   invocation. To keep the full tree across resume, also set
+   *   `DurableExecutionConfig.pluginsConfig.childOperationsDepth` on
+   *   `withDurableExecution` (this replays preserved contexts on resume to keep
+   *   their children in state — see that field's cost note).
+   */
+  operationDetail?: "full-tree" | "top-level";
+
+  /**
+   * Control what data is included in records (input/output transforms,
+   * operation overrides, error inclusion).
+   */
+  content?: ContentConfig;
+}
+
+/**
+ * An error as written in a record: the execution-level `error`, every
+ * `operations[].error`, and every `operationsByName.<name>.error`.
+ *
+ * Keys are written in the order `name`, `message`, `cause`. `name` and
+ * `message` are the error's own values, capped at 8,192 code points (a longer
+ * value is cut and followed by `…`); error names are not aligned across SDK
+ * languages. `cause` is present only when the error has one (`Error.cause`, or
+ * the cause the SDK built when it rebuilt the error from a checkpoint), has the
+ * same shape, and is cut after 16 levels or at a cause already written.
+ */
+export interface ErrorRecord {
+  name: string;
+  message: string;
+  cause?: ErrorRecord;
+}
+
+/**
+ * A single operation within an execution (step, wait, invoke, callback, or context).
+ */
+export interface OperationRecord {
+  id: string;
+  name?: string;
+  type: string;
+  subType?: string;
+  parentId?: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  attempt?: number;
+  error?: ErrorRecord;
+  /**
+   * The operation's result. Omitted by default; included only when a matching
+   * `content.operations.overrides` entry supplies a `result` transform.
+   */
+  result?: OperationResult;
+  /**
+   * `true` when the size limiter dropped this operation's `result` to fit the
+   * exporter's `maxRecordSizeBytes`. The operation's other fields are retained;
+   * only the (opted-in) `result` value was removed.
+   */
+  truncated?: boolean;
+}
+
+/**
+ * How an exporter renders operations in the emitted record:
+ * - `"array"`: the canonical `operations` array (lossless; default).
+ * - `"by-name"`: replace it with the `operationsByName` map (name-keyed summary).
+ * - `"both"`: include the `operations` array and the `operationsByName` map.
+ */
+export type OperationsFormat = "array" | "by-name" | "both";
+
+/**
+ * A per-operation-name summary emitted (as an `operationsByName` map) by
+ * point-access exporters (CloudWatch Logs, DynamoDB) to make name-based queries
+ * ergonomic. The canonical `operations` array remains the lossless source of
+ * truth; see `docs/operations-shape.md`.
+ *
+ * Metric fields aggregate across ALL occurrences of the name; `type`, `subType`,
+ * and `status` reflect the most recently seen occurrence. `result` and `error`
+ * are included only when the name occurs exactly ONCE in the execution — for a
+ * repeated name there is no single representative value, so both are omitted.
+ */
+export interface OperationSummary {
+  type: string;
+  subType?: string;
+  /** Number of occurrences of this operation name in the execution. */
+  count: number;
+  /** Min/max/total duration across occurrences that have a duration. */
+  minDurationMs?: number;
+  maxDurationMs?: number;
+  totalDurationMs?: number;
+  /** How many occurrences ended in FAILED. */
+  failedCount: number;
+  /** Highest attempt number seen across occurrences. */
+  maxAttempt?: number;
+  /** Status of the most recently seen occurrence. */
+  status: string;
+  /** Result — only present when this name occurs exactly once (and opted results in). */
+  result?: OperationResult;
+  /** Error — only present when this name occurs exactly once (and it failed, errors included). */
+  error?: ErrorRecord;
+}
+
+/**
+ * The curated execution record emitted to destinations.
+ */
+export interface DurableExecutionTelemetryRecord {
+  /** Fixed identifier to distinguish telemetry records from other log data. */
+  recordType: "DurableExecutionTelemetry";
+  /**
+   * Record schema version. New fields are additive and do not change this
+   * value; it is bumped only for a breaking change (a field is renamed,
+   * removed, or changes meaning/type) so consumers can detect and adapt.
+   */
+  schemaVersion: "1.0";
+  /**
+   * When the record was built. Strictly increases across the records of one
+   * invocation: if two records are built in the same millisecond, the later one
+   * is 1 ms after the earlier one. Exporters key on `executionArn` + `emittedAt`
+   * (the SQS FIFO deduplication id, the default DynamoDB sort key), so equal
+   * values would drop or overwrite a record.
+   */
+  emittedAt: string;
+  executionArn: string;
+  executionName?: string;
+  functionName: string;
+  functionQualifier: string;
+  region: string;
+  accountId: string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
+  startTime: string;
+  endTime?: string;
+  durationMs?: number;
+  input?: ExecutionInput;
+  output?: ExecutionOutput;
+  error?: ErrorRecord;
+  operations: OperationRecord[];
+  /**
+   * `true` when the size limiter dropped data to fit the exporter's
+   * `maxRecordSizeBytes`. Omitted when nothing was dropped, so a truncated
+   * record is always distinguishable from a complete one ("cut, not missing").
+   */
+  truncated?: boolean;
+  /**
+   * `true` when the size limiter removed every error `cause` (from the
+   * execution `error` and every operation error). It is the first thing the
+   * limiter drops; each error keeps its own `name` and `message`.
+   */
+  droppedCauses?: boolean;
+  /** Number of whole operations dropped by the size limiter. */
+  droppedOperations?: number;
+  /**
+   * `true` when the size limiter dropped execution `input` as a last resort
+   * (only after every operation was already dropped). Distinguishes a
+   * size-dropped input from one omitted by a `content.input` transform.
+   */
+  droppedInput?: boolean;
+  /** `true` when the size limiter dropped execution `output` as a last resort. */
+  droppedOutput?: boolean;
+}

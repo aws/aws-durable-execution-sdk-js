@@ -40,62 +40,25 @@ describe("validateCallbackOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateCallbackOperation(update, currentOperation);
-      }).toThrow("Cannot start a CALLBACK that already exists.");
-    });
-  });
-
-  describe("CANCEL action", () => {
-    it("should succeed when operation has STARTED status", () => {
-      const currentOperation = createOperation(OperationStatus.STARTED);
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateCallbackOperation(update, currentOperation);
-      }).not.toThrow();
-    });
-
-    it("should throw exception when no current operation exists", () => {
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateCallbackOperation(update, undefined);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateCallbackOperation(update, undefined);
-      }).toThrow(
-        "Cannot cancel a CALLBACK that does not exist or has already completed.",
-      );
-    });
-
-    it("should throw exception when operation has invalid status", () => {
-      const currentOperation = createOperation(OperationStatus.SUCCEEDED);
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateCallbackOperation(update, currentOperation);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateCallbackOperation(update, currentOperation);
-      }).toThrow(
-        "Cannot cancel a CALLBACK that does not exist or has already completed.",
-      );
+      }).toThrow("Cannot start a CALLBACK operation that already exists.");
     });
   });
 
   describe("Invalid action", () => {
-    it("should throw exception for invalid action", () => {
-      const update: OperationUpdate = {
-        Action: "INVALID_ACTION" as OperationAction,
-        Type: OperationType.CALLBACK,
-        Id: "test-id",
-      };
+    it.each([
+      OperationAction.CANCEL,
+      OperationAction.SUCCEED,
+      "INVALID_ACTION" as OperationAction,
+    ])("should throw exception for %s", (action) => {
+      const currentOperation = createOperation(OperationStatus.STARTED);
+      const update = createOperationUpdate(action);
 
       expect(() => {
-        validateCallbackOperation(update, undefined);
+        validateCallbackOperation(update, currentOperation);
       }).toThrow(InvalidParameterValueException);
       expect(() => {
-        validateCallbackOperation(update, undefined);
-      }).toThrow("Invalid CALLBACK action.");
+        validateCallbackOperation(update, currentOperation);
+      }).toThrow("Invalid action for CALLBACK operation.");
     });
   });
 });

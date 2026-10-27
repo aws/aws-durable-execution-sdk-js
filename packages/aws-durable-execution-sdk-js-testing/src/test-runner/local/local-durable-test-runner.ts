@@ -19,7 +19,7 @@ import {
   LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../common/create-durable-api-client";
-import { install, InstalledClock } from "@sinonjs/fake-timers";
+import { install, Clock } from "@sinonjs/fake-timers";
 import { Handler } from "aws-lambda";
 import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
 import {
@@ -61,11 +61,21 @@ export interface LocalDurableTestRunnerSetupParameters {
   /**
    * Whether to enable time skipping using fake timers during test execution.
    *
-   * When set to `true`, the test runner will install fake timers that allow tests
-   * to skip over time-based operations like `setTimeout`, `setInterval`, `context.wait`,
-   * and `context.step` retries without actually waiting for the specified duration.
-   * This significantly speeds up test execution for workflows that involve delays
-   * or timeouts.
+   * When set to `true`, the test runner installs a fake clock. The runner moves that clock
+   * to the end of each `context.wait` and each `context.step` retry delay without waiting
+   * for the delay in real time. It moves the clock only when no invocation is running.
+   * This significantly speeds up test execution for workflows that involve delays.
+   *
+   * While an invocation is running, the fake clock advances with real time. So a timer that
+   * your own code sets, such as `setTimeout` or `setInterval` inside a step or inside a
+   * non-durable invoked function, fires after its delay in real time. To keep such a test
+   * fast, shorten the delay in the test, or use `context.wait` for a durable delay.
+   *
+   * While a non-durable invoked function runs, the clock waits for its result for up to 1 s
+   * of real time. If the function takes longer, a later wait or retry end can be applied
+   * before its result arrives. The clock also waits for each invocation of a durable invoked
+   * function for up to 1 s of real time. If a step in it runs longer, the clock can move to a
+   * later end while that step still runs.
    *
    * When set to `false` or undefined, real timers will be used and any time-based
    * operations will execute with their actual delays.
@@ -126,20 +136,20 @@ export interface LocalDurableTestRunnerSetupParameters {
  *
  * @public
  */
-export class LocalDurableTestRunner<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TResult = any,
-> implements DurableTestRunner<DurableOperation, TResult>
+export class LocalDurableTestRunner<TResult = any>
+  implements DurableTestRunner<DurableOperation, TResult>
 {
   private operationStorage: LocalOperationStorage;
   private waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<TResult>;
   private operationIndex: IndexedOperations;
   private static skipTime = false;
-  private static fakeClock: InstalledClock | undefined;
+  private static fakeClock: Clock | undefined;
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
+  /** The orchestrator of the run in progress, which pause and resume act on. */
+  private currentExecution: TestExecutionOrchestrator | undefined;
 
   /**
    * Creates a new LocalDurableTestRunner instance and starts the checkpoint server.
@@ -216,6 +226,7 @@ export class LocalDurableTestRunner<
           fakeClock: LocalDurableTestRunner.fakeClock,
         },
       );
+      this.currentExecution = orchestrator;
 
       const lambdaResponse = await orchestrator.executeHandler(params);
       return this.resultFormatter.formatTestResult(
@@ -230,8 +241,68 @@ export class LocalDurableTestRunner<
         this.operationStorage,
       );
     } finally {
+      this.currentExecution = undefined;
       this.waitManager.clearWaitingOperations();
     }
+  }
+
+  /**
+   * Pauses the execution started by {@link LocalDurableTestRunner.run}, resolving once no
+   * invocation of it is running.
+   *
+   * The invocation running at the time, if any, is answered without a `CheckpointToken` on
+   * its next checkpoint — which is what the service does to an invocation it will accept no
+   * further checkpoints from. That checkpoint is kept. The SDK abandons whatever it had not
+   * yet sent, and the invocation returns PENDING. The abandoned work replays after
+   * {@link LocalDurableTestRunner.resumeExecution}.
+   *
+   * No invocation starts while paused. Waits keep elapsing and callbacks can still be sent;
+   * the invocations they would start are held back until the execution is resumed. So
+   * `run()` does not settle while paused: resume before awaiting it.
+   *
+   * Pausing applies to this runner's execution only, not to durable functions it invokes.
+   * Idempotent, and a no-op once the execution has finished.
+   *
+   * @throws If no execution is in progress — call `run()` first, without awaiting it.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   *
+   * @example
+   * ```typescript
+   * const execution = runner.run({ payload: {} });
+   *
+   * // Pause once the first step has started.
+   * await runner.getOperation("charge-card").waitForData(WaitingOperationStatus.STARTED);
+   * await runner.pauseExecution();
+   *
+   * // Nothing runs until resumed, and the abandoned work then replays.
+   * await runner.resumeExecution();
+   * const result = await execution;
+   * ```
+   */
+  async pauseExecution(): Promise<void> {
+    await this.requireCurrentExecution("pauseExecution").pause();
+  }
+
+  /**
+   * Resumes an execution paused with {@link LocalDurableTestRunner.pauseExecution}, starting
+   * the invocation that was held back, if any. Idempotent.
+   *
+   * @throws If no execution is in progress.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  async resumeExecution(): Promise<void> {
+    await this.requireCurrentExecution("resumeExecution").resume();
+  }
+
+  private requireCurrentExecution(method: string): TestExecutionOrchestrator {
+    if (!this.currentExecution) {
+      throw new Error(
+        `${method}() needs an execution in progress. Call run() first, and do not await it before calling ${method}().`,
+      );
+    }
+    return this.currentExecution;
   }
 
   /**
@@ -318,10 +389,10 @@ export class LocalDurableTestRunner<
    * @param index - Optional index for operations with the same name (defaults to 0)
    * @returns An operation instance that can be used to inspect operation details
    */
-  getOperation<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string, index?: number): DurableOperation<TOperationResult> {
+  getOperation<TOperationResult = any>(
+    name: string,
+    index?: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -344,10 +415,9 @@ export class LocalDurableTestRunner<
    * @param index - The zero-based index of the operation in execution order
    * @returns An operation instance for the operation at the specified index
    */
-  getOperationByIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(index: number): DurableOperation<TOperationResult> {
+  getOperationByIndex<TOperationResult = any>(
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -370,10 +440,10 @@ export class LocalDurableTestRunner<
    * @param index - The zero-based index among operations with the same name
    * @returns An operation instance for the specified named operation occurrence
    */
-  getOperationByNameAndIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string, index: number): DurableOperation<TOperationResult> {
+  getOperationByNameAndIndex<TOperationResult = any>(
+    name: string,
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -396,10 +466,9 @@ export class LocalDurableTestRunner<
    * @param id - The unique identifier of the operation
    * @returns An operation instance for the operation with the specified ID
    */
-  getOperationById<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(id: string): DurableOperation<TOperationResult> {
+  getOperationById<TOperationResult = any>(
+    id: string,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,

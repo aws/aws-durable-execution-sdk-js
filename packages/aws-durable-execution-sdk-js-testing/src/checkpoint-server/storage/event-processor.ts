@@ -11,6 +11,7 @@ import {
   HistoryEventDetail,
   OperationActionWithoutRetry,
 } from "../utils/history-event-details";
+import { ExecutionClock } from "../utils/client-clock";
 
 /**
  * Processes operation updates and transforms them into properly formatted history events.
@@ -29,8 +30,12 @@ export class EventProcessor {
    * Creates a new EventProcessor instance.
    *
    * @param executionTimeout - Optional execution timeout in seconds that will be included in event metadata
+   * @param clock - The execution's clock, which stamps every event
    */
-  constructor(private readonly executionTimeout?: number) {}
+  constructor(
+    private readonly executionTimeout?: number,
+    private readonly clock: ExecutionClock = new ExecutionClock(),
+  ) {}
 
   /**
    * Creates a history event with the specified details and operation context.
@@ -68,7 +73,7 @@ export class EventProcessor {
       EventId: this.eventId++,
       Id: operation?.Id,
       Name: operation?.Name,
-      EventTimestamp: new Date(),
+      EventTimestamp: this.clock.now(),
       ParentId: operation?.ParentId,
       [detailPlace]: details,
     };
@@ -117,7 +122,7 @@ export class EventProcessor {
       EventId: this.eventId++,
       Id: update.Id,
       Name: update.Name,
-      EventTimestamp: new Date(),
+      EventTimestamp: this.clock.now(),
       ParentId: update.ParentId,
       [historyDetails.detailPlace]: historyDetails.getDetails(
         update,

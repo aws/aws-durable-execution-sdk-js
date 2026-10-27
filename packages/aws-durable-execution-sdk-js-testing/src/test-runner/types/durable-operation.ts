@@ -114,10 +114,7 @@ export enum WaitingOperationStatus {
  * Provides methods to inspect operation details, wait for data, and send callback responses.
  * @public
  */
-export interface DurableOperation<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TResult = any,
-> {
+export interface DurableOperation<TResult = any> {
   /**
    * Wait for data for the current operation. If data is not found by the time
    * the execution completes, this function will throw an error.

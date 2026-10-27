@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+// biome-ignore-all lint/suspicious/noConsole: this module IS the SDK logger -- writing to console is what it exists to do. Was `/* eslint-disable no-console */` before the Biome migration.
 import { safeStringify } from "../safe-stringify/safe-stringify";
 
 // Cached at module load: reading process.env is a native call, and log() is

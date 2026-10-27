@@ -13,6 +13,7 @@ describe("validateWaitOperation", () => {
     Action: action,
     Type: OperationType.WAIT,
     Id: "test-id",
+    WaitOptions: { WaitSeconds: 1 },
   });
 
   const createOperation = (status: OperationStatus): Operation => ({
@@ -40,7 +41,21 @@ describe("validateWaitOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateWaitOperation(update, currentOperation);
-      }).toThrow("Cannot start a WAIT that already exists.");
+      }).toThrow("Cannot start a WAIT operation that already exists.");
+    });
+
+    it("should throw exception when WaitOptions is missing", () => {
+      const update: OperationUpdate = {
+        ...createOperationUpdate(OperationAction.START),
+        WaitOptions: undefined,
+      };
+
+      expect(() => {
+        validateWaitOperation(update, undefined);
+      }).toThrow(InvalidParameterValueException);
+      expect(() => {
+        validateWaitOperation(update, undefined);
+      }).toThrow("Update for WAIT operation requires WaitOptions.");
     });
   });
 
@@ -63,7 +78,7 @@ describe("validateWaitOperation", () => {
       expect(() => {
         validateWaitOperation(update, undefined);
       }).toThrow(
-        "Cannot cancel a WAIT that does not exist or has already completed.",
+        "Cannot cancel a WAIT operation that does not exist or has already completed.",
       );
     });
 
@@ -77,7 +92,7 @@ describe("validateWaitOperation", () => {
       expect(() => {
         validateWaitOperation(update, currentOperation);
       }).toThrow(
-        "Cannot cancel a WAIT that does not exist or has already completed.",
+        "Cannot cancel a WAIT operation that does not exist or has already completed.",
       );
     });
   });
@@ -95,7 +110,7 @@ describe("validateWaitOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateWaitOperation(update, undefined);
-      }).toThrow("Invalid WAIT action.");
+      }).toThrow("Invalid action for WAIT operation.");
     });
   });
 });

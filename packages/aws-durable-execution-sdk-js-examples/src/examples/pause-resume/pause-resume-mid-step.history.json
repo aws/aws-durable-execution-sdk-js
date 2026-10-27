@@ -1,0 +1,171 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "948c7116-fc0a-45c4-9d85-e96a0823933b",
+    "EventTimestamp": "2026-09-25T18:24:29.401Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"orderId\":\"order-7\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "reserve-stock",
+    "EventTimestamp": "2026-09-25T18:24:29.408Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "reserve-stock",
+    "EventTimestamp": "2026-09-25T18:24:29.609Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"reserved-order-7\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-09-25T18:24:29.612Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-09-25T18:24:29.401Z",
+      "EndTimestamp": "2026-09-25T18:24:29.612Z",
+      "Error": {},
+      "RequestId": "ce1cfe96-a609-4496-adba-1ea5abe5cd03"
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "manager-approval",
+    "EventTimestamp": "2026-09-25T18:24:29.820Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "8fbdbf5573b18fae",
+    "EventTimestamp": "2026-09-25T18:24:29.820Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImM3NWMwN2I2LTg4ZWMtNGIzMC1hYzUyLTM5ZmNjNTM4OTM5ZCIsIm9wZXJhdGlvbklkIjoiOGZiZGJmNTU3M2IxOGZhZSIsInRva2VuIjoiOGFhZDI2NDktZWM4OC00ZTU0LWJjYmUtY2QxM2Q3NWRlNTZlIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "3c46a0407be60a1f",
+    "EventTimestamp": "2026-09-25T18:24:29.823Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "3c46a0407be60a1f",
+    "EventTimestamp": "2026-09-25T18:24:29.823Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 9,
+    "Id": "8fbdbf5573b18fae",
+    "EventTimestamp": "2026-09-25T18:24:29.824Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "approved"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-09-25T18:24:29.845Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-09-25T18:24:29.817Z",
+      "EndTimestamp": "2026-09-25T18:24:29.845Z",
+      "Error": {},
+      "RequestId": "d2e1821a-e922-40b0-9a5e-a8ba0106ad6d"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 11,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "manager-approval",
+    "EventTimestamp": "2026-09-25T18:24:29.849Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"approved\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "ship-order",
+    "EventTimestamp": "2026-09-25T18:24:29.849Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 13,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "ship-order",
+    "EventTimestamp": "2026-09-25T18:24:29.849Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"shipped-order-7\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 14,
+    "EventTimestamp": "2026-09-25T18:24:29.850Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-09-25T18:24:29.846Z",
+      "EndTimestamp": "2026-09-25T18:24:29.850Z",
+      "Error": {},
+      "RequestId": "c75e700f-0a21-47cb-bfb5-4ce5eea84094"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 15,
+    "Id": "948c7116-fc0a-45c4-9d85-e96a0823933b",
+    "EventTimestamp": "2026-09-25T18:24:29.850Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"reservation\":\"reserved-order-7\",\"approval\":\"approved\",\"shipment\":\"shipped-order-7\"}"
+      }
+    }
+  }
+]

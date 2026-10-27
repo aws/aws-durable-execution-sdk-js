@@ -86,10 +86,8 @@ export interface StepDetails {
  *
  * @public
  */
-export interface WireStepDetails extends Omit<
-  StepDetails,
-  "NextAttemptTimestamp"
-> {
+export interface WireStepDetails
+  extends Omit<StepDetails, "NextAttemptTimestamp"> {
   /** When the next retry attempt becomes eligible to run. */
   NextAttemptTimestamp?: WireTimestamp | undefined;
 }
@@ -192,10 +190,11 @@ export interface Operation {
  *
  * @public
  */
-export interface WireOperation extends Omit<
-  Operation,
-  "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"
-> {
+export interface WireOperation
+  extends Omit<
+    Operation,
+    "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"
+  > {
   /** When the operation started. */
   StartTimestamp: WireTimestamp | undefined;
   /** When the operation reached a terminal status, if it has. */
@@ -258,6 +257,8 @@ export interface ChainedInvokeOptions {
   FunctionName: string | undefined;
   /** Tenant the invoked execution should run under, when using tenant isolation. */
   TenantId?: string | undefined;
+  /** X-Ray trace header for the calling operation, when supplied by instrumentation. */
+  XAmznTraceId?: string | undefined;
 }
 
 /**

@@ -14,15 +14,26 @@ import {
   SimpleSpanProcessor,
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
+import { context, trace, propagation } from "@opentelemetry/api";
 import {
-  context,
-  trace,
-  propagation,
-  SpanStatusCode,
-} from "@opentelemetry/api";
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { InvocationOtelPlugin } from "../invocation-plugin";
-import { ProviderSource } from "../otel-plugin-config";
+  createInvocationOtelPluginFactory,
+  InvocationOtelPlugin,
+} from "../invocation-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): InvocationOtelPlugin {
+  return createInvocationOtelPluginFactory(config).createPlugin(info);
+}
+import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -104,8 +115,8 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     propagation.disable();
   });
 
-  it("uses the global provider when providerSource is GLOBAL", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+  it("uses the global provider by default", async () => {
+    const plugin = newPlugin();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -130,16 +141,27 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     // (matching ExecutionOtelPlugin and the Python/Java reference plugins).
     const workflowSpan = spans.find((s) => s.name === "Workflow");
     expect(workflowSpan).toBeDefined();
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
     expect(workflowSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
     );
     expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
       "SUCCEEDED",
     );
+    // With no propagated context and no ambient span, a synthetic execution
+    // root anchors the trace. Both the Workflow and Invocation spans parent
+    // onto it and share one execution trace.
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
     // The Invocation span stays invocation-rooted: it is NOT a child of the
-    // Workflow span. With no active parent span in this test it is a root.
-    expect(invocationSpan!.parentSpanContext).toBeUndefined();
+    // Workflow span (both are siblings under the synthetic execution root).
+    expect(invocationSpan!.parentSpanContext?.spanId).not.toBe(
+      workflowSpan!.spanContext().spanId,
+    );
     // Operation spans link to the Workflow span for execution correlation.
     expect(
       opSpan!.links.some(
@@ -148,24 +170,8 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     ).toBe(true);
   });
 
-  it("creates its own internal provider with providerSource AUTO_OTLP", async () => {
-    // With AUTO_OTLP the InvocationOtelPlugin creates its own provider (option 3).
-    // Spans will NOT appear in the globally registered exporter.
-    const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.AUTO_OTLP,
-    });
-
-    await plugin.onInvocationStart(makeInvocationInfo());
-    await plugin.onInvocationEnd(makeInvocationEndInfo());
-
-    // The global exporter should NOT have any spans since the plugin uses its own provider
-    const globalSpans = exporter.getFinishedSpans();
-    const invocationSpan = globalSpans.find((s) => s.name === "Invocation");
-    expect(invocationSpan).toBeUndefined();
-  });
-
-  it("exports operation spans via the global provider when providerSource is GLOBAL", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+  it("exports operation spans via the global provider", async () => {
+    const plugin = newPlugin();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -183,10 +189,13 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
   });
 
   it("supports multiple invocation lifecycles without leaking state", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+    // Two invocations, so one instance each out of the same factory.
+    const factory = createInvocationOtelPluginFactory({});
 
     // First invocation
-    await plugin.onInvocationStart(makeInvocationInfo());
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory.createPlugin(firstInfo);
+    await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart(
       makeOperationInfo({ id: "op-a", name: "step-a" }),
     );
@@ -199,16 +208,16 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     exporter.reset();
 
     // Second invocation
-    await plugin.onInvocationStart(
-      makeInvocationInfo({ executionArn: "arn:second" }),
-    );
-    await plugin.onOperationStart(
+    const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
+    const second = factory.createPlugin(secondInfo);
+    await second.onInvocationStart(secondInfo);
+    await second.onOperationStart(
       makeOperationInfo({ id: "op-b", name: "step-b" }),
     );
-    await plugin.onOperationEnd(
+    await second.onOperationEnd(
       makeOperationEndInfo({ id: "op-b", name: "step-b" }),
     );
-    await plugin.onInvocationEnd(
+    await second.onInvocationEnd(
       makeInvocationEndInfo({ executionArn: "arn:second" }),
     );
 
@@ -224,9 +233,11 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
   });
 
   it("does not shutdown the global provider on invocation end", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+    const factory = createInvocationOtelPluginFactory({});
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory.createPlugin(firstInfo);
 
-    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart(
       makeOperationInfo({ id: "op-1", name: "first-op", type: "STEP" }),
     );
@@ -238,16 +249,16 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     // If provider was shut down, creating another span would fail silently
     // Verify by running another invocation
     exporter.reset();
-    await plugin.onInvocationStart(
-      makeInvocationInfo({ executionArn: "arn:second" }),
-    );
-    await plugin.onOperationStart(
+    const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
+    const second = factory.createPlugin(secondInfo);
+    await second.onInvocationStart(secondInfo);
+    await second.onOperationStart(
       makeOperationInfo({ id: "op-2", name: "second-op", type: "STEP" }),
     );
-    await plugin.onOperationEnd(
+    await second.onOperationEnd(
       makeOperationEndInfo({ id: "op-2", name: "second-op", type: "STEP" }),
     );
-    await plugin.onInvocationEnd(
+    await second.onInvocationEnd(
       makeInvocationEndInfo({ executionArn: "arn:second" }),
     );
 
@@ -260,12 +271,17 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
 describe("InvocationOtelPlugin - custom instrumentationName", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
+  let tracerProviderFactory: TracerProviderFactory;
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
-    provider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
+    tracerProviderFactory = (createIdGenerator) => {
+      provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator: createIdGenerator(),
+      });
+      return provider;
+    };
   });
 
   afterEach(async () => {
@@ -277,7 +293,9 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
   });
 
   it("uses default instrumentationName when not specified", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.EXPLICIT, tracerProvider: provider });
+    const plugin = newPlugin({
+      tracerProviderFactory,
+    });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());
@@ -291,9 +309,8 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
   });
 
   it("uses custom instrumentationName when specified", async () => {
-    const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.EXPLICIT,
-      tracerProvider: provider,
+    const plugin = newPlugin({
+      tracerProviderFactory,
       instrumentationName: "my-custom-tracer",
     });
 
@@ -334,9 +351,8 @@ describe("InvocationOtelPlugin - forceFlush error handling", () => {
       forceFlush: jest.fn().mockRejectedValue(new Error("flush failed")),
     };
 
-    const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.EXPLICIT,
-      tracerProvider: failingProvider as any,
+    const plugin = newPlugin({
+      tracerProviderFactory: () => failingProvider as any,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());

@@ -5,6 +5,7 @@ import { Context } from "aws-lambda";
 import { DurableExecutionInvocationInput } from "./types";
 import { log } from "./utils/logger/logger";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
+import { TerminationReason } from "./termination-manager/types";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
@@ -92,7 +93,8 @@ describe("withDurableExecution Queue Completion", () => {
 
     // Mock termination promise to resolve immediately
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
-      reason: "TIMEOUT",
+      reason: TerminationReason.WAIT_SCHEDULED,
+      message: "Wait scheduled",
     });
 
     const wrappedHandler = withDurableExecution(mockHandler);

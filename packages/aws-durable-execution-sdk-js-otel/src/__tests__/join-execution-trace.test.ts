@@ -1,0 +1,769 @@
+import {
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+  NodeTracerProvider,
+  AlwaysOffSampler,
+  AlwaysOnSampler,
+} from "@opentelemetry/sdk-trace-node";
+import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
+import type {
+  InvocationInfo,
+  InvocationEndInfo,
+} from "@aws/durable-execution-sdk-js";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
+import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+import { w3cClientContextExtractor } from "../context-extractors";
+
+const TEST_ARN =
+  "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
+const TEST_START = new Date("2026-08-15T00:00:00Z");
+
+function makeInvocationInfo(
+  overrides?: Partial<InvocationInfo>,
+): InvocationInfo {
+  return {
+    requestId: "req-1",
+    executionArn: TEST_ARN,
+    isFirstInvocation: true,
+    executionInput: {},
+    operations: {},
+    updatedOperations: {},
+    executionStartTimestamp: TEST_START,
+    ...overrides,
+  };
+}
+
+function makeInvocationEndInfo(
+  overrides?: Partial<InvocationEndInfo>,
+): InvocationEndInfo {
+  return {
+    requestId: "req-1",
+    executionArn: TEST_ARN,
+    executionInput: {},
+    operations: {},
+    status: "SUCCEEDED" as any,
+    executionResult: undefined,
+    executionError: undefined,
+    executionStartTimestamp: TEST_START,
+    ...overrides,
+  };
+}
+
+describe("Execution trace joining", () => {
+  let exporter: InMemorySpanExporter;
+  let provider: NodeTracerProvider;
+
+  beforeEach(() => {
+    exporter = new InMemorySpanExporter();
+    provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+  });
+
+  afterEach(async () => {
+    await provider.shutdown();
+    exporter.reset();
+    trace.disable();
+    context.disable();
+    propagation.disable();
+  });
+
+  function spanByName(name: string): ReadableSpan | undefined {
+    return exporter.getFinishedSpans().find((s) => s.name === name);
+  }
+
+  // The plugin the SDK would build for one invocation: the factory called with
+  // that invocation's own info, before any hook fires.
+  describe.each([
+    [
+      "ExecutionOtelPlugin",
+      (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
+        createExecutionOtelPluginFactory(c).createPlugin(info),
+    ],
+    [
+      "InvocationOtelPlugin",
+      (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
+        createInvocationOtelPluginFactory(c).createPlugin(info),
+    ],
+  ] as const)("%s", (_name, makePlugin) => {
+    it("joins the propagated Root trace but anchors on a synthetic root when only a Root (no usable Parent) is propagated", async () => {
+      // The auto-instrumentation layer creates the ambient handler span before
+      // the plugin runs, on the SAME trace the durable backend propagated. The
+      // extractor reports that trace (Root, no usable Parent). Because there is
+      // no complete remote parent, the execution does NOT adopt the ambient span
+      // as its ancestor; it anchors on the deterministic synthetic root. It does
+      // still join the propagated Root trace, since that trace ID is canonical.
+      const ambient = provider.getTracer("adot").startSpan("LambdaHandler");
+      const ambientCtx = ambient.spanContext();
+      const plugin = makePlugin({
+        // Root matches the ambient trace; no Parent → synthetic-root path.
+        contextExtractor: () => ({
+          traceId: ambientCtx.traceId,
+        }),
+      });
+
+      await context.with(trace.setSpan(ROOT_CONTEXT, ambient), async () => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
+      });
+      ambient.end();
+
+      const workflow = spanByName("Workflow")!;
+      const invocation = spanByName("Invocation")!;
+      // The whole execution joins the propagated Root trace.
+      expect(workflow.spanContext().traceId).toBe(ambientCtx.traceId);
+      expect(invocation.spanContext().traceId).toBe(ambientCtx.traceId);
+      // The Workflow span is the execution ancestor: because there is no
+      // complete remote parent it anchors on the deterministic synthetic root,
+      // NOT the ambient span.
+      expect(workflow.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+      // Without a complete remote Parent, fallback mode makes the
+      // SDK-owned synthetic root the common parent of Workflow and Invocation.
+      expect(invocation.parentSpanContext?.spanId).toBe(
+        workflow.parentSpanContext?.spanId,
+      );
+      expect(invocation.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+
+      const syntheticRoot = exporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.name === "DurableExecutionRoot" &&
+            span.spanContext().spanId === workflow.parentSpanContext?.spanId,
+        );
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+      expect(syntheticRoot!.spanContext().traceId).toBe(ambientCtx.traceId);
+    });
+
+    it.each(["SUCCEEDED", "FAILED"] as const)(
+      "exports a connected synthetic root on terminal %s",
+      async (status) => {
+        const plugin = makePlugin({ contextExtractor: () => undefined });
+
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({
+            status: status as any,
+            executionError:
+              status === "FAILED"
+                ? new Error("expected test failure")
+                : undefined,
+          }),
+        );
+
+        const spans = exporter.getFinishedSpans();
+        const workflow = spans.find((span) => span.name === "Workflow")!;
+        const invocation = spans.find((span) => span.name === "Invocation")!;
+        const roots = spans.filter(
+          (span) => span.name === "DurableExecutionRoot",
+        );
+
+        expect(roots).toHaveLength(1);
+        expect(roots[0].parentSpanContext).toBeUndefined();
+        expect(workflow.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(invocation.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(workflow.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+        expect(invocation.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+      },
+    );
+
+    it("exports the first anchor and repeats it at terminal completion", async () => {
+      const plugin = makePlugin({ contextExtractor: () => undefined });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(1);
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "Workflow"),
+      ).toHaveLength(0);
+
+      const resumedInfo = makeInvocationInfo({
+        requestId: "req-2",
+        isFirstInvocation: false,
+      });
+      const resumed = makePlugin(
+        { contextExtractor: () => undefined },
+        resumedInfo,
+      );
+      await resumed.onInvocationStart(resumedInfo);
+      await resumed.onInvocationEnd(
+        makeInvocationEndInfo({
+          requestId: "req-2",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(2);
+    });
+
+    it("does not emit a stray synthetic root for explicit Sampled=0 fallback", async () => {
+      const dropExporter = new InMemorySpanExporter();
+      let dropProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          dropProvider = new NodeTracerProvider({
+            sampler: new AlwaysOnSampler(),
+            spanProcessors: [new SimpleSpanProcessor(dropExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return dropProvider;
+        },
+        contextExtractor: () => ({
+          traceId: "9".repeat(32),
+          sampling: "NOT_SAMPLED" as const,
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(dropExporter.getFinishedSpans()).toHaveLength(0);
+      await dropProvider?.shutdown();
+    });
+
+    it("keeps execution-owned synthetic roots unique across different resources when executions share a propagated Root", async () => {
+      const sharedTraceId = "8".repeat(32);
+      const targetArn = `${TEST_ARN}-target`;
+      const targetStart = new Date(TEST_START.getTime() + 60_000);
+      const firstExporter = new InMemorySpanExporter();
+      const secondExporter = new InMemorySpanExporter();
+      let firstProvider: NodeTracerProvider | undefined;
+      let secondProvider: NodeTracerProvider | undefined;
+
+      const first = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          firstProvider = new NodeTracerProvider({
+            resource: resourceFromAttributes({ "service.name": "caller" }),
+            spanProcessors: [new SimpleSpanProcessor(firstExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return firstProvider;
+        },
+        contextExtractor: () => ({
+          traceId: sharedTraceId,
+          sampling: "SAMPLED" as const,
+        }),
+      });
+      const second = makePlugin(
+        {
+          tracerProviderFactory: (createIdGenerator) => {
+            secondProvider = new NodeTracerProvider({
+              resource: resourceFromAttributes({ "service.name": "callee" }),
+              spanProcessors: [new SimpleSpanProcessor(secondExporter)],
+              idGenerator: createIdGenerator(),
+            });
+            return secondProvider;
+          },
+          contextExtractor: () => ({
+            traceId: sharedTraceId,
+            sampling: "SAMPLED" as const,
+          }),
+        },
+        makeInvocationInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+
+      await first.onInvocationStart(makeInvocationInfo());
+      await first.onInvocationEnd(makeInvocationEndInfo());
+      await second.onInvocationStart(
+        makeInvocationInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+      await second.onInvocationEnd(
+        makeInvocationEndInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+
+      const firstRoot = firstExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "DurableExecutionRoot");
+      const secondRoot = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "DurableExecutionRoot");
+      expect(firstRoot).toBeDefined();
+      expect(secondRoot).toBeDefined();
+      expect(firstRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(secondRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(firstRoot!.spanContext().spanId).not.toBe(
+        secondRoot!.spanContext().spanId,
+      );
+      expect(
+        new Set([
+          `${firstRoot!.spanContext().traceId}:${firstRoot!.spanContext().spanId}`,
+          `${secondRoot!.spanContext().traceId}:${secondRoot!.spanContext().spanId}`,
+        ]).size,
+      ).toBe(2);
+      expect(firstRoot!.startTime.join(":")).not.toBe(
+        secondRoot!.startTime.join(":"),
+      );
+      expect(firstRoot!.resource.attributes["service.name"]).toBe("caller");
+      expect(secondRoot!.resource.attributes["service.name"]).toBe("callee");
+
+      const firstWorkflow = firstExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      const secondWorkflow = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      expect(firstWorkflow?.parentSpanContext?.spanId).toBe(
+        firstRoot!.spanContext().spanId,
+      );
+      expect(secondWorkflow?.parentSpanContext?.spanId).toBe(
+        secondRoot!.spanContext().spanId,
+      );
+
+      await firstProvider?.shutdown();
+      await secondProvider?.shutdown();
+    });
+
+    it("does NOT parent Invocation onto a same-trace ambient span whose sampled bit differs from the execution ancestor", async () => {
+      // Build an UNSAMPLED ambient span (AlwaysOff), then propagate an explicit
+      // Sampled=1 on the SAME trace so the execution ancestor IS sampled. The
+      // ambient span shares the canonical trace but its sampled bit differs.
+      // Adopting it would make the (sampled, exported) Invocation span parent
+      // onto a dropped ambient span; the plugin must instead fall back to the
+      // execution ancestor, which carries the authoritative sampled decision.
+      const unsampledProvider = new NodeTracerProvider({
+        sampler: new AlwaysOffSampler(),
+      });
+      const ambient = unsampledProvider
+        .getTracer("adot")
+        .startSpan("LambdaHandler");
+      const ambientCtx = ambient.spanContext();
+      // Sanity: the ambient span is NOT sampled.
+      expect(ambientCtx.traceFlags & 1).toBe(0);
+
+      const plugin = makePlugin({
+        // Same trace as the ambient span, but an explicit Sampled=1 decision.
+        contextExtractor: () => ({
+          traceId: ambientCtx.traceId,
+          sampling: "SAMPLED" as const,
+        }),
+      });
+
+      await context.with(trace.setSpan(ROOT_CONTEXT, ambient), async () => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
+      });
+      ambient.end();
+      await unsampledProvider.shutdown();
+
+      const invocation = spanByName("Invocation")!;
+      expect(invocation).toBeDefined();
+      // The execution joins the ambient span's trace...
+      expect(invocation.spanContext().traceId).toBe(ambientCtx.traceId);
+      // ...but the sampled bits differ, so the ambient span is rejected as the
+      // parent; the Invocation span parents onto the execution ancestor.
+      expect(invocation.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+    });
+
+    it("ignores an uncorroborated ambient span (no propagation) and anchors on the stable synthetic root", async () => {
+      // Reviewer case: with NO propagated context, a fresh ambient trace must
+      // NOT anchor the execution (it is not stable across reinvocations). The
+      // execution anchors on the deterministic ARN-derived synthetic root.
+      const plugin = makePlugin({ contextExtractor: () => undefined });
+      const ambient = provider.getTracer("adot").startSpan("LambdaHandler");
+      const ambientCtx = ambient.spanContext();
+
+      await context.with(trace.setSpan(ROOT_CONTEXT, ambient), async () => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
+      });
+      ambient.end();
+
+      const workflow = spanByName("Workflow")!;
+      const invocation = spanByName("Invocation")!;
+      // The execution does NOT join the uncorroborated ambient trace.
+      expect(workflow.spanContext().traceId).not.toBe(ambientCtx.traceId);
+      expect(workflow.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+      // Workflow and Invocation share the deterministic execution trace and its
+      // synthetic root.
+      expect(workflow.spanContext().traceId).toBe(
+        invocation.spanContext().traceId,
+      );
+      expect(workflow.parentSpanContext?.spanId).toBe(
+        invocation.parentSpanContext?.spanId,
+      );
+    });
+
+    it("rejects an ambient span from another trace and uses a synthetic root", async () => {
+      // A remote parent is propagated on trace A while an ambient span from an
+      // unrelated trace B is active. The plugin must not adopt trace B; it uses
+      // the propagated remote parent on trace A.
+      const remoteTraceId = "a".repeat(32);
+      const remoteParentId = "b".repeat(16);
+      const plugin = makePlugin({
+        contextExtractor: () => ({
+          traceId: remoteTraceId,
+          parentSpanId: remoteParentId,
+          sampling: "SAMPLED",
+        }),
+      });
+      // Ambient span from a DIFFERENT trace.
+      const unrelated = provider.getTracer("other").startSpan("Unrelated");
+      const unrelatedCtx = unrelated.spanContext();
+      expect(unrelatedCtx.traceId).not.toBe(remoteTraceId);
+
+      await context.with(trace.setSpan(ROOT_CONTEXT, unrelated), async () => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
+      });
+      unrelated.end();
+
+      const workflow = spanByName("Workflow")!;
+      const invocation = spanByName("Invocation")!;
+      // Everything joins the propagated remote trace, not the unrelated ambient.
+      expect(workflow.spanContext().traceId).toBe(remoteTraceId);
+      expect(invocation.spanContext().traceId).toBe(remoteTraceId);
+      expect(workflow.spanContext().traceId).not.toBe(unrelatedCtx.traceId);
+      // Workflow parents onto the remote parent.
+      expect(workflow.parentSpanContext?.spanId).toBe(remoteParentId);
+      // Invocation does not adopt the unrelated ambient span.
+      expect(invocation.parentSpanContext?.spanId).not.toBe(
+        unrelatedCtx.spanId,
+      );
+    });
+
+    it("propagates an explicit Sampled=0 decision onto the execution trace", async () => {
+      // With Sampled=0 propagated and a parent-based sampler, the execution
+      // trace is dropped (not exported), confirming the decision is honored
+      // rather than hard-coded to sampled.
+      const dropExporter = new InMemorySpanExporter();
+      const dropProvider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(dropExporter)],
+      });
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          const p = new NodeTracerProvider({
+            spanProcessors: [new SimpleSpanProcessor(dropExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return p;
+        },
+        contextExtractor: () => ({
+          traceId: "c".repeat(32),
+          parentSpanId: "d".repeat(16),
+          sampling: "NOT_SAMPLED",
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      await dropProvider.shutdown();
+
+      // A NodeTracerProvider defaults to a parent-based AlwaysOn sampler, so an
+      // explicitly not-sampled remote parent drops the whole execution trace.
+      expect(dropExporter.getFinishedSpans()).toHaveLength(0);
+    });
+
+    it("enforces explicit Sampled=1 even when a direct AlwaysOff sampler is configured", async () => {
+      const forcedExporter = new InMemorySpanExporter();
+      let forcedProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          forcedProvider = new NodeTracerProvider({
+            sampler: new AlwaysOffSampler(),
+            spanProcessors: [new SimpleSpanProcessor(forcedExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return forcedProvider;
+        },
+        contextExtractor: () => ({
+          traceId: "e".repeat(32),
+          parentSpanId: "f".repeat(16),
+          sampling: "SAMPLED",
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(forcedExporter.getFinishedSpans().length).toBeGreaterThan(0);
+      await forcedProvider?.shutdown();
+    });
+
+    it("enforces explicit Sampled=0 even when a direct AlwaysOn sampler is configured", async () => {
+      const forcedExporter = new InMemorySpanExporter();
+      let forcedProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          forcedProvider = new NodeTracerProvider({
+            sampler: new AlwaysOnSampler(),
+            spanProcessors: [new SimpleSpanProcessor(forcedExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return forcedProvider;
+        },
+        contextExtractor: () => ({
+          traceId: "1".repeat(32),
+          parentSpanId: "2".repeat(16),
+          sampling: "NOT_SAMPLED",
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(forcedExporter.getFinishedSpans()).toHaveLength(0);
+      await forcedProvider?.shutdown();
+    });
+
+    it("preserves normal tracing when an opaque forwarding tracer hides the sampler", async () => {
+      const opaqueExporter = new InMemorySpanExporter();
+      let opaqueProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          opaqueProvider = new NodeTracerProvider({
+            sampler: new AlwaysOnSampler(),
+            spanProcessors: [new SimpleSpanProcessor(opaqueExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return {
+            getTracer: (
+              ...args: Parameters<NodeTracerProvider["getTracer"]>
+            ) => {
+              const realTracer = opaqueProvider!.getTracer(...args);
+              return {
+                startSpan: realTracer.startSpan.bind(realTracer),
+                startActiveSpan: realTracer.startActiveSpan.bind(realTracer),
+              };
+            },
+            forceFlush: () => opaqueProvider!.forceFlush(),
+          };
+        },
+        contextExtractor: () => ({
+          traceId: "3".repeat(32),
+          parentSpanId: "4".repeat(16),
+          sampling: "NOT_SAMPLED",
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(opaqueExporter.getFinishedSpans().length).toBeGreaterThan(0);
+
+      await opaqueProvider?.shutdown();
+    });
+
+    it("uses w3cClientContextExtractor as a valid remote parent", async () => {
+      const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+      const parentSpanId = "00f067aa0ba902b7";
+      const plugin = makePlugin({
+        contextExtractor: w3cClientContextExtractor,
+      });
+      const invocationInfo = makeInvocationInfo({
+        context: {
+          clientContext: {
+            custom: {
+              traceparent: `00-${traceId}-${parentSpanId}-01`,
+            },
+          },
+        },
+      } as any);
+
+      await plugin.onInvocationStart(invocationInfo);
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const workflow = spanByName("Workflow")!;
+      const invocation = spanByName("Invocation")!;
+      expect(workflow).toBeDefined();
+      expect(invocation).toBeDefined();
+      expect(workflow.spanContext().traceId).toBe(traceId);
+      expect(invocation.spanContext().traceId).toBe(traceId);
+      expect(workflow.parentSpanContext?.spanId).toBe(parentSpanId);
+    });
+  });
+});
+
+describe("Cross-invocation operation link stitching", () => {
+  let exporter: InMemorySpanExporter;
+  let provider: NodeTracerProvider;
+
+  beforeEach(() => {
+    exporter = new InMemorySpanExporter();
+    provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+  });
+
+  afterEach(async () => {
+    await provider.shutdown();
+    exporter.reset();
+    trace.disable();
+    context.disable();
+    propagation.disable();
+  });
+
+  it("stitches a wait continuation back to its initial operation span across invocations (InvocationOtelPlugin)", async () => {
+    // Two invocations of one execution, so two instances out of one factory —
+    // the stitching below has to survive the instance being dropped in between,
+    // which is what the deterministic operation span ID is for.
+    const factory = createInvocationOtelPluginFactory({
+      contextExtractor: () => undefined,
+    });
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory.createPlugin(firstInfo);
+
+    // Invocation 1: the wait operation starts (initial logical span) and the
+    // invocation suspends (PENDING) — the initial operation span is ended so it
+    // exports.
+    await plugin.onInvocationStart(firstInfo);
+    await plugin.onOperationStart({
+      id: "op-wait",
+      type: "WAIT",
+      name: "pause",
+      isReplay: false,
+    });
+    await plugin.onInvocationEnd(
+      makeInvocationEndInfo({ status: "PENDING" as any }),
+    );
+
+    const initialWaitSpan = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === "pause");
+    expect(initialWaitSpan).toBeDefined();
+    const executionTraceId = initialWaitSpan!.spanContext().traceId;
+    // Its span ID is the deterministic operation span ID on the execution trace.
+    expect(initialWaitSpan!.spanContext().spanId).toBe(
+      deriveSpanIdFromOperationId("op-wait", TEST_ARN),
+    );
+
+    exporter.reset();
+
+    // Invocation 2: the wait completes; a continuation span is emitted that
+    // links back to the initial operation span on the same execution trace.
+    const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+    const resumedPlugin = factory.createPlugin(secondInfo);
+    await resumedPlugin.onInvocationStart(secondInfo);
+    await resumedPlugin.onOperationEnd({
+      id: "op-wait",
+      type: "WAIT",
+      name: "pause",
+      isReplay: false,
+      status: "SUCCEEDED" as any,
+    });
+    await resumedPlugin.onInvocationEnd(
+      makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+    );
+
+    const continuation = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === "pause");
+    const workflow = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === "Workflow");
+    expect(continuation).toBeDefined();
+    expect(workflow).toBeDefined();
+    // Same execution trace across both invocations.
+    expect(continuation!.spanContext().traceId).toBe(executionTraceId);
+    // Links are ordered [initial operation span, Workflow span]: links[0] is the
+    // deterministic operation span on the execution trace, links[1] the Workflow.
+    expect(continuation!.links).toHaveLength(2);
+    expect(continuation!.links[0].context.spanId).toBe(
+      deriveSpanIdFromOperationId("op-wait", TEST_ARN),
+    );
+    expect(continuation!.links[0].context.traceId).toBe(executionTraceId);
+    expect(continuation!.links[1].context.spanId).toBe(
+      workflow!.spanContext().spanId,
+    );
+  });
+
+  it("keeps continuation links on the extracted trace when a stable custom extractor is used across invocations", async () => {
+    // A valid extracted trace ID is adopted as the canonical execution trace.
+    // A well-behaved extractor returns the same execution context on every
+    // invocation, so the continuation segment stays on that adopted trace and
+    // its initial-operation link is anchored on it.
+    const extractedTraceId = "5".repeat(32);
+    // One factory, one instance per invocation of the same execution.
+    const factory = createInvocationOtelPluginFactory({
+      contextExtractor: () => ({
+        traceId: extractedTraceId,
+        parentSpanId: "6".repeat(16),
+        sampling: "SAMPLED" as const,
+      }),
+    });
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory.createPlugin(firstInfo);
+
+    await plugin.onInvocationStart(firstInfo);
+    await plugin.onOperationStart({
+      id: "op-stable-extractor",
+      type: "WAIT",
+      name: "pause-stable-extractor",
+      isReplay: false,
+    });
+    await plugin.onInvocationEnd(
+      makeInvocationEndInfo({ status: "PENDING" as any }),
+    );
+
+    const initialWaitSpan = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === "pause-stable-extractor");
+    expect(initialWaitSpan).toBeDefined();
+    const executionTraceId = initialWaitSpan!.spanContext().traceId;
+    // The valid extracted trace ID is adopted as the execution trace.
+    expect(executionTraceId).toBe(extractedTraceId);
+
+    exporter.reset();
+
+    const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+    const resumedPlugin = factory.createPlugin(secondInfo);
+    await resumedPlugin.onInvocationStart(secondInfo);
+    await resumedPlugin.onOperationEnd({
+      id: "op-stable-extractor",
+      type: "WAIT",
+      name: "pause-stable-extractor",
+      isReplay: false,
+      status: "SUCCEEDED" as any,
+    });
+    await resumedPlugin.onInvocationEnd(
+      makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+    );
+
+    const continuation = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === "pause-stable-extractor");
+    expect(continuation).toBeDefined();
+    expect(continuation!.spanContext().traceId).toBe(executionTraceId);
+    expect(continuation!.links[0].context.traceId).toBe(executionTraceId);
+    expect(continuation!.links[0].context.spanId).toBe(
+      deriveSpanIdFromOperationId("op-stable-extractor", TEST_ARN),
+    );
+  });
+});

@@ -14,6 +14,7 @@ import {
   encodeCheckpointToken,
 } from "../utils/checkpoint-token";
 import { validateCheckpointUpdates } from "../validators/checkpoint-durable-execution-input-validator";
+import { normalizeUpdateIntegers } from "../validators/normalize-update-integers";
 import { randomUUID } from "crypto";
 import { ExecutionManager } from "../storage/execution-manager";
 import { CheckpointOperation } from "../storage/checkpoint-manager";
@@ -40,6 +41,31 @@ export async function processPollCheckpointData(
 
   return {
     operations,
+  };
+}
+
+/**
+ * Returns the checkpoint data no poll has picked up yet, without waiting for more. A poll
+ * still waiting is released with no data.
+ *
+ * Called once the execution has finished, so the test runner holds every update without
+ * waiting an arbitrary time for the long poll to deliver them.
+ */
+export function processDrainCheckpointData(
+  executionIdParam: string,
+  executionManager: ExecutionManager,
+): { operations: CheckpointOperation[] } {
+  const executionId = createExecutionId(executionIdParam);
+
+  const checkpointStorage =
+    executionManager.getCheckpointsByExecution(executionId);
+
+  if (!checkpointStorage) {
+    throw new Error("Execution not found");
+  }
+
+  return {
+    operations: checkpointStorage.drainPendingCheckpointUpdates(),
   };
 }
 
@@ -107,14 +133,20 @@ export function processCheckpointDurableExecution(
 
   validateCheckpointUpdates(updates, storage.getAllOperationData());
 
-  storage.registerUpdates(updates);
+  // The service applies the integer that it reads for each integer member.
+  // So the local server stores the same integers.
+  storage.registerUpdates(updates.map(normalizeUpdateIntegers));
 
   const output: CheckpointDurableExecutionResponse = {
-    CheckpointToken: encodeCheckpointToken({
-      executionId: data.executionId,
-      invocationId: data.invocationId,
-      token: randomUUID(),
-    }),
+    // A paused execution still accepts this checkpoint: its updates were registered above.
+    // Withholding the token only ends the invocation's ability to checkpoint again.
+    CheckpointToken: storage.isPaused()
+      ? undefined
+      : encodeCheckpointToken({
+          executionId: data.executionId,
+          invocationId: data.invocationId,
+          token: randomUUID(),
+        }),
     NewExecutionState: {
       Operations: storage.getDirtyOperations(),
       NextMarker: undefined,

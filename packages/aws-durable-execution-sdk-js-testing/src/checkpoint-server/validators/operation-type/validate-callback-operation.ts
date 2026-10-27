@@ -1,17 +1,13 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   Operation,
   OperationAction,
-  OperationStatus,
   OperationUpdate,
 } from "@aws/durable-execution-sdk-js";
 
-const allowedStatusToCancel: (OperationStatus | undefined)[] = [
-  OperationStatus.STARTED,
-];
-
 /**
  * Validates a CALLBACK operation update against the current operation state.
+ * A checkpoint can only start a CALLBACK. The service completes it.
  *
  * @param update - The operation update to validate
  * @param operation - The current operation state (if it exists)
@@ -24,25 +20,12 @@ export function validateCallbackOperation(
   switch (update.Action) {
     case OperationAction.START:
       if (operation) {
-        throw new InvalidParameterValueException({
-          message: "Cannot start a CALLBACK that already exists.",
-          $metadata: {},
-        });
-      }
-      break;
-    case OperationAction.CANCEL:
-      if (!operation || !allowedStatusToCancel.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message:
-            "Cannot cancel a CALLBACK that does not exist or has already completed.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot start a CALLBACK operation that already exists.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid CALLBACK action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue("Invalid action for CALLBACK operation.");
   }
 }

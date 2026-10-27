@@ -103,6 +103,7 @@ describe("LocalDurableTestRunner", () => {
     );
   });
 
+  // biome-ignore lint/suspicious/noDuplicateTestHooks: GENUINE DEFECT, not stylistic -- two beforeEach hooks in one describe run in declaration order, which is easy to misread and to break by reordering. Should be merged; tracked as follow-up rather than changing test setup inside a toolchain migration.
   beforeEach(() => {
     delete process.env.DURABLE_LOCAL_RUNNER_REGION;
     delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;

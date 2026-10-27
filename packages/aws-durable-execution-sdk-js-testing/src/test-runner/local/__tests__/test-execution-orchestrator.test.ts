@@ -22,7 +22,7 @@ import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoi
 import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
-import { InstalledClock } from "@sinonjs/fake-timers";
+import { Clock } from "@sinonjs/fake-timers";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 // Mock dependencies
@@ -155,6 +155,8 @@ describe("TestExecutionOrchestrator", () => {
     mockOperationStorage.populateOperations = jest.fn();
 
     checkpointApi = {
+      pauseExecution: jest.fn().mockResolvedValue(undefined),
+      resumeExecution: jest.fn().mockResolvedValue(undefined),
       startDurableExecution: jest.fn().mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,
@@ -163,6 +165,7 @@ describe("TestExecutionOrchestrator", () => {
         updatedOperationIds: [],
       }),
       pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
+      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
       updateCheckpointData: jest.fn().mockResolvedValue(undefined),
       startInvocation: jest.fn().mockResolvedValue({
         checkpointToken: createCheckpointToken("new-token"),
@@ -219,7 +222,11 @@ describe("TestExecutionOrchestrator", () => {
     status = OperationStatus.SUCCEEDED,
     result = "",
     error,
-  }: { status?: OperationStatus; result?: string; error?: ErrorObject } = {}): {
+  }: {
+    status?: OperationStatus;
+    result?: string;
+    error?: ErrorObject;
+  } = {}): {
     operations: CheckpointOperation[];
   } {
     return {
@@ -694,8 +701,7 @@ describe("TestExecutionOrchestrator", () => {
       );
     });
 
-    it("should handle non-SUCCEEDED/FAILED status responses", async () => {
-      // Mock a never-resolving polling to simulate PENDING status
+    it("should reject PENDING when no operation can resume the execution", async () => {
       (checkpointApi.pollCheckpointData as jest.Mock).mockReturnValue(
         nonResolvingPromise,
       );
@@ -706,11 +712,13 @@ describe("TestExecutionOrchestrator", () => {
 
       mockInvoke.mockResolvedValue(pendingResult);
 
-      const executePromise = orchestrator.executeHandler();
-
-      // Give some time for the handler to be invoked
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
+      await expect(orchestrator.executeHandler()).rejects.toEqual({
+        error: {
+          ErrorType: "InvalidParameterValueException",
+          ErrorMessage:
+            "Cannot return PENDING status with no pending operations.",
+        },
+        status: "FAILED",
       });
 
       expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
@@ -719,19 +727,6 @@ describe("TestExecutionOrchestrator", () => {
         operations: [mockOperationEvents[0].operation],
         updatedOperationIds: [],
       });
-
-      // The promise should not resolve immediately for PENDING status
-      const timeoutSymbol = Symbol("timeout");
-      const raceResult = await Promise.race([
-        executePromise,
-        new Promise((resolve) => {
-          setTimeout(() => {
-            resolve(timeoutSymbol);
-          }, 50);
-        }),
-      ]);
-
-      expect(raceResult).toBe(timeoutSymbol);
     });
 
     it("should handle AbortError gracefully during polling", async () => {
@@ -739,7 +734,6 @@ describe("TestExecutionOrchestrator", () => {
       abortError.name = "AbortError";
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw abortError;
         },
@@ -754,7 +748,6 @@ describe("TestExecutionOrchestrator", () => {
     it("should propagate non-AbortError polling errors", async () => {
       const pollingError = new Error("Polling failed");
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw pollingError;
         },
@@ -769,7 +762,6 @@ describe("TestExecutionOrchestrator", () => {
       let abortSignal: AbortSignal | undefined;
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
           return { operations: [] };
@@ -786,7 +778,6 @@ describe("TestExecutionOrchestrator", () => {
 
       // Mock polling to capture the abort signal
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
           return { operations: [] };
@@ -819,7 +810,6 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw errorWithoutName;
         },
@@ -841,7 +831,6 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw errorWithNumberName;
         },
@@ -960,7 +949,7 @@ describe("TestExecutionOrchestrator", () => {
         mockFunctionStorage,
         {
           enabled: true,
-          fakeClock: fakeClock as unknown as InstalledClock,
+          fakeClock: fakeClock as unknown as Clock,
         },
       );
 
@@ -1003,7 +992,6 @@ describe("TestExecutionOrchestrator", () => {
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
 
-      expect(fakeClock.countTimers).toHaveBeenCalledTimes(1);
       expect(fakeClock.tick).toHaveBeenCalledTimes(1);
 
       const [tickMs] = fakeClock.tick.mock.lastCall;
@@ -1719,14 +1707,15 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       const executePromise = orchestrator.executeHandler();
+      const rejection = expect(executePromise).rejects.toThrow(
+        "Failed to start invocation",
+      );
 
       await new Promise((resolve) => setImmediate(resolve));
 
       resolvePolling!();
 
-      await expect(executePromise).rejects.toThrow(
-        "Failed to start invocation",
-      );
+      await rejection;
 
       // Verify startInvocation was called
       expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
@@ -1908,14 +1897,13 @@ describe("TestExecutionOrchestrator", () => {
         });
 
       const executePromise = orchestrator.executeHandler();
-
-      // Queue up advancing timers
-      void jest.advanceTimersByTimeAsync(5000);
-
-      // Start execution
-      await expect(executePromise).rejects.toThrow(
+      const rejection = expect(executePromise).rejects.toThrow(
         "Failed to update checkpoint data",
       );
+
+      await jest.advanceTimersByTimeAsync(5000);
+
+      await rejection;
 
       // Only one invocation should have occurred in the whole execution
       expect(mockInvoke).toHaveBeenCalledTimes(1);
@@ -1956,14 +1944,15 @@ describe("TestExecutionOrchestrator", () => {
         });
 
       const executePromise = orchestrator.executeHandler();
+      const rejection = expect(executePromise).rejects.toThrow(
+        "Failed to start invocation",
+      );
 
       // Queue up advancing timers
       await jest.advanceTimersByTimeAsync(5000);
 
       // Start execution
-      await expect(executePromise).rejects.toThrow(
-        "Failed to start invocation",
-      );
+      await rejection;
 
       // Only one invocation should have occurred in the whole execution
       expect(mockInvoke).toHaveBeenCalledTimes(1);

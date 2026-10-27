@@ -408,7 +408,6 @@ describe("FunctionStorage", () => {
       const mockError = "Non-Error exception";
 
       mockNonDurableHandler.mockImplementation(() => {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw mockError;
       });
 

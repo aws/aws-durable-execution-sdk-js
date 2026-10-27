@@ -1,7 +1,10 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { DurableExecutionMode } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import {
+  runWithContext,
+  runWithRootContext,
+} from "../../utils/context-tracker/context-tracker";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 describe("DurableContext Composed Tests", () => {
@@ -192,6 +195,147 @@ describe("DurableContext Composed Tests", () => {
           undefined,
           DurableExecutionMode.ExecutionMode,
           "root-op", // operation name should be ignored for root
+        );
+      });
+
+      it("should use the execution identity of the active context, not of the context that created the logging context", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+        const otherExecution = {
+          executionArn: `${executionContext.durableExecutionArn}-other`,
+          requestId: "other-request",
+          tenantId: "other-tenant",
+        };
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(otherExecution, () =>
+          runWithContext("1", "root", () => {
+            expect(loggingContext.getDurableLogData()).toEqual({
+              executionArn: otherExecution.executionArn,
+              requestId: otherExecution.requestId,
+              tenantId: otherExecution.tenantId,
+              operationId: hashId("1"),
+            });
+          }),
+        );
+      });
+
+      it("should use the context's own execution identity when the active context records none", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithContext("1", undefined, () => {
+          expect(loggingContext.getDurableLogData()).toEqual({
+            executionArn: executionContext.durableExecutionArn,
+            requestId: executionContext.requestId,
+            tenantId: executionContext.tenantId,
+            operationId: hashId("1"),
+          });
+        });
+      });
+
+      it("should return the plugin log fields", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "trace-1" }) },
+        });
+
+        expect(context.getDurableLoggingContext().getLogEnrichment?.()).toEqual(
+          { traceId: "trace-1" },
+        );
+      });
+
+      it("should read the plugin log fields on every call", () => {
+        let spanId = "span-1";
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ spanId }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        expect(loggingContext.getLogEnrichment?.()).toEqual({
+          spanId: "span-1",
+        });
+        spanId = "span-2";
+        expect(loggingContext.getLogEnrichment?.()).toEqual({
+          spanId: "span-2",
+        });
+      });
+
+      it("should return undefined when a plugin throws", () => {
+        const { context } = createTestDurableContext({
+          plugin: {
+            enrichLogContext: () => {
+              throw new Error("plugin failed");
+            },
+          },
+        });
+
+        expect(
+          context.getDurableLoggingContext().getLogEnrichment?.(),
+        ).toBeUndefined();
+      });
+
+      it("should return undefined when no plugin adds fields", () => {
+        const { context } = createTestDurableContext();
+
+        expect(
+          context.getDurableLoggingContext().getLogEnrichment?.(),
+        ).toBeUndefined();
+      });
+
+      it("should use the plugins of the execution that the active context records", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "captured" }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          {
+            executionArn: "arn:other",
+            requestId: "other-request",
+            enrichLogContext: () => ({ traceId: "active" }),
+          },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toEqual({
+              traceId: "active",
+            });
+          },
+        );
+      });
+
+      it("should return undefined when the active execution has no plugin fields, even if this context's plugin has some", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "captured" }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          { executionArn: "arn:other", requestId: "other-request" },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toBeUndefined();
+          },
+        );
+      });
+
+      it("should return undefined when the active execution's plugin throws", () => {
+        const { context } = createTestDurableContext();
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          {
+            executionArn: "arn:other",
+            requestId: "other-request",
+            enrichLogContext: () => {
+              throw new Error("plugin failed");
+            },
+          },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toBeUndefined();
+          },
         );
       });
 

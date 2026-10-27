@@ -1,0 +1,352 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "787dc13b-b0b0-35de-acc3-c4fa2fd951db",
+    "Name": "54d2a480-793b-4565-9521-766ed1fc324f",
+    "EventTimestamp": "2026-10-05T18:20:29.341Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"key\":\"0ce1a6c6-6fd5-4379-ad46-d5d33f89d94c\"}",
+        "Truncated": false
+      },
+      "ExecutionTimeout": 900
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MicrovmSession",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "file-session",
+    "EventTimestamp": "2026-10-05T18:20:31.334Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmSessionId",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "file-session.session",
+    "EventTimestamp": "2026-10-05T18:20:31.334Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmSessionId",
+    "EventId": 4,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "file-session.session",
+    "EventTimestamp": "2026-10-05T18:20:31.334Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"2d5dee6a-d54f-4d33-914c-05318e67fc8e\"",
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmLaunch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "file-session.launch",
+    "EventTimestamp": "2026-10-05T18:20:31.840Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmLaunch",
+    "EventId": 6,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "file-session.launch",
+    "EventTimestamp": "2026-10-05T18:20:32.183Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"endpoint\":\"52d086a5-e2bf-f8be-a260-3cc52cc07d12.lambda-microvm.us-east-1.on.aws\",\"delivery\":\"http\"}",
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MicrovmSessionJob",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "write",
+    "EventTimestamp": "2026-10-05T18:20:32.320Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "MicrovmCallback",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "write.callback",
+    "EventTimestamp": "2026-10-05T18:20:32.320Z",
+    "ParentId": "13cee27a2bd93915",
+    "CallbackStartedDetails": {
+      "CallbackId": "Ab9hZXizYXJuOmF3czpsYW1iZGE6dXMtZWFzdC0xOjczMDc1ODc0NTA3NzpmdW5jdGlvbjpNaWNyb1ZNU2Vzc2lvbi0yMngtTm9kZUpTLVZlcmlmeTokTEFURVNUL2R1cmFibGUtZXhlY3V0aW9uLzU0ZDJhNDgwLTc5M2ItNDU2NS05NTIxLTc2NmVkMWZjMzI0Zi83ODdkYzEzYi1iMGIwLTM1ZGUtYWNjMy1jNGZhMmZkOTUxZGJhaXgkMTIzMzRiNTMtMTM0ZC00YmY5LTg4NDItYjNiYjNhODk2NWE4YXJ4LCRMQVRFU1Q6Nzg3ZGMxM2ItYjBiMC0zNWRlLWFjYzMtYzRmYTJmZDk1MWRi/w",
+      "HeartbeatTimeout": 30,
+      "Timeout": 300
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmRequest",
+    "EventId": 9,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "write.request",
+    "EventTimestamp": "2026-10-05T18:20:32.479Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmRequest",
+    "EventId": 10,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "write.request",
+    "EventTimestamp": "2026-10-05T18:20:34.599Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-10-05T18:20:34.751Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-05T18:20:29.395Z",
+      "EndTimestamp": "2026-10-05T18:20:34.743Z",
+      "RequestId": "f22b4c58-eef0-44b0-9a93-b22ec3339169"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "MicrovmCallback",
+    "EventId": 12,
+    "Id": "b425e0c75591aa8f",
+    "Name": "write.callback",
+    "EventTimestamp": "2026-10-05T18:20:36.041Z",
+    "ParentId": "13cee27a2bd93915",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "pause",
+    "EventTimestamp": "2026-10-05T18:20:36.161Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 5,
+      "ScheduledEndTimestamp": "2026-10-05T18:20:41.161Z"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MicrovmSessionJob",
+    "EventId": 13,
+    "Id": "13cee27a2bd93915",
+    "Name": "write",
+    "EventTimestamp": "2026-10-05T18:20:36.161Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2026-10-05T18:20:36.237Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-05T18:20:36.085Z",
+      "EndTimestamp": "2026-10-05T18:20:36.223Z",
+      "RequestId": "75bf5b70-d823-46ba-8206-22792933bf1a"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 16,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "pause",
+    "EventTimestamp": "2026-10-05T18:20:41.161Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 5
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MicrovmSessionJob",
+    "EventId": 17,
+    "Id": "12426c956d1bc501",
+    "Name": "read",
+    "EventTimestamp": "2026-10-05T18:20:41.318Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "MicrovmCallback",
+    "EventId": 18,
+    "Id": "0f42756e5788f9b0",
+    "Name": "read.callback",
+    "EventTimestamp": "2026-10-05T18:20:41.318Z",
+    "ParentId": "12426c956d1bc501",
+    "CallbackStartedDetails": {
+      "CallbackId": "Ab9hZXizYXJuOmF3czpsYW1iZGE6dXMtZWFzdC0xOjczMDc1ODc0NTA3NzpmdW5jdGlvbjpNaWNyb1ZNU2Vzc2lvbi0yMngtTm9kZUpTLVZlcmlmeTokTEFURVNUL2R1cmFibGUtZXhlY3V0aW9uLzU0ZDJhNDgwLTc5M2ItNDU2NS05NTIxLTc2NmVkMWZjMzI0Zi83ODdkYzEzYi1iMGIwLTM1ZGUtYWNjMy1jNGZhMmZkOTUxZGJhaXgkOWYzNDU5YzAtYjUzYS00NjY4LTlmM2EtN2NjMTJlNTFiNzE0YXJ4LCRMQVRFU1Q6Nzg3ZGMxM2ItYjBiMC0zNWRlLWFjYzMtYzRmYTJmZDk1MWRi/w",
+      "HeartbeatTimeout": 30,
+      "Timeout": 300
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmRequest",
+    "EventId": 19,
+    "Id": "79cef6701281790d",
+    "Name": "read.request",
+    "EventTimestamp": "2026-10-05T18:20:41.546Z",
+    "ParentId": "12426c956d1bc501",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "MicrovmCallback",
+    "EventId": 20,
+    "Id": "0f42756e5788f9b0",
+    "Name": "read.callback",
+    "EventTimestamp": "2026-10-05T18:20:41.780Z",
+    "ParentId": "12426c956d1bc501",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"value\":\"written-by-0ce1a6c6-6fd5-4379-ad46-d5d33f89d94c\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmRequest",
+    "EventId": 21,
+    "Id": "79cef6701281790d",
+    "Name": "read.request",
+    "EventTimestamp": "2026-10-05T18:20:41.820Z",
+    "ParentId": "12426c956d1bc501",
+    "StepSucceededDetails": {
+      "Result": {
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmTerminate",
+    "EventId": 23,
+    "Id": "449daf85c71a9f8e",
+    "Name": "file-session.terminate",
+    "EventTimestamp": "2026-10-05T18:20:42.020Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MicrovmSessionJob",
+    "EventId": 22,
+    "Id": "12426c956d1bc501",
+    "Name": "read",
+    "EventTimestamp": "2026-10-05T18:20:42.020Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"value\":\"written-by-0ce1a6c6-6fd5-4379-ad46-d5d33f89d94c\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmTerminate",
+    "EventId": 24,
+    "Id": "449daf85c71a9f8e",
+    "Name": "file-session.terminate",
+    "EventTimestamp": "2026-10-05T18:20:42.085Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MicrovmSession",
+    "EventId": 25,
+    "Id": "c4ca4238a0b92382",
+    "Name": "file-session",
+    "EventTimestamp": "2026-10-05T18:20:42.138Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"sessionMicrovmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"writtenBy\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"readBy\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"value\":\"written-by-0ce1a6c6-6fd5-4379-ad46-d5d33f89d94c\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 26,
+    "EventTimestamp": "2026-10-05T18:20:42.167Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-05T18:20:41.192Z",
+      "EndTimestamp": "2026-10-05T18:20:42.163Z",
+      "RequestId": "3757d1ac-339a-4cf1-bc10-19affa93033b"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 27,
+    "Id": "787dc13b-b0b0-35de-acc3-c4fa2fd951db",
+    "Name": "54d2a480-793b-4565-9521-766ed1fc324f",
+    "EventTimestamp": "2026-10-05T18:20:42.167Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"sessionMicrovmId\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"writtenBy\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"readBy\":\"microvm-26e69f0c-6dd6-3f13-ac8f-65d5994491b0\",\"value\":\"written-by-0ce1a6c6-6fd5-4379-ad46-d5d33f89d94c\"}",
+        "Truncated": false
+      }
+    }
+  }
+]

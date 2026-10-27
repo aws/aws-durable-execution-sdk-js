@@ -8,7 +8,7 @@ module.exports = {
   // Exclude scripts tests from main library tests
   testPathIgnorePatterns: ["/node_modules/", "/dist/", "/src/scripts/"],
   transform: {
-    "^.+\\.ts$": "ts-jest",
+    "^.+\\.ts$": ["ts-jest", { diagnostics: false, isolatedModules: true }],
   },
   // Map the real version module to a hand-rolled stub so ts-jest never
   // has to compile the real file's `import.meta.url` reference (which
@@ -29,7 +29,10 @@ module.exports = {
       "<rootDir>/src/utils/constants/__mocks__/version.ts",
   },
   moduleFileExtensions: ["ts", "js", "json", "node"],
-  collectCoverage: true,
+  // Off by default: coverage instrumentation adds real wall time to every local
+  // `npm test`, and nothing in CI or local workflow reads it on every run. Use
+  // `npm run test:coverage` when coverage output is actually wanted.
+  collectCoverage: false,
   coverageDirectory: "coverage/library",
   coveragePathIgnorePatterns: [
     "/node_modules/",

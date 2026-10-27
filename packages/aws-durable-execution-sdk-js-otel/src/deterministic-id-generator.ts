@@ -1,69 +1,58 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "crypto";
-import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
+import {
+  RandomIdGenerator,
+  type IdGenerator,
+} from "@opentelemetry/sdk-trace-node";
+
+export interface IdOverride {
+  traceId?: string;
+  spanId?: string;
+}
 
 /**
- * A custom OpenTelemetry IdGenerator that produces deterministic trace and span IDs
- * derived from execution metadata (X-Ray headers, execution ARNs, operation IDs)
- * rather than random values.
+ * An OpenTelemetry IdGenerator with execution-scoped deterministic overrides.
  *
- * This ensures that spans from different Lambda invocations of the same durable
- * execution are stitched into a single coherent trace.
+ * Overrides are active only while {@link withIds} runs. All other ID generation
+ * is delegated to the fallback generator. AsyncLocalStorage makes the override
+ * visible to the provider-owned generator without leaking it to unrelated spans
+ * or concurrent durable executions.
  */
 export class DeterministicIdGenerator implements IdGenerator {
-  private traceId: string | undefined;
-  private nextSpanId: string | undefined;
+  private static readonly idOverrides = new AsyncLocalStorage<IdOverride>();
+
+  constructor(
+    private readonly fallbackIdGenerator: IdGenerator = new RandomIdGenerator(),
+  ) {}
 
   /**
-   * Set the trace ID for all subsequent generateTraceId() calls.
-   * This is persistent until setTraceId is called again.
-   */
-  setTraceId(traceId: string): void {
-    this.traceId = traceId;
-  }
-
-  /**
-   * Set the span ID to return on the next single generateSpanId() call.
-   * This is a one-shot override: it is consumed on the next call and then
-   * reverts to default behavior.
-   */
-  setNextSpanId(spanId: string): void {
-    this.nextSpanId = spanId;
-  }
-
-  /**
-   * Generate a 32-char lowercase hex trace ID.
+   * Runs a synchronous span-creation callback with deterministic IDs.
    *
-   * If setTraceId has been called, returns that value persistently.
-   * Otherwise returns a random 32-char hex string as fallback.
+   * The span ID is consumed on its first use so re-entrant ID generation cannot
+   * accidentally assign the same ID to more than one span.
    */
+  withIds<T>(ids: IdOverride, fn: () => T): T {
+    return DeterministicIdGenerator.idOverrides.run({ ...ids }, fn);
+  }
+
+  /** Generate a 32-char lowercase hex trace ID. */
   generateTraceId(): string {
-    if (this.traceId) {
-      return this.traceId;
+    const traceId = DeterministicIdGenerator.idOverrides.getStore()?.traceId;
+    if (traceId) {
+      return traceId;
     }
-    // Fallback: generate a random trace ID
-    return createHash("sha256")
-      .update(Math.random().toString())
-      .digest("hex")
-      .slice(0, 32);
+    return this.fallbackIdGenerator.generateTraceId();
   }
 
-  /**
-   * Generate a 16-char lowercase hex span ID.
-   *
-   * If setNextSpanId has been called, returns that value once (one-shot)
-   * and then clears it. Otherwise returns a random 16-char hex string.
-   */
+  /** Generate a 16-char lowercase hex span ID. */
   generateSpanId(): string {
-    if (this.nextSpanId) {
-      const spanId = this.nextSpanId;
-      this.nextSpanId = undefined;
+    const override = DeterministicIdGenerator.idOverrides.getStore();
+    if (override?.spanId) {
+      const spanId = override.spanId;
+      override.spanId = undefined;
       return spanId;
     }
-    // Fallback: generate a random span ID
-    return createHash("sha256")
-      .update(Math.random().toString())
-      .digest("hex")
-      .slice(0, 16);
+    return this.fallbackIdGenerator.generateSpanId();
   }
 }
 
@@ -103,14 +92,28 @@ export function deriveTraceIdFromXRayRoot(
 }
 
 /**
- * Derive a deterministic trace ID from an execution ARN by hashing it
- * with SHA-256 and truncating to the first 32 lowercase hex characters.
+ * Derive a deterministic trace ID from an execution ARN and its durable start
+ * timestamp by hashing them with SHA-256 and truncating to the first 32
+ * lowercase hex characters.
+ *
+ * The timestamp is optional for callers that do not have it. When omitted, the
+ * ARN-only derivation is retained as a deterministic fallback.
  *
  * @param executionArn - The execution ARN string
+ * @param executionStartTimestamp - Stable start time of the durable execution
  * @returns A 32-char lowercase hex string
  */
-export function deriveTraceIdFromArn(executionArn: string): string {
-  return createHash("sha256").update(executionArn).digest("hex").slice(0, 32);
+export function deriveTraceIdFromArn(
+  executionArn: string,
+  executionStartTimestamp?: Date,
+): string {
+  const executionIdentity = executionStartTimestamp
+    ? `${executionArn}:${executionStartTimestamp.toISOString()}`
+    : executionArn;
+  return createHash("sha256")
+    .update(executionIdentity)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 /**
@@ -160,6 +163,38 @@ export function deriveWorkflowSpanId(executionArn: string): string {
 
   // Ensure the result is never all-zeros (astronomically unlikely with SHA-256,
   // but guaranteed by contract)
+  if (spanId === "0000000000000000") {
+    return "0000000000000001";
+  }
+
+  return spanId;
+}
+
+/**
+ * Derive a deterministic span ID for the synthetic execution root from an
+ * execution ARN. Hashes `"execution-root:" + executionArn` with SHA-256 and
+ * truncates to the first 16 lowercase hex characters.
+ *
+ * The `"execution-root:"` prefix is a distinct namespace from
+ * `deriveWorkflowSpanId` (`"workflow:"`) and `deriveSpanIdFromOperationId`
+ * (`"<arn>:<opId>"`), so the synthetic root never collides with the Workflow or
+ * operation spans that share the execution trace. Stable across reinvocations
+ * so the same synthetic root is the common ancestor every invocation.
+ *
+ * @param executionArn - The execution ARN string (must be non-empty)
+ * @returns A 16-char lowercase hex string, never equal to "0000000000000000"
+ * @throws Error if the execution ARN is an empty string
+ */
+export function deriveExecutionRootSpanId(executionArn: string): string {
+  if (executionArn === "") {
+    throw new Error("Execution ARN must be non-empty");
+  }
+
+  const spanId = createHash("sha256")
+    .update("execution-root:" + executionArn)
+    .digest("hex")
+    .slice(0, 16);
+
   if (spanId === "0000000000000000") {
     return "0000000000000001";
   }

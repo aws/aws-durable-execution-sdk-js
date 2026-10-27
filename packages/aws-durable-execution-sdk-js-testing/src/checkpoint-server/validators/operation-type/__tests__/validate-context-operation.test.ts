@@ -47,7 +47,7 @@ describe("validateContextOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateContextOperation(update, currentOperation);
-      }).toThrow("Cannot start a CONTEXT that already exists.");
+      }).toThrow("Cannot start a CONTEXT operation that already exists.");
     });
   });
 
@@ -159,7 +159,7 @@ describe("validateContextOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateContextOperation(update, undefined);
-      }).toThrow("Invalid CONTEXT action.");
+      }).toThrow("Invalid action for CONTEXT operation.");
     });
   });
 });

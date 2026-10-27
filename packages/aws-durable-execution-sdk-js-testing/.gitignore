@@ -7,5 +7,3 @@
 .husky
 *.iml
 *.tsbuildinfo
-
-api-extractor

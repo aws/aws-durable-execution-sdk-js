@@ -1,7 +1,7 @@
 // @ts-check
 
 import { execSync } from "child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ArgumentParser } from "argparse";
@@ -44,6 +44,42 @@ const log = {
   error: (/** @type {string} */ msg) =>
     console.error(`${COLORS.RED}[ERROR]${COLORS.NC} ${msg}`),
 };
+
+// Map a run outcome to a category for the job summary.
+function classifyOutcome(/** @type {unknown} */ error) {
+  if (!error) return "success";
+  const msg = String(
+    /** @type {{message?: string}} */ (error)?.message ?? error,
+  );
+  if (/Credentials could not be loaded/i.test(msg)) return "credential";
+  if (/ResourceConflictException|Function already exist/i.test(msg))
+    return "resource-conflict";
+  if (/CapacityProviderScalingLimitExceeded/i.test(msg))
+    return "capacity-limit";
+  if (
+    /failed to enter successful state|failed to settle|State.*Failed/i.test(msg)
+  )
+    return "runtime";
+  if (/jest|test.*failed|assertion/i.test(msg)) return "assertion";
+  return "unknown";
+}
+
+// Append the outcome to $GITHUB_STEP_SUMMARY. No-op off CI.
+function writeOutcomeSummary(
+  /** @type {string} */ category,
+  /** @type {string} */ detail,
+) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (!file) return;
+  const line = detail
+    ? `- **${category}**: ${detail}\n`
+    : `- **${category}**\n`;
+  try {
+    appendFileSync(file, `## Integration test outcome\n${line}`);
+  } catch {
+    // Don't fail the run if summary can't be written.
+  }
+}
 
 // Configuration
 const CONFIG = {
@@ -363,7 +399,7 @@ class IntegrationTestRunner {
           `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
         );
 
-        let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
+        const capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
         this.execCommand(capacityDeployCommand, {
           cwd: examplesDir,
           env: this.getLegacyTestSecretEnv(),
@@ -429,6 +465,15 @@ class IntegrationTestRunner {
       );
     }
 
+    const examples = await this.getIntegrationExamples();
+    if (examples.some((example) => example.usesMicrovm)) {
+      const { imageArn, executionRoleArn } = this.ensureMicrovmImage(samDir);
+      templateArgs.push(
+        `--microvm-image-arn ${shellQuote(imageArn)}`,
+        `--microvm-execution-role-arn ${shellQuote(executionRoleArn)}`,
+      );
+    }
+
     this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
 
     if (!this.samStackExists()) {
@@ -453,6 +498,26 @@ class IntegrationTestRunner {
     log.info(`Deploying SAM stack: ${stackName}`);
     await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
     log.success(`Deployed SAM stack: ${stackName}`);
+  }
+
+  /**
+   * Builds the MicroVM image that the MicroVM examples run, or reuses it.
+   * The image name carries a hash of its contents, so an unchanged worker and
+   * app skip the build.
+   * @param {string} samDir
+   * @returns {{ imageArn: string, executionRoleArn: string }}
+   */
+  ensureMicrovmImage(samDir) {
+    const outputPath = join(samDir, "microvm-image.json");
+    log.info("Ensuring the MicroVM image for the MicroVM examples...");
+    this.execCommand(
+      `npm run ensure-microvm-image -- --output ${shellQuote(outputPath)}`,
+      {
+        cwd: CONFIG.EXAMPLES_PACKAGE_PATH,
+        env: { AWS_REGION: CONFIG.AWS_REGION },
+      },
+    );
+    return JSON.parse(readFileSync(outputPath, "utf8"));
   }
 
   // Run Jest integration tests
@@ -722,10 +787,13 @@ async function main() {
   const runner = new IntegrationTestRunner(options);
 
   await runner.run(options);
+
+  writeOutcomeSummary("success", "");
 }
 
 // Run if this file is executed directly
 main().catch((error) => {
   console.error(error);
+  writeOutcomeSummary(classifyOutcome(error), String(error?.message ?? error));
   process.exit(1);
 });

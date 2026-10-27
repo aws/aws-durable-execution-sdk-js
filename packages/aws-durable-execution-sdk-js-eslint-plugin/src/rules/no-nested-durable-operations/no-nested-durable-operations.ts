@@ -6,7 +6,6 @@ export const noNestedDurableOperations: Rule.RuleModule = {
     docs: {
       description:
         "Disallow using the same context object inside its own durable operation",
-      category: "Possible Errors",
       recommended: true,
     },
     messages: {
@@ -27,7 +26,7 @@ export const noNestedDurableOperations: Rule.RuleModule = {
     ]);
 
     // Track context variables by name and their declaration node
-    let contextStack: { name: string; declarationNode: any }[] = [];
+    const contextStack: { name: string; declarationNode: any }[] = [];
 
     function isDurableOperation(
       node: any,

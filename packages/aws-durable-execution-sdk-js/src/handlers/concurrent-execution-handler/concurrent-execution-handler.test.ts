@@ -289,7 +289,7 @@ describe("Concurrent Execution Handler", () => {
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
-          let actualFn;
+          let actualFn: any;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
           } else {
@@ -507,7 +507,7 @@ describe("Concurrent Execution Handler", () => {
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
-          let actualFn;
+          let actualFn: any;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
           } else {
@@ -543,7 +543,7 @@ describe("Concurrent Execution Handler", () => {
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
-          let actualFn;
+          let actualFn: any;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
           } else {
@@ -1146,7 +1146,7 @@ describe("ConcurrencyController", () => {
       const executor = jest.fn();
 
       // Resolve in reverse order
-      let resolvers: Array<(value: any) => void> = [];
+      const resolvers: Array<(value: any) => void> = [];
       mockParentContext.runInChildContext.mockImplementation(() => {
         return new DurablePromise(
           () =>

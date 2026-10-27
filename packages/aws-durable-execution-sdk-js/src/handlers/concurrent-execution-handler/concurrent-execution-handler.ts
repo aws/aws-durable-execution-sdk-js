@@ -231,14 +231,17 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       // (terminal-only) set is exactly what produced non-deterministic replay,
       // so we read the value the live run recorded instead.
       let recordedCompletionReason: CompletionReason | undefined;
+      let recordedItemStatuses: string | undefined;
       if (entityId && executionContext) {
         const stepData = executionContext.getStepData(entityId);
         const summaryPayload = stepData?.ContextDetails?.Result;
         if (summaryPayload) {
           recordedCompletionReason =
             this.parseRecordedCompletionReason(summaryPayload);
+          recordedItemStatuses = this.parseRecordedItemStatuses(summaryPayload);
           log("📊", "Recovered completion reason from summary:", {
             recordedCompletionReason,
+            hasRecordedItemStatuses: recordedItemStatuses !== undefined,
           });
         }
       }
@@ -258,6 +261,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           parentContext,
           config,
           recordedCompletionReason,
+          recordedItemStatuses,
           executionContext,
           entityId,
         );
@@ -275,6 +279,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       executor,
       parentContext,
       config,
+      entityId,
+      executionContext,
     );
   }
 
@@ -306,7 +312,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         // "toString" from a crafted summary are not treated as valid.
         if (
           typeof reason === "string" &&
-          Object.prototype.hasOwnProperty.call(VALID_COMPLETION_REASONS, reason)
+          Object.hasOwn(VALID_COMPLETION_REASONS, reason)
         ) {
           return reason as CompletionReason;
         }
@@ -319,12 +325,156 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     return undefined;
   }
 
+  /**
+   * Extracts the recorded per-item completion markers from a checkpointed batch
+   * payload. One character per item in index order (`S`/`F`/`-`).
+   *
+   * Two payload shapes are recognised, because ReplayChildren is reached two
+   * ways:
+   *
+   *  - The summary written when the result exceeded the checkpoint size limit,
+   *    which carries `itemStatuses` directly.
+   *  - The FULL serialized BatchResult written when `childOperationsDepth` opts
+   *    a context into child preservation. That path sets ReplayChildren while
+   *    checkpointing the whole result, so the summary generator never runs and
+   *    there is no `itemStatuses` — but the payload already contains
+   *    `all: [{ index, status }]`, which carries the same information.
+   *
+   * Validated as strictly as `parseRecordedCompletionReason`: legacy checkpoints
+   * can carry arbitrary JSON (including free-form strings from pre-fix custom
+   * generators), and the consequence here is terminality decisions rather than a
+   * display field. `Object.hasOwn` keeps inherited keys like `constructor` out,
+   * and the marker alphabet is checked so a crafted value cannot be read as
+   * terminality.
+   *
+   * Returns undefined when the payload is absent, unparseable, or carries
+   * neither shape — in which case replay falls back to probing.
+   */
+  private parseRecordedItemStatuses(
+    summaryPayload: unknown,
+  ): string | undefined {
+    if (typeof summaryPayload !== "string") {
+      return undefined;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(summaryPayload);
+    } catch {
+      // Unparseable payload; fall through to probing.
+      return undefined;
+    }
+    if (!parsed || typeof parsed !== "object") {
+      return undefined;
+    }
+    const record = parsed as Record<string, unknown>;
+
+    // Shape 1: the summary envelope's encoded markers.
+    if (Object.hasOwn(record, "itemStatuses")) {
+      const statuses = record.itemStatuses;
+      if (
+        typeof statuses === "string" &&
+        statuses.length > 0 &&
+        /^[SF-]+$/.test(statuses)
+      ) {
+        return statuses;
+      }
+      return undefined;
+    }
+
+    // Shape 2: a full BatchResult payload (childOperationsDepth path).
+    if (Object.hasOwn(record, "all") && Array.isArray(record.all)) {
+      return this.encodeStatusesFromBatchItems(record.all);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Derives the per-item markers from a checkpointed `all` array, so the
+   * `childOperationsDepth` path (which checkpoints the full result and therefore
+   * has no summary envelope) gets the same treatment as a summarized batch.
+   */
+  private encodeStatusesFromBatchItems(items: unknown[]): string | undefined {
+    let maxIndex = -1;
+    for (const entry of items) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const index = (entry as Record<string, unknown>).index;
+      if (typeof index === "number" && index > maxIndex) {
+        maxIndex = index;
+      }
+    }
+    if (maxIndex < 0) {
+      return undefined;
+    }
+
+    const encoded = new Array<string>(maxIndex + 1).fill("-");
+    for (const entry of items) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const item = entry as Record<string, unknown>;
+      if (typeof item.index !== "number") {
+        continue;
+      }
+      if (item.status === BatchItemStatus.SUCCEEDED) {
+        encoded[item.index] = "S";
+      } else if (item.status === BatchItemStatus.FAILED) {
+        encoded[item.index] = "F";
+      }
+    }
+    return encoded.join("");
+  }
+
+  /**
+   * Whether a virtual item finished, inferred from its own checkpointed
+   * operations. Used ONLY for summaries written before per-item statuses were
+   * recorded.
+   *
+   * A virtual (FLAT) item has no context checkpoint, so its operations are
+   * probed directly. Probing only the first operation would be unsound: an item
+   * that was still in flight can have a SUCCEEDED first operation and would be
+   * misread as finished. Every recorded operation is therefore walked, and the
+   * item counts as finished only if all of them are terminal.
+   *
+   * Step ids come from a per-context counter starting at 1 and increasing by one
+   * per operation, so the recorded ids are contiguous and the walk stops at the
+   * first gap.
+   *
+   * Residual limitation, unavoidable without recorded statuses: an item whose
+   * body creates no durable operation leaves nothing to probe and is
+   * indistinguishable from one that never started, so it reads as unfinished and
+   * is not rebuilt.
+   */
+  private isVirtualItemTerminalByProbe(
+    executionContext: ExecutionContext,
+    childEntityId: string,
+  ): boolean {
+    let found = false;
+    for (let opIndex = 1; ; opIndex++) {
+      const op = executionContext.getStepData(`${childEntityId}-${opIndex}`);
+      if (!op) {
+        break;
+      }
+      found = true;
+      if (
+        op.Status !== OperationStatus.SUCCEEDED &&
+        op.Status !== OperationStatus.FAILED
+      ) {
+        return false;
+      }
+    }
+    return found;
+  }
+
   private async replayItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
     recordedCompletionReason: CompletionReason | undefined,
+    recordedItemStatuses: string | undefined,
     executionContext: ExecutionContext,
     parentEntityId: string,
   ): Promise<BatchResult<R>> {
@@ -346,10 +496,72 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     for (const item of items) {
       const childEntityId = `${parentEntityId}-${stepCounter + 1}`;
       const childStepData = executionContext.getStepData(childEntityId);
-      const isTerminal =
-        !!childStepData &&
-        (childStepData.Status === OperationStatus.SUCCEEDED ||
-          childStepData.Status === OperationStatus.FAILED);
+
+      // Terminality is resolved in order of authority:
+      //
+      //  1. The per-item statuses recorded on the batch payload, AND any context
+      //     record the item has, which must agree. The statuses are by
+      //     construction what the live BatchResult contained, which is what
+      //     replay has to reproduce, so a "-" marker overrides even a terminal
+      //     context record: a child that settles after the batch completed early
+      //     has a terminal record but was never part of the live result, and
+      //     rebuilding it would add an item the live run never reported.
+      //
+      //     The agreement requirement is not symmetric with that, deliberately.
+      //     The two directions fail very differently:
+      //
+      //       - marker says unfinished, record says terminal -> skip. Benign: the
+      //         item is left out of the rebuild, which is what the live result
+      //         did.
+      //       - marker says terminal, record says unfinished -> re-driving would
+      //         HANG. In ReplaySucceededContext, runInChildContext goes through
+      //         checkForNonResolvingPromise, which returns a never-resolving
+      //         promise when the pending step id has a non-terminal checkpoint.
+      //         replayItems awaits it, the reconstruction never settles, the
+      //         invocation times out and retries into the same state (issue
+      //         #751).
+      //
+      //     So a terminal marker is only honoured when the checkpoints do not
+      //     contradict it. FLAT items have no context record at all, so this
+      //     costs them nothing.
+      //
+      //     Recording the statuses is what makes the two cases no probe can
+      //     settle decidable: a multi-operation item that was mid-flight (its
+      //     first operation can be SUCCEEDED while the item never finished), and
+      //     an item whose body creates no durable operation and so leaves no
+      //     trace at all.
+      //
+      //  2. The item's own CONTEXT checkpoint, for payloads with no recorded
+      //     statuses. NESTED items have one; virtual (FLAT) items never do, which
+      //     is the original bug — the probe below found nothing for every item,
+      //     all were skipped, and the rebuilt batch came back EMPTY even though
+      //     they had all succeeded.
+      //
+      //  3. Probing the item's operations, for payloads predating the recorded
+      //     statuses. See isVirtualItemTerminalByProbe for its limits.
+      //
+      // Only terminality is decided here. An item's SUCCEEDED/FAILED outcome
+      // comes from re-driving it below.
+      const childRecordIsTerminal =
+        !childStepData ||
+        childStepData.Status === OperationStatus.SUCCEEDED ||
+        childStepData.Status === OperationStatus.FAILED;
+
+      let isTerminal: boolean;
+      if (recordedItemStatuses !== undefined) {
+        const marker = recordedItemStatuses[item.index];
+        isTerminal =
+          (marker === "S" || marker === "F") && childRecordIsTerminal;
+      } else if (childStepData) {
+        isTerminal =
+          childStepData.Status === OperationStatus.SUCCEEDED ||
+          childStepData.Status === OperationStatus.FAILED;
+      } else {
+        isTerminal = this.isVirtualItemTerminalByProbe(
+          executionContext,
+          childEntityId,
+        );
+      }
 
       if (isTerminal) {
         // Terminal child: re-drive runInChildContext so it returns the cached
@@ -462,11 +674,55 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     return new BatchResultImpl(resultItems, completionReason);
   }
 
+  /**
+   * Runs the items and decides when the batch completes.
+   *
+   * A batch can resume after an earlier invocation ended between the item
+   * checkpoints and the batch checkpoint. Then several items already have a
+   * terminal record. Most of them finished before that invocation's
+   * completion decision. Up to maxConcurrency - 1 of them can be racers: items
+   * that recorded their outcome after the decision but before the batch
+   * context finished, which the live result reported STARTED (issue #967). On
+   * resume, the recorded items settle again in index order, not in their
+   * original order. So an early recorded success could reach minSuccessful
+   * before another recorded item settles, and that item would be reported
+   * STARTED.
+   *
+   * So while any recorded item has not settled, the controller does not
+   * resolve. During that time it starts items only up to the last recorded
+   * index, because each recorded item needs its own start to get its id. It
+   * starts no later item, because the original invocation may have stopped
+   * before it.
+   *
+   * The built-in rules stay met once they are met, because the counts only
+   * grow. So for them the controller decides on the full set, once every
+   * recorded item has settled. A custom shouldComplete predicate need not stay
+   * met. So the controller keeps the first complete decision the predicate
+   * returns while recorded items settle, and resolves with it. Once every
+   * recorded item has settled, the controller evaluates completion before it
+   * starts later items.
+   *
+   * A gap item is an item below the last recorded index that has no terminal
+   * record. Once the outcome is known while recorded items settle, the
+   * controller reserves a gap item's child id without running it, so its code
+   * does not run again for a result the batch will not use.
+   *
+   * So every recorded outcome is kept. For the built-in rules, and for a
+   * predicate that stays complete once it is complete as the counts grow, no
+   * item starts that the completion rule would not start. Other predicates can
+   * decide differently on resume, because the original settle order is not
+   * recorded, and the resumed order can differ: a cached failure settles
+   * faster than a cached success. For example, `successCount === 1 &&
+   * failureCount === 0` can see (0, 1) and then (1, 1) on resume, and never
+   * complete.
+   */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
+    batchEntityId?: string,
+    executionContext?: ExecutionContext,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
@@ -479,6 +735,45 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     let completedCount = 0;
     let successCount = 0;
     let failureCount = 0;
+
+    // Items whose child context already has a terminal record from an
+    // earlier invocation. Items start in index order, so item i is the child
+    // entity `${batchEntityId}-${i + 1}`, as in replayItems. A FLAT item has
+    // no context record, so it is not in this set.
+    const recordedTerminal = new Set<number>();
+    let lastRecorded = -1;
+    if (
+      batchEntityId !== undefined &&
+      executionContext !== undefined &&
+      config.nesting !== NestingType.FLAT
+    ) {
+      for (let i = 0; i < items.length; i++) {
+        const status = executionContext.getStepData(
+          `${batchEntityId}-${i + 1}`,
+        )?.Status;
+        if (
+          status === OperationStatus.SUCCEEDED ||
+          status === OperationStatus.FAILED
+        ) {
+          recordedTerminal.add(i);
+          lastRecorded = i;
+        }
+      }
+    }
+    // The recorded items that have not settled yet.
+    let unsettledRecorded = recordedTerminal.size;
+    const reconciling = (): boolean => unsettledRecorded > 0;
+    // The first complete decision of a custom shouldComplete predicate while
+    // recorded items settle. See the doc comment above.
+    let latchedReason: CompletionReason | undefined;
+    // Set when the batch resolves. Items still running settle later. They must
+    // not start more items, because the batch has already returned.
+    let resolved = false;
+    // Whether the batch's outcome is already decided while recorded items
+    // settle. The built-in rules stay met once met. A custom predicate counts
+    // only once its decision is latched. Defined after isComplete and
+    // shouldContinue, which it calls.
+    let outcomeKnown = (): boolean => false;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -571,14 +866,33 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         );
       };
 
+      outcomeKnown = (): boolean =>
+        latchedReason !== undefined ||
+        (!config.completionConfig?.shouldComplete &&
+          (isComplete() || !shouldContinue()));
+
       const tryStartNext = (): void => {
         while (
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          shouldContinue()
+          (reconciling() ? currentIndex <= lastRecorded : shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];
+
+          // A gap item has no terminal record, so it was still running when
+          // the earlier invocation ended. Once the outcome is already known,
+          // starting it would run its code again although the batch will not
+          // use it. So its child id is reserved without running it. It stays
+          // out of the result, as in replayItems.
+          if (reconciling() && !recordedTerminal.has(index) && outcomeKnown()) {
+            this.skipReplayStep(parentContext);
+            log("⏭", `Skipping unfinished ${this.operationName} item:`, {
+              index,
+              itemId: item.id,
+            });
+            continue;
+          }
 
           startedItems.add(index);
           activeCount++;
@@ -615,7 +929,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemId: item.id,
                   itemName: item.name,
                 });
-                onComplete();
+                onComplete(index);
               },
               (error) => {
                 const err =
@@ -637,17 +951,36 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemName: item.name,
                   error: err.message,
                 });
-                onComplete();
+                onComplete(index);
               },
             );
         }
       };
 
-      const onComplete = (): void => {
+      const onComplete = (index: number): void => {
         activeCount--;
         completedCount++;
+        if (recordedTerminal.has(index)) {
+          unsettledRecorded--;
+        }
+        if (resolved) {
+          return;
+        }
 
-        if (isComplete() || !shouldContinue()) {
+        if (reconciling()) {
+          if (
+            latchedReason === undefined &&
+            config.completionConfig?.shouldComplete &&
+            isComplete()
+          ) {
+            latchedReason = getCompletionReason(failureCount);
+          }
+          tryStartNext();
+          return;
+        }
+
+        if (latchedReason !== undefined || isComplete() || !shouldContinue()) {
+          resolved = true;
           // Convert sparse array to dense array - items are already in correct order by index
           // Include all items that were started (have a value in resultItems)
           // Create shallow copy to prevent mutations from affecting the returned result
@@ -669,7 +1002,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
           const result = new BatchResultImpl(
             finalBatchItems,
-            getCompletionReason(failureCount),
+            latchedReason ?? getCompletionReason(failureCount),
           );
           resolve(result);
         } else {

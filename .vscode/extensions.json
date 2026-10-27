@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    // settings.json sets Biome as the formatter for JS/TS/JSON, so without this
+    // contributors get "no formatter installed" prompts.
+    "biomejs.biome"
+  ]
+}

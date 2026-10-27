@@ -27,10 +27,10 @@ import {
  * AWS-typed field added to a response shape would also compile, because an object literal
  * need not supply it. Only a newly *required* AWS-typed response field would break it.
  *
- * The actual gates are elsewhere: the `no-restricted-imports` rule on `src/types/wire/**`
- * (see `eslint.config.js`), which fails the build if an AWS import appears in the wire
- * model at all, and `wire-model.aws-sdk-parity.test.ts`, which pins those shapes to the
- * service model in both directions.
+ * The actual gates are elsewhere: the `noRestrictedImports` rule on `src/types/wire/**`
+ * (see `biome.jsonc`), which fails CI if an AWS import appears in the wire model at all,
+ * and `wire-model.aws-sdk-parity.test.ts`, which pins those shapes to the service model
+ * in both directions.
  */
 
 /** A transport with no AWS dependency of any kind. */

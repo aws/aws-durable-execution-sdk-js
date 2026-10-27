@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+// biome-ignore-all lint/suspicious/noConsole: this is the local CLI runner -- printing execution progress and results to stdout is its entire purpose. Was `/* eslint-disable no-console */` before the Biome migration.
 
 import { Context } from "aws-lambda";
 import { withDurableExecution } from "./with-durable-execution";

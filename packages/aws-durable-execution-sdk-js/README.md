@@ -232,6 +232,38 @@ const results = await context.parallel(
 
 **Note**: `parallel()` executes durable operations within the same Lambda invocation. Each branch runs in its own child context with isolated state tracking.
 
+### Early completion
+
+A `map()` or `parallel()` completes early when its completion rule is met before every item has finished. With no `completionConfig`, the rule is fail-fast: the first failure completes the batch. `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage` and `shouldComplete` set other rules. Setting any of them replaces fail-fast.
+
+The batch checks its rule each time an item's result reaches it. Once the rule is met, the remaining items are abandoned:
+
+- An item that is running is reported as `STARTED`. It is not counted in `successCount` or `failureCount`.
+- An item that had not started, because of `maxConcurrency`, does not appear in `all`.
+- The batch does not wait for abandoned items and does not stop them. Once the batch's context finishes, the item's checkpoints are dropped. An abandoned item stops only when it awaits a dropped checkpoint. Until then its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
+  - A step whose function is running keeps running while the invocation is active. It is not guaranteed to finish. If it finishes after the batch's context, its result is not recorded.
+  - A new `step` with the default `StepSemantics.AtLeastOncePerRetry` runs its function once, and the history has no record of it. A new `waitForCondition` runs its check function once. The item then stops.
+  - `runInChildContext` does not await its own checkpoints. So its function runs, and the operations inside it follow these rules.
+  - A new `wait`, `invoke`, `createCallback`, `waitForCallback`, or step with `StepSemantics.AtMostOncePerRetry` stops the item before it takes effect. "New" means the item starts it after the batch's context finished. An operation started earlier may already have recorded its start and taken effect.
+
+What happens next depends on what the handler does after the batch:
+
+- If the handler returns, the invocation can end while abandoned code still runs. That code is then not guaranteed to finish.
+- If the handler waits, for example on a `wait` or a callback, the invocation cannot suspend while an abandoned step function or `waitForCondition` check is still running. Such an operation counts as running until its function returns and its dropped checkpoint releases it. So a slow abandoned function keeps the invocation active, which adds to its duration and cost.
+
+An abandoned item can record its outcome before the batch's context finishes. This includes an item that recorded its outcome before the item that completed the batch, but whose result reached the batch later. The execution history then shows its child context as `SUCCEEDED` or `FAILED`, while the `BatchResult` reports it as `STARTED`. With `NestingType.FLAT`, the item has no child context, and the history shows its operations instead.
+
+The handler receives only the `BatchResult`. Replay returns the same completed items and the same `completionReason`. Replay can omit the `STARTED` items, so `started()`, `startedCount` and `totalCount` can differ after replay. So base decisions on the completed items, and do not reconcile the `BatchResult` with the execution history.
+
+To get the result of every item, use a rule that cannot complete early. Set `toleratedFailurePercentage: 100`, and leave `minSuccessful`, `toleratedFailureCount` and `shouldComplete` unset. The batch then waits for every item. Failed items appear in `failed()`. The call does not throw, so call `throwIfError()` if a failure must stop the handler:
+
+```typescript
+const results = await context.map("process-all", items, processItem, {
+  completionConfig: { toleratedFailurePercentage: 100 },
+});
+const failures = results.failed(); // every failed item, with its error
+```
+
 ### Promise Combinators
 
 For fast, in-memory operations (use `map()` or `parallel()` for durable operations):
@@ -263,7 +295,120 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 **Note**: Promise combinators accept already-executing promises and cannot provide concurrency control or durability. Use `map()` or `parallel()` for durable, controlled execution.
 
+## Operation Subtypes
+
+`runInChildContext`, `step`, and `createCallback` accept a `subType` option. A function that composes several operations can use it to label its parts. The SDK records the subtype in the checkpoint and passes it to plugins. So execution history and plugins can filter the parts without parsing names.
+
+```typescript
+ctx.runInChildContext(
+  name,
+  async (child) => {
+    const receipt = await child.step("charge", async () => charge(orderId), {
+      subType: "OrderCharge",
+    });
+    await child.step("notify", async () => notify(receipt), {
+      subType: "OrderNotify",
+    });
+    return receipt;
+  },
+  { subType: "ChargeAndNotify" },
+);
+```
+
+The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects the default subtype, such as `Step` or `Callback`. Replay compares the subtype with the checkpoint. So changing a subtype is a breaking change for executions in flight.
+
+[`@aws/durable-execution-sdk-js-extras`](../aws-durable-execution-sdk-js-extras) ships ready-made operations built this way, such as `microvm`.
+
 ## Configuration
+
+### Dynamic Instrumentation Plugins
+
+Instrumentation plugins can be selected at Lambda cold start without importing
+them in the function artifact. Install a provider package in the function or a
+Lambda layer, then set an ordered list of package or module specifiers:
+
+```text
+DURABLE_EXECUTION_PLUGINS=@example/durable-otel,@example/durable-audit/provider
+```
+
+The SDK imports each module once when `withDurableExecution(...)` initializes
+the wrapped handler. An unset or blank variable preserves the existing
+behavior. Plugins passed through `DurableExecutionConfig.plugins` run first in
+their configured order; environment-selected plugins follow in the order listed
+in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
+create the same plugin type.
+
+Provider modules export a factory named `durableExecutionPluginProvider`. A
+factory is an object with a `createPlugin(info)` method; a bare function is not
+one and is rejected. The SDK calls `createPlugin` once per invocation, with that
+invocation's `InvocationInfo`, so the instance it returns serves exactly one
+invocation:
+
+```typescript
+import type {
+  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
+} from "@aws/durable-execution-sdk-js";
+
+class AuditPlugin implements DurableInstrumentationPlugin {
+  constructor(
+    private readonly exporter: Exporter,
+    private readonly executionArn: string,
+  ) {}
+  // Implement the lifecycle hooks needed by this plugin.
+}
+
+// Built once for the execution environment and shared by every instance.
+const exporter = new Exporter();
+
+export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory<AuditPlugin> =
+  {
+    createPlugin: (info) => new AuditPlugin(exporter, info.executionArn),
+  };
+```
+
+Because an instance is dropped when its invocation returns, a plugin never has
+to key per-execution state by execution ARN, and two executions running
+concurrently in one execution environment cannot observe each other's state.
+State that belongs to the execution environment — an exporter, a tracer
+provider, a scheduler — belongs outside the factory, as above.
+
+The module specifier must be resolvable through normal application module
+resolution or Node.js module paths. For a Lambda layer, package the provider and
+its dependencies under `nodejs/node_modules`:
+
+```text
+plugin-layer.zip
+`-- nodejs
+    `-- node_modules
+        `-- @example
+            `-- durable-audit
+```
+
+Malformed configuration, missing modules or exports, a
+`durableExecutionPluginProvider` without a `createPlugin` method, and an entry in
+`DurableExecutionConfig.plugins` without one are reported as `PluginLoadError`
+failures before execution state is read — the two sources are checked by the same
+rule, because an entry with no `createPlugin` could never produce a plugin. A
+`createPlugin` that throws when it runs, or returns nothing, is contained like
+any other plugin failure: that plugin sits out the invocation and the execution
+is unaffected.
+
+### Instrumentation Operation Status and Errors
+
+Use `OperationInfo.status` to identify terminal operation states such as `FAILED`,
+`CANCELLED`, `TIMED_OUT`, and `STOPPED`. `OperationInfo.error` contains optional
+error details; a failed operation can have `error === undefined`, including in
+replay and `onOperationChange` metadata. Missing or empty checkpointed error data
+does not invent an error. Supplied partial details, including explicitly empty
+strings or an empty stack trace, remain available.
+
+This also applies to API-v1 plugins: code that uses only the presence of `error`
+as its failure signal should inspect `status` instead. For an attempt-end hook,
+use `AttemptEndInfo.outcome` to determine whether that attempt failed. An external
+callback failure without error details still rejects the callback promise and
+retains its failed operation status; optional instrumentation details do not
+change the caller's outcome or persisted state.
 
 ### Retry Strategies
 
@@ -478,6 +623,125 @@ context.configureLogger({
 context.configureLogger({ modeAware: false });
 ```
 
+### Powertools for AWS Lambda (TypeScript)
+
+`createPowertoolsLogger` wraps a [Powertools `Logger`](https://docs.powertools.aws.dev/lambda/typescript/latest/features/logger/). Every log entry then contains the durable execution metadata: `executionArn`, `requestId`, `tenantId`, `operationId`, `operationName`, and `attempt`. Keys without a value are omitted. Every entry also contains the fields that the configured plugins add, such as the OTel plugin's `traceId` and `spanId`, as entries of the default logger do.
+
+```typescript
+import { Logger } from "@aws-lambda-powertools/logger";
+import {
+  createPowertoolsLogger,
+  DurableContext,
+  PowertoolsDurableLogger,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+const logger = new Logger({ serviceName: "my-service" });
+
+export const handler = withDurableExecution(
+  async (
+    event: { orderId: string },
+    context: DurableContext<PowertoolsDurableLogger<Logger>>,
+  ) => {
+    context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
+    context.logger.info("workflow-started", { orderId: event.orderId });
+  },
+);
+```
+
+- Declare `context` as `DurableContext<PowertoolsDurableLogger<Logger>>`, as above. Then `context.logger` and the step loggers accept the Powertools argument types. Without the declaration, `context.logger` accepts any arguments.
+- The keys use the same names as the default logger and the Python SDK.
+- A key passed in the log call replaces the metadata key with the same name. The metadata replaces keys set with `appendKeys` or `persistentKeys`, because Powertools applies per-call keys after those.
+- The adapter reads the metadata on every call. So one adapter instance logs the correct `operationId` and `attempt` for concurrent steps and child contexts.
+- Powertools reads only `message` from an `Error` passed as the first argument, and writes no stack. To log the stack, pass the `Error` as a later argument: `context.logger.error("charge failed", error)`.
+- The SDK does not depend on `@aws-lambda-powertools/logger`. Install it in your function.
+- `logger.addContext(context.lambdaContext)` adds the Powertools Lambda context fields, such as `cold_start` and `function_name`. It also adds `function_request_id`, which repeats `requestId`. For a tenant-scoped execution it adds `tenant_id`, which repeats `tenantId`. Powertools stores these fields on the `Logger` instance. So when several invocations run at the same time in one process, as on Lambda Managed Instances, they carry the values of the invocation that called `addContext` last. The durable metadata fields do not have this problem.
+
+Leave the `POWERTOOLS_DEV` environment variable unset in deployed functions. When it is set, Powertools writes through the global `console`. With Lambda's JSON log format, Lambda wraps each `console` line in a JSON object. So each Powertools entry then appears as a string inside the `message` field of a second JSON object.
+
+The `powertools-logger` example used to define its own adapter class, which wrote snake_case keys (`execution_arn`, `request_id`, `operation_id`). `createPowertoolsLogger` writes camelCase keys. If you copied that example, update log queries and metric filters to the camelCase names.
+
+## Runtime requirements
+
+The SDK targets the Lambda managed Node.js runtimes (`nodejs22.x`, `nodejs24.x`), where
+everything below is satisfied automatically. It also runs on a **container image carrying your
+own JavaScript runtime**, which is how durable functions can be deployed on a runtime Lambda
+does not manage.
+
+At load, the SDK imports these Node builtins: `async_hooks`, `crypto`, `events`,
+`node:console`, `node:crypto`, `node:fs/promises` (`mkdir`, `readFile`, `writeFile`),
+`node:path`, `node:url` and `node:util`. Note that a **named ESM import of a missing export is
+fatal at module load**, not at first use — so a runtime that provides a module but not the
+member the SDK imports from it will fail with a `SyntaxError` before your handler runs.
+
+It also loads `@aws-sdk/client-lambda` on first checkpoint, via a dynamic import. If you bundle
+with `@aws-sdk` marked external, the runtime must provide that client.
+
+### Runtimes without AsyncLocalStorage
+
+Some lightweight runtimes — [LLRT](https://github.com/awslabs/llrt), for example — implement
+only part of the Node API. The SDK detects and works around the two gaps that would otherwise be
+fatal:
+
+- **`async_hooks.AsyncLocalStorage`** is used to track which durable operation is active across
+  `await` boundaries. Without it the SDK falls back to tracking only within synchronous code.
+- **`util.formatWithOptions`** is used by the default logger. Without it the SDK falls back to
+  `util.format`.
+
+**Checkpointing and replay are unaffected**, and the checkpoint data is byte-for-byte the same.
+What degrades is observability, and the SDK emits one warning per execution environment when it
+does:
+
+|                                                              | Effect on a runtime without `AsyncLocalStorage`                                                                                                                  |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log records emitted after an `await`                         | lose `operationId`, `operationName` and `attempt`                                                                                                                |
+| Replay-aware logging                                         | cannot suppress replayed records, so a log statement behind the replay frontier is re-emitted on **every replay** — this adds CloudWatch cost on long executions |
+| Using a parent or sibling context inside `runInChildContext` | only detected when it happens synchronously                                                                                                                      |
+
+That last item is a guard against a real determinism bug, so if you deploy on such a runtime,
+enable the `no-nested-durable-operations` rule from
+[`@aws/durable-execution-sdk-js-eslint-plugin`](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-eslint-plugin),
+which catches the same mistake at build time.
+
+Performance is a separate question from support. Durable executions replay, and replay cost grows
+with the number of completed operations, so a runtime without a JIT can be slower overall for
+workflows with large operation counts or compute-heavy steps — even where it starts faster.
+Measure your own workload before switching.
+
 ## License
 
 This project is licensed under the Apache-2.0 License.
+
+## SDK 3.x plugin migration
+
+See the [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md) for
+package versions, before/after examples, provider packaging, and validation.
+
+SDK 3.x requires an explicit migration from the legacy v1 provider contract.
+Providers declaring `pluginApiVersion` are rejected with `PluginLoadError` in
+both `plugins` and `DURABLE_EXECUTION_PLUGINS` registration. They are not silently
+called with a different lifetime: v1 `createPlugin()` ran once per handler,
+whereas a 3.x factory's `createPlugin(info)` runs once per invocation.
+
+Replace legacy provider/instance registrations with a factory object:
+
+```typescript
+import { withDurableExecution, type InvocationInfo } from "@aws/durable-execution-sdk-js";
+
+const factory = {
+  createPlugin(info: InvocationInfo) {
+    return new MyPlugin(info);
+  },
+};
+const handler = withDurableExecution(myHandler, { plugins: [factory] });
+```
+
+Return a fresh plugin instance for each invocation. Keep intentionally shared
+resources, such as a tracer provider/exporter, outside the invocation instance;
+keep invocation-specific spans, operation maps and buffers inside it. Remove
+legacy `pluginApiVersion` and `pluginType` metadata after migrating the factory.
+Environment-loaded modules still export `durableExecutionPluginProvider`, whose
+value is now this factory shape. Upgrade bundled OTel layers together with core
+3.x and use their factory builders; an old 1.x layer is rejected rather than
+silently reinterpreted. Core 2.x's supported v1 providers are unaffected by this
+major-only policy.

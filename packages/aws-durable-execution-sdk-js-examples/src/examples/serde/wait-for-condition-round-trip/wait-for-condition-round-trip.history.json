@@ -1,0 +1,190 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "29f39b22-7c3a-4b2f-b706-13b3af04d69e",
+    "EventTimestamp": "2026-10-11T16:25:46.521Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:46.528Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:46.528Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"polls\":1,\"roundTrippedOnEachCheck\":[true]}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-10-11T16:25:46.556Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-11T16:25:46.521Z",
+      "EndTimestamp": "2026-10-11T16:25:46.556Z",
+      "Error": {},
+      "RequestId": "ee4de7e8-50cb-4032-a5d8-53bd583519b9"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:47.533Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:47.533Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"polls\":2,\"roundTrippedOnEachCheck\":[true,true]}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-10-11T16:25:47.557Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-11T16:25:47.531Z",
+      "EndTimestamp": "2026-10-11T16:25:47.557Z",
+      "Error": {},
+      "RequestId": "e6e4b524-d6be-4ae3-ad8c-9f5efe473fc4"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:48.536Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "poll-until-ready",
+    "EventTimestamp": "2026-10-11T16:25:48.536Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"polls\":3,\"roundTrippedOnEachCheck\":[true,true,true]}"
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "record-first-run-state",
+    "EventTimestamp": "2026-10-11T16:25:48.539Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "record-first-run-state",
+    "EventTimestamp": "2026-10-11T16:25:48.539Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"polls\":3,\"roundTrippedOnEachCheck\":[true,true,true],\"roundTripped\":true}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 12,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay",
+    "EventTimestamp": "2026-10-11T16:25:48.541Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-10-11T16:25:49.541Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-10-11T16:25:48.571Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-11T16:25:48.535Z",
+      "EndTimestamp": "2026-10-11T16:25:48.571Z",
+      "Error": {},
+      "RequestId": "7810f994-dcf3-45e9-8606-a578c6ad490c"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay",
+    "EventTimestamp": "2026-10-11T16:25:49.542Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2026-10-11T16:25:49.546Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-11T16:25:49.542Z",
+      "EndTimestamp": "2026-10-11T16:25:49.546Z",
+      "Error": {},
+      "RequestId": "8f0ed22c-21f6-44d8-bdb7-b956b9bf7e7b"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 16,
+    "Id": "29f39b22-7c3a-4b2f-b706-13b3af04d69e",
+    "EventTimestamp": "2026-10-11T16:25:49.546Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"finalState\":{\"polls\":3,\"roundTrippedOnEachCheck\":[true,true,true],\"roundTripped\":true},\"firstRunState\":{\"polls\":3,\"roundTrippedOnEachCheck\":[true,true,true],\"roundTripped\":true},\"firstRunMatchesReplay\":true}"
+      }
+    }
+  }
+]

@@ -1,0 +1,498 @@
+const ddbSend = jest.fn();
+jest.mock("@aws-sdk/client-dynamodb", () => ({
+  DynamoDBClient: jest.fn(() => ({ send: ddbSend })),
+  DescribeTableCommand: jest.fn((i) => ({ __t: "descTable", i })),
+}));
+const logsSend = jest.fn();
+jest.mock("@aws-sdk/client-cloudwatch-logs", () => ({
+  CloudWatchLogsClient: jest.fn(() => ({ send: logsSend })),
+  DescribeLogGroupsCommand: jest.fn((i) => ({ __t: "descLog", i })),
+}));
+const sqsSend = jest.fn();
+jest.mock("@aws-sdk/client-sqs", () => ({
+  SQSClient: jest.fn(() => ({ send: sqsSend })),
+  GetQueueAttributesCommand: jest.fn((i) => ({ __t: "getAttrs", i })),
+}));
+jest.mock("./athena", () => ({
+  tableExists: jest.fn(),
+  runAthenaQuery: jest.fn(),
+}));
+jest.mock("./aurora", () => ({
+  runAuroraQuery: jest.fn(),
+}));
+jest.mock("./redshift", () => ({
+  runRedshiftQuery: jest.fn(),
+}));
+jest.mock("./opensearch", () => ({
+  pingOpenSearch: jest.fn(),
+  countOpenSearchDocs: jest.fn(),
+}));
+// Must target ./configCore, which is where destinationTest.ts imports
+// resolveCredentials from. Pointing this at ./config made it a no-op and let the
+// real provider chain run in tests.
+jest.mock("./configCore", () => ({
+  resolveCredentials: jest.fn(() => ({})),
+}));
+jest.mock("./writeAccess", () => ({
+  checkWriteAccess: jest.fn(async () => ({
+    status: "unverified",
+    reason: "r",
+  })),
+  // Default: results land outside the data, so the Athena probe may run.
+  checkAthenaResultLocation: jest.fn(async () => ({ kind: "outside" })),
+}));
+
+import type { TelemetryConfig } from "./configCore";
+import { testDestination } from "./destinationTest";
+import { checkAthenaResultLocation, checkWriteAccess } from "./writeAccess";
+import { tableExists, runAthenaQuery } from "./athena";
+import { runAuroraQuery } from "./aurora";
+import { runRedshiftQuery } from "./redshift";
+import { pingOpenSearch, countOpenSearchDocs } from "./opensearch";
+
+function baseCfg(overrides: Partial<TelemetryConfig>): TelemetryConfig {
+  return {
+    region: "us-east-1",
+    logGroupNames: [],
+    destinationType: "s3",
+    dynamodbTableName: "",
+    auroraResourceArn: "",
+    auroraSecretArn: "",
+    auroraDatabase: "postgres",
+    auroraTable: "durable_execution_telemetry",
+    redshiftWorkgroupName: "",
+    redshiftClusterIdentifier: "",
+    redshiftDbUser: "",
+    redshiftSecretArn: "",
+    redshiftDatabase: "dev",
+    redshiftTable: "durable_execution_telemetry",
+    redshiftSchema: "public",
+    opensearchEndpoint: "",
+    opensearchIndex: "durable-execution-telemetry",
+    sqsQueueUrl: "",
+    sqsDeleteAfterRead: false,
+    athenaDatabase: "",
+    athenaTable: "durable_execution_telemetry",
+    athenaWorkgroup: "",
+    athenaOutputLocation: "",
+    athenaS3Location: "",
+    llmProvider: "bedrock",
+    awsProfile: undefined,
+    bedrockModelId: "m",
+    localModel: "m",
+    localServerUrl: "u",
+    localServerModel: "m",
+    agenticMaxIterations: 8,
+    queryMode: "agent",
+    aiDisclosureAcceptedVersion: "",
+    ...overrides,
+  };
+}
+
+beforeEach(() => jest.clearAllMocks());
+
+describe("testDestination — S3/Athena", () => {
+  const complete = {
+    destinationType: "s3" as const,
+    athenaDatabase: "db",
+    athenaTable: "durable_execution_telemetry",
+    athenaS3Location: "s3://bucket/prefix/",
+    athenaOutputLocation: "s3://bucket/athena-results/",
+  };
+
+  it("fails on missing required fields without probing AWS", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "s3" }));
+    expect(r.ok).toBe(false);
+    const required = r.checks.find((c) => c.label === "Required fields");
+    expect(required?.ok).toBe(false);
+    expect(required?.detail).toMatch(/Glue Database/);
+    expect(tableExists).not.toHaveBeenCalled();
+    expect(runAthenaQuery).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "inside the table's data",
+      { kind: "inside", finding: "Athena writes inside." },
+      /Athena writes inside\./,
+    ],
+    [
+      "undetermined",
+      { kind: "undetermined", reason: "No location." },
+      /No location\./,
+    ],
+  ] as const)(
+    "skips the Athena probe when the result location is %s",
+    async (_name, result, detail) => {
+      (tableExists as jest.Mock).mockResolvedValue(true);
+      (checkAthenaResultLocation as jest.Mock).mockResolvedValueOnce(result);
+      const r = await testDestination(baseCfg(complete));
+      expect(runAthenaQuery).not.toHaveBeenCalled();
+      expect(r.ok).toBe(false);
+      const probe = r.checks.find(
+        (c) => c.label === "Athena test query (SELECT 1)",
+      );
+      expect(probe?.ok).toBe(false);
+      expect(probe?.detail).toMatch(/^Skipped/);
+      expect(probe?.detail).toMatch(detail);
+    },
+  );
+
+  it("passes when the table exists and the test query succeeds", async () => {
+    (tableExists as jest.Mock).mockResolvedValue(true);
+    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    const r = await testDestination(baseCfg(complete));
+    expect(r.ok).toBe(true);
+    expect(runAthenaQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "SELECT 1", database: "db" }),
+    );
+  });
+
+  it("still passes (with a note) when the table doesn't exist yet", async () => {
+    (tableExists as jest.Mock).mockResolvedValue(false);
+    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    const r = await testDestination(baseCfg(complete));
+    expect(r.ok).toBe(true);
+    const tbl = r.checks.find((c) => c.label === "Glue table exists");
+    expect(tbl?.ok).toBe(true);
+    expect(tbl?.detail).toMatch(/created automatically when you Save/);
+  });
+
+  describe("for a host that does not create the table (the MCP server)", () => {
+    const queryOnly = { createsAthenaTable: false };
+    const { athenaS3Location: _unused, ...withoutS3Location } = complete;
+
+    it("does not require the S3 location", async () => {
+      (tableExists as jest.Mock).mockResolvedValue(true);
+      (runAthenaQuery as jest.Mock).mockResolvedValue({
+        columns: [],
+        rows: [],
+      });
+      const r = await testDestination(baseCfg(withoutS3Location), queryOnly);
+      expect(r.ok).toBe(true);
+      const required = r.checks.find((c) => c.label === "Required fields");
+      expect(required?.ok).toBe(true);
+    });
+
+    it("fails when the table does not exist, because nothing will create it", async () => {
+      (tableExists as jest.Mock).mockResolvedValue(false);
+      (runAthenaQuery as jest.Mock).mockResolvedValue({
+        columns: [],
+        rows: [],
+      });
+      const r = await testDestination(baseCfg(withoutS3Location), queryOnly);
+      expect(r.ok).toBe(false);
+      const tbl = r.checks.find((c) => c.label === "Glue table exists");
+      expect(tbl?.ok).toBe(false);
+      expect(tbl?.detail).toMatch(/does not exist/);
+    });
+  });
+
+  it("still requires the S3 location by default, for the explorer that creates the table", async () => {
+    const { athenaS3Location: _unused, ...withoutS3Location } = complete;
+    const r = await testDestination(baseCfg(withoutS3Location));
+    expect(r.ok).toBe(false);
+    expect(r.checks.find((c) => c.label === "Required fields")?.detail).toMatch(
+      /S3 Location/,
+    );
+  });
+
+  it("fails when the Athena test query errors (e.g. no result location)", async () => {
+    (tableExists as jest.Mock).mockResolvedValue(true);
+    (runAthenaQuery as jest.Mock).mockRejectedValue(
+      new Error("No output location provided"),
+    );
+    const r = await testDestination(baseCfg(complete));
+    expect(r.ok).toBe(false);
+    const q = r.checks.find((c) => c.label.startsWith("Athena test query"));
+    expect(q?.ok).toBe(false);
+    expect(q?.detail).toMatch(/No output location/);
+  });
+
+  it("notes primary-workgroup usage when neither workgroup nor location set", async () => {
+    (tableExists as jest.Mock).mockResolvedValue(true);
+    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "s3",
+        athenaDatabase: "db",
+        athenaS3Location: "s3://bucket/prefix/",
+      }),
+    );
+    expect(r.checks.some((c) => c.label === "Query result location")).toBe(
+      true,
+    );
+  });
+});
+
+describe("testDestination — DynamoDB", () => {
+  it("fails when table name missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "dynamodb" }));
+    expect(r.ok).toBe(false);
+    expect(ddbSend).not.toHaveBeenCalled();
+  });
+
+  it("passes when DescribeTable succeeds", async () => {
+    ddbSend.mockResolvedValue({ Table: { TableStatus: "ACTIVE" } });
+    const r = await testDestination(
+      baseCfg({ destinationType: "dynamodb", dynamodbTableName: "wi" }),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.checks.at(-1)?.detail).toMatch(/ACTIVE/);
+  });
+
+  it("fails when DescribeTable throws", async () => {
+    ddbSend.mockRejectedValue(new Error("ResourceNotFoundException"));
+    const r = await testDestination(
+      baseCfg({ destinationType: "dynamodb", dynamodbTableName: "wi" }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.at(-1)?.detail).toMatch(/ResourceNotFound/);
+  });
+});
+
+describe("testDestination — Aurora", () => {
+  it("fails when ARNs missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "aurora" }));
+    expect(r.ok).toBe(false);
+    expect(runAuroraQuery).not.toHaveBeenCalled();
+  });
+
+  it("passes SELECT 1 against the Data API", async () => {
+    (runAuroraQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "aurora",
+        auroraResourceArn: "arn:rds",
+        auroraSecretArn: "arn:secret",
+        auroraDatabase: "postgres",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(runAuroraQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: "SELECT 1" }),
+    );
+  });
+});
+
+describe("testDestination — Redshift", () => {
+  it("fails when neither workgroup nor cluster is set", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "redshift" }));
+    expect(r.ok).toBe(false);
+    expect(runRedshiftQuery).not.toHaveBeenCalled();
+  });
+
+  it("passes SELECT 1 against the Data API (Serverless workgroup)", async () => {
+    (runRedshiftQuery as jest.Mock).mockResolvedValue({
+      columns: [],
+      rows: [],
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftWorkgroupName: "telemetry-workgroup",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(runRedshiftQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: "SELECT 1",
+        workgroupName: "telemetry-workgroup",
+        database: "dev",
+      }),
+    );
+  });
+
+  it("fails when the Data API statement errors", async () => {
+    (runRedshiftQuery as jest.Mock).mockRejectedValue(
+      new Error("Redshift statement failed: relation does not exist"),
+    );
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftClusterIdentifier: "my-cluster",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.at(-1)?.detail).toMatch(/relation does not exist/);
+  });
+});
+
+describe("testDestination — OpenSearch", () => {
+  it("fails when endpoint missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "opensearch" }));
+    expect(r.ok).toBe(false);
+    expect(pingOpenSearch).not.toHaveBeenCalled();
+  });
+
+  it("passes when the SigV4 ping and index count succeed", async () => {
+    (pingOpenSearch as jest.Mock).mockResolvedValue(
+      'Connected to cluster "x".',
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(5);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(pingOpenSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.checks.at(-1)?.detail).toMatch(/5 document/);
+  });
+
+  it("soft-passes the index check when the index doesn't exist yet (404)", async () => {
+    (pingOpenSearch as jest.Mock).mockResolvedValue(
+      'Connected to cluster "x".',
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(undefined);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.checks.at(-1)?.detail).toMatch(/not found yet/);
+  });
+
+  it("fails when the ping errors (e.g. 403 not authorized)", async () => {
+    (pingOpenSearch as jest.Mock).mockRejectedValue(
+      new Error("OpenSearch connection failed (403 Forbidden)"),
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(0);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.some((c) => /403/.test(c.detail ?? ""))).toBe(true);
+  });
+});
+
+describe("testDestination — SQS", () => {
+  it("fails when queue URL missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "sqs" }));
+    expect(r.ok).toBe(false);
+    expect(sqsSend).not.toHaveBeenCalled();
+  });
+
+  it("passes when GetQueueAttributes succeeds", async () => {
+    sqsSend.mockResolvedValue({
+      Attributes: { ApproximateNumberOfMessages: "3" },
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "sqs",
+        sqsQueueUrl: "https://sqs/q",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.checks.at(-1)?.detail).toMatch(/~3 messages/);
+  });
+});
+
+describe("testDestination — CloudWatch Logs", () => {
+  it("fails when no log groups", async () => {
+    const r = await testDestination(
+      baseCfg({ destinationType: "cloudwatch-logs-exporter" }),
+    );
+    expect(r.ok).toBe(false);
+    expect(logsSend).not.toHaveBeenCalled();
+  });
+
+  it("passes when the exact log group is found", async () => {
+    logsSend.mockResolvedValue({
+      logGroups: [{ logGroupName: "/wi/demo" }],
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "cloudwatch-logs-exporter",
+        logGroupNames: ["/wi/demo"],
+      }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("fails when the group name is not an exact match", async () => {
+    logsSend.mockResolvedValue({
+      logGroups: [{ logGroupName: "/wi/demo-2" }],
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "cloudwatch-logs-exporter",
+        logGroupNames: ["/wi/demo"],
+      }),
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it("pages via nextToken to find an exact match beyond the first page", async () => {
+    logsSend
+      .mockResolvedValueOnce({
+        logGroups: [{ logGroupName: "/wi/demo-a" }],
+        nextToken: "t1",
+      })
+      .mockResolvedValueOnce({
+        logGroups: [{ logGroupName: "/wi/demo" }],
+      });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "cloudwatch-logs-exporter",
+        logGroupNames: ["/wi/demo"],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(logsSend).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a missing lambda-log-exporter group as a pass (auto-created)", async () => {
+    logsSend.mockResolvedValue({ logGroups: [] });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "lambda-log-exporter",
+        logGroupNames: ["/aws/lambda/my-fn"],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.checks.at(-1)?.detail).toMatch(/first invocation/);
+  });
+});
+
+describe("testDestination — write-access check", () => {
+  const aurora = baseCfg({
+    destinationType: "aurora",
+    auroraResourceArn: "arn:aws:rds:us-east-1:1:cluster:c",
+    auroraSecretArn: "arn:aws:secretsmanager:us-east-1:1:secret:s",
+  });
+
+  it("attaches the write-access result when every check passed", async () => {
+    (runAuroraQuery as jest.Mock).mockResolvedValue({ rows: [] });
+    (checkWriteAccess as jest.Mock).mockResolvedValueOnce({
+      status: "can-write",
+      findings: ["The database user is a superuser."],
+    });
+    const r = await testDestination(aurora);
+    expect(r.ok).toBe(true);
+    expect(r.writeAccess).toEqual({
+      status: "can-write",
+      findings: ["The database user is a superuser."],
+    });
+  });
+
+  it("skips the write-access check when a check failed", async () => {
+    (runAuroraQuery as jest.Mock).mockRejectedValue(new Error("unreachable"));
+    const r = await testDestination(aurora);
+    expect(r.ok).toBe(false);
+    expect(r.writeAccess).toBeUndefined();
+    expect(checkWriteAccess).not.toHaveBeenCalled();
+  });
+});

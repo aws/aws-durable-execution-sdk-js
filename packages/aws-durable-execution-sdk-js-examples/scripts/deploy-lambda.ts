@@ -22,6 +22,8 @@ import {
   State,
   LastUpdateStatusReasonCode,
   PutFunctionScalingConfigCommand,
+  PutRuntimeManagementConfigCommand,
+  UpdateRuntimeOn,
   CreateFunctionCommandInput,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
@@ -36,62 +38,26 @@ import {
 const DEBUG = false;
 const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
-// ADOT Layer ARN mapping for X-Ray E2E test
-// Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
-// ARNs sourced from: https://aws-otel.github.io/docs/getting-started/lambda#adot-lambda-layer-arns
-const ADOT_LAYER_ARNS: Record<string, string> = {
-  "us-east-1":
-    "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-east-2":
-    "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-west-1":
-    "arn:aws:lambda:us-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+// TEMPORARY WORKAROUND — pin the Managed Instances runtime.
+//
+// The managed-instances durable runtime nodejs:24.DurableFunction.v33 has no outbound
+// network connectivity from the execution sandbox: DNS resolves, but TCP/TLS to every AWS
+// service endpoint (lambda, sqs, sts) black-holes. The durable SDK's first checkpoint
+// therefore never returns — `client.send(CheckpointDurableExecutionCommand)` neither
+// resolves nor rejects — and the execution dies at its ExecutionTimeout. This surfaces as
+// `capacity-provider-tests` failing with `getOperations()` returning [].
+//
+// Runtime v29 is unaffected. Pinning it restores connectivity (verified in us-west-2:
+// TCP to the Lambda endpoint 1ms, checkpoint round trip 102ms, execution succeeds in ~1s).
+// Only functions on a capacity provider are affected; on-demand functions are fine.
+//
+// Remove this block, and the PutRuntimeManagementConfig call below, once Lambda ships a
+// fixed managed-instances runtime. Pinning opts these functions out of automatic runtime
+// patching, so it must not outlive the underlying fix.
+const PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS: Record<string, string> = {
   "us-west-2":
-    "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-1":
-    "arn:aws:lambda:eu-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-2":
-    "arn:aws:lambda:eu-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-central-1":
-    "arn:aws:lambda:eu-central-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-northeast-1":
-    "arn:aws:lambda:ap-northeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-1":
-    "arn:aws:lambda:ap-southeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-2":
-    "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+    "arn:aws:lambda:us-west-2::runtime:33c885f25b2bbcf5fe2728c23ed25a2d438e49c5d08c29476328b3a18e0ca9d1",
 };
-
-// OpenTelemetry community collector-only layer for ExecutionOtelPlugin functions.
-// This layer only runs the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
-// It does NOT include auto-instrumentation — the ExecutionOtelPlugin handles that.
-// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-amd64-{version}:{layer-version}
-// Source: https://github.com/open-telemetry/opentelemetry-lambda/releases
-const OTEL_COLLECTOR_LAYER_ARN_TEMPLATE =
-  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1";
-
-function getOtelCollectorLayerArn(region: string): string {
-  return OTEL_COLLECTOR_LAYER_ARN_TEMPLATE.replace("${region}", region);
-}
-
-/**
- * Checks if the handler is a community collector otel function that needs the
- * collector-only layer (no ADOT auto-instrumentation).
- */
-function needsCollectorLayer(handler: string): boolean {
-  return handler.includes("otel-community-collector");
-}
-
-/**
- * Checks if the handler needs the ADOT layer (regular otel functions only).
- * These functions use ADOT auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER).
- * Community collector functions use a collector-only layer instead.
- */
-function needsAdotLayer(handler: string): boolean {
-  return (
-    handler.includes("otel-") && !handler.includes("otel-community-collector")
-  );
-}
 
 // Types
 interface EnvironmentVariables {
@@ -183,7 +149,9 @@ function loadExampleConfiguration(exampleName: string): ExamplesWithConfig {
       `Error: Example with handler '${targetHandler}' not found in catalog`,
     );
     console.error("Available handlers:");
-    catalog.forEach((example) => console.error(`  ${example.handler}`));
+    catalog.forEach((example) => {
+      console.error(`  ${example.handler}`);
+    });
     process.exit(1);
   }
 
@@ -226,8 +194,8 @@ async function checkFunctionExists(
   functionName: string,
 ): Promise<boolean> {
   try {
-    await lambdaClient.send(
-      new GetFunctionCommand({ FunctionName: functionName }),
+    await retryOnConflict(() =>
+      lambdaClient.send(new GetFunctionCommand({ FunctionName: functionName })),
     );
     return true;
   } catch (error: unknown) {
@@ -297,37 +265,116 @@ async function retryOnConflict<T>(
   throw new Error("Max retries exceeded");
 }
 
-async function runWithRetry<T, P>(
-  operation: () => Promise<T>,
+async function readBeforeDeadline<T>(
+  operation: (abortSignal: AbortSignal) => Promise<T>,
+  deadline: number,
+  timeoutError: unknown,
+): Promise<T> {
+  const remainingMs = deadline - performance.now();
+  if (remainingMs <= 0) throw timeoutError;
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Settle the deadline first so an SDK AbortError cannot replace the
+        // last transient failure. Race also bounds clients that ignore abort.
+        reject(timeoutError);
+        controller.abort(timeoutError);
+      }, Math.ceil(remainingMs));
+    });
+    const result = await Promise.race([operation(controller.signal), timeout]);
+    // A blocked event loop can deliver a late response before the timer runs.
+    if (performance.now() >= deadline) {
+      controller.abort(timeoutError);
+      throw timeoutError;
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runWithRetry<T>(
+  operation: (abortSignal: AbortSignal) => Promise<T>,
   checkOperationResult: (result: T) => {
     shouldRetry?: boolean;
     reason: string;
   },
-  maxRetries: number,
+  maxAttempts: number,
 ) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const result = await operation();
-    const operationResult = checkOperationResult(result);
-    if (!operationResult.shouldRetry) {
-      console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
-      return result;
+  // Each raw read consumes one attempt, whether it returns Pending or throws.
+  // Preserve the one-second polling window as a deadline shared by reads and
+  // backoff. A successful Pending read must not start a new retry budget.
+  const pollIntervalMs = 1000;
+  const deadline = performance.now() + maxAttempts * pollIntervalMs;
+  let consecutiveErrors = 0;
+  let lastError: unknown;
+  for (
+    let attempt = 0;
+    attempt < maxAttempts && performance.now() < deadline;
+    attempt++
+  ) {
+    let delayMs = pollIntervalMs;
+    let reason: string;
+    try {
+      const result = await readBeforeDeadline(
+        operation,
+        deadline,
+        lastError ?? new Error("Max retries exceeded"),
+      );
+      const operationResult = checkOperationResult(result);
+      if (!operationResult.shouldRetry) {
+        console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
+        return result;
+      }
+      reason = operationResult.reason;
+      consecutiveErrors = 0;
+      lastError = undefined;
+    } catch (error: unknown) {
+      const isThrottle = isThrottlingError(error);
+      if (!(error instanceof ResourceConflictException) && !isThrottle) {
+        throw error;
+      }
+      lastError = error;
+      const baseDelayMs = isThrottle
+        ? Math.min(1000 * 2 ** consecutiveErrors, 20000)
+        : pollIntervalMs;
+      consecutiveErrors++;
+      delayMs = baseDelayMs + Math.floor(Math.random() * 250);
+      reason = `Transient Lambda control-plane error: ${(error as Error).message}`;
     }
-    console.log(
-      `Retrying: ${operationResult.reason}. ${attempt + 1}/${maxRetries} attempts`,
+    const remainingMs = deadline - performance.now();
+    if (attempt === maxAttempts - 1 || remainingMs <= 0) break;
+    console.log(`Retrying: ${reason}. ${attempt + 1}/${maxAttempts} attempts`);
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(delayMs, remainingMs)),
     );
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error("Max retries exceeded");
+  throw lastError ?? new Error("Max retries exceeded");
 }
 
 async function getCurrentConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
+  abortSignal?: AbortSignal,
 ): Promise<GetFunctionConfigurationCommandOutput> {
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
-  return await lambdaClient.send(command);
+  // Reads inside a deployment phase or poll share that phase's retry budget.
+  return lambdaClient.send(command, { abortSignal });
+}
+
+async function getCurrentConfigurationWithRetry(
+  lambdaClient: LambdaClient,
+  functionName: string,
+): Promise<GetFunctionConfigurationCommandOutput> {
+  // The standalone initial inspection has no phase or polling retry budget.
+  return retryOnConflict(() =>
+    getCurrentConfiguration(lambdaClient, functionName),
+  );
 }
 
 async function ensureLogGroupRetention(functionName: string): Promise<void> {
@@ -354,6 +401,82 @@ async function ensureLogGroupRetention(functionName: string): Promise<void> {
   );
 }
 
+/**
+ * TEMPORARY WORKAROUND. Pins the runtime version for a function that
+ * runs on a Managed Instances capacity provider, so it does not pick up the broken
+ * nodejs:24.DurableFunction.v33 runtime. See PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS.
+ *
+ * No-op in regions without a known-good pinned ARN — runtime ARNs are region-scoped, and
+ * only us-west-2 has been verified. Failures are logged but not fatal: an unpinned function
+ * still deploys, and failing the deploy here would be worse than letting the test report
+ * the real symptom.
+ */
+async function pinCapacityProviderRuntime(
+  lambdaClient: LambdaClient,
+  functionName: string,
+  region: string,
+): Promise<void> {
+  const runtimeVersionArn = PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS[region];
+  if (!runtimeVersionArn) {
+    console.log(
+      `No pinned Managed Instances runtime configured for ${region}; using the default runtime`,
+    );
+    return;
+  }
+
+  console.log(`Pinning Managed Instances runtime to ${runtimeVersionArn}`);
+  try {
+    // PutRuntimeManagementConfig rejects a function that is still Pending/Creating with
+    // ResourceConflictException, and CreateFunction returns well before a capacity-provider
+    // function reaches Active (typically 90s+, since Lambda launches three instances for AZ
+    // resiliency first). Retry on conflict with the same budget the publish call below uses.
+    await retryOnConflict(
+      () =>
+        lambdaClient.send(
+          new PutRuntimeManagementConfigCommand({
+            FunctionName: functionName,
+            UpdateRuntimeOn: UpdateRuntimeOn.Manual,
+            RuntimeVersionArn: runtimeVersionArn,
+          }),
+        ),
+      180,
+    );
+    console.log("Runtime pinned successfully");
+
+    // PutRuntimeManagementConfig starts an update. Publishing while that update is in
+    // flight fails with "An update is in progress for resource ...". Wait for the
+    // function to settle before entering the separate publication phase.
+    await runWithRetry(
+      (abortSignal) =>
+        getCurrentConfiguration(lambdaClient, functionName, abortSignal),
+      (config) => {
+        if (
+          config.LastUpdateStatus === LastUpdateStatus.Failed ||
+          config.State === State.Failed
+        ) {
+          throw new Error(
+            `Function ${functionName} failed to settle after pinning the runtime. ` +
+              `${config.LastUpdateStatusReason ?? config.StateReason}`,
+          );
+        }
+        if (config.LastUpdateStatus === LastUpdateStatus.InProgress) {
+          return {
+            shouldRetry: true,
+            reason: `Runtime pin update is ${config.LastUpdateStatus}`,
+          };
+        }
+        return { shouldRetry: false, reason: "Runtime pin update completed" };
+      },
+      300,
+    );
+  } catch (error) {
+    console.error(
+      `Failed to pin Managed Instances runtime for ${functionName}:`,
+      error,
+    );
+  }
+}
+
 async function createFunction(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -369,52 +492,15 @@ async function createFunction(
 
   const zipBuffer = readFileSync(zipFile);
 
-  // IAM Role Requirements:
-  // - The Lambda execution role must have `CloudWatchLambdaApplicationSignalsExecutionRolePolicy`
-  //   attached for ADOT otel functions (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
-  //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
-  // - The test runner role must have `xray:GetTraceSummaries` and `xray:BatchGetTraces`
-  //   permissions to query X-Ray traces in the e2e assertion tests.
   const roleArn = env.LAMBDA_EXECUTION_ROLE_ARN;
 
   const logGroupName = `/aws/lambda/${functionName}`;
   await ensureLogGroupRetention(functionName);
 
   // Determine environment variables
-  let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+  const envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
-
-  // Apply ADOT layer + Active Tracing for ADOT otel functions
-  let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
-  let layers: string[] | undefined;
-
-  if (needsAdotLayer(exampleConfig.handler)) {
-    const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
-    if (!adotArn) {
-      console.error(
-        `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
-          `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
-      );
-      process.exit(1);
-    }
-    tracingConfig = { Mode: "Active" };
-    layers = [adotArn];
-    if (needsAdotLayer(exampleConfig.handler)) {
-      envVars = {
-        ...envVars,
-        AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
-      };
-    }
-  } else if (needsCollectorLayer(exampleConfig.handler)) {
-    // ExecutionOtelPlugin: use the OTel community collector-only layer
-    tracingConfig = { Mode: "Active" };
-    layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
-    envVars = {
-      ...envVars,
-      OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
-    };
-  }
 
   const createParams: CreateFunctionCommandInput = {
     FunctionName: functionName,
@@ -451,8 +537,6 @@ async function createFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    TracingConfig: tracingConfig,
-    Layers: layers,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -501,27 +585,9 @@ async function updateFunction(
     Role: env.LAMBDA_EXECUTION_ROLE_ARN,
     Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     Environment: {
-      Variables: (() => {
-        let vars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
-          ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
-          : undefined;
-
-        if (needsAdotLayer(exampleConfig.handler)) {
-          vars = {
-            ...vars,
-            AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
-          };
-        }
-
-        if (needsCollectorLayer(exampleConfig.handler)) {
-          vars = {
-            ...vars,
-            OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
-          };
-        }
-
-        return vars;
-      })(),
+      Variables: env.LAMBDA_ENDPOINT
+        ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
+        : undefined,
     },
     CapacityProviderConfig:
       useCapacityProvider && exampleConfig.capacityProviderConfig
@@ -535,27 +601,6 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    ...(needsAdotLayer(exampleConfig.handler)
-      ? {
-          TracingConfig: { Mode: "Active" as const },
-          Layers: (() => {
-            const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
-            if (!adotArn) {
-              console.error(
-                `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
-                  `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
-              );
-              process.exit(1);
-            }
-            return [adotArn];
-          })(),
-        }
-      : needsCollectorLayer(exampleConfig.handler)
-        ? {
-            TracingConfig: { Mode: "Active" as const },
-            Layers: [getOtelCollectorLayerArn(env.AWS_REGION)],
-          }
-        : {}),
   };
 
   // Check if DurableConfig needs updating
@@ -591,7 +636,7 @@ async function showFinalConfiguration(
 }
 
 // Main function
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     // Parse arguments and load configuration
     const { example, functionName, runtime, useCapacityProvider } = parseArgs();
@@ -652,7 +697,10 @@ async function main(): Promise<void> {
 
     // Handle function deletion if configuration changes require it (outside retry logic)
     if (functionExists) {
-      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      currentConfig = await getCurrentConfigurationWithRetry(
+        lambdaClient,
+        functionName,
+      );
       if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
         console.log("Deleting function since durability changed");
         functionExists = false;
@@ -686,180 +734,240 @@ async function main(): Promise<void> {
     await retryOnConflict(
       async () => {
         if (functionExists) {
+          // A previous attempt may have created the function or failed while
+          // loading its configuration. Never reuse an absent or stale snapshot.
+          currentConfig = await getCurrentConfiguration(
+            lambdaClient,
+            functionName,
+          );
           await updateFunction(
             lambdaClient,
             functionName,
             exampleConfig,
             zipFile,
             env,
-            currentConfig!,
+            currentConfig,
             useCapacityProvider,
             selectedRuntime,
           );
         } else {
           console.log("Function does not exist");
-          await createFunction(
-            lambdaClient,
-            functionName,
-            exampleConfig,
-            zipFile,
-            env,
-            useCapacityProvider,
-            selectedRuntime,
-          );
-        }
-
-        if (useCapacityProvider) {
-          for (let attempts = 1; attempts <= 2; attempts++) {
-            console.log(
-              "Publishing LATEST_PUBLISHED for function with capacity provider",
+          try {
+            await createFunction(
+              lambdaClient,
+              functionName,
+              exampleConfig,
+              zipFile,
+              env,
+              useCapacityProvider,
+              selectedRuntime,
             );
-            try {
-              await retryOnConflict(
-                () =>
-                  lambdaClient.send(
-                    new PublishVersionCommand({
-                      FunctionName: functionName,
-                      PublishTo:
-                        FunctionVersionLatestPublished.LATEST_PUBLISHED,
-                    }),
-                  ),
-                180,
-              );
-            } catch (err) {
-              throw new Error("Timed out publishing LATEST_PUBLISHED version", {
-                cause: err,
-              });
-            }
-
-            try {
-              console.log("Waiting for function to enter active state");
-              const qualifier = "$LATEST.PUBLISHED";
-              const functionWithQualifier = `${functionName}:${qualifier}`;
-
-              const result = await runWithRetry(
-                async () => {
-                  return getCurrentConfiguration(
-                    lambdaClient,
-                    functionWithQualifier,
-                  );
-                },
-                (currentConfiguration) => {
-                  if (
-                    currentConfiguration.LastUpdateStatus ===
-                      LastUpdateStatus.Failed ||
-                    currentConfiguration.State === State.Failed
-                  ) {
-                    if (
-                      currentConfiguration.LastUpdateStatusReasonCode ===
-                      LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
-                    ) {
-                      return {
-                        shouldRetry: false,
-                        reason: `Capacity provider limit exceeded.`,
-                      };
-                    }
-
-                    throw new Error(
-                      `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
-                    );
-                  }
-
-                  if (
-                    currentConfiguration.State !== State.Active ||
-                    currentConfiguration.LastUpdateStatus ===
-                      LastUpdateStatus.InProgress
-                  ) {
-                    return {
-                      shouldRetry: true,
-                      reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
-                    };
-                  }
-
-                  return {
-                    shouldRetry: false,
-                    reason: "Function is now active",
-                  };
-                },
-                900,
-              );
-
-              if (
-                result.LastUpdateStatusReasonCode !==
-                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
-              ) {
-                console.log("Setting function scaling config");
-                await lambdaClient.send(
-                  new PutFunctionScalingConfigCommand({
-                    FunctionName: functionName,
-                    Qualifier: qualifier,
-                    FunctionScalingConfig: {
-                      MinExecutionEnvironments: 1,
-                      MaxExecutionEnvironments: 1,
-                    },
-                  }),
-                );
-                break;
-              }
-
+            functionExists = true;
+          } catch (error: unknown) {
+            // The function can appear mid-deploy (a cancelled run's cleanup or a
+            // racing run). Switch to update instead of retrying create.
+            if (error instanceof ResourceConflictException) {
               console.log(
-                "Deleting function version and retrying since capacity limit exceeded",
+                "Function already exists (created concurrently); switching to update",
               );
-              // If the capacity provider limit exceeded, we should delete the version and retry once.
-              // It's possible for a failed version to take up capacity.
-              await lambdaClient.send(
-                new DeleteFunctionCommand({
-                  FunctionName: functionWithQualifier,
-                }),
+              // Record existence before reading so a throttled read retries
+              // the update path with fresh configuration.
+              functionExists = true;
+              currentConfig = await getCurrentConfiguration(
+                lambdaClient,
+                functionName,
               );
-
-              console.log("Waiting for function to be deleted");
-              await runWithRetry(
-                async () => {
-                  try {
-                    await getCurrentConfiguration(
-                      lambdaClient,
-                      functionWithQualifier,
-                    );
-                    return true;
-                  } catch (err) {
-                    if (err instanceof ResourceNotFoundException) {
-                      return false;
-                    }
-                    throw err;
-                  }
-                },
-                (exists) => {
-                  if (exists) {
-                    return {
-                      shouldRetry: true,
-                      reason: "Function still exists",
-                    };
-                  }
-
-                  return {
-                    shouldRetry: false,
-                    reason: "Function deleted successfully",
-                  };
-                },
-                120,
+              await updateFunction(
+                lambdaClient,
+                functionName,
+                exampleConfig,
+                zipFile,
+                env,
+                currentConfig,
+                useCapacityProvider,
+                selectedRuntime,
               );
-            } catch (err) {
-              if (err instanceof ResourceConflictException) {
-                throw new Error(
-                  "Timed out waiting for function to enter active state",
-                  {
-                    cause: err,
-                  },
-                );
-              }
-              throw err;
+            } else {
+              throw error;
             }
           }
         }
       },
       useCapacityProvider ? 120 : undefined,
     );
+
+    // Completed create/update work must not be replayed when a later phase
+    // exhausts its own bounded retries.
+    if (useCapacityProvider) {
+      // Must happen before PublishVersion: the published version snapshots the
+      // function's runtime management config, so pinning afterwards has no effect on
+      // the version that actually serves invocations.
+      await pinCapacityProviderRuntime(
+        lambdaClient,
+        functionName,
+        env.AWS_REGION,
+      );
+
+      for (let attempts = 1; attempts <= 2; attempts++) {
+        console.log(
+          "Publishing LATEST_PUBLISHED for function with capacity provider",
+        );
+        try {
+          await retryOnConflict(
+            () =>
+              lambdaClient.send(
+                new PublishVersionCommand({
+                  FunctionName: functionName,
+                  PublishTo: FunctionVersionLatestPublished.LATEST_PUBLISHED,
+                }),
+              ),
+            180,
+          );
+        } catch (err) {
+          throw new Error("Timed out publishing LATEST_PUBLISHED version", {
+            cause: err,
+          });
+        }
+
+        try {
+          console.log("Waiting for function to enter active state");
+          const qualifier = "$LATEST.PUBLISHED";
+          const functionWithQualifier = `${functionName}:${qualifier}`;
+
+          const result = await runWithRetry(
+            async (abortSignal) => {
+              return getCurrentConfiguration(
+                lambdaClient,
+                functionWithQualifier,
+                abortSignal,
+              );
+            },
+            (currentConfiguration) => {
+              if (
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.Failed ||
+                currentConfiguration.State === State.Failed
+              ) {
+                if (
+                  currentConfiguration.LastUpdateStatusReasonCode ===
+                  LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+                ) {
+                  return {
+                    shouldRetry: false,
+                    reason: `Capacity provider limit exceeded.`,
+                  };
+                }
+
+                throw new Error(
+                  `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                );
+              }
+
+              if (
+                currentConfiguration.State !== State.Active ||
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.InProgress
+              ) {
+                return {
+                  shouldRetry: true,
+                  reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
+                };
+              }
+
+              return {
+                shouldRetry: false,
+                reason: "Function is now active",
+              };
+            },
+            900,
+          );
+
+          if (
+            result.LastUpdateStatusReasonCode !==
+            LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+          ) {
+            console.log("Setting function scaling config");
+            await retryOnConflict(() =>
+              lambdaClient.send(
+                new PutFunctionScalingConfigCommand({
+                  FunctionName: functionName,
+                  Qualifier: qualifier,
+                  FunctionScalingConfig: {
+                    MinExecutionEnvironments: 1,
+                    MaxExecutionEnvironments: 1,
+                  },
+                }),
+              ),
+            );
+            break;
+          }
+
+          console.log(
+            "Deleting function version and retrying since capacity limit exceeded",
+          );
+          // If the capacity provider limit exceeded, we should delete the version and retry once.
+          // It's possible for a failed version to take up capacity.
+          await retryOnConflict(() =>
+            lambdaClient.send(
+              new DeleteFunctionCommand({
+                FunctionName: functionWithQualifier,
+              }),
+            ),
+          );
+
+          console.log("Waiting for function to be deleted");
+          await runWithRetry(
+            async (abortSignal) => {
+              try {
+                await getCurrentConfiguration(
+                  lambdaClient,
+                  functionWithQualifier,
+                  abortSignal,
+                );
+                return true;
+              } catch (err) {
+                if (err instanceof ResourceNotFoundException) {
+                  return false;
+                }
+                throw err;
+              }
+            },
+            (exists) => {
+              if (exists) {
+                return {
+                  shouldRetry: true,
+                  reason: "Function still exists",
+                };
+              }
+
+              return {
+                shouldRetry: false,
+                reason: "Function deleted successfully",
+              };
+            },
+            120,
+          );
+          if (attempts === 2) {
+            throw new Error(
+              `Function ${functionWithQualifier} exceeded capacity after two publication attempts: ` +
+                (result.LastUpdateStatusReason ??
+                  result.StateReason ??
+                  "CapacityProviderScalingLimitExceeded"),
+            );
+          }
+        } catch (err) {
+          if (err instanceof ResourceConflictException) {
+            throw new Error(
+              "Timed out waiting for function to enter active state",
+              {
+                cause: err,
+              },
+            );
+          }
+          throw err;
+        }
+      }
+    }
 
     console.log(`Successfully deployed function: ${functionName}`);
 

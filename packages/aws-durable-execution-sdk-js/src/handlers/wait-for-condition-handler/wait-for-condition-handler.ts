@@ -17,6 +17,7 @@ import {
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -97,27 +98,26 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "WaitForCondition already completed:", { stepId });
 
-        checkpoint.markOperationState(
+        const result = stepData.StepDetails?.Result;
+        return await completeAfter(
+          checkpoint,
           stepId,
-          OperationLifecycleState.COMPLETED,
-          {
-            metadata: {
+          () =>
+            safeDeserialize(
+              serdes,
+              result,
               stepId,
               name,
-              type: OperationType.STEP,
-              subType: OperationSubType.WAIT_FOR_CONDITION,
-              parentId,
-            },
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
+          {
+            stepId,
+            name,
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT_FOR_CONDITION,
+            parentId,
           },
-        );
-
-        return await safeDeserialize(
-          serdes,
-          stepData.StepDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
         );
       }
 
@@ -173,31 +173,59 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       async function executeCheckLogic(): Promise<T> {
         stepData = context.getStepData(stepId);
 
+        // Mark the operation EXECUTING before deserializing the current state.
+        // Otherwise the invocation could suspend while an async deserializer
+        // runs, before the check starts.
+        checkpoint.markOperationState(
+          stepId,
+          OperationLifecycleState.EXECUTING,
+          {
+            metadata: {
+              stepId,
+              name,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT_FOR_CONDITION,
+              parentId,
+            },
+          },
+        );
+
         // Get current state
-        let currentState: T;
-        if (
+        const checkpointData =
           stepData?.Status === OperationStatus.STARTED ||
           stepData?.Status === OperationStatus.READY
-        ) {
-          const checkpointData = stepData.StepDetails?.Result;
-          if (checkpointData) {
-            try {
-              const serdesContext = {
-                entityId: stepId,
-                durableExecutionArn: context.durableExecutionArn,
-              };
-              currentState = await serdes.deserialize(
-                checkpointData,
-                serdesContext,
-              );
-            } catch {
-              currentState = config.initialState;
-            }
-          } else {
-            currentState = config.initialState;
-          }
+            ? stepData.StepDetails?.Result
+            : undefined;
+
+        let currentState: T;
+        if (checkpointData) {
+          currentState = await safeDeserialize(
+            serdes,
+            checkpointData,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
         } else {
-          currentState = config.initialState;
+          // Round-trip initialState through the serdes so the first check sees
+          // the same shape as a check that resumes from a checkpoint.
+          const serializedInitialState = await safeSerialize(
+            serdes,
+            config.initialState,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+          currentState = await safeDeserialize(
+            serdes,
+            serializedInitialState,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
         }
 
         const currentAttempt = (stepData?.StepDetails?.Attempt ?? 0) + 1;
@@ -231,21 +259,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             logger,
             attempt: currentAttempt,
           };
-
-          // Mark operation as EXECUTING
-          checkpoint.markOperationState(
-            stepId,
-            OperationLifecycleState.EXECUTING,
-            {
-              metadata: {
-                stepId,
-                name,
-                type: OperationType.STEP,
-                subType: OperationSubType.WAIT_FOR_CONDITION,
-                parentId,
-              },
-            },
-          );
 
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
@@ -314,11 +327,19 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               ...attemptEndInfo,
               isReplay: false,
             });
-            checkpoint.markOperationState(
-              stepId,
-              OperationLifecycleState.COMPLETED,
+            // waitStrategy is user code and may have mutated deserializedState.
+            // Return the value that was checkpointed, as a replay would. The
+            // operation stays EXECUTING until that value is deserialized.
+            return await completeAfter(checkpoint, stepId, () =>
+              safeDeserialize(
+                serdes,
+                serializedState,
+                stepId,
+                name,
+                context.terminationManager,
+                context.durableExecutionArn,
+              ),
             );
-            return deserializedState;
           }
 
           const nextAttemptDelaySeconds = durationToSeconds(decision.delay);
@@ -337,7 +358,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
-            AttemptEndInfoOutcome.FAILED,
+            AttemptEndInfoOutcome.SUCCEEDED,
             {
               attempt: currentAttempt,
             },

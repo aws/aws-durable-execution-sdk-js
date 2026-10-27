@@ -33,7 +33,7 @@ describe("Checkpoint Integration Tests", () => {
 
     mockState = {
       checkpoint: jest.fn().mockResolvedValue({
-        checkpointToken: mockNewTaskToken,
+        CheckpointToken: mockNewTaskToken,
       }),
     };
 
@@ -262,7 +262,7 @@ describe("Checkpoint Integration Tests", () => {
     // Create second mock state
     mockState2 = {
       checkpoint: jest.fn().mockResolvedValue({
-        checkpointToken: mockNewTaskToken,
+        CheckpointToken: mockNewTaskToken,
       }),
     };
 

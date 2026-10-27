@@ -1,0 +1,360 @@
+import {
+  CallbackTimeoutError,
+  ChildContextError,
+  DurableOperationError,
+} from "@aws/durable-execution-sdk-js";
+
+/**
+ * The base class of every error that {@link microvm} and
+ * {@link microvmSession} report for a MicroVM failure.
+ *
+ * @remarks
+ * Catch it to handle every MicroVM failure the same way. Catch a subclass to
+ * handle one kind:
+ *
+ * - {@link MicrovmLaunchError}: `RunMicrovm` failed after all retries.
+ * - {@link MicrovmDeliveryError}: the job could not be delivered over HTTP.
+ *   Its subclass {@link MicrovmNotRunningError} means that the MicroVM no
+ *   longer runs. A session reports it. A {@link microvm} job over HTTP also
+ *   reports it, when CreateMicrovmAuthToken reports the MicroVM removed.
+ * - {@link MicrovmJobFailedError}: the job handler in the MicroVM failed.
+ * - {@link MicrovmTimeoutError}: no result or no heartbeat arrived in time.
+ *
+ * The message names the operation and keeps the underlying message. For a
+ * failed job, `errorData` is the `ErrorData` that the MicroVM reported.
+ *
+ * The SDK checkpoints a failed operation's error type, message, and data,
+ * and rebuilds the error from them, on the first run and on replay alike. So
+ * the SDK error that caused the failure, such as a `StepError`, is not kept.
+ * `cause` is the rebuilt error, whose `name` is the MicroVM error type.
+ *
+ * The class survives replay at the operation's own boundary. A caller's own
+ * `runInChildContext` does not restore it: the SDK wraps the failure in
+ * `ChildContextError`, and rebuilds the inner error as a `StepError` whose
+ * `cause.name` is the MicroVM error type. The SDK rebuilds every error type
+ * it does not know that way.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmError extends DurableOperationError {
+  readonly errorType: string = "MicrovmError";
+}
+
+/**
+ * `RunMicrovm` failed after all retries.
+ *
+ * A launch attempt that timed out or lost its connection can still have
+ * created a MicroVM. When the launch step still fails, the operation never
+ * learns that MicroVM's ID. So the operation cannot terminate that MicroVM.
+ * That MicroVM ends at its maximum duration.
+ *
+ * 1. With `run` hook delivery, the launch request holds the job. So that
+ *    MicroVM runs the job. So a caller that runs the job again after this
+ *    error can run it twice.
+ * 2. With HTTP delivery, the launch request holds no job. The request step
+ *    starts only after a launch succeeds. So when you invoke through a
+ *    version or an alias, no MicroVM runs the job.
+ *
+ * When the last RunMicrovm call failed with an error of the Lambda MicroVMs
+ * service, the message ends with the request ID of that call, in the form
+ * `RunMicrovm request ID: <id>.`. A support case can quote it. The message
+ * has no request ID when the AWS SDK error carries none, for example after
+ * a connection failure. It also has none for an error of another service,
+ * such as STS in a credential provider, because that request ID does not
+ * belong to RunMicrovm.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmLaunchError extends MicrovmError {
+  readonly errorType: string = "MicrovmLaunchError";
+}
+
+/**
+ * The job could not be delivered over HTTP: the endpoint stayed unavailable
+ * after all retries, the auth token was refused, or the route answered with a
+ * client error such as 404, or with a redirect.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmDeliveryError extends MicrovmError {
+  readonly errorType: string = "MicrovmDeliveryError";
+}
+
+/**
+ * The MicroVM can no longer run a job, because it is terminating,
+ * terminated, or removed. It is a {@link MicrovmDeliveryError}, so code that
+ * catches delivery failures also catches it.
+ *
+ * @remarks
+ * A MicroVM lives at most its `timeout` plus 5 minutes, and never longer
+ * than 8 hours, running or suspended. This holds for a session and for
+ * {@link microvm}. The platform then terminates and removes it. A
+ * TerminateMicrovm call from outside the operation ends it too.
+ *
+ * The request step reports this error in three cases:
+ *
+ * 1. A session that checks the MicroVM state before each job. It checks when
+ *    `autoSuspendOnIdle` is `true`, when an `idlePolicy` is set, and after a
+ *    job with `suspendAfter`. The check calls GetMicrovm. It also calls
+ *    ResumeMicrovm when the MicroVM is suspended. GetMicrovm can report a
+ *    terminating or terminated MicroVM. Either call can report a MicroVM
+ *    that no longer exists.
+ * 2. Every session job, after a request without an answer, or after an HTTP
+ *    502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step
+ *    then calls GetMicrovm once.
+ * 3. Any job that goes over HTTP, from {@link microvm} or from a session.
+ *    The request step calls CreateMicrovmAuthToken before the first request,
+ *    and again after a 401 or 403. The API model lists
+ *    `ResourceNotFoundException` for that call. So it can report a MicroVM
+ *    that no longer exists.
+ *
+ * A later attempt finds the same state. So the job is not retried. To
+ * continue, start a new session, or call {@link microvm} again for a new
+ * MicroVM.
+ *
+ * The message ends with the request ID of the call that reported the state,
+ * in the form `GetMicrovm request ID: <id>.`,
+ * `ResumeMicrovm request ID: <id>.`, or
+ * `CreateMicrovmAuthToken request ID: <id>.`. A support case can quote it.
+ * The message has no request ID when the AWS SDK error or output carries
+ * none, or when the error does not come from the Lambda MicroVMs service.
+ *
+ * By default, with no `idlePolicy` and no job with `suspendAfter`, the
+ * session makes no GetMicrovm call before delivery. The endpoint of a
+ * terminated MicroVM answers 502. Whether that 502 carries
+ * `MICROVM_CONNECT_FAILED` is not verified. Without it, the request step
+ * retries the 502 as a MicroVM that is still starting. So the job then
+ * fails with a plain {@link MicrovmDeliveryError}, after the retries of both
+ * tiers.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmNotRunningError extends MicrovmDeliveryError {
+  readonly errorType: string = "MicrovmNotRunningError";
+}
+
+/**
+ * The job handler in the MicroVM failed. The MicroVM reported the failure
+ * with `SendDurableExecutionCallbackFailure`.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmJobFailedError extends MicrovmError {
+  readonly errorType: string = "MicrovmJobFailedError";
+}
+
+/**
+ * No result arrived within the job's `timeout`, or no heartbeat arrived
+ * within its `heartbeatTimeout`. A MicroVM that crashed or never booted ends
+ * this way. The message keeps the service's reason, such as "Callback timed
+ * out on heartbeat".
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class MicrovmTimeoutError extends MicrovmError {
+  readonly errorType: string = "MicrovmTimeoutError";
+}
+
+type MicrovmErrorClass = new (
+  message: string,
+  cause?: Error,
+  errorData?: string,
+) => MicrovmError;
+
+const CLASSES: Readonly<Record<string, MicrovmErrorClass>> = {
+  MicrovmError,
+  MicrovmLaunchError,
+  MicrovmDeliveryError,
+  MicrovmNotRunningError,
+  MicrovmJobFailedError,
+  MicrovmTimeoutError,
+};
+
+/**
+ * The name of the error that the request step throws when the MicroVM is
+ * terminating, terminated, or removed. See `aws-errors.ts`.
+ */
+export const MICROVM_STATE_ERROR_NAME = "MicrovmStateError";
+
+/** The stage of a MicroVM operation that failed. */
+export type MicrovmStage = "launch" | "delivery" | "job";
+
+/**
+ * Converts an error of one stage into its MicroVM error. It runs inside the
+ * child context, before the SDK checkpoints the failure. So the checkpoint
+ * records the MicroVM error type, and {@link rebuildMicrovmError} can
+ * restore the class from it.
+ */
+export function toMicrovmError(
+  name: string,
+  stage: MicrovmStage,
+  error: unknown,
+): unknown {
+  if (error instanceof MicrovmError || !(error instanceof Error)) {
+    return error;
+  }
+  const detail = error.message;
+  const errorData =
+    error instanceof DurableOperationError ? error.errorData : undefined;
+  switch (stage) {
+    case "launch":
+      return new MicrovmLaunchError(
+        `MicroVM "${name}": the launch failed: ${detail}`,
+        error,
+        errorData,
+      );
+    case "delivery":
+      // The request step failed with the state error, and the SDK keeps the
+      // step error's original name in cause.name.
+      if (
+        error.name === MICROVM_STATE_ERROR_NAME ||
+        (error.cause instanceof Error &&
+          error.cause.name === MICROVM_STATE_ERROR_NAME)
+      ) {
+        return new MicrovmNotRunningError(
+          `MicroVM "${name}": the job could not be delivered: ${detail}`,
+          error,
+          errorData,
+        );
+      }
+      return new MicrovmDeliveryError(
+        `MicroVM "${name}": the job could not be delivered: ${detail}`,
+        error,
+        errorData,
+      );
+    case "job": {
+      if (error instanceof CallbackTimeoutError) {
+        return new MicrovmTimeoutError(
+          `MicroVM "${name}": the job timed out: ${detail}`,
+          error,
+          errorData,
+        );
+      }
+      // For a failed callback, the SDK sets cause.name to the ErrorType that
+      // the MicroVM reported, such as the job handler's error class. The
+      // checkpoint keeps only the message, so the message carries the type.
+      const jobType =
+        error.cause instanceof Error && error.cause.name !== "Error"
+          ? ` (${error.cause.name})`
+          : "";
+      return new MicrovmJobFailedError(
+        `MicroVM "${name}": the job failed${jobType}: ${detail}`,
+        error,
+        errorData,
+      );
+    }
+  }
+}
+
+/**
+ * Runs one stage and converts its failure with {@link toMicrovmError}.
+ */
+export async function inStage<T>(
+  name: string,
+  stage: MicrovmStage,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    throw toMicrovmError(name, stage, error);
+  }
+}
+
+/**
+ * Restores a MicroVM error from the error that the SDK rebuilt from a
+ * checkpoint.
+ *
+ * The SDK rebuilds an error type it does not know as a `StepError`, and it
+ * sets `cause.name` to the checkpointed type. So the checkpointed type is
+ * `cause.name`, unless the SDK knew the type itself.
+ */
+export function rebuildMicrovmError(
+  error: DurableOperationError,
+): MicrovmError | undefined {
+  if (error instanceof MicrovmError) {
+    return error;
+  }
+  const type =
+    error.errorType === "StepError" ? error.cause?.name : error.errorType;
+  const Class = type === undefined ? undefined : CLASSES[type];
+  return Class
+    ? new Class(error.message, error.cause, error.errorData)
+    : undefined;
+}
+
+/**
+ * The error mapper of an operation that contains no caller code: `microvm`,
+ * and one `vm.invoke`. Every failure inside it is a MicroVM failure. So an
+ * error of another type becomes a plain {@link MicrovmError}.
+ */
+export function microvmErrorMapper(
+  name: string,
+): (error: DurableOperationError) => DurableOperationError {
+  return (error) =>
+    rebuildMicrovmError(error) ??
+    new MicrovmError(
+      `MicroVM "${name}": ${error.message}`,
+      error.cause,
+      error.errorData,
+    );
+}
+
+/**
+ * Every error type that `DurableOperationError.fromErrorObject` in the core
+ * SDK rebuilds as its own class. A test checks this list against the SDK.
+ *
+ * @internal
+ */
+export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
+  "StepError",
+  "CallbackError",
+  "CallbackExternalError",
+  "CallbackTimeoutError",
+  "CallbackSubmitterError",
+  "InvokeError",
+  "ChildContextError",
+  "WaitForConditionError",
+  "PromiseCombinatorError",
+]);
+
+/**
+ * The error mapper of a session. The session handler is caller code. So only
+ * MicroVM errors are restored, and every SDK error keeps its type.
+ *
+ * The rule:
+ *
+ * 1. A MicroVM error is restored to its class.
+ * 2. An SDK error type that `fromErrorObject` knows passes through. The SDK
+ *    rebuilds such an error with `cause.name` set to its type.
+ * 3. Any other error is wrapped in `ChildContextError`, as `runInChildContext`
+ *    does without an error mapper.
+ *
+ * The SDK rebuilds an error type that it does not know, such as a plain
+ * `Error` thrown by the handler, as `StepError`, and keeps the original type
+ * as `cause.name`. So `errorType` alone cannot tell a failed step from a
+ * failed handler. So rule 2 also requires `cause.name` to match the type.
+ */
+export function sessionErrorMapper(
+  error: DurableOperationError,
+): DurableOperationError {
+  return (
+    rebuildMicrovmError(error) ??
+    (SDK_ERROR_TYPES.has(error.errorType) &&
+    error.cause?.name === error.errorType
+      ? error
+      : new ChildContextError(error.message, error))
+  );
+}

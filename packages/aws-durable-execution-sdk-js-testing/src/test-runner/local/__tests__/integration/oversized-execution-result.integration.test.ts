@@ -1,5 +1,5 @@
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { EventType } from "@aws-sdk/client-lambda";
+import { EventType, ExecutionStatus } from "@aws-sdk/client-lambda";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
@@ -24,18 +24,26 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
  *     InvocationCompleted   Id: None
  *     ExecutionSucceeded    Id: <executionId>
  *
+ * The service limits the payload of that update to 6291456 bytes, the
+ * synchronous invocation limit. So only a result between the SDK's guard
+ * (6291456 - 50 bytes) and that limit takes this path successfully. A larger
+ * result fails the checkpoint.
+ *
  * Ordering is the one known remaining difference: the service emits
  * `InvocationCompleted` before the terminal event, the local runner after. That
  * is tracked with the event-ordering TODO in local-durable-test-runner.ts, so
  * these assertions are on counts and ids rather than positions.
  */
 describe("oversized execution result", () => {
+  // Past the SDK's response-size guard of 6291456 - 50 bytes, and within the
+  // service's limit of 6291456 bytes once JSON adds its 2 quotes.
+  const RESULT_LENGTH = 6 * 1024 * 1024 - 10;
+
   const oversizedHandler = withDurableExecution(async (_, context) => {
     // Small enough to checkpoint inline as usual.
     await context.step("plan", () => Promise.resolve({ rows: 1 }));
 
-    // Comfortably past the SDK's 6MB response-size guard.
-    return "x".repeat(6 * 1024 * 1024 + 1000);
+    return "x".repeat(RESULT_LENGTH);
   });
 
   it("matches the history the service produces", async () => {
@@ -82,9 +90,25 @@ describe("oversized execution result", () => {
     expect(execution.getInvocations()).toHaveLength(1);
 
     // The caller still receives the whole result.
-    expect((execution.getResult() as string).length).toBe(
-      6 * 1024 * 1024 + 1000,
-    );
+    expect((execution.getResult() as string).length).toBe(RESULT_LENGTH);
+  }, 60000);
+
+  it("fails the execution for a result over the service's limit", async () => {
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(async () =>
+        "x".repeat(6 * 1024 * 1024 + 1000),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
+    expect(execution.getError()).toMatchObject({
+      errorType: "CheckpointUnrecoverableExecutionError",
+      errorMessage: expect.stringContaining(
+        "Checkpoint failed: Execution output payload size must be less than or equal to 6291456 bytes.",
+      ),
+    });
   }, 60000);
 
   it("keeps the ordinary inline path unchanged", async () => {

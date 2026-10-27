@@ -88,6 +88,7 @@ export {
  */
 export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
+export { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
 export {
   DurableExecutionClientError,
   DurableExecutionClientErrorScope,
@@ -129,6 +130,11 @@ export {
 } from "./utils/serdes/filesystem-serdes";
 export { buildPreview } from "./utils/serdes/preview";
 export { refreshLogConfig } from "./utils/logger/logger";
+export {
+  createPowertoolsLogger,
+  PowertoolsDurableLogger,
+  PowertoolsLoggerLike,
+} from "./utils/logger/powertools-logger";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
@@ -147,6 +153,12 @@ export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
 export {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPlugin,
+  RegisteredDurableInstrumentationPluginFactory,
+  PropagationInput,
+  PropagationMetadata,
   InvocationInfo,
   InvocationEndInfo,
   PluginInvocationStatus,

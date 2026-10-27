@@ -1,0 +1,1304 @@
+import type {
+  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
+  InvocationInfo,
+  InvocationEndInfo,
+  OperationChangeInfo,
+  OperationInfo,
+  PluginInvocationStatus,
+} from "@aws/durable-execution-sdk-js";
+import type {
+  DurableExecutionTelemetryConfig,
+  DurableExecutionTelemetryRecord,
+  ErrorRecord,
+  OperationRecord,
+  OperationOverride,
+  OperationResult,
+  JsonValue,
+  TelemetryExporter,
+} from "./types";
+import { withOperationsByName } from "./operations-index";
+import { truncateRecord } from "./truncation";
+
+export type {
+  TelemetryExporter,
+  DurableExecutionTelemetryConfig,
+  DurableExecutionTelemetryRecord,
+  ErrorRecord,
+  OperationRecord,
+  OperationSummary,
+  OperationsFormat,
+  ContentConfig,
+  OperationOverride,
+} from "./types";
+
+export {
+  buildOperationsByName,
+  withOperationsByName,
+  applyOperationsFormat,
+} from "./operations-index";
+
+export { truncateRecord } from "./truncation";
+
+export { S3Exporter } from "./exporters/s3-exporter";
+export type { S3ExporterConfig } from "./exporters/s3-exporter";
+
+export { DynamoDBExporter } from "./exporters/dynamodb-exporter";
+export type { DynamoDBExporterConfig } from "./exporters/dynamodb-exporter";
+
+export { AuroraExporter } from "./exporters/aurora-exporter";
+export type { AuroraExporterConfig } from "./exporters/aurora-exporter";
+
+export { CloudWatchLogsExporter } from "./exporters/cloudwatch-logs-exporter";
+export type { CloudWatchLogsExporterConfig } from "./exporters/cloudwatch-logs-exporter";
+
+export { OTelExporter } from "./exporters/otel-exporter";
+export type { OTelExporterConfig } from "./exporters/otel-exporter";
+
+export { FirehoseExporter } from "./exporters/firehose-exporter";
+export type { FirehoseExporterConfig } from "./exporters/firehose-exporter";
+
+export { EventBridgeExporter } from "./exporters/eventbridge-exporter";
+export type { EventBridgeExporterConfig } from "./exporters/eventbridge-exporter";
+
+export { RedshiftExporter } from "./exporters/redshift-exporter";
+export type { RedshiftExporterConfig } from "./exporters/redshift-exporter";
+
+export { OpenSearchExporter } from "./exporters/opensearch-exporter";
+export type { OpenSearchExporterConfig } from "./exporters/opensearch-exporter";
+
+export { SQSExporter } from "./exporters/sqs-exporter";
+export type { SQSExporterConfig } from "./exporters/sqs-exporter";
+
+export { HttpExporter } from "./exporters/http-exporter";
+export type { HttpExporterConfig } from "./exporters/http-exporter";
+
+export { FileExporter } from "./exporters/file-exporter";
+export type { FileExporterConfig } from "./exporters/file-exporter";
+
+// --- ARN Parsing ---
+
+interface ParsedArn {
+  functionName: string;
+  qualifier: string;
+  region: string;
+  accountId: string;
+  executionName: string;
+  invocationId: string;
+}
+
+function parseExecutionArn(executionArn: string): ParsedArn {
+  // Format: arn:<partition>:lambda:<region>:<accountId>:function:<functionName>:<qualifier>/durable-execution/<executionName>/<invocationId>
+  const parts = executionArn.split(":");
+  const lastPart = parts[7] ?? "";
+  const segments = lastPart.split("/");
+  return {
+    region: parts[3] ?? "",
+    accountId: parts[4] ?? "",
+    functionName: parts[6] ?? "",
+    qualifier: segments[0] ?? "",
+    executionName: segments[2] ?? "",
+    invocationId: segments[3] ?? "",
+  };
+}
+
+// --- Sampling ---
+
+/**
+ * FNV-1a 32-bit hash. `Math.imul` performs a correct 32-bit integer multiply —
+ * a plain `*` loses precision once the intermediate exceeds 2^53 — so the
+ * result is identical across JS engines and therefore stable across replays.
+ */
+function fnv1a32(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Deterministic, all-or-nothing per-execution sampling decision.
+ *
+ * The execution ARN is stable across all invocations and replays of the same
+ * execution, so hashing it directly yields a decision that never changes
+ * mid-flight — a resumed execution always reaches the same conclusion. Maps the
+ * hash into [0, 1) and samples in when it falls below `rate`.
+ */
+function shouldSampleExecution(executionArn: string, rate: number): boolean {
+  if (rate >= 1) return true;
+  if (rate <= 0) return false;
+  return fnv1a32(executionArn) / 0xffffffff < rate;
+}
+
+/**
+ * Normalizes a user-supplied `samplingRate` into a rate in [0, 1]. `undefined`
+ * means "sample everything" (1.0). Out-of-range or non-numeric values are
+ * clamped/defaulted with a warning rather than throwing, so a misconfiguration
+ * never breaks instrumentation.
+ */
+function resolveSamplingRate(rate: number | undefined): number {
+  if (rate === undefined) return 1;
+  if (typeof rate !== "number" || Number.isNaN(rate)) {
+    console.warn(
+      "[durable-execution-telemetry] samplingRate is not a number; defaulting to 1.0 (all executions).",
+    );
+    return 1;
+  }
+  if (rate < 0 || rate > 1) {
+    const clamped = Math.max(0, Math.min(1, rate));
+    console.warn(
+      `[durable-execution-telemetry] samplingRate ${rate} is out of range [0, 1]; clamping to ${clamped}.`,
+    );
+    return clamped;
+  }
+  return rate;
+}
+
+// --- Status Mapping ---
+
+const STATUS_MAP: Record<string, DurableExecutionTelemetryRecord["status"]> = {
+  SUCCEEDED: "SUCCEEDED",
+  FAILED: "FAILED",
+  // A durable execution suspends (no compute) while waiting on a timer or an
+  // external event/callback. The runtime reports this as PENDING, but from the
+  // execution's point of view it is still in flight, so we surface it as
+  // RUNNING. RETRYING (runtime will auto-retry) is likewise still in flight.
+  PENDING: "RUNNING",
+  RETRYING: "RUNNING",
+};
+
+function mapStatus(
+  status: PluginInvocationStatus,
+): DurableExecutionTelemetryRecord["status"] {
+  return STATUS_MAP[status] ?? "RUNNING";
+}
+
+// --- Operation Records ---
+
+/**
+ * Operation timestamps may arrive as Date objects (local test runner) or as
+ * epoch milliseconds / ISO strings (real Lambda durable runtime, after
+ * checkpoint serialization). Normalize defensively so record building never
+ * throws on an unexpected shape.
+ *
+ * An Invalid Date is treated as absent, exactly like an unparseable string: it
+ * passes `instanceof Date`, so returning its `NaN` time would carry the failure
+ * into `new Date(NaN).toISOString()`, which throws `RangeError` and loses the
+ * whole record instead of one field. This matches the core SDK's own `toDate`
+ * (`utils/timestamp/timestamp.ts`), which maps an unparseable wire timestamp to
+ * `undefined` for the same reason.
+ */
+function toEpochMs(ts: unknown): number | undefined {
+  if (ts == null) return undefined;
+  if (ts instanceof Date) {
+    const ms = ts.getTime();
+    return Number.isNaN(ms) ? undefined : ms;
+  }
+  if (typeof ts === "number") return Number.isFinite(ts) ? ts : undefined;
+  if (typeof ts === "string") {
+    const ms = new Date(ts).getTime();
+    return Number.isNaN(ms) ? undefined : ms;
+  }
+  return undefined;
+}
+
+function toIsoString(ts: unknown): string | undefined {
+  const ms = toEpochMs(ts);
+  return ms === undefined ? undefined : new Date(ms).toISOString();
+}
+
+// --- Error Records ---
+
+/** How many `cause` levels are written below an error before the chain is cut. */
+const MAX_CAUSE_DEPTH = 16;
+
+/**
+ * Longest `name` or `message` written for an error or a cause, in Unicode code
+ * points (not UTF-16 code units), so a cut never splits a surrogate pair and the
+ * cut point matches the Python and Java exporters. A longer value keeps this
+ * many code points followed by `…`.
+ */
+const MAX_TEXT_LENGTH = 8192;
+
+/**
+ * Caps a `name` or `message` at {@link MAX_TEXT_LENGTH} code points, then
+ * appends `…`. A string has at least as many UTF-16 units as code points, so a
+ * string of at most {@link MAX_TEXT_LENGTH} units is returned without scanning.
+ * A longer string is scanned only up to the cut point.
+ */
+function capText(text: string): string {
+  if (text.length <= MAX_TEXT_LENGTH) return text;
+  let units = 0;
+  let points = 0;
+  for (const ch of text) {
+    if (points === MAX_TEXT_LENGTH) return `${text.slice(0, units)}…`;
+    units += ch.length;
+    points++;
+  }
+  // More units than the cap, but at most MAX_TEXT_LENGTH code points.
+  return text;
+}
+
+/**
+ * True for an error object, including one from another realm (a `vm` context),
+ * which `instanceof Error` does not recognize.
+ *
+ * Both checks can throw on customer values: `instanceof` on a revoked proxy,
+ * and `Object.prototype.toString` on a throwing `Symbol.toStringTag` getter.
+ * This function does not catch; callers classify inside a `try` so that a
+ * throw ends the cause chain instead of losing the record.
+ */
+function isErrorObject(value: unknown): value is Error {
+  return (
+    value instanceof Error ||
+    Object.prototype.toString.call(value) === "[object Error]"
+  );
+}
+
+/**
+ * The string form of a cause that is not an error object (a thrown string, a
+ * number, a plain object). A `toString` that throws must not lose the record,
+ * so it falls back to the `Object.prototype.toString` tag.
+ */
+function causeToString(cause: unknown): string {
+  try {
+    return String(cause);
+  } catch {
+    try {
+      return Object.prototype.toString.call(cause);
+    } catch {
+      return "";
+    }
+  }
+}
+
+/**
+ * Reads an error's `cause`. `undefined` and `null` mean "no cause". A throwing
+ * `cause` getter also ends the chain rather than losing the record.
+ */
+function readCause(error: Error): unknown {
+  try {
+    return (error as { cause?: unknown }).cause ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One written cause level, and whether the chain may continue below it. */
+interface CauseLevel {
+  record: ErrorRecord;
+  /** `true` when the cause is an error object whose own `cause` is read next. */
+  isError: boolean;
+}
+
+/**
+ * Reads an error object's `name` and `message` as strings, capped: a non-string
+ * value is converted with the same safe stringify used for non-error causes, a
+ * missing (`undefined`/`null`) `name` is `"Error"`, and a missing `message` is
+ * `""`. Does not catch: a throwing getter or proxy trap propagates to the
+ * caller, which decides what a failed read means.
+ */
+function readNameAndMessage(error: Error): ErrorRecord {
+  const name: unknown = error.name;
+  const message: unknown = error.message;
+  return {
+    name: capText(
+      typeof name === "string"
+        ? name
+        : name == null
+          ? "Error"
+          : causeToString(name),
+    ),
+    message: capText(
+      typeof message === "string"
+        ? message
+        : message == null
+          ? ""
+          : causeToString(message),
+    ),
+  };
+}
+
+/**
+ * One cause level. Unlike the top-level error, a cause is customer data the
+ * exporter did not ask for, so any throw while reading it — classifying it
+ * (revoked proxy, throwing `Symbol.toStringTag`), or reading `name`/`message`
+ * — ends the chain (returns `undefined`) instead of losing the whole record.
+ *
+ * `name` and `message` are read by {@link readNameAndMessage}, so they are
+ * always capped strings.
+ */
+function toCauseLevel(cause: unknown): CauseLevel | undefined {
+  try {
+    if (!isErrorObject(cause)) {
+      return {
+        record: { name: "Error", message: capText(causeToString(cause)) },
+        isError: false,
+      };
+    }
+    return { record: readNameAndMessage(cause), isError: true };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds the record form of an error: `{ name, message, cause? }`, in that key
+ * order.
+ *
+ * `name` and `message` are the error's own values, converted to strings and
+ * capped at {@link MAX_TEXT_LENGTH} code points (a longer value is cut and
+ * followed by `…`); nothing else is rewritten. The `cause` chain
+ * follows `Error.cause` (for an operation error rebuilt from a checkpoint, the
+ * cause the SDK built from the checkpointed error), writes at most
+ * {@link MAX_CAUSE_DEPTH} levels below `error`, and stops at a cause it has
+ * already written, so a cycle cannot loop. A cause that is not an error object
+ * is written as `{ name: "Error", message: String(cause) }` and ends the chain.
+ * Any throw while reading a cause ends the chain; the levels already written
+ * are kept. The error's own `name` and `message` are read the same way as a
+ * cause's (converted to strings); if reading either throws, the error is
+ * written as `{ name: "Error", message: "" }` and its cause chain is still
+ * read, so the record is kept. Every `name` and `message` (the error's and each
+ * cause's) is capped at {@link MAX_TEXT_LENGTH} code points plus `…`. Levels
+ * that repeat the level above are written as they are.
+ * `cause` is omitted, not `undefined`, when there is none, so the serialized
+ * shape is `{ name, message }` exactly as before.
+ */
+function toErrorRecord(error: Error): ErrorRecord {
+  let root: ErrorRecord;
+  try {
+    root = readNameAndMessage(error);
+  } catch {
+    root = { name: "Error", message: "" };
+  }
+  const visited = new Set<unknown>([error]);
+  let tail = root;
+  let current: unknown = readCause(error);
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+    if (current === undefined || visited.has(current)) break;
+    visited.add(current);
+    const level = toCauseLevel(current);
+    if (level === undefined) break;
+    tail.cause = level.record;
+    tail = level.record;
+    if (!level.isError) break;
+    current = readCause(current as Error);
+  }
+  return root;
+}
+
+function toOperationRecord(op: OperationInfo): OperationRecord {
+  const startMs = toEpochMs(op.startTimestamp);
+  const endMs = toEpochMs(op.endTimestamp);
+  const durationMs =
+    startMs !== undefined && endMs !== undefined ? endMs - startMs : undefined;
+
+  return {
+    id: op.id,
+    name: op.name,
+    type: op.type,
+    subType: op.subType,
+    parentId: op.parentId,
+    status: op.status ?? "UNKNOWN",
+    startTime: toIsoString(op.startTimestamp),
+    endTime: toIsoString(op.endTimestamp),
+    durationMs,
+    attempt: op.attempt,
+    error: op.error ? toErrorRecord(op.error) : undefined,
+  };
+}
+
+/**
+ * Options controlling how operation records are filtered/enriched, derived from
+ * `content.operations`.
+ */
+interface OperationContentOptions {
+  /** Overrides keyed by `operationName`. */
+  overridesByName: Map<string, OperationOverride>;
+  /** Whether to include per-operation error details. */
+  includeErrors: boolean;
+  /**
+   * When true, only top-level operations are emitted; any operation with a
+   * `parentId` (parallel branches, map items, nested steps/contexts) is
+   * dropped. Derived from `operationDetail: "top-level"`.
+   */
+  topLevelOnly: boolean;
+}
+
+/**
+ * Applies a user-supplied result transform to an operation's raw (serialized)
+ * result. The checkpointed result is a JSON string; we parse it before handing
+ * it to the transform, falling back to the raw string if it isn't valid JSON.
+ *
+ * User transforms are untrusted code: a throwing transform must never break the
+ * execution or leak the raw result, so on error we omit the field.
+ */
+function applyResultOverride(
+  transform: (result: OperationResult) => OperationResult,
+  rawResult: string | undefined,
+): OperationResult | undefined {
+  if (rawResult === undefined) return undefined;
+  let parsed: OperationResult;
+  try {
+    parsed = JSON.parse(rawResult) as OperationResult;
+  } catch {
+    parsed = rawResult;
+  }
+  try {
+    return transform(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolves a `content.input`/`content.output` setting against a value.
+ * - `false` → omit (undefined)
+ * - function → transformed value (omit on throw, so a failing redactor never
+ *   leaks the raw value)
+ * - `true`/`undefined` → include as-is
+ */
+function applyDataContent(
+  value: unknown,
+  setting: boolean | ((value: JsonValue) => JsonValue) | undefined,
+): JsonValue | undefined {
+  if (setting === false) return undefined;
+  if (value === undefined) return undefined;
+  if (typeof setting === "function") {
+    try {
+      return setting(value as JsonValue);
+    } catch {
+      return undefined;
+    }
+  }
+  return value as JsonValue;
+}
+
+function buildOperationRecords(
+  operations: Record<string, OperationInfo>,
+  opts: OperationContentOptions,
+): OperationRecord[] {
+  const records: OperationRecord[] = [];
+  for (const op of Object.values(operations)) {
+    // The SDK core tracks the invocation/execution itself as a pseudo-entry
+    // of type EXECUTION in its internal operations map (used for its own
+    // ancestor-completion bookkeeping). It's not an operation a customer
+    // created, its status is never transitioned past STARTED (that would
+    // require rewriting core SDK internals unrelated to this plugin), and
+    // the record already carries the execution's real status/startTime/
+    // endTime/durationMs at the top level — so surfacing it as an "operation"
+    // is redundant at best and misleadingly stuck-looking at worst. Exclude
+    // it here rather than leaving it for exporters/consumers to filter.
+    if (op.type === "EXECUTION") continue;
+
+    // Unnamed operations are excluded by default (can't be targeted or keyed).
+    if (!op.name) continue;
+
+    // In "top-level" detail mode, drop anything nested under a context
+    // (parallel branches, map items, nested steps/contexts). Top-level
+    // operations have no parentId. This gives a resume-independent snapshot.
+    if (opts.topLevelOnly && op.parentId) continue;
+
+    const override = opts.overridesByName.get(op.name);
+    if (override?.exclude) continue;
+
+    const record = toOperationRecord(op);
+
+    if (!opts.includeErrors) {
+      record.error = undefined;
+    }
+
+    // Results are omitted unless an override explicitly opts in via a transform.
+    if (override?.result) {
+      record.result = applyResultOverride(override.result, op.result);
+    }
+
+    records.push(record);
+  }
+  return records;
+}
+
+// --- CloudWatch Logs Exporter ---
+
+/**
+ * Exports durable execution telemetry records to CloudWatch Logs via console.log.
+ * Since Lambda sends stdout to the function's CloudWatch log group,
+ * this requires no additional IAM permissions or configuration.
+ */
+export class LambdaLogExporter implements TelemetryExporter {
+  /** CloudWatch Logs caps a single log event at 256 KB. */
+  readonly maxRecordSizeBytes: number;
+
+  constructor(config: { maxRecordSizeBytes?: number } = {}) {
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
+  }
+
+  render = withOperationsByName;
+
+  async export(record: DurableExecutionTelemetryRecord): Promise<void> {
+    console.log(JSON.stringify(this.render(record)));
+  }
+}
+
+// --- Per-Execution Scope ---
+
+/**
+ * One invocation's slot in the export queue.
+ *
+ * The scheduler outlives the invocations it serves (it belongs to the execution
+ * environment, because serializing exporter calls is a cross-execution
+ * concern), so it must not keep an index of its own from execution to queue
+ * state: with Lambda Managed Instances several executions run concurrently in
+ * one environment, and a scheduler-side map is exactly where one execution's
+ * hooks could observe, overwrite, or wait on another's. Instead every scalar
+ * the scheduler needs lives on the slot object it is handed, which is the
+ * plugin instance the SDK built for that one invocation — so "which execution
+ * is this?" is answered by object identity and has no second answer that could
+ * disagree.
+ */
+interface ExportSlot {
+  /**
+   * Latest record scheduled for this execution and not yet handed to the
+   * exporters. A newer snapshot of the same execution supersedes it.
+   */
+  pending: DurableExecutionTelemetryRecord | undefined;
+  /** True while this slot sits in the scheduler's queue. */
+  queued: boolean;
+  /**
+   * True while this slot has export work the scheduler has not finished:
+   * queued, or dequeued and mid fan-out. It is what {@link ExportScheduler.drain}
+   * tests to decide whether there is anything to wait for.
+   */
+  outstanding: boolean;
+  /**
+   * Resolvers waiting for this execution's latest record to be exported. A
+   * non-empty list also tells the pump that this record gates an invocation
+   * return, so it is exported before the pump spends a flush fan-out.
+   */
+  readonly waiters: (() => void)[];
+}
+
+// --- Export Scheduling ---
+
+/**
+ * Serializes record exports so that, at most, one export runs at a time, while
+ * coalescing updates per execution.
+ *
+ * Each {@link DurableExecutionTelemetryRecord} is a complete snapshot of one execution,
+ * so a newer record for that execution fully supersedes any record of the same
+ * execution still waiting to be exported — intermediate records are dropped
+ * because the latest one already contains all of their information. Coalescing
+ * is therefore scoped to a single execution ARN: records for different
+ * executions queue up independently and never displace one another.
+ *
+ * Exporter calls stay globally serialized per scheduler: one pump drains the
+ * queue, so an exporter never sees concurrent `export()` calls from this
+ * scheduler, no matter how many executions the environment hosts. {@link flush}
+ * requests run on the same pump, so a flush never overlaps an export either;
+ * they are served as a batch, and the records a {@link drain} is waiting for are
+ * exported first, so a burst of invocation ends can share a flush. Late updates
+ * can require further rounds. The scheduler belongs to the execution
+ * environment, not to an invocation: it lives in `durableExecutionTelemetry`'s closure and is shared by every
+ * plugin instance the factory hands out, because serializing exporter calls is
+ * only meaningful across executions. Serialization is per scheduler, not per
+ * exporter object: two `durableExecutionTelemetry()` calls each build their own, so an
+ * exporter instance shared between them can be called by both at once.
+ */
+class ExportScheduler {
+  /** FIFO of slots that have a record waiting to be exported. */
+  private readonly queue: ExportSlot[] = [];
+  /**
+   * True while a pump is running. A boolean rather than the pump's promise:
+   * keeping the promise in a field means a pump that settles before the
+   * assignment lands — which a synchronous failure does — has its own `finally`
+   * clobbered by that assignment, leaving the marker armed forever and no later
+   * `schedule` able to start a pump again.
+   */
+  private pumping = false;
+  /**
+   * Resolvers for pending {@link flush} requests, in request order. All requests
+   * queued when the pump reaches its flush turn are served by one `flushAll`.
+   */
+  private readonly flushWaiters: (() => void)[] = [];
+
+  constructor(private readonly exporters: TelemetryExporter[]) {}
+
+  /**
+   * Queue the latest record for one execution. If an export is already running,
+   * the record waits in that execution's own pending slot (replacing only an
+   * earlier record of the same execution) and is exported once the queue
+   * reaches it.
+   */
+  schedule(slot: ExportSlot, record: DurableExecutionTelemetryRecord): void {
+    slot.pending = record;
+    slot.outstanding = true;
+    if (!slot.queued) {
+      slot.queued = true;
+      this.queue.push(slot);
+    }
+    this.ensurePump();
+  }
+
+  /**
+   * Starts the pump unless one is already running. Never throws, never rejects.
+   */
+  private ensurePump(): void {
+    if (this.pumping) return;
+    this.pumping = true;
+    // The pump contains every failure it can encounter — allSettled around the
+    // fan-out and the flush, `finally` around the bookkeeping — so this catch
+    // only guards the unforeseen. Instrumentation must never hand the host
+    // process an unhandled rejection, which node terminates on by default.
+    // There is nothing to repair here: the pump's own `finally` has already
+    // cleared `pumping` and re-armed itself if work was left behind.
+    void this.pump().catch(() => undefined);
+  }
+
+  /**
+   * Flush every exporter that supports it, serialized against exports: the
+   * request is queued behind the pump's current fan-out, so an exporter never
+   * sees `flush()` overlap an `export()`. Requests that are already waiting when
+   * the pump reaches its flush turn are served by one shared `flushAll`.
+   *
+   * Before spending that fan-out the pump first exports the queued records a
+   * {@link drain} is waiting for (see
+   * {@link exportRecordsADrainIsWaitingFor}), which is what lets a burst of
+   * invocation ends that each carry a record share one flush rather than pay for
+   * one each. A request made while a flushAll is already running is never served
+   * by it — it waits for the next turn.
+   */
+  async flush(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      this.flushWaiters.push(resolve);
+      this.ensurePump();
+    });
+  }
+
+  /**
+   * Wait until the latest record scheduled for `slot` has been handed to every
+   * exporter. Safe to call when that execution has nothing outstanding. Used
+   * before an invocation returns to guarantee that execution's final record is
+   * delivered (exports are otherwise fire-and-forget).
+   *
+   * Takes the slot itself, not an execution ARN: the caller is the plugin
+   * instance that owns this invocation, so it *is* the slot its own hooks
+   * schedule their records on and there is nothing to look up.
+   *
+   * Resolves as soon as this execution's own record is out, and never while it
+   * is still pending. With a single pump the wait still includes whatever was
+   * queued ahead of it; what it never does is let records scheduled afterwards,
+   * for other executions, displace it or push it further back.
+   *
+   * While the wait is outstanding the slot carries a waiter, which is how the
+   * pump knows this record gates an invocation return and must be exported
+   * before the pump spends a flush fan-out — see
+   * {@link exportRecordsADrainIsWaitingFor}.
+   */
+  async drain(slot: ExportSlot): Promise<void> {
+    if (!slot.outstanding) return;
+    await new Promise<void>((resolve) => {
+      slot.waiters.push(resolve);
+    });
+  }
+
+  private async pump(): Promise<void> {
+    try {
+      // One record, then one flush turn, alternating: a flush therefore
+      // waits at most one fan-out — it cannot be starved by a queue that never
+      // runs dry — and it still never overlaps an export, because each fan-out
+      // is awaited before the flush runs and vice versa.
+      while (this.queue.length > 0 || this.flushWaiters.length > 0) {
+        const slot = this.queue.shift();
+        if (slot !== undefined) {
+          await this.exportPending(slot);
+        }
+        // Serve every request that is already waiting with one flushAll.
+        // Coalescing is sound because each requester drained its own record
+        // before asking: a flushAll that *starts* after the request was enqueued
+        // therefore sees that record in the exporter's buffer and pushes it.
+        // Requests that arrive while this flushAll runs are deliberately left
+        // for the next turn — their record may have been exported after this
+        // flush already read the buffer.
+        const flushed = this.flushWaiters.splice(0);
+        if (flushed.length > 0) {
+          // The resolvers are claimed, so nothing else can find them: from here
+          // to the release below, every exit has to go through the `finally`.
+          // Without that, a rejection out of the front-load pass stranded them
+          // — `exportPending` is a try/finally with no catch, so a synchronous
+          // throw from `this.exporters.map` escapes it — and every invocation
+          // end waiting on this flush hung until Lambda timed it out. The
+          // `finally` releases them on that path too: a flush that did not run
+          // is the same answer as a flush that failed, which is what the
+          // per-exporter containment in `flushAll` already establishes.
+          try {
+            // Before spending the fan-out: export the queued records that other
+            // invocations are still waiting on. Those ends cannot have asked for
+            // their flush yet — they are inside drain() — so without this the
+            // pump staggers them one record per turn with a whole flush in
+            // between, and each end pays for its own flush however well the
+            // requests coalesce.
+            await this.exportRecordsADrainIsWaitingFor();
+            // Re-take: the ends released above ask for their flush as their
+            // continuations run, and one flushAll covers all of them because it
+            // starts after every one of those records reached the exporters.
+            // Still taken strictly before the flush begins, so the rule above
+            // holds.
+            flushed.push(...this.flushWaiters.splice(0));
+            await flushAll(this.exporters);
+          } finally {
+            for (const resolve of flushed) resolve();
+          }
+        }
+      }
+    } finally {
+      this.pumping = false;
+      // A record or flush request that arrived while the loop was unwinding
+      // must not be stranded. Re-arm on a fresh task rather than by calling
+      // ensurePump() here: this `finally` can run synchronously inside
+      // ensurePump() (a fan-out that throws before its first await never
+      // suspends), and a direct call would then re-enter pump() on the current
+      // stack, one frame pair per queued execution.
+      if (this.queue.length > 0 || this.flushWaiters.length > 0) {
+        queueMicrotask(() => this.ensurePump());
+      }
+    }
+  }
+
+  /**
+   * Exports the queued records that a {@link drain} is waiting for, one at a
+   * time, and returns once they have all reached the exporters. Called by the
+   * pump immediately before a flush.
+   *
+   * Those records are the last records of invocations that cannot return until
+   * they are exported, and their ends cannot ask for their flush until then.
+   * Exporting them first is what lets one flush serve a whole burst of
+   * invocation ends: without it the pump interleaves one record and one flush
+   * fan-out, so each end pays for a flush of its own even though every queued
+   * request is coalesced.
+   *
+   * Bounded by the snapshot taken in this synchronous turn, so a producer that
+   * keeps scheduling records for an execution someone is draining cannot hold a
+   * flush back indefinitely — and records nobody is waiting for (an on-change
+   * stream, say) are not front-loaded at all, so they still cannot starve a
+   * flush: it waits at most one ordinary fan-out plus this pass over the
+   * executions whose invocation return is already blocked on their own record.
+   */
+  private async exportRecordsADrainIsWaitingFor(): Promise<void> {
+    const awaited = this.queue.filter((slot) => slot.waiters.length > 0);
+    for (const slot of awaited) {
+      const index = this.queue.indexOf(slot);
+      // Defensive: nothing else dequeues a slot while this pump owns the queue,
+      // and a slot appears in it at most once (`queued` guards that), so the
+      // snapshot entries are still queued here.
+      if (index < 0) continue;
+      this.queue.splice(index, 1);
+      await this.exportPending(slot);
+    }
+  }
+
+  /**
+   * Hands one execution's queued record to every exporter and releases the
+   * drains waiting on it. The caller has already removed `slot` from the queue.
+   */
+  private async exportPending(slot: ExportSlot): Promise<void> {
+    slot.queued = false;
+    const record = slot.pending;
+    // Claim the record synchronously: from here on, anything scheduled for
+    // this execution is a newer snapshot that re-queues the slot, so no
+    // update is lost and no other execution can take this slot.
+    slot.pending = undefined;
+    try {
+      if (record !== undefined) {
+        // allSettled so one failing or slow exporter never blocks or
+        // fails the others, and a `try` around the call so a *synchronous*
+        // throw — from `export` itself, or from `truncateRecord`/`render`
+        // — becomes a rejected promise that allSettled absorbs instead of
+        // escaping the pump before its waiters are released.
+        // `map(async (exporter) => ...)` would contain that throw too (an
+        // async function turns a synchronous throw into a rejection) and
+        // emits an identical record sequence under the real SDK driver —
+        // the two forms only diverge under a driver that awaits the hook
+        // directly. The explicit `catch` is kept because it keeps the
+        // guard visible at the call site, instead of depending on the
+        // reader knowing about that conversion. Nothing awaits the pump
+        // and `drain` waits only on `settle`, so a broken exporter cannot
+        // fail the invocation either. Each exporter gets a copy truncated
+        // to its own maxRecordSizeBytes (no-op when unset), measured
+        // against the exact shape that exporter emits (its `render`).
+        await Promise.allSettled(
+          this.exporters.map((exporter) => {
+            try {
+              return exporter.export(
+                truncateRecord(
+                  record,
+                  exporter.maxRecordSizeBytes,
+                  exporter.render?.bind(exporter),
+                ),
+              );
+            } catch (error) {
+              return Promise.reject(error);
+            }
+          }),
+        );
+      }
+    } finally {
+      // Release this execution's waiters even if the fan-out threw, and
+      // only when nothing newer arrived for it while the fan-out ran;
+      // otherwise they wait for that newer record.
+      if (slot.pending === undefined) {
+        this.settle(slot);
+      }
+    }
+  }
+
+  /** This execution has no outstanding record: wake anyone waiting on it. */
+  private settle(slot: ExportSlot): void {
+    slot.outstanding = false;
+    for (const resolve of slot.waiters.splice(0)) {
+      resolve();
+    }
+  }
+}
+
+/**
+ * Start of the whole execution, resolved once per invocation from that
+ * invocation's own info — the plugin instance never sees an earlier invocation
+ * of the same execution, so there is nothing carried over to prefer.
+ *
+ * `executionStartTimestamp` is optional (the SDK fills it from
+ * `initialExecutionEvent?.StartTimestamp ?? undefined`) but it always reaches the
+ * plugin as a `Date`: the SDK normalizes every wire timestamp through
+ * `utils/timestamp/timestamp.ts` `toDate` (via `normalize-operation.ts`, whose
+ * output `with-durable-execution.ts:110` reads), and `toDate` maps an
+ * unparseable or invalid value to `undefined` rather than passing on an Invalid
+ * Date. {@link toEpochMs}'s ISO-string and epoch-millis branches are therefore
+ * defensive only — a hand-built info object, a local driver, a future transport
+ * change — not a transport this value actually crosses.
+ *
+ * The important part is the fallback: when the SDK reports nothing, use the
+ * oldest operation start this invocation knows about rather than `new Date()`.
+ * For a resumed execution that is still an earlier, replay-stable instant, where
+ * `now` would report a duration covering only the final invocation.
+ */
+function resolveExecutionStart(info: {
+  executionStartTimestamp?: Date;
+  operations?: Record<string, OperationInfo>;
+}): Date {
+  const reported = toEpochMs(info.executionStartTimestamp);
+  if (reported !== undefined) return new Date(reported);
+  let oldest: number | undefined;
+  for (const op of Object.values(info.operations ?? {})) {
+    const started = toEpochMs(op.startTimestamp);
+    if (started !== undefined && (oldest === undefined || started < oldest)) {
+      oldest = started;
+    }
+  }
+  return new Date(oldest ?? Date.now());
+}
+
+/**
+ * Flush all exporters that support it, isolating individual failures: one
+ * exporter's rejection never stops another's flush and never propagates into the
+ * execution. Each failure is logged as a warning, so a flush that silently drops
+ * buffered records is at least visible in the function's logs.
+ */
+async function flushAll(exporters: TelemetryExporter[]): Promise<void> {
+  // The `try` mirrors the export fan-out's: an exporter whose `flush()` throws
+  // synchronously instead of rejecting is absorbed by allSettled like any other
+  // failure, rather than rejecting flushAll and stranding whoever waits on it.
+  const results = await Promise.allSettled(
+    exporters.map((exporter) => {
+      try {
+        return exporter.flush?.();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }),
+  );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      // console.warn, not a throw: the flush contract is that failures never
+      // reach the customer's execution.
+      console.warn(
+        "[durable-execution-telemetry] exporter flush failed:",
+        result.reason,
+      );
+    }
+  }
+}
+
+// --- Per-Invocation Plugin ---
+
+/**
+ * What {@link durableExecutionTelemetry} resolves once for the execution environment and
+ * hands, unchanged, to every plugin instance it creates: the exporters, the
+ * scheduler that serializes them, and the immutable view of the user's config.
+ *
+ * These are the only things that legitimately outlive an invocation. Exporters
+ * hold connections and buffers, and serializing their calls is a cross-execution
+ * concern by definition, so the scheduler has to be shared; resolving the config
+ * per invocation would just repeat the same work and re-log the same warnings.
+ */
+interface TelemetryEnvironment {
+  readonly scheduler: ExportScheduler;
+  readonly emitMode: NonNullable<DurableExecutionTelemetryConfig["emitMode"]>;
+  readonly samplingRate: number;
+  readonly content: DurableExecutionTelemetryConfig["content"];
+  readonly opContentOptions: OperationContentOptions;
+}
+
+/**
+ * The Durable Execution Telemetry plugin for exactly one durable execution invocation.
+ *
+ * The SDK builds one of these per invocation and drops it when the invocation
+ * returns, so everything that belongs to the execution is an ordinary field:
+ * there is no map from execution ARN to state, and therefore no way for one
+ * execution's hook to read, overwrite, or wait on another's, and nothing to
+ * remember to delete. Two executions running concurrently in one environment
+ * (routine under Lambda Managed Instances) are two objects.
+ *
+ * Identity is taken from the {@link InvocationInfo} the factory receives, which
+ * is the same object `onInvocationStart` is then called with, so the instance is
+ * fully formed before the first hook fires — a hook that arrives without a
+ * preceding `onInvocationStart` (the SDK's config-error path does exactly that)
+ * still finds the ARN, sampling decision, start time and input in place.
+ *
+ * The instance is also its own {@link ExportSlot}: the scheduler is handed
+ * `this`, so the queue entry and the object whose hooks fill it cannot get out
+ * of step.
+ */
+class DurableExecutionTelemetryInvocation
+  implements DurableInstrumentationPlugin, ExportSlot
+{
+  private readonly executionArn: string;
+  private readonly parsedArn: ParsedArn;
+  /** Start of the whole execution, not of this invocation. */
+  private readonly startTime: Date;
+  /**
+   * The execution input, kept for the RUNNING records `onOperationChange`
+   * builds — that hook is told only about operations. Released with the
+   * instance when the invocation returns, so a suspended execution that never
+   * resumes pins nothing.
+   */
+  private readonly cachedInput: unknown;
+  /**
+   * Deterministic sampling decision for this execution. Computed from the
+   * execution's stable identity, so every invocation and replay of it reaches
+   * the same conclusion, and read by every hook to skip work entirely when the
+   * execution is sampled out.
+   */
+  private readonly sampledIn: boolean;
+  /**
+   * Set once this execution has reached a terminal status. A late hook lands on
+   * this same instance — the SDK does not order `onOperationChange` against
+   * `onInvocationEnd`, so a checkpoint that completed just before the end can
+   * deliver its change afterwards — and it must emit nothing: exporters that
+   * upsert by execution ARN would otherwise revert a finished execution back to
+   * RUNNING.
+   */
+  private closed = false;
+  /** The end hook has drained its records; later nonterminal updates must flush. */
+  private invocationEnded = false;
+  /**
+   * Counts the hook frames that have started building a record on this
+   * instance. Incremented immediately before a build, never decremented.
+   *
+   * Building a record runs customer code: the `content.input`,
+   * `content.output` and `content.operations.overrides[].result` transforms,
+   * plus any accessor on a value the record copies, such as `message` on a
+   * thrown error. That code runs synchronously inside the build, so it can call
+   * a hook on this instance and complete that hook before the outer build
+   * returns. The nested hook then builds from newer state and schedules it
+   * first, and the outer frame — holding a snapshot of older state — would
+   * schedule after it. An exporter that upserts by execution ARN would end up
+   * storing the older snapshot, and in the `onOperationChange` /
+   * `onInvocationEnd` pairing it would store RUNNING over a terminal status.
+   * Each frame therefore takes this counter's value before building and
+   * schedules only while its value is still the latest; see
+   * {@link buildAndSchedule}.
+   */
+  private buildRevision = 0;
+  /**
+   * The `emittedAt` of the last record this instance built, in epoch
+   * milliseconds. See {@link nextEmittedAt}.
+   */
+  private lastEmittedMs = Number.NEGATIVE_INFINITY;
+
+  // --- ExportSlot; owned by ExportScheduler ---
+  pending: DurableExecutionTelemetryRecord | undefined = undefined;
+  queued = false;
+  outstanding = false;
+  readonly waiters: (() => void)[] = [];
+
+  constructor(
+    private readonly env: TelemetryEnvironment,
+    info: InvocationInfo,
+  ) {
+    this.executionArn = info.executionArn;
+    this.parsedArn = parseExecutionArn(info.executionArn);
+    this.startTime = resolveExecutionStart(info);
+    this.cachedInput = info.executionInput;
+    this.sampledIn = shouldSampleExecution(info.executionArn, env.samplingRate);
+  }
+
+  private buildRecord(args: {
+    status: DurableExecutionTelemetryRecord["status"];
+    operations: OperationRecord[];
+    endTime?: Date;
+    input?: unknown;
+    output?: unknown;
+    error?: Error;
+  }): DurableExecutionTelemetryRecord {
+    const arn = this.parsedArn;
+    const content = this.env.content;
+    const durationMs = args.endTime
+      ? args.endTime.getTime() - this.startTime.getTime()
+      : undefined;
+
+    return {
+      recordType: "DurableExecutionTelemetry" as const,
+      schemaVersion: "1.0",
+      emittedAt: this.nextEmittedAt(),
+      executionArn: this.executionArn,
+      executionName: arn.executionName || undefined,
+      functionName: arn.functionName,
+      functionQualifier: arn.qualifier,
+      region: arn.region,
+      accountId: arn.accountId,
+      status: args.status,
+      startTime: this.startTime.toISOString(),
+      endTime: args.endTime?.toISOString(),
+      durationMs,
+      input: applyDataContent(args.input, content?.input),
+      output: applyDataContent(args.output, content?.output),
+      error: args.error ? toErrorRecord(args.error) : undefined,
+      operations: args.operations,
+    };
+  }
+
+  /**
+   * The `emittedAt` for the next record: the current time, unless that is not
+   * later than the previous record's, in which case 1 ms after the previous one.
+   *
+   * `emittedAt` has millisecond precision. With `emitMode: "on-change"`, two
+   * records of one execution can be built within the same millisecond, for
+   * example a RUNNING record and the final record. Exporters key on
+   * `executionArn` + `emittedAt`: the SQS FIFO deduplication id, and the default
+   * DynamoDB sort key. Equal values would make SQS drop the second message and
+   * DynamoDB overwrite the first item. So `emittedAt` strictly increases within
+   * this instance, which serves one invocation.
+   */
+  private nextEmittedAt(): string {
+    const now = Date.now();
+    const ms = now > this.lastEmittedMs ? now : this.lastEmittedMs + 1;
+    this.lastEmittedMs = ms;
+    return new Date(ms).toISOString();
+  }
+
+  /**
+   * Builds a record and hands it to the scheduler, unless a nested hook frame
+   * has already published newer state.
+   *
+   * `build` runs customer code (see {@link buildRevision}), so a hook can run to
+   * completion inside it. That hook sees state this frame has not seen and
+   * schedules a strictly newer snapshot. A record is a complete snapshot of one
+   * execution, so the newer one supersedes this frame's entirely — the same
+   * property that makes the scheduler's coalescing sound — and scheduling this
+   * frame's record afterwards would leave an exporter that upserts by execution
+   * ARN holding the older state. This frame therefore drops its record when the
+   * revision it took has been superseded.
+   */
+  private buildAndSchedule(build: () => DurableExecutionTelemetryRecord): void {
+    const revision = ++this.buildRevision;
+    const record = build();
+    if (revision !== this.buildRevision) return;
+    this.env.scheduler.schedule(this, record);
+  }
+
+  async onInvocationStart(info: InvocationInfo): Promise<void> {
+    if (!this.sampledIn) return;
+
+    if (this.env.emitMode === "on-change") {
+      this.buildAndSchedule(() =>
+        this.buildRecord({
+          status: "RUNNING",
+          operations: buildOperationRecords(
+            info.operations,
+            this.env.opContentOptions,
+          ),
+          input: info.executionInput,
+        }),
+      );
+    }
+  }
+
+  /**
+   * Emits this invocation's final record and does not resolve until it has
+   * reached every exporter.
+   *
+   * The SDK awaits this hook on every path out of an invocation — the six
+   * status branches in `with-durable-execution.ts` plus the config-error path
+   * that returns before `wrapInvocation` is ever called. The runner first lets
+   * the asynchronous work of earlier hooks settle, then awaits this hook, so a
+   * rejection here cannot become the invocation's error. The first wait stops
+   * 500 ms before the invocation's deadline, and the wait for this hook 50 ms
+   * before it. So this hook keeps its time even when earlier hooks are slow.
+   * That makes this the right place for the drain, and it is where the Python
+   * and Java ports already do it.
+   */
+  async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    const status = mapStatus(info.status);
+    const isTerminal = status === "SUCCEEDED" || status === "FAILED";
+    const isFailure = status === "FAILED";
+
+    // Decide whether this status update should produce a record.
+    // - on-change:   emit on every update (terminal or not)
+    // - on-complete: emit only on terminal SUCCEEDED/FAILED
+    // - on-failure:  emit only on terminal FAILED
+    const shouldEmit =
+      this.env.emitMode === "on-change"
+        ? true
+        : this.env.emitMode === "on-failure"
+          ? isFailure
+          : isTerminal;
+
+    // Only a terminal execution must reject late RUNNING snapshots. A pending
+    // or retrying invocation can still receive newer checkpoint state while its
+    // final export/flush is draining.
+    this.closed ||= isTerminal;
+
+    // The drain is in a `finally` so it also covers the paths that never reach
+    // the schedule above: a sampled-in end that emits nothing in this mode may
+    // still have a record queued by an earlier hook, and a throw while building
+    // the record (a poisoned `error.message`, say) must not strand whatever was
+    // already queued.
+    try {
+      if (this.sampledIn && shouldEmit) {
+        this.buildAndSchedule(() =>
+          this.buildRecord({
+            status,
+            operations: buildOperationRecords(
+              info.operations,
+              this.env.opContentOptions,
+            ),
+            endTime: new Date(),
+            input: info.executionInput,
+            output: info.executionResult,
+            error: info.executionError,
+          }),
+        );
+      }
+    } finally {
+      // Sampled-out executions never schedule a record, so there is nothing to
+      // drain or flush — skip the work entirely. The flush goes through the
+      // scheduler so it is serialized against exports: an exporter never sees
+      // one execution's flush() overlap another's export().
+      if (this.sampledIn) {
+        let flushedRevision: number;
+        do {
+          await this.env.scheduler.drain(this);
+          flushedRevision = this.buildRevision;
+          await this.env.scheduler.flush();
+          // A nonterminal checkpoint update can arrive while flush awaits I/O.
+          // Even an already exported update needs a new flush if the previous
+          // flush took its buffer snapshot before that update was scheduled.
+        } while (this.outstanding || this.buildRevision !== flushedRevision);
+      }
+      // No await separates the final empty check from this flag. A change
+      // delivered after that boundary owns its own drain and flush below.
+      this.invocationEnded = true;
+    }
+  }
+
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.env.emitMode !== "on-change") return;
+    // `closed` covers the hook arriving after the end hook has returned:
+    // emitting then would publish RUNNING after the terminal record. It does not
+    // cover the end hook running nested inside this frame's record build, which
+    // buildAndSchedule handles. This hook no longer has to check that the change
+    // belongs to this execution — a hook reaches this instance only if it does.
+    if (this.closed || !this.sampledIn) return;
+    this.buildAndSchedule(() =>
+      this.buildRecord({
+        status: "RUNNING",
+        operations: buildOperationRecords(
+          info.operations,
+          this.env.opContentOptions,
+        ),
+        input: this.cachedInput,
+      }),
+    );
+    if (this.invocationEnded) {
+      await this.env.scheduler.drain(this);
+      await this.env.scheduler.flush();
+    }
+  }
+}
+
+// --- Plugin Factory ---
+
+/**
+ * Creates the Durable Execution Telemetry plugin factory the SDK installs.
+ *
+ * Call it once, at module scope, and pass the result in
+ * `DurableExecutionConfig.plugins`. The SDK then calls the returned factory's
+ * `createPlugin` once per invocation and dispatches that invocation's hooks to
+ * the instance it returns, so config resolution, the exporters and the export
+ * scheduler are shared by the whole execution environment while every
+ * execution's own state is confined to an object that dies with its invocation.
+ */
+export function durableExecutionTelemetry(
+  config: DurableExecutionTelemetryConfig,
+): {
+  createPlugin(info: InvocationInfo): DurableInstrumentationPlugin;
+} {
+  const content = config.content;
+  const overridesByName = new Map<string, OperationOverride>();
+  for (const override of content?.operations?.overrides ?? []) {
+    overridesByName.set(override.operationName, override);
+  }
+
+  // `exporters` reaches `this.exporters.map` in the export fan-out, which is the
+  // last remaining synchronous-throw site there: an array-like passes a
+  // truthiness/`.length` check and then makes every fan-out throw a TypeError.
+  // Require a real array and fall back to the default exporter.
+  //
+  // Held by reference rather than copied. A copy would make the check above
+  // permanent, but it would also replace the caller's array with a plain one,
+  // and the fan-out's own robustness test reaches the throw site by defining
+  // `map` on the array it passes in. A caller that mutates the array after
+  // registration is out of contract; a fan-out whose only synchronous-throw site
+  // is untestable is worse.
+  if (config.exporters !== undefined && !Array.isArray(config.exporters)) {
+    console.warn(
+      "[durable-execution-telemetry] exporters is not an array; defaulting to the Lambda log exporter.",
+    );
+  }
+  const exporters =
+    Array.isArray(config.exporters) && config.exporters.length > 0
+      ? config.exporters
+      : [new LambdaLogExporter()];
+
+  const env: TelemetryEnvironment = {
+    scheduler: new ExportScheduler(exporters),
+    emitMode: config.emitMode ?? "on-complete",
+    samplingRate: resolveSamplingRate(config.samplingRate),
+    content,
+    opContentOptions: {
+      overridesByName,
+      includeErrors: content?.operations?.includeErrors ?? true,
+      // Default to top-level: it yields a consistent snapshot regardless of
+      // suspend/resume. "full-tree" is opt-in because, without child
+      // preservation (pluginsConfig.childOperationsDepth), it can silently miss
+      // children of contexts that finished in an earlier invocation.
+      topLevelOnly: config.operationDetail !== "full-tree",
+    },
+  };
+
+  return {
+    createPlugin: (info: InvocationInfo) =>
+      new DurableExecutionTelemetryInvocation(env, info),
+  } satisfies DurableInstrumentationPluginFactory;
+}

@@ -16,6 +16,8 @@ import { OperationEvents } from "../../test-runner/common/operations/operation-w
 import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 import { executionDetails } from "./execution-details";
+import { pruneReplayChildren } from "./prune-replay-children";
+import { ExecutionClock } from "../utils/client-clock";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -31,12 +33,21 @@ export class CheckpointManager {
   private readonly pendingUpdates: CheckpointOperation[] = [];
   private resolvePendingUpdatePromise: (() => void) | undefined = undefined;
   private readonly callbackManager: CallbackManager;
+  /** Every time this execution records. Never goes back. See ExecutionClock. */
+  private readonly clock = new ExecutionClock();
   // TODO: add execution timeout
-  readonly eventProcessor = new EventProcessor();
+  readonly eventProcessor = new EventProcessor(undefined, this.clock);
   private readonly invocationsMap = new Map<InvocationId, Date>();
   private readonly dirtyOperationIds = new Set<string>();
 
   private _isExecutionCompleted = false;
+
+  /**
+   * Whether the test has paused this execution. While set, every checkpoint is accepted
+   * but answered without a `CheckpointToken`, which is how the service tells an invocation
+   * it may checkpoint no further. See {@link pause}.
+   */
+  private _isPaused = false;
 
   /**
    * Id of the execution's own EXECUTION-typed operation, assigned in
@@ -67,6 +78,23 @@ export class CheckpointManager {
     return !!this.dirtyOperationIds.size;
   }
 
+  /**
+   * Pauses the execution. The invocation running now, if any, is answered without a token
+   * on its next checkpoint, which makes the SDK suspend it with PENDING. Starting no further
+   * invocations until {@link resume} is the orchestrator's half of pausing, not this one's.
+   */
+  pause(): void {
+    this._isPaused = true;
+  }
+
+  resume(): void {
+    this._isPaused = false;
+  }
+
+  isPaused(): boolean {
+    return this._isPaused;
+  }
+
   getDirtyOperations(): Operation[] {
     const dirtyOperations = Array.from(this.dirtyOperationIds).map((id) => {
       const operationEvents = this.operationDataMap.get(id);
@@ -90,7 +118,7 @@ export class CheckpointManager {
     operationEvents: OperationEvents[];
     updatedOperationIds: string[];
   } {
-    this.invocationsMap.set(invocationId, new Date());
+    this.invocationsMap.set(invocationId, this.clock.now());
 
     // Capture the IDs of operations that were updated externally between invocations
     // (e.g., wait timers expired, callbacks received, chained invokes completed).
@@ -99,8 +127,13 @@ export class CheckpointManager {
     const updatedOperationIds = Array.from(this.dirtyOperationIds);
     this.dirtyOperationIds.clear();
 
+    // The service omits the children of completed contexts from the
+    // invocation input. It still reports their IDs in UpdatedOperationIds.
     return {
-      operationEvents: Array.from(this.operationDataMap.values()),
+      operationEvents: pruneReplayChildren(
+        Array.from(this.operationDataMap.values()),
+        (data) => data.operation,
+      ),
       updatedOperationIds,
     };
   }
@@ -119,41 +152,20 @@ export class CheckpointManager {
 
     return {
       startTimestamp,
-      endTimestamp: new Date(),
+      endTimestamp: this.clock.now(),
     };
   }
 
+  /**
+   * Returns the execution state that the service returns from
+   * `GetDurableExecutionState`. It omits the children of completed contexts,
+   * as the service does. See {@link pruneReplayChildren}.
+   */
   getState(): Operation[] {
-    const excludedOperations = new Set<string>();
-    const operations: Operation[] = [];
-    for (const [id, { operation }] of this.operationDataMap.entries()) {
-      const parentId = operation.ParentId;
-      if (!parentId) {
-        operations.push(operation);
-        continue;
-      }
-
-      const parent = this.operationDataMap.get(parentId);
-      if (
-        // Parent type is valid
-        parent?.operation.Type === OperationType.CONTEXT &&
-        // Parent is completed
-        (parent.operation.Status === OperationStatus.SUCCEEDED ||
-          parent.operation.Status === OperationStatus.FAILED) &&
-        // The parent is set to not replay children
-        (!parent.operation.ContextDetails?.ReplayChildren ||
-          // If the parent was excluded, then ReplayChildren must be false for an ancestor,
-          // so this operation should also be excluded.
-          excludedOperations.has(parentId))
-      ) {
-        excludedOperations.add(id);
-        continue;
-      }
-
-      operations.push(operation);
-    }
-
-    return operations;
+    return pruneReplayChildren(
+      Array.from(this.operationDataMap.values()),
+      (data) => data.operation,
+    ).map((data) => data.operation);
   }
 
   /**
@@ -166,7 +178,7 @@ export class CheckpointManager {
       Id: initialId,
       Type: OperationType.EXECUTION,
       Status: OperationStatus.STARTED,
-      StartTimestamp: new Date(),
+      StartTimestamp: this.clock.now(),
       ExecutionDetails: {
         InputPayload: payload,
       },
@@ -210,6 +222,21 @@ export class CheckpointManager {
     this.resolvePendingUpdatePromise = undefined;
     const copied = Array.from(this.pendingUpdates);
     this.pendingUpdates.length = 0;
+    return copied;
+  }
+
+  /**
+   * Takes the pending checkpoint updates without waiting for any.
+   *
+   * Used once an execution has finished, to collect the updates no poll has picked up yet.
+   * A poll still waiting is released with an empty list, since no further update is coming.
+   * This takes the updates first, so the released poll cannot get them as well.
+   * @returns A list of checkpoint updates since the last poll or drain.
+   */
+  drainPendingCheckpointUpdates(): CheckpointOperation[] {
+    const copied = Array.from(this.pendingUpdates);
+    this.pendingUpdates.length = 0;
+    this.resolvePendingUpdatePromise?.();
     return copied;
   }
 
@@ -260,7 +287,7 @@ export class CheckpointManager {
     const result: Operation = {
       ...operation,
       Status: status,
-      EndTimestamp: new Date(),
+      EndTimestamp: this.clock.now(),
     };
 
     if (operation.Type === OperationType.STEP) {
@@ -278,7 +305,7 @@ export class CheckpointManager {
     attempt: number,
     retryDelaySeconds = 0,
   ): void {
-    const scheduledEndTimestamp = new Date();
+    const scheduledEndTimestamp = this.clock.now();
     scheduledEndTimestamp.setSeconds(
       scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
     );
@@ -352,10 +379,9 @@ export class CheckpointManager {
           ...copied.operation.ContextDetails,
           Result: inputUpdate.Payload,
           Error: inputUpdate.Error,
-          // Preserve ReplayChildren from ContextOptions if provided
-          ReplayChildren:
-            inputUpdate.ContextOptions?.ReplayChildren ??
-            copied.operation.ContextDetails?.ReplayChildren,
+          // The service records ReplayChildren from the closing update only.
+          // A close without it sets ReplayChildren to false.
+          ReplayChildren: inputUpdate.ContextOptions?.ReplayChildren === true,
         };
         break;
       case OperationType.EXECUTION:
@@ -602,14 +628,14 @@ export class CheckpointManager {
       ParentId: update.ParentId,
       Name: update.Name,
       Type: update.Type,
-      StartTimestamp: new Date(),
+      StartTimestamp: this.clock.now(),
       Status: OperationStatus.STARTED,
       SubType: update.SubType,
     };
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        const scheduledEndTimestamp = new Date();
+        const scheduledEndTimestamp = this.clock.now();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
           scheduledEndTimestamp.getSeconds() + waitSeconds,
@@ -642,9 +668,9 @@ export class CheckpointManager {
         break;
       }
       case OperationType.CONTEXT: {
-        operation.ContextDetails = {
-          ReplayChildren: update.ContextOptions?.ReplayChildren,
-        };
+        // The service ignores ContextOptions on START. It records
+        // ReplayChildren from the closing update only.
+        operation.ContextDetails = {};
         break;
       }
     }

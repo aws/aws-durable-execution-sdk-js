@@ -86,7 +86,7 @@ describe("validateExecutionOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateExecutionOperation(update);
-      }).toThrow("Invalid EXECUTION action.");
+      }).toThrow("Invalid action for EXECUTION operation.");
     });
   });
 });

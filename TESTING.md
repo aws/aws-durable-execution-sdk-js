@@ -124,9 +124,10 @@ npm run test:integration -- --help
 The automated testing pipeline is defined in [`.github/workflows/build.yml`](./.github/workflows/build.yml). Pull requests and merges to the main branch both run the same `build.yml` on every change. This script does the following:
 
 1. Check PR title and ensure it matches what we expect based on [lintcommit.js](.github/workflows/lintcommit.js).
-2. Builds the entire package and uploads the build artifact for other steps to use
-3. Runs unit tests using the build artifacts on node 22 and node 24 using [unit-tests.yml](.github/workflows/unit-tests.yml)
-4. Runs integration tests using the build artifacts on node 22 and node 24 using [integration-tests.yml](.github/workflows/integration-tests.yml)
+2. Checks formatting and lint across the monorepo with `biome ci` using [lint.yml](.github/workflows/lint.yml). This runs off the sources, so it does not wait for the build.
+3. Builds the entire package and uploads the build artifact for other steps to use
+4. Runs unit tests using the build artifacts on node 22 and node 24 using [unit-tests.yml](.github/workflows/unit-tests.yml)
+5. Runs integration tests using the build artifacts on node 22 and node 24 using [integration-tests.yml](.github/workflows/integration-tests.yml)
 
 The integration tests are orchestrated by the [integration test workflow](.github/workflows/integration-tests.yml). The workflow requires the following secrets:
 

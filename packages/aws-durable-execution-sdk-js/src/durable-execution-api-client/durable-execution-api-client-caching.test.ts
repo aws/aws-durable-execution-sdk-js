@@ -25,7 +25,7 @@ describe("DurableExecutionApiClient Caching", () => {
     const send = jest.fn().mockResolvedValue({});
 
     // Replace the mock implementation to track calls
-    (LambdaClient as jest.Mock).mockImplementation(function () {
+    (LambdaClient as jest.Mock).mockImplementation(() => {
       callCount++;
       return { send };
     });

@@ -43,9 +43,9 @@ export interface OperationEvents {
  * the current state of the execution.
  * @internal
  */
-export class OperationWithData<
-  OperationResultValue = unknown,
-> implements DurableOperation<OperationResultValue> {
+export class OperationWithData<OperationResultValue = unknown>
+  implements DurableOperation<OperationResultValue>
+{
   /**
    * Creates a new OperationWithData instance.
    * @param waitManager - Manager for waiting on operation status changes
@@ -165,9 +165,11 @@ export class OperationWithData<
 
     let result: OperationResultValue | undefined;
     try {
+      // Wire boundary: JSON.parse returns `any`, and the service contract is the
+      // only thing that says this is an OperationResultValue. Reviewed and accepted
+      // under ESLint's no-unsafe-type-assertion before the Biome migration.
       result = invokeDetails?.Result
-        ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
+        ? (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
         : undefined;
     } catch (err) {
       throw new Error("Could not parse result for invoke details", {
@@ -276,7 +278,9 @@ export class OperationWithData<
   }
 
   getSubType(): OperationSubType | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    // Wire boundary: SubType arrives as a plain string and is narrowed to the enum.
+    // Reviewed and accepted under ESLint's no-unsafe-type-assertion before the
+    // Biome migration.
     return this.checkpointOperationData?.operation.SubType as OperationSubType;
   }
 

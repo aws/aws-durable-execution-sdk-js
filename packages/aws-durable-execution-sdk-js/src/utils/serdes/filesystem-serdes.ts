@@ -203,7 +203,6 @@ function resolveExecutionDir(
 
 async function writeToFile(
   basePath: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   context: SerdesContext,
   pathEncoding: FileSystemPathEncoding,
@@ -287,7 +286,6 @@ export function createFileSystemSerdes(
   const pathEncoding = config.pathEncoding ?? FileSystemPathEncoding.URI;
   return {
     serialize: async (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       value: any,
       context: SerdesContext,
     ): Promise<string | undefined> => {
@@ -331,7 +329,6 @@ export function createFileSystemSerdes(
     deserialize: async (
       data: string | undefined,
       _context: SerdesContext,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<any> => {
       if (data === undefined) return undefined;
 

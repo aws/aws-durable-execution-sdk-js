@@ -360,8 +360,9 @@ async function runProfiling() {
   session.connect();
 
   // Step 4: Import test infrastructure (after module hook is set up)
-  const { LocalDurableTestRunner } =
-    await import("@aws/durable-execution-sdk-js-testing");
+  const { LocalDurableTestRunner } = await import(
+    "@aws/durable-execution-sdk-js-testing"
+  );
 
   // Step 5: Discover examples
   const examples = discoverExamples(opts.examples);

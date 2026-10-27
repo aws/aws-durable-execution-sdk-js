@@ -13,8 +13,24 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { ProviderSource } from "../otel-plugin-config";
+import {
+  createExecutionOtelPluginFactory,
+  ExecutionOtelPlugin,
+} from "../execution-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): ExecutionOtelPlugin {
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
+}
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration-1";
@@ -115,7 +131,7 @@ function findSpans(
  * Integration test: End-to-end span export with default provider.
  *
  * This test registers a real NodeTracerProvider with InMemorySpanExporter globally,
- * creates a ExecutionOtelPlugin with providerSource: ProviderSource.GLOBAL, and simulates
+ * creates an ExecutionOtelPlugin with its default configuration, and simulates
  * a full invocation lifecycle verifying the complete span hierarchy is exported.
  *
  * Since this test runs locally (no Lambda environment), there is no ambient invocation
@@ -143,9 +159,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("exports spans through the globally registered provider pipeline", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     // Simulate full invocation lifecycle:
     // onInvocationStart → onOperationStart → onOperationAttemptStart →
@@ -191,10 +205,8 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(attemptSpan).toBeDefined();
   });
 
-  it("Workflow_Span is a root span with no parent", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+  it("Workflow_Span parents onto the synthetic execution root when no context is propagated", async () => {
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -208,16 +220,25 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     );
 
     const workflowSpan = findSpan(exporter, "Workflow");
+    const invocationSpan = findSpan(exporter, "Invocation");
     expect(workflowSpan).toBeDefined();
+    expect(invocationSpan).toBeDefined();
 
-    // Workflow_Span MUST be a root span — no parent span context
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    // With no ambient span and no propagated backend context, a synthetic
+    // execution root anchors the execution trace. The Workflow span parents
+    // onto that root (it is no longer a parentless root) and shares the
+    // execution trace with the Invocation span.
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
+    expect(workflowSpan!.parentSpanContext?.spanId).toBe(
+      invocationSpan!.parentSpanContext?.spanId,
+    );
   });
 
   it("Invocation_Span is created as child of ambient context", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -247,9 +268,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.wrapInvocation(makeInvocationInfo(), async () => {
@@ -293,9 +312,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("span links point to the Invocation span when there is no ambient invocation span", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     // No ambient invocation span in local test environment
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -339,9 +356,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   it("no shutdown is called on the globally registered provider", async () => {
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -361,9 +376,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("full lifecycle with multiple operations produces correct span hierarchy", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = newPlugin({});
 
     // Simulate: start → op1 (with attempt) → op2 (with attempt) → end
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -419,8 +432,12 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
 
-    // Workflow is root
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    // Workflow parents onto the synthetic execution root and shares the
+    // execution trace with the Invocation span (no propagated context here).
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
 
     // Both operations are children of Workflow_Span
     expect(validateSpan!.parentSpanContext?.spanId).toBe(
@@ -452,9 +469,26 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       processSpan!.spanContext().spanId,
     );
 
-    // Operation and attempt spans link to the Invocation span (no ambient invocation span locally)
+    const syntheticRoot = spans.find(
+      (span) => span.name === "DurableExecutionRoot",
+    );
+    expect(syntheticRoot).toBeDefined();
+    expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+    expect(workflowSpan!.parentSpanContext?.spanId).toBe(
+      syntheticRoot!.spanContext().spanId,
+    );
+    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      syntheticRoot!.spanContext().spanId,
+    );
+
+    // Operation and attempt spans link to Invocation. The synthetic root is the
+    // parentless trace anchor and therefore does not carry that link.
     for (const span of spans) {
-      if (span.name !== "Workflow" && span.name !== "Invocation") {
+      if (
+        span.name !== "Workflow" &&
+        span.name !== "Invocation" &&
+        span.name !== "DurableExecutionRoot"
+      ) {
         expect(span.links.length).toBe(1);
         expect(span.links[0].context.spanId).toBe(
           invocationSpan!.spanContext().spanId,
@@ -462,8 +496,22 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       }
     }
 
-    // All spans share the same trace ID
-    const traceIds = new Set(spans.map((s) => s.spanContext().traceId));
-    expect(traceIds.size).toBe(1);
+    // The whole execution shares one trace: operations, attempts, the Workflow
+    // span, and the Invocation span all share the execution trace ID.
+    expect(validateSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(validateAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(invocationSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
   });
 });

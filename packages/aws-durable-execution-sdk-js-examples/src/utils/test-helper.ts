@@ -40,6 +40,12 @@ export interface TestDefinition<ResultType> {
   tests: TestCallback<ResultType>;
   invocationType?: InvocationType;
   localRunnerConfig?: LocalDurableTestRunnerSetupParameters;
+  /**
+   * Runs the tests only against the deployed function. Use it for an example
+   * that calls an AWS service the local runner cannot provide, such as a
+   * Lambda MicroVM. The local run then skips the tests.
+   */
+  cloudOnly?: boolean;
 }
 
 export interface EventSignatureConfig {
@@ -304,6 +310,14 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       }
     });
 
+    return;
+  }
+
+  if (testDef.cloudOnly) {
+    describe(`${parsedFunctionName} (local)`, () => {
+      it.skip("skipped — runs only against the deployed function (cloudOnly)", () => {});
+    });
+    calledAssertEventSignature = true; // Suppress afterAll check
     return;
   }
 

@@ -573,9 +573,11 @@ describe("CheckpointManager", () => {
               : OperationStatus.FAILED,
           );
           expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
+          // The service sets ReplayChildren to false for a close without it.
           expect(result.operation.ContextDetails).toEqual({
             Result: '{"result": "data"}',
             Error: undefined,
+            ReplayChildren: false,
           });
           expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 

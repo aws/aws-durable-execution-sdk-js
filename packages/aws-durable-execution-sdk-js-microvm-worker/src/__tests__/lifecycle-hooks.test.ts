@@ -1,0 +1,1071 @@
+import type {
+  IncomingHttpHeaders,
+  IncomingMessage,
+  ServerResponse,
+} from "node:http";
+import { PassThrough } from "node:stream";
+import {
+  LambdaClient,
+  SendDurableExecutionCallbackFailureCommand,
+  SendDurableExecutionCallbackHeartbeatCommand,
+  SendDurableExecutionCallbackSuccessCommand,
+} from "@aws-sdk/client-lambda";
+import {
+  createMicrovmWorkerListener,
+  HOOK_PATH_PREFIX,
+  type MicrovmWorkerListener,
+  MicrovmTerminatedError,
+} from "..";
+import {
+  advance,
+  call,
+  FakeMicrovmsClient,
+  FORWARDED_HEADERS,
+  LAMBDA_HEADERS,
+} from "./helpers";
+
+type Completion =
+  | { kind: "success"; callbackId: string }
+  | {
+      kind: "failure";
+      callbackId: string;
+      errorType?: string;
+      message?: string;
+    };
+
+/**
+ * Records callback completions. With `hold`, each completion stays pending
+ * until `finish()`.
+ */
+class FakeLambdaClient {
+  readonly completions: Completion[] = [];
+  hold = false;
+  /** Answers every heartbeat with this error. */
+  heartbeatError: Error | undefined;
+  /** Answers every completion with this error. */
+  completionError: Error | undefined;
+  private pending: (() => void)[] = [];
+
+  async send(command: unknown): Promise<unknown> {
+    if (command instanceof SendDurableExecutionCallbackHeartbeatCommand) {
+      if (this.heartbeatError) {
+        throw this.heartbeatError;
+      }
+      return {};
+    }
+    if (this.hold) {
+      await new Promise<void>((resolve) => this.pending.push(resolve));
+    }
+    if (this.completionError) {
+      throw this.completionError;
+    }
+    if (command instanceof SendDurableExecutionCallbackSuccessCommand) {
+      this.completions.push({
+        kind: "success",
+        callbackId: command.input.CallbackId as string,
+      });
+      return {};
+    }
+    if (command instanceof SendDurableExecutionCallbackFailureCommand) {
+      this.completions.push({
+        kind: "failure",
+        callbackId: command.input.CallbackId as string,
+        errorType: command.input.Error?.ErrorType,
+        message: command.input.Error?.ErrorMessage,
+      });
+      return {};
+    }
+    throw new Error("unexpected command");
+  }
+
+  finish(): void {
+    for (const resolve of this.pending.splice(0)) {
+      resolve();
+    }
+  }
+
+  /** Lets only the oldest held completion end. */
+  finishFirst(): void {
+    this.pending.shift()?.();
+  }
+
+  asClient(): LambdaClient {
+    return this as unknown as LambdaClient;
+  }
+}
+
+/**
+ * Starts a request whose body arrives in two parts. The listener has read
+ * the first part when this returns. `finish()` sends the rest, and resolves
+ * with the status.
+ */
+const startSlowCall = async (
+  target: MicrovmWorkerListener,
+  path: string,
+  body: unknown,
+): Promise<{ finish: () => Promise<number> }> => {
+  const text = JSON.stringify(body);
+  const half = Math.floor(text.length / 2);
+  const request = Object.assign(new PassThrough(), {
+    url: path,
+    method: "POST",
+    headers: LAMBDA_HEADERS,
+  });
+  let resolveStatus: (status: number) => void = () => {};
+  const status = new Promise<number>((resolve) => {
+    resolveStatus = resolve;
+  });
+  let code = 0;
+  const response = {
+    headersSent: false,
+    writeHead(value: number) {
+      code = value;
+      this.headersSent = true;
+      return this;
+    },
+    end() {
+      resolveStatus(code);
+      return this;
+    },
+  };
+  target.listener(
+    request as unknown as IncomingMessage,
+    response as unknown as ServerResponse,
+  );
+  request.write(text.slice(0, half));
+  await new Promise((resolve) => setImmediate(resolve));
+  return {
+    finish: async () => {
+      request.end(text.slice(half));
+      return status;
+    },
+  };
+};
+
+describe("suspend and terminate hooks", () => {
+  let target: MicrovmWorkerListener | undefined;
+  let lambda: FakeLambdaClient;
+  let microvms: FakeMicrovmsClient;
+  let signals: Map<string, AbortSignal>;
+  let releases: Map<string, () => void>;
+  /** The callback ID of each handler run, in start order. */
+  let started: string[];
+
+  beforeEach(() => {
+    // The requests go straight to the listener, so no socket timer runs.
+    // Stream reads use nextTick and microtasks, which stay real.
+    jest.useFakeTimers({
+      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    });
+    lambda = new FakeLambdaClient();
+    microvms = new FakeMicrovmsClient();
+    signals = new Map();
+    releases = new Map();
+    started = [];
+  });
+
+  afterEach(async () => {
+    target?.close();
+    lambda.hold = false;
+    lambda.finish();
+    microvms.finish();
+    for (const release of releases.values()) {
+      release();
+    }
+    await jest.runOnlyPendingTimersAsync();
+    await target?.idle();
+    target = undefined;
+    jest.useRealTimers();
+  });
+
+  const start = (
+    warn: jest.Mock = jest.fn(),
+    info: jest.Mock = jest.fn(),
+    error: jest.Mock = jest.fn(),
+  ): MicrovmWorkerListener => {
+    target = createMicrovmWorkerListener({
+      handler: (_input, context) => {
+        signals.set(context.callbackId, context.signal);
+        started.push(context.callbackId);
+        return new Promise((resolve) => {
+          releases.set(context.callbackId, () => resolve("done"));
+        });
+      },
+      routes: {
+        "/job": (_input, context) => {
+          signals.set(context.callbackId, context.signal);
+          started.push(context.callbackId);
+          return new Promise((resolve) => {
+            releases.set(context.callbackId, () => resolve("done"));
+          });
+        },
+      },
+      createClient: () => lambda.asClient(),
+      createMicrovmsClient: () => microvms.asClient(),
+      logger: { info, warn, error },
+    });
+    return target;
+  };
+
+  const runHook = (worker: MicrovmWorkerListener, idleSeconds?: number) =>
+    call(worker, `${HOOK_PATH_PREFIX}run`, {
+      microvmId: "mvm-1",
+      runHookPayload: JSON.stringify({
+        version: 1,
+        region: "us-east-1",
+        ...(idleSeconds !== undefined && {
+          autoSuspendIdleSeconds: idleSeconds,
+        }),
+      }),
+    });
+
+  const hook = (
+    worker: MicrovmWorkerListener,
+    name: string,
+    headers: IncomingHttpHeaders = LAMBDA_HEADERS,
+  ) => call(worker, `${HOOK_PATH_PREFIX}${name}`, {}, headers);
+
+  const job = (worker: MicrovmWorkerListener, callbackId: string) =>
+    call(worker, "/job", {
+      version: 1,
+      region: "us-east-1",
+      callbackId,
+      input: {},
+    });
+
+  const finishJob = async (callbackId: string): Promise<void> => {
+    releases.get(callbackId)?.();
+    releases.delete(callbackId);
+    await advance(0);
+  };
+
+  describe("terminate", () => {
+    it("fails each running job's callback, and aborts its signal", async () => {
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(202);
+
+      expect(await hook(worker, "terminate")).toBe(200);
+
+      expect(lambda.completions).toEqual([
+        {
+          kind: "failure",
+          callbackId: "cb-1",
+          errorType: "MicrovmTerminatedError",
+          message: "the MicroVM was terminated before the job finished",
+        },
+        {
+          kind: "failure",
+          callbackId: "cb-2",
+          errorType: "MicrovmTerminatedError",
+          message: "the MicroVM was terminated before the job finished",
+        },
+      ]);
+      expect(signals.get("cb-1")?.aborted).toBe(true);
+      expect(signals.get("cb-1")?.reason).toBeInstanceOf(
+        MicrovmTerminatedError,
+      );
+    });
+
+    it("reports nothing more when the handler returns after the hook", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+      await hook(worker, "terminate");
+
+      await finishJob("cb-1");
+      await worker.idle();
+
+      expect(lambda.completions).toHaveLength(1);
+      expect(lambda.completions[0].kind).toBe("failure");
+    });
+
+    it("answers after the reports end", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(1_000);
+      expect(status).toBe(0);
+
+      lambda.finish();
+      await advance(0);
+      expect(status).toBe(200);
+      expect(lambda.completions).toHaveLength(1);
+    });
+
+    it("answers after 5 seconds when a report stalls", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(4_999);
+      expect(status).toBe(0);
+
+      await advance(1);
+      expect(status).toBe(200);
+    });
+
+    it("waits for a job that is reporting its own outcome", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+      lambda.hold = true;
+      await finishJob("cb-1");
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(1_000);
+      expect(status).toBe(0);
+
+      lambda.finish();
+      await advance(0);
+      expect(status).toBe(200);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+    });
+
+    it("holds a second, concurrent hook until the first one's reports end", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      // Both hooks arrive together. The first one has taken the job out of
+      // the map before its report is registered.
+      const answers: string[] = [];
+      void hook(worker, "terminate").then(() => answers.push("first"));
+      void hook(worker, "terminate").then(() => answers.push("second"));
+      await advance(1_000);
+      expect(answers).toEqual([]);
+
+      lambda.finish();
+      await advance(0);
+      expect(answers.sort()).toEqual(["first", "second"]);
+      expect(lambda.completions).toHaveLength(1);
+    });
+
+    it("answers a concurrent hook after 5 seconds too", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      const answers: string[] = [];
+      void hook(worker, "terminate").then(() => answers.push("first"));
+      await advance(2_000);
+      void hook(worker, "terminate").then(() => answers.push("second"));
+      await advance(2_999);
+      expect(answers).toEqual([]);
+      await advance(1);
+      expect(answers.sort()).toEqual(["first", "second"]);
+    });
+
+    it("reports nothing for a job whose callback a heartbeat found gone", async () => {
+      const worker = start();
+      await runHook(worker);
+      lambda.heartbeatError = Object.assign(new Error("timed out"), {
+        name: "CallbackTimeoutException",
+      });
+      // A heartbeat timeout makes the worker send a heartbeat at once.
+      await call(worker, "/job", {
+        version: 1,
+        region: "us-east-1",
+        callbackId: "cb-gone",
+        input: {},
+        heartbeatTimeoutSeconds: 30,
+      });
+      await advance(0);
+      expect(signals.get("cb-gone")?.aborted).toBe(true);
+
+      expect(await hook(worker, "terminate")).toBe(200);
+      await advance(0);
+
+      expect(lambda.completions).toEqual([]);
+    });
+
+    it("logs a failure report that the service refuses as terminal at info, not error", async () => {
+      const info = jest.fn();
+      const error = jest.fn();
+      const worker = start(jest.fn(), info, error);
+      await runHook(worker);
+      await job(worker, "cb-1");
+      lambda.completionError = Object.assign(
+        new Error("The callback is either timed out or already completed"),
+        { name: "CallbackTimeoutException" },
+      );
+
+      await hook(worker, "terminate");
+
+      expect(info).toHaveBeenCalledWith(
+        "the callback no longer accepts a failure",
+        expect.anything(),
+      );
+      expect(error).not.toHaveBeenCalledWith(
+        "could not fail the callback",
+        expect.anything(),
+      );
+    });
+
+    it("answers at once when no job runs", async () => {
+      const worker = start();
+      await runHook(worker);
+
+      expect(await hook(worker, "terminate")).toBe(200);
+      expect(lambda.completions).toEqual([]);
+    });
+
+    it("fails a job once when the hook arrives twice", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      await hook(worker, "terminate");
+      await hook(worker, "terminate");
+
+      expect(lambda.completions).toHaveLength(1);
+    });
+
+    it("refuses jobs with 503 after the hook", async () => {
+      const worker = start();
+      await runHook(worker);
+      await hook(worker, "terminate");
+
+      expect(await job(worker, "cb-1")).toBe(503);
+      expect(signals.has("cb-1")).toBe(false);
+    });
+
+    it("answers a resend of a running or finished job with 202 after the hook, and starts nothing", async () => {
+      // A duplicate starts no job, so 202 is safe after the hook. A 503 would
+      // make the durable function retry the delivery against a MicroVM that
+      // is ending. The callback of each job already has its outcome, or the
+      // hook fails it.
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-done")).toBe(202);
+      await finishJob("cb-done");
+      expect(await job(worker, "cb-running")).toBe(202);
+      await hook(worker, "terminate");
+
+      expect(await job(worker, "cb-done")).toBe(202);
+      expect(await job(worker, "cb-running")).toBe(202);
+      expect(await job(worker, "cb-new")).toBe(503);
+      await advance(0);
+
+      expect(started).toEqual(["cb-done", "cb-running"]);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-done" },
+        {
+          kind: "failure",
+          callbackId: "cb-running",
+          errorType: "MicrovmTerminatedError",
+          message: "the MicroVM was terminated before the job finished",
+        },
+      ]);
+    });
+
+    it("never suspends after the hook", async () => {
+      const worker = start();
+      await runHook(worker, 10);
+      await hook(worker, "terminate");
+
+      await advance(60_000);
+      expect(microvms.suspended).toEqual([]);
+    });
+
+    it.each([
+      ["a forwarded request", FORWARDED_HEADERS],
+      [
+        "a request with a request ID",
+        { ...LAMBDA_HEADERS, "x-amzn-requestid": "r-1" },
+      ],
+      ["a request without a Host header", {}],
+    ])("ignores %s", async (_name, headers) => {
+      const warn = jest.fn();
+      const worker = start(warn);
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      expect(await hook(worker, "terminate", headers)).toBe(200);
+
+      expect(lambda.completions).toEqual([]);
+      expect(signals.get("cb-1")?.aborted).toBe(false);
+      expect(await job(worker, "cb-2")).toBe(202);
+      expect(warn).toHaveBeenCalledWith(
+        "lifecycle hook ignored: it did not come from Lambda",
+        expect.objectContaining({ hook: "terminate" }),
+      );
+      await finishJob("cb-1");
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+    });
+
+    it.each(["127.0.0.1:8080", "localhost", "[::1]:8080"])(
+      "accepts Host: %s",
+      async (host) => {
+        const worker = start();
+        await runHook(worker);
+        await job(worker, "cb-1");
+
+        await hook(worker, "terminate", { host });
+
+        expect(lambda.completions).toHaveLength(1);
+      },
+    );
+  });
+
+  describe("a run hook whose body is still arriving", () => {
+    const runWithJob = {
+      microvmId: "mvm-1",
+      runHookPayload: JSON.stringify({
+        version: 1,
+        region: "us-east-1",
+        job: { callbackId: "cb-run", input: {} },
+      }),
+    };
+
+    it("fails the job's callback when the terminate hook came first", async () => {
+      const worker = start();
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+
+      // Lambda can end the MicroVM as soon as the terminate hook answers. So
+      // the failure must be reported before that answer.
+      const terminated = hook(worker, "terminate").then((status) => ({
+        status,
+        completionsAtAnswer: [...lambda.completions],
+      }));
+      await advance(1_000);
+      expect(await run.finish()).toBe(200);
+      const { status, completionsAtAnswer } = await terminated;
+
+      expect(status).toBe(200);
+      expect(signals.has("cb-run")).toBe(false);
+      expect(completionsAtAnswer).toEqual([
+        {
+          kind: "failure",
+          callbackId: "cb-run",
+          errorType: "MicrovmTerminatedError",
+          message: "the MicroVM was terminated before the job finished",
+        },
+      ]);
+    });
+
+    it("waits for a run hook that begins while the terminate hook waits", async () => {
+      const worker = start();
+      // An HTTP job can arrive before the run hook. Its report holds the
+      // terminate answer open while the run hook begins.
+      expect(await job(worker, "cb-http")).toBe(202);
+      lambda.hold = true;
+
+      const terminated = hook(worker, "terminate").then((status) => ({
+        status,
+        completionsAtAnswer: [...lambda.completions],
+      }));
+      await advance(100);
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+      lambda.hold = false;
+      lambda.finish();
+      await advance(100);
+      expect(await run.finish()).toBe(200);
+      const { status, completionsAtAnswer } = await terminated;
+
+      expect(status).toBe(200);
+      expect(completionsAtAnswer.map((c) => c.callbackId).sort()).toEqual([
+        "cb-http",
+        "cb-run",
+      ]);
+    });
+
+    describe("an invalid request's failure report", () => {
+      // The version is unknown, so the request is rejected. The callback ID
+      // is still readable, so the worker fails that callback.
+      const invalidRunHook = {
+        microvmId: "mvm-1",
+        runHookPayload: JSON.stringify({
+          version: 99,
+          region: "us-east-1",
+          job: { callbackId: "cb-invalid", input: {} },
+        }),
+      };
+      const invalidJob = {
+        version: 99,
+        region: "us-east-1",
+        callbackId: "cb-invalid",
+        input: {},
+      };
+
+      const terminateAfter = async (
+        worker: MicrovmWorkerListener,
+        send: () => Promise<number>,
+      ) => {
+        lambda.hold = true;
+        expect(await send()).toBe(400);
+        let answer: { status: number; completions: Completion[] } | undefined;
+        void hook(worker, "terminate").then((status) => {
+          answer = { status, completions: [...lambda.completions] };
+        });
+        return () => answer;
+      };
+
+      it.each([
+        ["a run hook", `${HOOK_PATH_PREFIX}run`, invalidRunHook],
+        ["a job request", "/job", invalidJob],
+      ])(
+        "from %s holds the terminate answer until it ends",
+        async (_name, path, body) => {
+          const worker = start();
+          if (path === "/job") {
+            await runHook(worker);
+          }
+          const answer = await terminateAfter(worker, () =>
+            call(worker, path, body),
+          );
+
+          await advance(1_000);
+          expect(answer()).toBeUndefined();
+
+          lambda.finish();
+          await advance(0);
+          expect(answer()?.status).toBe(200);
+          expect(answer()?.completions).toEqual([
+            expect.objectContaining({
+              kind: "failure",
+              callbackId: "cb-invalid",
+            }),
+          ]);
+        },
+      );
+
+      it("holds the terminate answer for at most 5 seconds", async () => {
+        const worker = start();
+        const answer = await terminateAfter(worker, () =>
+          call(worker, `${HOOK_PATH_PREFIX}run`, invalidRunHook),
+        );
+
+        await advance(4_999);
+        expect(answer()).toBeUndefined();
+        await advance(1);
+        expect(answer()?.status).toBe(200);
+      });
+
+      it("that begins while the terminate hook waits holds the answer", async () => {
+        const worker = start();
+        await runHook(worker);
+        expect(await job(worker, "cb-http")).toBe(202);
+        lambda.hold = true;
+        let answer: { status: number; completions: Completion[] } | undefined;
+        void hook(worker, "terminate").then((status) => {
+          answer = { status, completions: [...lambda.completions] };
+        });
+        await advance(100);
+
+        expect(await call(worker, "/job", invalidJob)).toBe(400);
+        // The running job's report ends. The invalid request's report still
+        // runs, so the answer must wait.
+        lambda.finishFirst();
+        await advance(0);
+        expect(lambda.completions.map((c) => c.callbackId)).toEqual([
+          "cb-http",
+        ]);
+        expect(answer).toBeUndefined();
+
+        lambda.finish();
+        await advance(0);
+        expect(answer?.status).toBe(200);
+        expect(answer?.completions.map((c) => c.callbackId).sort()).toEqual([
+          "cb-http",
+          "cb-invalid",
+        ]);
+      });
+    });
+
+    it("answers the terminate hook after 5 seconds when the run hook body never ends", async () => {
+      const worker = start();
+      await startSlowCall(worker, `${HOOK_PATH_PREFIX}run`, runWithJob);
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(4_999);
+      expect(status).toBe(0);
+      await advance(1);
+      expect(status).toBe(200);
+    });
+
+    it("answers the terminate hook at once when no run hook is in flight", async () => {
+      const worker = start();
+      await runHook(worker);
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(0);
+      expect(status).toBe(200);
+    });
+
+    it("starts the job after the resume hook when the suspend hook came first", async () => {
+      const worker = start();
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+
+      expect(await hook(worker, "suspend")).toBe(200);
+      expect(await run.finish()).toBe(200);
+      expect(signals.has("cb-run")).toBe(false);
+
+      await hook(worker, "resume");
+      expect(signals.has("cb-run")).toBe(true);
+      await finishJob("cb-run");
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-run" },
+      ]);
+    });
+
+    it("starts the deferred job 30 seconds after the suspend hook without a resume", async () => {
+      const worker = start();
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+      await hook(worker, "suspend");
+      await run.finish();
+
+      await advance(29_999);
+      expect(signals.has("cb-run")).toBe(false);
+      await advance(1);
+      expect(signals.has("cb-run")).toBe(true);
+    });
+
+    it("fails a deferred job when the terminate hook follows the suspend hook", async () => {
+      const worker = start();
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+      await hook(worker, "suspend");
+      await run.finish();
+
+      await hook(worker, "terminate");
+      await advance(30_000);
+
+      expect(signals.has("cb-run")).toBe(false);
+      expect(lambda.completions).toEqual([
+        expect.objectContaining({
+          kind: "failure",
+          callbackId: "cb-run",
+          errorType: "MicrovmTerminatedError",
+        }),
+      ]);
+    });
+
+    it("fails an HTTP job's delivery with 503 when the terminate hook came first", async () => {
+      const worker = start();
+      await runHook(worker);
+      const request = await startSlowCall(worker, "/job", {
+        version: 1,
+        region: "us-east-1",
+        callbackId: "cb-http",
+        input: {},
+      });
+
+      await hook(worker, "terminate");
+      expect(await request.finish()).toBe(503);
+      expect(signals.has("cb-http")).toBe(false);
+    });
+  });
+
+  it("answers a hook that it does not know with 200, and does not act on it", async () => {
+    const info = jest.fn();
+    const worker = start(undefined, info);
+    await runHook(worker, 10);
+    await advance(5_000);
+
+    expect(await hook(worker, "checkpoint")).toBe(200);
+    expect(info).toHaveBeenCalledWith("lifecycle hook", { hook: "checkpoint" });
+    // The hook neither refuses jobs nor restarts the idle time.
+    await advance(5_000);
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+  });
+
+  describe("suspend", () => {
+    it("refuses jobs with 503 until the resume hook", async () => {
+      const worker = start();
+      await runHook(worker);
+
+      expect(await hook(worker, "suspend")).toBe(200);
+      expect(await job(worker, "cb-1")).toBe(503);
+
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("answers a resend of a finished job with 202 during the refusal, and does not run it again", async () => {
+      const warn = jest.fn();
+      const worker = start(warn);
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await finishJob("cb-1");
+      await hook(worker, "suspend");
+
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(503);
+      await advance(0);
+
+      expect(started).toEqual(["cb-1"]);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+      expect(warn).toHaveBeenCalledWith("duplicate job ignored", {
+        microvmId: "mvm-1",
+      });
+    });
+
+    it("answers a resend of a running job with 503 during the refusal, and with 202 after the resume hook", async () => {
+      // The running job can freeze with the MicroVM. A 202 would end the
+      // durable function's delivery, and nothing would resume the MicroVM.
+      // The 503 makes the durable function check the state and resume it.
+      const info = jest.fn();
+      const worker = start(undefined, info);
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await hook(worker, "suspend");
+
+      expect(await job(worker, "cb-1")).toBe(503);
+      expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual(["cb-1"]);
+      expect(info).toHaveBeenCalledWith(
+        "job refused: the MicroVM is suspending",
+        { microvmId: "mvm-1" },
+      );
+
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(started).toEqual(["cb-1"]);
+
+      await finishJob("cb-1");
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+    });
+
+    it("answers a resend of a running job with 202 when a terminate hook follows the suspend hook", async () => {
+      // The terminate hook fails the job's callback. So a 503 would only make
+      // the durable function retry against a MicroVM that is ending.
+      const worker = start();
+      await runHook(worker);
+      expect(await job(worker, "cb-1")).toBe(202);
+      await hook(worker, "suspend");
+      await hook(worker, "terminate");
+
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual(["cb-1"]);
+    });
+
+    it("accepts jobs again 30 seconds after the hook without a resume", async () => {
+      const worker = start();
+      await runHook(worker);
+      await hook(worker, "suspend");
+
+      await advance(29_999);
+      expect(await job(worker, "cb-1")).toBe(503);
+      await advance(1);
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("leaves running jobs running", async () => {
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      await hook(worker, "suspend");
+      await finishJob("cb-1");
+
+      expect(signals.get("cb-1")?.aborted).toBe(false);
+      expect(lambda.completions).toEqual([
+        { kind: "success", callbackId: "cb-1" },
+      ]);
+    });
+
+    it("keeps refusing jobs after a forwarded resume", async () => {
+      const worker = start();
+      await runHook(worker);
+      await hook(worker, "suspend");
+
+      expect(await hook(worker, "resume", FORWARDED_HEADERS)).toBe(200);
+      expect(await job(worker, "cb-1")).toBe(503);
+
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("ignores a forwarded request", async () => {
+      const worker = start();
+      await runHook(worker);
+
+      expect(await hook(worker, "suspend", FORWARDED_HEADERS)).toBe(200);
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("stops the idle time, and starts it again after the resume hook", async () => {
+      const worker = start();
+      await runHook(worker, 10);
+      await advance(5_000);
+      await hook(worker, "suspend");
+
+      await advance(20_000);
+      expect(microvms.suspended).toEqual([]);
+
+      await hook(worker, "resume");
+      await advance(10_000);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+    });
+
+    it("keeps the refusal when the hook arrives during the worker's own call that the service rejects", async () => {
+      // The worker's own SuspendMicrovm call triggers the suspend hook. A
+      // rejection of a retried call, or of a concurrent one, must not end the
+      // refusal that the hook started, because the MicroVM is suspending.
+      microvms.hold = true;
+      microvms.failure = Object.assign(new Error("not authorized"), {
+        name: "AccessDeniedException",
+      });
+      const warn = jest.fn();
+      const worker = start(warn);
+      await runHook(worker, 10);
+      await advance(10_000);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+
+      await hook(worker, "suspend");
+      microvms.finish();
+      await advance(0);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("the service rejected the call"),
+        expect.objectContaining({
+          outcome: "rejected",
+          suspendHookArrived: true,
+          refusingJobs: true,
+        }),
+      );
+      expect(await job(worker, "cb-1")).toBe(503);
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("ends the refusal at once when the service rejects the worker's own call and no hook came", async () => {
+      microvms.failure = Object.assign(new Error("not authorized"), {
+        name: "AccessDeniedException",
+      });
+      const warn = jest.fn();
+      const worker = start(warn);
+      await runHook(worker, 10);
+      await advance(10_000);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("the service rejected the call"),
+        expect.objectContaining({
+          outcome: "rejected",
+          suspendHookArrived: false,
+          refusingJobs: false,
+        }),
+      );
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("keeps one 30-second refusal when the hook follows the worker's own call", async () => {
+      const worker = start();
+      await runHook(worker, 10);
+      await advance(10_000);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+
+      await advance(5_000);
+      await hook(worker, "suspend");
+
+      // The hook started a new 30-second refusal 5 seconds after the call's.
+      await advance(25_000);
+      expect(await job(worker, "cb-1")).toBe(503);
+      await advance(5_000);
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+  });
+});
+
+describe("a failure report whose client cannot be closed", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("neither rejects unhandled nor holds the request", async () => {
+    // The worker creates and destroys the default client itself. A destroy
+    // that throws must not turn into an unhandled rejection, which would end
+    // the worker process.
+    jest
+      .spyOn(LambdaClient.prototype, "send")
+      .mockImplementation(async () => ({}));
+    const destroy = jest
+      .spyOn(LambdaClient.prototype, "destroy")
+      .mockImplementation(() => {
+        throw new Error("destroy failed");
+      });
+    // Jest fails the test on an unhandled rejection. A listener on
+    // `process` here would not see it, because each test file gets its own
+    // copy of `process`.
+    const error = jest.fn();
+    const worker = createMicrovmWorkerListener({
+      handler: async () => "done",
+      logger: { info: () => {}, warn: () => {}, error },
+    });
+    const status = await call(worker, `${HOOK_PATH_PREFIX}run`, {
+      microvmId: "mvm-1",
+      runHookPayload: JSON.stringify({
+        version: 99,
+        region: "us-east-1",
+        job: { callbackId: "cb-invalid", input: {} },
+      }),
+    });
+    await worker.idle();
+    // Let a rejection that nothing handles reach Jest before the test ends.
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(status).toBe(400);
+    expect(destroy).toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      "could not close the Lambda client",
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "destroy failed" }),
+      }),
+    );
+  });
+});

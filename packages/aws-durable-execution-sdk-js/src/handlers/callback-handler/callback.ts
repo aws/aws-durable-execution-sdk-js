@@ -9,6 +9,7 @@ import {
 import { OperationStatus, OperationType } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
@@ -40,6 +41,8 @@ export const createCallback = (
 
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
   plugin: DurableInstrumentationPlugin = {},
+  // Plugin-only operation name; never checkpointed. Labels the CALLBACK span.
+  pluginOperationName?: string,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -56,6 +59,10 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
+    // A custom subtype labels callbacks of a custom operation. It is typed as
+    // OperationSubType, like ChildConfig.subType in the child context handler.
+    const subType =
+      (config?.subType as OperationSubType) || OperationSubType.CALLBACK;
     const serdes =
       config?.serdes ||
       (getDefaultCallbackDeserializer
@@ -64,9 +71,9 @@ export const createCallback = (
 
     const opInfo = {
       id: hashId(stepId),
-      name: name,
+      name: pluginOperationName ?? name,
       type: OperationType.CALLBACK,
-      subType: OperationSubType.CALLBACK,
+      subType,
       parentId: parentId ? hashId(parentId) : undefined,
     };
 
@@ -84,7 +91,7 @@ export const createCallback = (
         {
           type: OperationType.CALLBACK,
           name,
-          subType: OperationSubType.CALLBACK,
+          subType,
         },
         stepData,
         context,
@@ -103,7 +110,7 @@ export const createCallback = (
               stepId,
               name,
               type: OperationType.CALLBACK,
-              subType: OperationSubType.CALLBACK,
+              subType,
               parentId,
             },
           },
@@ -138,7 +145,7 @@ export const createCallback = (
               stepId,
               name,
               type: OperationType.CALLBACK,
-              subType: OperationSubType.CALLBACK,
+              subType,
               parentId,
             },
           },
@@ -163,7 +170,7 @@ export const createCallback = (
           Id: stepId,
           ParentId: parentId,
           Action: "START",
-          SubType: OperationSubType.CALLBACK,
+          SubType: subType,
           Type: OperationType.CALLBACK,
           Name: name,
           CallbackOptions: {
@@ -196,7 +203,7 @@ export const createCallback = (
             stepId,
             name,
             type: OperationType.CALLBACK,
-            subType: OperationSubType.CALLBACK,
+            subType,
             parentId,
           },
         },
@@ -222,13 +229,20 @@ export const createCallback = (
         }
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
-          const deserializedResult = await safeDeserialize(
-            serdes,
-            callbackData.Result,
+          // Phase 1 marked the callback COMPLETED. Count it as active again
+          // while the replayed result is deserialized.
+          const deserializedResult = await completeAfter(
+            checkpoint,
             stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+            () =>
+              safeDeserialize(
+                serdes,
+                callbackData.Result,
+                stepId,
+                name,
+                context.terminationManager,
+                context.durableExecutionArn,
+              ),
           );
 
           const resolvedPromise = new DurablePromise(

@@ -1,9 +1,10 @@
+import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { noClosureInDurableOperations } from "./no-closure-in-durable-operations";
 
 const ruleTester = new RuleTester({
-  parser: require.resolve("@typescript-eslint/parser"),
-} as any);
+  languageOptions: { parser: typescriptParser },
+});
 
 describe("no-closure-in-durable-operations composed tests", () => {
   ruleTester.run(

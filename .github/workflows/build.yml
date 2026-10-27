@@ -29,11 +29,19 @@ env:
 jobs:
   lint-commits:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
-    runs-on: ubuntu-latest
+    #
+    # Jobs run on the CodeBuild-hosted runner in the JS testing account (EC2
+    # compute, Ubuntu standard image; the label must match the CodeBuild project
+    # name). Pull requests from forks are routed to GitHub-hosted runners. This
+    # expression is routing, not a trust boundary: a pull_request runs the PR's
+    # own workflow file, so the fork boundary is the repository's approval
+    # setting for fork workflows. The same expression is used by every job below
+    # and by the reusable workflows this one calls.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
           cache: "npm"
@@ -42,12 +50,24 @@ jobs:
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
 
   build:
+    # Deliberately NOT `needs: lint`. That was tried, on the theory that depending on
+    # lint would make a lint failure block the merge the way it did when lint ran inside
+    # `prebuild`. It does not: GitHub reports a job skipped by a failed `needs` with a
+    # conclusion of `skipped`, and skipped counts as SUCCESS for required status checks
+    # (see "Troubleshooting required status checks" in the GitHub docs -- successful
+    # statuses are success, skipped and neutral).
+    #
+    # So `needs: lint` was strictly worse: a lint failure skipped `build` AND the
+    # `unit-tests` jobs that depend on it, all three reported success, the PR stayed
+    # mergeable, and the tests never ran. Blocking is the ruleset's job -- `lint / lint`
+    # is a required check -- and keeping these parallel means a PR with a lint error
+    # still gets real test results in the same run.
     needs: lint-commits
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
           cache: "npm"
@@ -55,6 +75,8 @@ jobs:
         run: npm ci
       - name: Build project
         run: npm run build
+      - name: Verify every package ships the files its package.json declares
+        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -64,7 +86,7 @@ jobs:
             package.json
             package-lock.json
 
-  # Typecheck and actually *bundle* both Workflow Insight hosts.
+  # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #
   # Neither host package is in the root `build` script, so without this job
   # main.ts, preload.ts and the two esbuild configs are only ever typechecked —
@@ -75,40 +97,87 @@ jobs:
   # webview-ui gets its own `npm ci`: it is a nested package outside the root
   # workspaces glob, so the root install never covers it, and it is the one place
   # the renderer is typechecked at all.
-  insight-hosts:
+  telemetry-hosts:
     needs: lint-commits
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
           cache: "npm"
       - name: Install dependencies
         run: npm ci
       - name: Install webview-ui dependencies
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npm ci
-      - name: Lint (boundary rules)
-        # The no-restricted-imports rules that forbid reaching into a sibling package
-        # by relative path, and forbid a host's API leaking into shared code. Review
-        # of #809 noted these had no CI gate at all -- eslint previously ran only via
-        # lint-staged on pre-commit, which `--no-verify` bypasses. The hostAgnostic
-        # tests cover the same ground, deliberately: the rules give the earliest
-        # signal, the tests are the backstop, and neither is the only gate.
-        run: npm run lint
+      # The boundary rules that used to run here are now enforced by the `lint` job
+      # (biome ci over the whole monorepo), which did not exist when this step was
+      # added -- at that point root `lint` was `eslint .` and this was the only CI
+      # gate for them. Keeping it would mean a second `npm ci` plus a duplicate
+      # whole-repo lint on every PR. The hostAgnostic tests below remain the
+      # backstop, as they always were.
       - name: Typecheck core and both hosts
         run: npm run typecheck:hosts
       - name: Typecheck the renderer
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npx tsc --noEmit
+      - name: Test the renderer
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
+        run: npm test
       - name: Bundle the VS Code extension (renderer + extension host)
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-vscode
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-vscode
       - name: Bundle the desktop app
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-desktop
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-desktop
       - name: Bundle the MCP server
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-mcp
+
+  # The plugin's peer range is ESLint ^8.57.0 || ^9.0.0 || ^10.0.0, but the
+  # repository installs only ESLint 10, and the RuleTester suites need that version
+  # (ESLint 8 RuleTester takes a different config format). This job installs the
+  # latest ESLint 8 and the latest ESLint 9 on top of the lockfile install, and
+  # lints real code through ESLint's public API with the plugin's recommended
+  # config. It needs no build artifacts, so like telemetry-hosts it runs off
+  # lint-commits.
+  eslint-plugin-compat:
+    needs: lint-commits
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The latest ESLint 8 is 8.57, the lowest version in the peer range.
+        eslint: ["8", "9"]
+    name: eslint-plugin-compat (ESLint ${{ matrix.eslint }})
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      # --no-save leaves package.json and the lockfile alone. npm puts the older
+      # ESLint in the plugin package's own node_modules, so the plugin and its
+      # tests resolve it there instead of the root copy.
+      - name: Install ESLint ${{ matrix.eslint }}
+        run: npm install --no-save eslint@${{ matrix.eslint }} -w packages/aws-durable-execution-sdk-js-eslint-plugin
+      - name: Show the ESLint version under test
+        working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
+        run: node -p "'ESLint ' + require('eslint/package.json').version"
+      - name: Lint with the plugin on ESLint ${{ matrix.eslint }}
+        # Jest only. The package's `npm test` also runs `npm run typecheck`, but
+        # ESLint 8 ships no types, so tsc would fall back to the root ESLint 10
+        # types and check nothing new here. The unit-tests job type-checks.
+        working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
+        run: npx jest src/index.test.ts src/eslint-integration.test.ts
+
+  # Runs off lint-commits rather than build: Biome needs only the sources, so
+  # linting does not have to wait for compilation and reports failures earlier.
+  lint:
+    needs: lint-commits
+    uses: "./.github/workflows/lint.yml"
 
   unit-tests:
     needs: build
@@ -122,8 +191,10 @@ jobs:
 
   integration-tests:
     needs: build
-    # Skip integration tests for PRs from forked repos (no access to secrets)
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Skip integration tests for PRs from forked repos or Dependabot (no access to secrets)
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       id-token: write
@@ -138,8 +209,10 @@ jobs:
 
   capacity-provider-tests:
     needs: build
-    # Skip for PRs from forked repos (no access to secrets)
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Skip for PRs from forked repos or Dependabot (no access to secrets)
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       id-token: write

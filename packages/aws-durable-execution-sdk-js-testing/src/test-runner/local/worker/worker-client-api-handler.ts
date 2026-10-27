@@ -11,6 +11,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { WorkerCommandType } from "../../../checkpoint-server/worker/worker-message-types";
 import { defaultLogger } from "../../../logger";
+import { deserializeWorkerApiError } from "../../../checkpoint-server/worker-api/worker-api-error";
 
 export interface ApiCallHandler<TResult> {
   readonly reject: (err: unknown) => void;
@@ -31,11 +32,14 @@ export class WorkerClientApiHandler {
     [ApiType.CompleteInvocation]: new Map(),
     [ApiType.UpdateCheckpointData]: new Map(),
     [ApiType.PollCheckpointData]: new Map(),
+    [ApiType.DrainCheckpointData]: new Map(),
     [ApiType.GetDurableExecutionState]: new Map(),
     [ApiType.CheckpointDurableExecutionState]: new Map(),
     [ApiType.SendDurableExecutionCallbackSuccess]: new Map(),
     [ApiType.SendDurableExecutionCallbackFailure]: new Map(),
     [ApiType.SendDurableExecutionCallbackHeartbeat]: new Map(),
+    [ApiType.PauseDurableExecution]: new Map(),
+    [ApiType.ResumeDurableExecution]: new Map(),
   };
 
   handleApiCallResponse(apiResponse: WorkerApiResponse<ApiType>) {
@@ -51,11 +55,10 @@ export class WorkerClientApiHandler {
     apiMap.delete(apiResponse.requestId);
 
     if ("error" in apiResponse) {
-      handler.reject(apiResponse.error);
+      handler.reject(deserializeWorkerApiError(apiResponse.error));
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     (handler as ApiCallHandler<WorkerApiResponseMapping[ApiType]>).resolve(
       apiResponse.response,
     );
@@ -74,6 +77,7 @@ export class WorkerClientApiHandler {
         requestId,
         type: apiType,
         params,
+        clientTimestampMs: Date.now(),
       } satisfies WorkerApiRequest<TApiType>,
     });
 

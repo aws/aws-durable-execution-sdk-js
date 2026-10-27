@@ -12,9 +12,10 @@ import {
 import { WorkerServerApiHandler } from "../worker-api/worker-server-api-handler";
 import { WorkerApiResponseMapping } from "../worker-api/worker-api-response";
 import { ApiType } from "../worker-api/worker-api-types";
+import { serializeWorkerApiError } from "../worker-api/worker-api-error";
+import { observeClientTime } from "../utils/client-clock";
 import { CheckpointWorkerManagerParams } from "../../test-runner/local/worker/checkpoint-worker-manager";
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 const workerParams = workerData as CheckpointWorkerManagerParams;
 
 /**
@@ -52,6 +53,7 @@ export class CheckpointWorker {
    * Main message handler for commands from the main thread
    */
   private handleMessage(command: WorkerCommand): void {
+    observeClientTime(command.data.clientTimestampMs);
     let response: WorkerApiResponseMapping[ApiType];
     try {
       response = this.workerServerApiHandler.performApiCall(command.data);
@@ -61,7 +63,7 @@ export class CheckpointWorker {
         data: {
           requestId: command.data.requestId,
           type: command.data.type,
-          error,
+          error: serializeWorkerApiError(error),
         },
       });
       return;
@@ -85,7 +87,7 @@ export class CheckpointWorker {
             data: {
               type: command.data.type,
               requestId: command.data.requestId,
-              error,
+              error: serializeWorkerApiError(error),
             },
           });
         });

@@ -1,3 +1,4 @@
+import { setOperationSpanStatus } from "./operation-span-status";
 import type {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -10,145 +11,264 @@ import type {
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
 import type {
-  TracerProvider,
   Tracer,
   Span,
+  SpanContext,
+  Context,
   Link,
+  HrTime,
 } from "@opentelemetry/api";
 import {
   context,
+  isSpanContextValid,
   trace,
   SpanKind,
   SpanStatusCode,
   ROOT_CONTEXT,
+  TraceFlags,
 } from "@opentelemetry/api";
 import {
-  DeterministicIdGenerator,
-  deriveTraceIdFromArn,
   deriveWorkflowSpanId,
   deriveSpanIdFromOperationId,
 } from "./deterministic-id-generator";
-import { xRayContextExtractor } from "./context-extractors";
-import type { ContextExtractor } from "./context-extractors";
+import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
+import {
+  canonicalTraceId,
+  resolveExecutionTraceContext,
+  rootSamplingDecision,
+} from "./execution-trace-context";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider, ProviderSource } from "./otel-plugin-provider";
-import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
+import { flushTracerProvider } from "./otel-plugin-provider";
+import {
+  createPluginFactory,
+  OtelPluginEnvironment,
+} from "./otel-plugin-environment";
+import { isDurableSamplerInstalled } from "./global-sampler";
+import { ExternalCompletions } from "./external-completions";
+import {
+  hrTimeToMilliseconds,
+  millisToHrTime,
+  timeInputToHrTime,
+} from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+  type InvocationClock,
+} from "./invocation-clock";
 
-const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
+import { createPropagationMetadata } from "./propagation-metadata";
+import type {
+  PropagationInput,
+  PropagationMetadata,
+} from "./propagation-metadata";
+import { PLUGIN_REGISTRATION } from "./plugin-registration";
+
+const PLUGIN_NAME = "ExecutionOtelPlugin";
 
 /**
- * Self-contained OpenTelemetry instrumentation plugin for durable executions.
+ * OpenTelemetry instrumentation plugin for one durable execution invocation.
  *
- * Unlike InvocationOtelPlugin (which relies on the ADOT Lambda layer for auto-instrumentation),
- * ExecutionOtelPlugin creates and manages its own TracerProvider, registers
- * instrumentations and propagators, and exports spans via OTLP to a local collector.
+ * Implements the DurableInstrumentationPlugin interface. The SDK builds one of
+ * these per invocation, from that invocation's {@link InvocationInfo}, and drops
+ * it when the invocation returns — so every field below describes one execution
+ * and no two executions sharing an execution environment (routine under Lambda
+ * Managed Instances) can observe each other's spans or operation maps. What
+ * outlives the invocation is the {@link OtelPluginEnvironment} it is handed.
  *
- * Implements the DurableInstrumentationPlugin interface with a Workflow_Span as the
- * synthetic trace root, deferred operation span export, and invocation spans as
- * correlation siblings (not parents) of operation spans.
+ * The Workflow span joins the execution trace by parenting onto the resolved
+ * execution ancestor (a propagated remote parent or a synthetic execution root),
+ * so the whole execution shares one trace. Operation spans parent onto the
+ * Workflow span and the per-invocation Invocation span is a correlation sibling
+ * (linked from, not a parent of, the operation spans). Both the Workflow span and
+ * each operation span are deferred: their identity is carried as a non-recording
+ * context and the single recording span is created and ended together at
+ * terminal / onOperationEnd, so nothing is left un-ended across invocations
+ * (issue #831).
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
-  // Shared utilities (reused from existing package)
-  private readonly idGenerator: DeterministicIdGenerator;
-  private readonly contextExtractor: ContextExtractor;
+  /** The execution this instance instruments, taken from the factory's info. */
+  private readonly executionArn: string;
+  /**
+   * The backend-reported start of the whole execution, or undefined when it
+   * reported none. Trace-ID derivation must see the reported value: deriving
+   * from a fabricated one would change the trace ID.
+   */
+  private readonly reportedExecutionStart: Date | undefined;
+  /**
+   * What the terminal Workflow span is backdated to: the reported execution
+   * start, or this invocation's clock anchor when it was not reported.
+   */
+  private get workflowStartTime(): Date {
+    return (
+      this.reportedExecutionStart ?? new Date(this.invocationClock!.epochMillis)
+    );
+  }
 
-  // TracerProvider (internally managed or user-provided)
-  private readonly tracerProvider: TracerProvider;
-  private readonly tracer: Tracer;
-
-  // Per-invocation state
+  // Non-recording context carrying the deterministic Workflow identity; the real
+  // span is created+ended once, at the terminal invocation (issue #831).
   private workflowSpan: Span | undefined;
   private invocationSpan: Span | undefined;
-  private spanMap: Map<string, Span>;
-  private executionArn: string;
+  private invocationClock: InvocationClock | undefined;
+  private latestObservedTimestamp: HrTime | undefined;
+  // Holds only recording ATTEMPT spans; operation spans are deferred (see
+  // operationContexts), never recording between start and end.
+  private readonly spanMap = new Map<string, Span>();
+  // Deterministic non-recording placeholders for in-flight operations; the real
+  // span is created+ended once in onOperationEnd. Children/attempts parent onto it.
+  private readonly operationContexts = new Map<string, SpanContext>();
+  // Naming/timing captured at start, reused when onOperationEnd omits them.
+  private readonly operationStarts = new Map<
+    string,
+    {
+      name?: string;
+      subType?: string;
+      parentId?: string;
+      startTimestamp?: Date | HrTime;
+    }
+  >();
+  private executionTraceId = "";
+  private executionTraceFlags: number = 0;
+  private executionSamplingDecision: SamplingDecision =
+    SamplingDecision.NOT_RECORD;
+  // The execution ancestor the terminal Workflow span parents onto, captured at
+  // invocation start and reused when the real span is created at terminal.
+  private executionAncestor: SpanContext | undefined;
+  private syntheticRootMaterialized = false;
 
-  // Default provider mode
-  private readonly providerSource: ProviderSource;
+  private tracingEnabled = false;
+  // Operation ends received after a flush starts may still be in a batch buffer.
+  private operationSpansNeedFlush = false;
+  private readonly externalCompletions = new ExternalCompletions();
+  // A real context span can finish even when an enclosing completed context
+  // suppresses its terminal checkpoint. Keep that observed parent identity.
+  private readonly recordedContextIds = new Set<string>();
+  private invocationEndOperations: Record<string, OperationInfo> | undefined;
 
-  // Workflow span name (configurable)
-  private readonly workflowSpanName: string;
+  private invocationFinalized = false;
 
-  // Whether enrichLogContext() contributes trace context to log records
-  private readonly enrichLogger: boolean;
-
-  constructor(config?: OtelPluginConfig) {
-    const instrumentationName =
-      config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
-
-    this.idGenerator = new DeterministicIdGenerator();
-    this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
-    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
-    this.enrichLogger = config?.enrichLogger ?? true;
-
-    // Create or accept TracerProvider via the provider factory
-    const { tracerProvider, source } = createTracerProvider(config);
-    this.tracerProvider = tracerProvider;
-    this.providerSource = source;
-
-    // Register HTTP and AWS SDK instrumentations (skipped when custom provider is supplied)
-    registerStandaloneInstrumentations(this.tracerProvider, source, config);
-
-    this.tracer = this.tracerProvider.getTracer(instrumentationName);
-
-    // Monkey-patch the tracer's ID generator so spans use deterministic IDs.
-    (this.tracer as any)._idGenerator = this.idGenerator;
-
-    // Initialize per-invocation state
-    this.spanMap = new Map();
-    this.executionArn = "";
+  /**
+   * @param environment - State that belongs to the execution environment: the
+   * resolved tracer provider and tracer, the deterministic ID generator
+   * installed on that tracer, the sampler wrapper, and the immutable
+   * config-derived settings. Shared by every instance the factory creates, so
+   * those resolutions and installations happen once no matter how many
+   * invocations run.
+   * @param info - The invocation this instance serves. It is the same object the
+   * SDK then passes to {@link onInvocationStart}, so the instance knows which
+   * execution it belongs to before its first hook fires.
+   *
+   * @internal Use {@link createExecutionOtelPluginFactory}; both parameters are
+   * internal to this package.
+   */
+  constructor(
+    private readonly environment: OtelPluginEnvironment,
+    info: InvocationInfo,
+  ) {
+    this.executionArn = info.executionArn;
+    // Snapshot the backend Date so later hooks cannot retime this invocation's
+    // retry-stable root anchor or terminal Workflow by mutating the input.
+    this.reportedExecutionStart = info.executionStartTimestamp
+      ? new Date(info.executionStartTimestamp.getTime())
+      : undefined;
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
-    // 1. Store the execution ARN
-    this.executionArn = info.executionArn;
+    try {
+      this.initializeInvocation(info);
+    } catch (error) {
+      // Keep later hooks inert, but release the Invocation we already obtained.
+      // The shared provider belongs to the environment, not this failed instance.
+      this.tracingEnabled = false;
+      try {
+        this.invocationSpan?.end(this.liveTimestamp());
+      } catch {
+        // Cleanup is best effort; the core must receive the original start error.
+      }
+      this.invocationSpan = undefined;
+      throw error;
+    }
+  }
 
-    // 2. Extract trace context via context extractor (same as InvocationOtelPlugin)
-    const extractedContext = this.contextExtractor(info);
-
-    // 3. Set the trace ID on the ID generator
-    if (extractedContext?.traceId) {
-      this.idGenerator.setTraceId(extractedContext.traceId);
-    } else {
-      // Fallback: derive trace ID from ARN
-      const derivedId = deriveTraceIdFromArn(info.executionArn);
-      this.idGenerator.setTraceId(derivedId);
+  private initializeInvocation(info: InvocationInfo): void {
+    if (!this.environment.ensureTracingEnabled(PLUGIN_NAME)) {
+      return;
     }
 
-    // 4. Derive the workflow span ID from execution ARN
-    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    this.invocationClock = captureInvocationClock();
 
-    // 5. Set it as the next span ID so the tracer uses it for the Workflow_Span
-    this.idGenerator.setNextSpanId(workflowSpanId);
+    // 1. Extract trace context via context extractor (same as InvocationOtelPlugin)
+    const extractedContext = this.environment.contextExtractor(info);
 
-    // 6. Create the Workflow_Span with deterministic ID (always as root — no parent)
-    this.workflowSpan = this.tracer.startSpan(
-      this.workflowSpanName,
-      {
-        kind: SpanKind.INTERNAL,
-        attributes: {
-          "durable.execution.arn": info.executionArn,
-        },
-        startTime: info.executionStartTimestamp ?? new Date(),
-      },
-      ROOT_CONTEXT,
+    // 2. Resolve the one execution ancestor both spans parent onto, so they
+    // share a trace and a sampling decision. The canonical trace ID is the
+    // propagated remote trace when valid, else one derived from the ARN and
+    // start time. The execution ancestor is a complete remote parent, else a
+    // synthetic execution root. A live ambient span is not used as the ancestor
+    // (its trace is not stable across reinvocations).
+    const canonical = canonicalTraceId(
+      extractedContext,
+      this.executionArn,
+      this.reportedExecutionStart,
+    );
+    const execTraceContext = resolveExecutionTraceContext(
+      extractedContext,
+      canonical,
+      this.executionArn,
+      () =>
+        rootSamplingDecision(
+          this.environment.tracer,
+          canonical,
+          this.environment.workflowSpanName,
+          {
+            "durable.execution.arn": this.executionArn,
+          },
+        ),
+    );
+    this.executionTraceId = canonical;
+    this.executionTraceFlags = execTraceContext.traceFlags;
+    this.executionSamplingDecision = execTraceContext.samplingDecision;
+
+    // 3. Derive the workflow span ID from execution ARN
+    const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
+
+    // 4. Resolve the Workflow_Span identity as a NON-RECORDING context. A whole
+    // execution spans many invocations, so only the terminal one can complete
+    // the real span; carrying a real recording span across invocations would
+    // leak it un-ended (issue #831), and ending one per invocation would export
+    // duplicate (traceId, spanId). Operations parent onto this non-recording
+    // context (a valid parent that stamps the right traceId/parentSpanId on its
+    // children); the single real span is created and ended once, at the terminal
+    // invocation (see onInvocationEnd), parented onto the execution ancestor. It
+    // carries the execution sampled bit so a parent-based sampler stays
+    // consistent with the eventual root.
+    this.executionAncestor = execTraceContext.executionAncestor;
+    this.workflowSpan = trace.wrapSpanContext({
+      traceId: this.executionTraceId,
+      spanId: workflowSpanId,
+      traceFlags: execTraceContext.traceFlags,
+      isRemote: false,
+    });
+
+    // 5. Create Invocation_Span parented onto the same-trace ambient span when
+    // available, otherwise onto the execution ancestor so it stays within the
+    // execution trace. Provider ownership must not change trace topology.
+    const invocationParentContext = this.invocationParentContext(
+      execTraceContext.executionAncestor,
+      canonical,
     );
 
-    // 7. Create Invocation_Span
-    if (this.providerSource !== ProviderSource.GLOBAL) {
-      // Non-default mode: child of Workflow_Span with Lambda semantic attributes
-      const parentContext = trace.setSpan(context.active(), this.workflowSpan);
+    const invocationAttributes: Record<string, string | number | boolean> = {
+      "durable.execution.arn": this.executionArn,
+      "durable.invocation.first": info.isFirstInvocation,
+    };
 
-      const invocationAttributes: Record<string, string | number | boolean> = {
-        "durable.execution.arn": info.executionArn,
-        "durable.invocation.first": info.isFirstInvocation,
-      };
-
+    if (!this.environment.usesGlobalProvider) {
       // Set cloud.resource_id from Lambda environment variables
       const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
       if (functionName) {
         const region = process.env.AWS_REGION;
         // Extract account ID from execution ARN (format: arn:aws:states:{region}:{account}:execution:{sm}:{exec})
-        const arnParts = info.executionArn.split(":");
+        const arnParts = this.executionArn.split(":");
         const accountId = arnParts.length >= 5 ? arnParts[4] : undefined;
 
         if (region && accountId) {
@@ -160,53 +280,96 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         }
       }
 
-      // Set faas.max_memory if available
+      // Set faas.max_memory if available. Lambda gives the memory setting in
+      // MiB, and the semantic conventions define the attribute in bytes.
       const memorySize = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
       if (memorySize) {
         const parsed = parseInt(memorySize, 10);
         if (!isNaN(parsed)) {
-          invocationAttributes["faas.max_memory"] = parsed;
+          invocationAttributes["faas.max_memory"] = parsed * 1024 * 1024;
         }
       }
-
-      this.invocationSpan = this.tracer.startSpan(
-        "Invocation",
-        {
-          kind: SpanKind.INTERNAL,
-          attributes: invocationAttributes,
-        },
-        parentContext,
-      );
-    } else {
-      // Default provider mode: create invocation span as child of the ambient
-      // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
-      const parentContext = context.active();
-
-      this.invocationSpan = this.tracer.startSpan(
-        "Invocation",
-        {
-          kind: SpanKind.INTERNAL,
-          attributes: {
-            "durable.execution.arn": info.executionArn,
-            "durable.invocation.first": info.isFirstInvocation,
-          },
-        },
-        parentContext,
-      );
     }
+
+    this.invocationSpan = this.startSpan(
+      "Invocation",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: invocationAttributes,
+        // Use the sampled wall boundary, before initialization and user work.
+        // A fractional live start can follow a Date in the same millisecond.
+        startTime: millisToHrTime(this.invocationClock.epochMillis),
+      },
+      invocationParentContext,
+    );
+
+    // Each sampled invocation can recover an earlier undelivered anchor. An
+    // opaque tracer retains terminal-only creation: without the sampler wrapper,
+    // an early anchor would independently query its hidden sampler again.
+    if (this.environment.durableSampler && this.reportedExecutionStart) {
+      this.createSyntheticRoot()?.end(this.reportedExecutionStart);
+    }
+
+    // A failed extractor or span setup leaves later hooks inert for this instance.
+    this.tracingEnabled = true;
+    this.externalCompletions.observe(info.updatedOperations, info.operations);
+  }
+
+  providePropagationMetadata(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined {
+    if (
+      !this.tracingEnabled ||
+      this.invocationFinalized ||
+      !this.invocationSpan ||
+      !this.workflowSpan ||
+      !isDurableSamplerInstalled(
+        this.environment.tracer,
+        this.environment.durableSampler,
+      )
+    ) {
+      return undefined;
+    }
+    return createPropagationMetadata(
+      input,
+      this.executionArn,
+      this.executionTraceId,
+      this.executionTraceFlags,
+    );
   }
 
   wrapInvocation(
     _info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput> {
-    if (!this.workflowSpan) {
+    if (!this.tracingEnabled || !this.workflowSpan) {
       return fn();
     }
     return context.with(trace.setSpan(context.active(), this.workflowSpan), fn);
   }
 
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
+    this.invocationEndOperations = info.operations ?? {};
+
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    this.drainExternalCompletions(info);
+    // Backend operation dates remain authoritative. Do not let a fractional
+    // local clock end this invocation before a boundary it actually observed.
+    const logicalEndTime = this.logicalTimestamp();
+    const liveEndTime = this.liveTimestamp();
+    const endTime =
+      logicalEndTime[0] > liveEndTime[0] ||
+      (logicalEndTime[0] === liveEndTime[0] &&
+        logicalEndTime[1] > liveEndTime[1])
+        ? logicalEndTime
+        : liveEndTime;
+
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -230,53 +393,292 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
       // RETRYING: leave status UNSET (default)
 
-      this.invocationSpan.end();
+      this.invocationSpan.end(endTime);
     }
 
-    // 2. Handle Workflow_Span based on terminal status
-    if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, map to span status, end (causes export).
-      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
-      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
-      // — those are collapsed into FAILED -> ERROR here.
-      if (this.workflowSpan) {
-        this.workflowSpan.setAttribute("durable.execution.status", info.status);
-        if (info.status === "FAILED") {
-          this.workflowSpan.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: info.executionError?.message ?? "Execution failed",
-          });
-        } else {
-          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
-        }
-        this.workflowSpan.end();
+    // 2. Terminal invocation ONLY: create and end the one real Workflow_Span,
+    // so a single span ever claims the deterministic (traceId, spanId) and no
+    // span is left un-ended on a non-terminal invocation (issue #831). It is
+    // parented onto the execution ancestor (the join-trace model) and backdated
+    // to the execution start captured at invocation start. Skipped when the
+    // execution decision was not sampled, so a dropped execution does not export
+    // a lone root. PluginInvocationStatus collapses TIMED_OUT/STOPPED into
+    // FAILED -> ERROR.
+    if (
+      this.executionSamplingDecision === SamplingDecision.RECORD_AND_SAMPLED &&
+      this.executionAncestor &&
+      (info.status === "SUCCEEDED" || info.status === "FAILED")
+    ) {
+      // Keep terminal-only fallback for providers without an early anchor.
+      // An anchor already materialized in this invocation is not emitted twice.
+      const syntheticRootSpan = this.createSyntheticRoot();
+
+      const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
+      const executionAncestorContext = trace.setSpanContext(
+        ROOT_CONTEXT,
+        this.executionAncestor,
+      );
+      const workflowSpan = this.environment.idGenerator.withIds(
+        { spanId: workflowSpanId },
+        () =>
+          this.startSpan(
+            this.environment.workflowSpanName,
+            {
+              kind: SpanKind.INTERNAL,
+              attributes: {
+                "durable.execution.arn": this.executionArn,
+              },
+              startTime: this.workflowStartTime,
+            },
+            executionAncestorContext,
+          ),
+      );
+      workflowSpan.setAttribute("durable.execution.status", info.status);
+      if (info.status === "FAILED") {
+        workflowSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: info.executionError?.message ?? "Execution failed",
+        });
+      } else {
+        workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
+      workflowSpan.end(endTime);
+      syntheticRootSpan?.end(this.reportedExecutionStart ?? endTime);
     }
-    // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Its status stays UNSET and the span is never exported (spans that are never
-    // .end()'d are never exported by the OTel SDK).
+    // PENDING/RETRYING never materializes Workflow. A sampled invocation may
+    // already have ended its stable synthetic anchor before customer code ran.
 
-    // 3. Discard open Operation_Spans without ending (they won't be exported)
+    // 3. End any attempt span still open (safeguard against a leak on a
+    // non-terminal invocation, issue #831). Operation placeholders have no
+    // recording span; their invocation-local hooks are finalized below.
+    this.endOpenAttemptSpans();
 
-    // 4. Always flush TracerProvider at invocation boundaries
-    if ("forceFlush" in this.tracerProvider) {
+    // End owns the drain/flush loop; change hooks only enqueue notifications.
+    // A response received during an awaited flush must not be cleared below.
+    const flushDeadline =
+      performance.now() + this.environment.flushTimeoutMillis;
+    const flush = async () => {
       try {
-        await (
-          this.tracerProvider as { forceFlush: () => Promise<void> }
-        ).forceFlush();
+        await flushTracerProvider(
+          this.environment.tracerProvider,
+          this.environment.usesGlobalProvider,
+          Math.max(0, flushDeadline - performance.now()),
+        );
       } catch (e) {
         console.error(
           "[ExecutionOtelPlugin] forceFlush failed:",
           e instanceof Error ? e.message : e,
         );
       }
+    };
+    do {
+      this.drainExternalCompletions(info);
+      this.operationSpansNeedFlush = false;
+      await flush();
+    } while (
+      [...this.externalCompletions.pending.values()].some(
+        (operation) => !this.hasOpenUnrecordedParent(operation),
+      ) &&
+      performance.now() < flushDeadline
+    );
+
+    // Finalize the remaining live parents after the open drain/flush phase.
+    // A normal parent End may already have exported its child during that wait.
+    if (this.externalCompletions.pending.size > 0) {
+      this.drainExternalCompletions(
+        info,
+        [...this.externalCompletions.pending.values()],
+        true,
+      );
     }
 
-    // 5. Clear per-invocation state
-    this.spanMap.clear();
-    this.workflowSpan = undefined;
-    this.invocationSpan = undefined;
-    this.executionArn = "";
+    // Attempts started during the awaited flush are owned by this invocation too.
+    this.endOpenAttemptSpans();
+
+    // Close this invocation's hooks before flushing the finalized snapshot.
+    // New operation-end hooks during this last wait cannot revise the snapshot.
+    const flushFinalOperations = this.operationSpansNeedFlush;
+    this.finalizeInvocation();
+    if (flushFinalOperations && performance.now() < flushDeadline) {
+      await flush();
+    }
+  }
+
+  private drainExternalCompletions(
+    info: InvocationEndInfo,
+    operations: Iterable<OperationInfo> = this.externalCompletions.pending.values(),
+    finalDrain = false,
+  ): void {
+    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
+    for (const operation of operations) {
+      // Even below a checkpointed terminal ancestor, a live context can still
+      // finish locally while forceFlush awaits. Give its End hook first choice.
+      const openParent = this.hasOpenUnrecordedParent(operation);
+      if (openParent && !finalDrain) continue;
+      const recordedParent =
+        operation.parentId && this.recordedContextIds.has(operation.parentId);
+      // A terminal handler can abandon an unawaited child. Its still-open
+      // placeholder will be discarded below, so it cannot parent this export.
+      const parentId =
+        !recordedParent &&
+        ((terminal && openParent) ||
+          this.hasAbandonedParent(
+            operation.parentId,
+            this.invocationEndOperations,
+          ))
+          ? undefined
+          : operation.parentId;
+      this.finishOperation({ ...operation, parentId, isReplay: false });
+    }
+  }
+
+  private hasOpenUnrecordedParent(operation: OperationInfo): boolean {
+    return (
+      operation.parentId !== undefined &&
+      this.operationContexts.has(operation.parentId) &&
+      !this.recordedContextIds.has(operation.parentId)
+    );
+  }
+
+  /** Creates at most one SDK-owned root per invocation; the caller ends it. */
+  private createSyntheticRoot(): Span | undefined {
+    if (
+      this.syntheticRootMaterialized ||
+      this.executionSamplingDecision !== SamplingDecision.RECORD_AND_SAMPLED ||
+      !this.executionAncestor ||
+      this.executionAncestor.isRemote
+    ) {
+      return undefined;
+    }
+
+    const span = this.environment.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: this.executionAncestor.spanId,
+      },
+      () =>
+        this.startSpan(
+          "DurableExecutionRoot",
+          {
+            kind: SpanKind.INTERNAL,
+            attributes: {
+              "durable.execution.synthetic_root": true,
+              "durable.execution.arn": this.executionArn,
+            },
+            startTime: this.workflowStartTime,
+          },
+          ROOT_CONTEXT,
+        ),
+    );
+    this.syntheticRootMaterialized = true;
+    return span;
+  }
+
+  private liveTimestamp(): HrTime {
+    return readInvocationClock(this.invocationClock!);
+  }
+
+  private logicalTimestamp(): HrTime {
+    const before = hrTimeToMilliseconds(this.liveTimestamp());
+    const wallMillis = Date.now();
+    const after = this.liveTimestamp();
+    const uncertainty = this.invocationClock!.sampleWindowMillis / 2;
+    // Date.now() loses the phase within its millisecond when the anchor is
+    // captured. Accept a wall tick only inside that original sampling interval
+    // (including integer truncation). Clock adjustments outside it are ignored.
+    const correlated =
+      wallMillis >= Math.floor(before - uncertainty) &&
+      wallMillis <= Math.ceil(hrTimeToMilliseconds(after) + uncertainty);
+    // Checkpoints use whole milliseconds. Use that precision for both logical
+    // boundaries so a fractional fallback cannot overtake the next Date.
+    // Already observed SDK timestamps also bound subsequent local fallbacks.
+    this.observeTimestamp(
+      correlated
+        ? millisToHrTime(wallMillis)
+        : [after[0], Math.floor(after[1] / 1_000_000) * 1_000_000],
+    );
+    return this.latestObservedTimestamp!;
+  }
+
+  /** Keep only this invocation's latest emitted/observed SDK boundary. */
+  private observeTimestamp<T extends Date | HrTime>(timestamp: T): T {
+    const time = timeInputToHrTime(timestamp);
+    const latest = this.latestObservedTimestamp;
+    if (
+      !latest ||
+      time[0] > latest[0] ||
+      (time[0] === latest[0] && time[1] > latest[1])
+    ) {
+      this.latestObservedTimestamp = time;
+    }
+    return timestamp;
+  }
+
+  private endOpenAttemptSpans(): void {
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording())
+        this.endOperationSpan(span, this.logicalTimestamp());
+    }
+  }
+
+  private endOperationSpan(
+    span: Span,
+    endTime?: Parameters<Span["end"]>[0],
+  ): void {
+    span.end(endTime);
+    this.operationSpansNeedFlush = true;
+  }
+
+  private finalizeInvocation(): void {
+    // A factory instance is never reused. Freeze its final snapshot before the
+    // final bounded provider wait; late hooks must not create or revise spans.
+    this.invocationFinalized = true;
+    this.tracingEnabled = false;
+    this.externalCompletions.clear();
+  }
+
+  private startSpan(
+    name: string,
+    options: Parameters<Tracer["startSpan"]>[1],
+    parentContext: Parameters<Tracer["startSpan"]>[2],
+  ): Span {
+    const { tracer, durableSampler } = this.environment;
+    const fn = () => tracer.startSpan(name, options, parentContext);
+    return durableSampler
+      ? durableSampler.withDecision(this.executionSamplingDecision, fn)
+      : fn();
+  }
+
+  /**
+   * The parent context for the Invocation span: the active ambient span when it
+   * is already on the execution trace, otherwise the execution ancestor so the
+   * Invocation span stays within the same trace.
+   */
+  private invocationParentContext(
+    executionAncestor: SpanContext,
+    canonical: string,
+  ) {
+    const activeContext = context.active();
+    const ambient = trace.getSpanContext(activeContext);
+    // Adopt the ambient span only in propagated-parent mode, when it is on
+    // the execution trace AND carries the same sampled bit as the execution
+    // ancestor. Synthetic fallback keeps Workflow and Invocation on the same
+    // SDK-owned root. Matching the trace ID alone is not enough: if the ambient span's
+    // sampled bit differs, the Invocation span would inherit the ambient
+    // decision and could export after an explicit Sampled=0, or drop after the
+    // root sampler chose sampled. On a mismatch, fall back to the execution
+    // ancestor, which carries the authoritative decision.
+    if (
+      executionAncestor.isRemote &&
+      ambient &&
+      isSpanContextValid(ambient) &&
+      ambient.traceId === canonical &&
+      (ambient.traceFlags & TraceFlags.SAMPLED) ===
+        (executionAncestor.traceFlags & TraceFlags.SAMPLED)
+    ) {
+      return activeContext;
+    }
+    return trace.setSpanContext(ROOT_CONTEXT, executionAncestor);
   }
 
   /**
@@ -293,162 +695,257 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
+    if (!this.tracingEnabled || this.invocationFinalized) {
+      return;
+    }
+
+    // Defer the span: store only a deterministic non-recording placeholder that
+    // children/attempts parent onto; the real span is created in onOperationEnd.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
     );
-    const spanName = info.name ?? info.type;
+    this.operationContexts.set(info.id, {
+      traceId: this.executionTraceId,
+      spanId: deterministicSpanId,
+      traceFlags: this.executionTraceFlags,
+      isRemote: false,
+    });
 
-    // Resolve parent span: use parentId from map, or fall back to Workflow_Span
-    let parentSpan: Span | undefined;
-    if (info.parentId && this.spanMap.has(info.parentId)) {
-      parentSpan = this.spanMap.get(info.parentId);
-    } else {
-      parentSpan = this.workflowSpan;
+    // Retain naming/timing for onOperationEnd, which may omit them. New
+    // operations can reach this hook before the checkpoint response supplies a
+    // backend start timestamp, so capture the hook time as the fallback. Keep
+    // the earliest observation if the same operation starts again on replay.
+    const existingStart = this.operationStarts.get(info.id);
+    const observedStart = info.startTimestamp ?? this.logicalTimestamp();
+    const startTimestamp = this.earliestStart(
+      existingStart?.startTimestamp,
+      observedStart,
+    )!;
+    const parentId = info.parentId ?? existingStart?.parentId;
+    this.operationStarts.set(info.id, {
+      name: info.name ?? existingStart?.name,
+      subType: info.subType ?? existingStart?.subType,
+      parentId,
+      startTimestamp,
+    });
+    this.observeAncestorStart(parentId, startTimestamp);
+  }
+
+  wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
     }
 
-    const parentContext = parentSpan
-      ? trace.setSpan(context.active(), parentSpan)
-      : context.active();
+    // Make the operation's placeholder current so nested calls become its children.
+    const operationContext = this.operationContexts.get(info.id);
+    if (!operationContext) {
+      return fn();
+    }
+    return context.with(
+      trace.setSpanContext(context.active(), operationContext),
+      fn,
+    );
+  }
 
-    const attributes: Record<string, string> = {
+  async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    this.finishOperation(info);
+  }
+
+  // Child completion and parent finalization share one synchronous turn. A
+  // provider flush must not reset invocation state between these two actions.
+  private finishOperation(info: OperationEndInfo): void {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
+    // A queued external completion can precede its live context's end even
+    // when traversal never awaited it. Export it while that parent is open.
+    if (info.type === "CONTEXT" && !info.isReplay) {
+      for (const child of this.externalCompletions.pending.values()) {
+        if (child.parentId === info.id) {
+          this.finishOperation({ ...child, isReplay: false });
+        }
+      }
+    }
+
+    // Release placeholders even when this is a previously observed completion.
+    const started = this.operationStarts.get(info.id);
+    this.operationContexts.delete(info.id);
+    this.operationStarts.delete(info.id);
+
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
+      return;
+    }
+
+    // The end event may omit name/subType; fall back to what start captured.
+    const name = info.name ?? started?.name;
+    const subType = info.subType ?? started?.subType;
+
+    const spanName = name ?? info.type;
+    const parentContext = this.resolveOperationParentContext(info.parentId);
+
+    const attributes: Record<string, string | number> = {
       "durable.execution.arn": this.executionArn,
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
     };
-    if (info.name) {
-      attributes["durable.operation.name"] = info.name;
+    if (name) {
+      attributes["durable.operation.name"] = name;
     }
-    if (info.subType) {
-      attributes["durable.operation.subtype"] = info.subType;
+    if (subType) {
+      attributes["durable.operation.subtype"] = subType;
+    }
+    if (info.status) {
+      attributes["durable.operation.status"] = info.status;
+    }
+    // durable.attempt.number for retriable operations (STEP, WAIT_FOR_CONDITION).
+    if (
+      (info.type === "STEP" || subType === "WAIT_FOR_CONDITION") &&
+      info.attempt != null
+    ) {
+      attributes["durable.attempt.number"] = info.attempt;
     }
 
     const links = this.buildInvocationLinks();
 
-    // Always use deterministic span ID regardless of replay status
-    this.idGenerator.setNextSpanId(deterministicSpanId);
-    const span = this.tracer.startSpan(
-      spanName,
-      { attributes, startTime: info.startTimestamp, links },
-      parentContext,
-    );
+    // Earliest known start, so the span never begins after its own attempt/child
+    // spans (created earlier at start).
+    const observedStart =
+      this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
+      this.logicalTimestamp();
+    // A local fallback cannot establish a start after a known completion.
+    // Preserve supplied Date starts; only bound the synthesized HrTime start.
+    const startTime =
+      observedStart instanceof Date
+        ? observedStart
+        : this.earliestStart(observedStart, info.endTimestamp)!;
+    this.observeAncestorStart(info.parentId ?? started?.parentId, startTime);
 
-    if (span) {
-      this.spanMap.set(info.id, span);
-    }
-  }
-
-  wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
-    const operationSpan = this.spanMap.get(info.id);
-
-    if (!operationSpan) {
-      return fn();
-    }
-    return context.with(trace.setSpan(context.active(), operationSpan), fn);
-  }
-
-  async onOperationEnd(info: OperationEndInfo): Promise<void> {
-    const deterministicSpanId = deriveSpanIdFromOperationId(
+    const operationSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
     );
+    const span = this.environment.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: operationSpanId,
+      },
+      () =>
+        this.startSpan(
+          spanName,
+          { attributes, startTime: this.observeTimestamp(startTime), links },
+          parentContext,
+        ),
+    );
 
-    if (this.spanMap.has(info.id)) {
-      // Operation was started in this invocation
-      const span = this.spanMap.get(info.id)!;
+    const endTime = info.endTimestamp ?? this.logicalTimestamp();
+    setOperationSpanStatus(span, info);
+    if (info.error) span.recordException(info.error, endTime);
+    const recordedContext = info.type === "CONTEXT" && span.isRecording();
+    this.endOperationSpan(span, this.observeTimestamp(endTime));
+    if (recordedContext) this.recordedContextIds.add(info.id);
+    this.externalCompletions.markExported(info);
+  }
 
-      // Set operation status attribute
-      if (info.status) {
-        span.setAttribute("durable.operation.status", info.status);
-      }
-
-      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
-      if (
-        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
-        info.attempt != null
-      ) {
-        span.setAttribute("durable.attempt.number", info.attempt);
-      }
-
-      if (info.error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
-        span.recordException(info.error);
-      } else if (info.status === "SUCCEEDED") {
-        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-        // NO error object (callback-timeout, chained-invoke fast paths); those
-        // must NOT be labelled OK, so they are left UNSET.
-        span.setStatus({ code: SpanStatusCode.OK });
-      }
-
-      span.end(info.endTimestamp);
-      this.spanMap.delete(info.id);
-    } else {
-      // Cross-invocation: create span with deterministic ID, export immediately
-      const spanName = info.name ?? info.type;
-
-      // Resolve parent: use parentId from map, or fall back to Workflow_Span
-      let parentSpan: Span | undefined;
-      if (info.parentId && this.spanMap.has(info.parentId)) {
-        parentSpan = this.spanMap.get(info.parentId);
-      } else {
-        parentSpan = this.workflowSpan;
-      }
-
-      const parentContext = parentSpan
-        ? trace.setSpan(context.active(), parentSpan)
-        : context.active();
-
-      const attributes: Record<string, string | number> = {
-        "durable.execution.arn": this.executionArn,
-        "durable.operation.id": info.id,
-        "durable.operation.type": info.type,
+  /**
+   * The parent context for an operation or attempt span: the parent operation's
+   * deterministic identity, or the Workflow identity for a top-level operation.
+   * A completion notification can arrive without traversing its parent in this
+   * invocation (for example, a completed child context skipped during replay).
+   * An exported parent's context remains a valid parent after it ends. Reusing
+   * its identity does not recreate the parent span or compare clock domains.
+   */
+  private resolveOperationParentContext(parentId: string | undefined): Context {
+    if (parentId) {
+      const parentContext = this.operationContexts.get(parentId) ?? {
+        traceId: this.executionTraceId,
+        spanId: deriveSpanIdFromOperationId(parentId, this.executionArn),
+        traceFlags: this.executionTraceFlags,
+        isRemote: false,
       };
-      if (info.name) {
-        attributes["durable.operation.name"] = info.name;
-      }
-      if (info.subType) {
-        attributes["durable.operation.subtype"] = info.subType;
-      }
-      if (info.status) {
-        attributes["durable.operation.status"] = info.status;
-      }
-      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
-      if (
-        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
-        info.attempt != null
-      ) {
-        attributes["durable.attempt.number"] = info.attempt;
-      }
-
-      const links = this.buildInvocationLinks();
-
-      this.idGenerator.setNextSpanId(deterministicSpanId);
-      const span = this.tracer.startSpan(
-        spanName,
-        { attributes, startTime: info.startTimestamp, links },
-        parentContext,
-      );
-
-      if (info.error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
-        span.recordException(info.error);
-      } else if (info.status === "SUCCEEDED") {
-        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-        // NO error object on the cross-invocation fast paths; those must NOT be
-        // labelled OK, so they are left UNSET.
-        span.setStatus({ code: SpanStatusCode.OK });
-      }
-
-      span.end(info.endTimestamp);
+      return trace.setSpanContext(context.active(), parentContext);
     }
+    const workflowContext = this.workflowSpan?.spanContext();
+    if (workflowContext) {
+      return trace.setSpanContext(context.active(), workflowContext);
+    }
+    return context.active();
+  }
+
+  /** Carry an observed child boundary only through still-active deferred parents. */
+  private observeAncestorStart(
+    parentId: string | undefined,
+    start: Date | HrTime,
+  ): void {
+    const visited = new Set<string>();
+    while (parentId !== undefined && !visited.has(parentId)) {
+      visited.add(parentId);
+      const parent = this.operationStarts.get(parentId);
+      // Never recreate a parent that has already ended or was not observed in
+      // this invocation. Its exported timestamps can no longer be corrected.
+      if (!parent || !this.operationContexts.has(parentId)) return;
+      start = this.earliestStart(parent.startTimestamp, start)!;
+      parent.startTimestamp = start;
+      parentId = parent.parentId;
+    }
+  }
+
+  private hasAbandonedParent(
+    parentId: string | undefined,
+    operations: Record<string, OperationInfo> = {},
+  ): boolean {
+    const parent = parentId ? operations[parentId] : undefined;
+    if (
+      parent?.type !== "CONTEXT" ||
+      !["STARTED", "READY", "PENDING"].includes(parent.status ?? "")
+    )
+      return false;
+
+    // Completed contexts do not restart unfinished descendants. ReplayChildren
+    // can rebuild a successful result by traversing completed children, but
+    // ReplaySucceededContext still blocks unfinished child operations.
+    const visited = new Set([parent.id]);
+    let ancestorId = parent.parentId;
+    while (ancestorId && !visited.has(ancestorId)) {
+      visited.add(ancestorId);
+      const ancestor = operations[ancestorId];
+      if (ancestor?.type !== "CONTEXT") return false;
+      if (
+        ["SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED", "CANCELLED"].includes(
+          ancestor.status ?? "",
+        )
+      )
+        return true;
+      ancestorId = ancestor.parentId;
+    }
+    return false;
+  }
+
+  /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
+  private earliestStart(
+    a: Date | HrTime | undefined,
+    b: Date | HrTime | undefined,
+  ): Date | HrTime | undefined {
+    if (!a) {
+      return b;
+    }
+    if (!b) {
+      return a;
+    }
+    const first = timeInputToHrTime(a);
+    const second = timeInputToHrTime(b);
+    if (first[0] === second[0] && first[1] === second[1]) {
+      // When a checkpoint matches a local fallback, keep the supplied Date.
+      return b instanceof Date && !(a instanceof Date) ? b : a;
+    }
+    return first[0] < second[0] ||
+      (first[0] === second[0] && first[1] <= second[1])
+      ? a
+      : b;
   }
 
   private getAttemptKey(id: string, attempt: number): string {
@@ -456,14 +953,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
+    if (!this.tracingEnabled || this.invocationFinalized) {
+      return;
+    }
+
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 
-    // Find the parent Operation_Span
-    const parentSpan = this.spanMap.get(info.id);
-    const parentContext = parentSpan
-      ? trace.setSpan(context.active(), parentSpan)
-      : context.active();
+    // Parent onto the operation's placeholder (the operation span is deferred).
+    const parentContext = this.resolveOperationParentContext(info.id);
 
     const attributes: Record<string, string | number> = {
       "durable.execution.arn": this.executionArn,
@@ -480,11 +978,26 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    const attemptSpan = this.tracer.startSpan(
+    const startTime = info.startTimestamp ?? this.logicalTimestamp();
+    // A backend attempt Date can precede a fractional local operation fallback.
+    // Keep its actual observed boundary when the deferred parent is exported.
+    const operationStart = this.operationStarts.get(info.id);
+    const observedStart = this.earliestStart(
+      operationStart?.startTimestamp,
+      startTime,
+    )!;
+    const parentId = info.parentId ?? operationStart?.parentId;
+    this.operationStarts.set(info.id, {
+      ...operationStart,
+      parentId,
+      startTimestamp: observedStart,
+    });
+    this.observeAncestorStart(parentId, observedStart);
+    const attemptSpan = this.startSpan(
       spanName,
       {
         attributes,
-        startTime: info.startTimestamp,
+        startTime: this.observeTimestamp(startTime),
         links,
       },
       parentContext,
@@ -494,6 +1007,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   wrapOperationAttemptFn(info: AttemptInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
+    }
+
     const attemptSpan = this.spanMap.get(
       this.getAttemptKey(info.id, info.attempt),
     );
@@ -504,9 +1021,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
+      const endTime = info.endTimestamp ?? this.logicalTimestamp();
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -514,23 +1036,30 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error?.message ?? "Attempt failed",
         });
         if (info.error) {
-          attemptSpan.recordException(info.error);
+          attemptSpan.recordException(info.error, endTime);
         }
       } else {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(info.endTimestamp);
+      this.endOperationSpan(attemptSpan, this.observeTimestamp(endTime));
       this.spanMap.delete(key);
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op — same as InvocationOtelPlugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      // End may be waiting for a provider flush. New completions must use the
+      // ancestry from this newer full snapshot, not End's captured snapshot.
+      if (this.invocationEndOperations && info.operations) {
+        this.invocationEndOperations = info.operations;
+      }
+      this.externalCompletions.observe(info.updatedOperations, info.operations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
-    if (!this.enrichLogger) {
+    if (!this.tracingEnabled || !this.environment.enrichLogger) {
       return undefined;
     }
     const span = trace.getSpan(context.active());
@@ -544,4 +1073,50 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       otelTraceSampled: (spanContext.traceFlags & 1) !== 0,
     };
   }
+}
+
+/**
+ * A factory that gives every durable invocation its own
+ * {@link ExecutionOtelPlugin}, over one shared tracer provider, tracer,
+ * deterministic ID generator and sampler.
+ *
+ * Pass the result in `plugins`; the SDK calls it once per invocation, with that
+ * invocation's info, and drops the instance it returns when the invocation
+ * returns:
+ *
+ * ```typescript
+ * export const handler = withDurableExecution(myHandler, {
+ *   plugins: [createExecutionOtelPluginFactory()],
+ * });
+ * ```
+ *
+ * One instance per invocation is what makes the plugin correct under Lambda
+ * Managed Instances. The plugin holds the execution ARN, the execution trace
+ * identity, the Workflow and Invocation spans, and maps keyed by operation ID —
+ * all of which describe one execution, while operation IDs are only unique
+ * within one. A single instance serving two concurrent executions would have the
+ * second overwrite the first; per-invocation instances remove that by
+ * construction, while the environment-scoped parts are still resolved and
+ * installed once.
+ *
+ * The environment is built on the first invocation, so calling this at module
+ * scope resolves no tracer provider and installs nothing.
+ *
+ * @param config - Plugin configuration, applied once to the shared environment.
+ */
+export function createExecutionOtelPluginFactory(config?: OtelPluginConfig): {
+  createPlugin(info: InvocationInfo): ExecutionOtelPlugin;
+} {
+  return Object.assign(
+    createPluginFactory(
+      config,
+      (environment, info) => new ExecutionOtelPlugin(environment, info),
+    ),
+    {
+      [PLUGIN_REGISTRATION]: {
+        name: PLUGIN_NAME,
+        exclusiveGroup: "durable-opentelemetry-view",
+      } as const,
+    },
+  );
 }

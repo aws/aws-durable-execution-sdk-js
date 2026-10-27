@@ -7,6 +7,8 @@ name: Conformance Tests
 # job, so adding a suite only requires shipping its template + handlers.
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
@@ -35,7 +37,11 @@ env:
 jobs:
   discover_suites:
     name: discover conformance suites
-    runs-on: ubuntu-latest
+    # 1. Run for non-PR events, such as scheduled runs and manual invocations
+    # 2. For PRs, run only same-repo branches from non-Dependabot actors; forked PRs or Dependabot should not access secrets.
+    if: github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       suites: ${{ steps.discover.outputs.suites }}
     steps:
@@ -49,13 +55,18 @@ jobs:
   conformance:
     name: conformance (${{ matrix.suite }})
     needs: discover_suites
-    runs-on: ubuntu-latest
+    # CodeBuild-hosted runner in the JS testing account (EC2 compute, Ubuntu
+    # standard image). Each matrix entry gets its own runner; the label must
+    # match the CodeBuild project name exactly.
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     # Global lock per suite stack: runs from different branches/PRs share the
     # persistent conformance-js-<suite> stacks, so deploys to the same stack
     # must never overlap. Queued (not cancelled) so every run still executes.
     concurrency:
       group: conformance-stack-${{ matrix.suite }}
       cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +78,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "22.x"
           cache: "npm"
@@ -84,12 +95,16 @@ jobs:
         run: npm run build # rollup -> dist/<handler>.js
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        # The runner image is Amazon Linux; actions/setup-python only ships
+        # Ubuntu builds, so uv provides the Python 3.14 the conformance runner
+        # requires and activates a venv for the steps below.
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.14"
+          activate-environment: true
 
       - name: Install conformance runner
-        run: pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
+        run: uv pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
 
       - name: Get AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
