@@ -8,10 +8,12 @@ import {
   createRetryStrategy,
   fakeExporter,
   runDurable,
-  START_SECONDS,
 } from "./helpers.js";
 
-const START_ISO = new Date(START_SECONDS * 1000).toISOString();
+// An ISO time from epoch seconds.
+const iso = (seconds) => new Date(seconds * 1000).toISOString();
+// The execution's start: the EXECUTION record's StartTimestamp, from the virtual clock.
+const startOf = (result) => result.operations[0].StartTimestamp;
 
 // step, wait, step: two invocations.
 const threeSteps = async ({ ctx }) => {
@@ -31,6 +33,8 @@ function run(workflow, config = {}, options = {}) {
 
 test("on-complete emits one SUCCEEDED record after a run of several invocations", async () => {
   const { result, records } = await run(threeSteps, {}, { input: { n: 1 } });
+  const START_SECONDS = startOf(result);
+  const START_ISO = iso(START_SECONDS);
   assert.equal(result.status, "SUCCEEDED");
   assert.equal(result.invocations, 2);
   assert.equal(records.length, 1);
@@ -67,10 +71,7 @@ test("on-complete emits one SUCCEEDED record after a run of several invocations"
   assert.equal(wait.subType, "Wait");
   assert.equal(wait.startTime, START_ISO);
   assert.equal(wait.durationMs, 10_000);
-  assert.equal(
-    wait.endTime,
-    new Date((START_SECONDS + 10) * 1000).toISOString(),
-  );
+  assert.equal(wait.endTime, iso(START_SECONDS + 10));
   assert.equal(record.operations[0].attempt, 1);
 });
 
@@ -107,7 +108,8 @@ test("on-failure emits nothing for SUCCEEDED and one record for FAILED", async (
 });
 
 test("on-change emits RUNNING records and then the final record", async () => {
-  const { records } = await run(threeSteps, { emitMode: "on-change" });
+  const { result, records } = await run(threeSteps, { emitMode: "on-change" });
+  const START_ISO = iso(startOf(result));
   assert.ok(records.length >= 4);
   assert.deepEqual(
     records.slice(0, -1).map((r) => r.status),
@@ -246,7 +248,9 @@ test("epoch milliseconds in the invocation event give the same times as seconds"
   // checkpoint responses, and so does the in-memory service. The lite SDK converts the
   // event's records to seconds when it loads them.
   const service = createInMemoryService();
-  const { records } = await run(threeSteps, {}, { service });
+  const { result, records } = await run(threeSteps, {}, { service });
+  const START_SECONDS = startOf(result);
+  const START_ISO = iso(START_SECONDS);
   const [record] = records;
   assert.equal(record.startTime, START_ISO);
   const [a, w, b] = record.operations;
@@ -254,10 +258,7 @@ test("epoch milliseconds in the invocation event give the same times as seconds"
   // (seconds).
   assert.equal(a.startTime, START_ISO);
   assert.equal(w.durationMs, 10_000);
-  assert.equal(
-    b.startTime,
-    new Date((START_SECONDS + 10) * 1000).toISOString(),
-  );
+  assert.equal(b.startTime, iso(START_SECONDS + 10));
   assert.equal(b.durationMs, 0);
 });
 

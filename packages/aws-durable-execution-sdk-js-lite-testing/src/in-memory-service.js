@@ -77,7 +77,9 @@ export function createInMemoryService({
   functions = {},
   pageSize,
 } = {}) {
-  let now = 1_700_000_000;
+  // The virtual clock in epoch seconds. It starts at the real time, because the SDK
+  // compares scheduled times with Date.now().
+  let now = Math.floor(Date.now() / 1000);
   let tokens = 0;
   let token;
   let callbacks = 0;

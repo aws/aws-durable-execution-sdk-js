@@ -10,7 +10,8 @@ import {
   withDurableExecution,
 } from "./helpers.js";
 
-const T0 = 1_700_000_000;
+// The start of a run: the EXECUTION record's StartTimestamp, from the virtual clock.
+const startOf = (run) => run.operations[0].StartTimestamp;
 
 // Applies updates with the current token, like one SDK request.
 async function checkpoint(service, token, ...Updates) {
@@ -46,6 +47,37 @@ test("runDurable runs the handler that createHandler builds with the service cli
   assert.equal(typeof clients[0].checkpoint, "function");
 });
 
+// The SDK compares a wait's ScheduledEndTimestamp with Date.now(). If the virtual clock
+// were in the past, every wait would look due, and the SDK would send an empty refresh
+// checkpoint before each suspension. So the clock starts at the real time.
+test("the virtual clock starts at the real time, so a wait sends no refresh checkpoint", async () => {
+  const before = Math.floor(Date.now() / 1000);
+  const updates = [];
+  const run = await realRunDurable({
+    createHandler: (client) =>
+      withDurableExecution(
+        async ({ ctx }) => {
+          await ctx.step({ name: "a", fn: () => 1 });
+          await ctx.wait({ seconds: 10 });
+          return "done";
+        },
+        {
+          client: {
+            ...client,
+            checkpoint: (request) => {
+              updates.push(request.Updates.length);
+              return client.checkpoint(request);
+            },
+          },
+        },
+      ),
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  const start = run.operations[0].StartTimestamp;
+  assert.ok(start >= before && start <= Math.floor(Date.now() / 1000));
+  assert.equal(updates.includes(0), false, `checkpoint sizes ${updates}`);
+});
+
 test("runDurable runs steps and returns the result and operations", async () => {
   const run = await runDurable({
     input: { n: 2 },
@@ -72,7 +104,7 @@ test("runDurable runs steps and returns the result and operations", async () => 
   );
   const a = run.getOperation("a");
   assert.deepEqual(a.StepDetails, { Attempt: 1, Result: "3" });
-  assert.equal(a.StartTimestamp, T0);
+  assert.equal(a.StartTimestamp, startOf(run));
   assert.equal(run.getOperation("missing"), undefined);
 });
 
@@ -98,7 +130,7 @@ test("step retry advances the virtual clock and re-invokes", async () => {
   assert.equal(op.StepDetails.Attempt, 3);
   // The second retry was scheduled 10 s after the first one became due.
   assert.equal(op.StepDetails.NextAttemptTimestamp - op.StartTimestamp, 20);
-  assert.equal(op.EndTimestamp, T0 + 20);
+  assert.equal(op.EndTimestamp, startOf(run) + 20);
   assert.equal(op.StepDetails.Error, undefined);
 });
 
@@ -238,6 +270,7 @@ test("a stale checkpoint token is rejected", async () => {
 
 test("STEP RETRY stores Payload and becomes READY when due", async () => {
   const service = createInMemoryService();
+  const T0 = service.now;
   const token = service.event().CheckpointToken;
   const step = {
     Id: "w",
@@ -276,6 +309,7 @@ test("STEP RETRY stores Payload and becomes READY when due", async () => {
 
 test("WAIT ends at ScheduledEndTimestamp when time advances", async () => {
   const service = createInMemoryService();
+  const T0 = service.now;
   const token = service.event().CheckpointToken;
   const res = await checkpoint(service, token, {
     Id: "w",
@@ -306,7 +340,7 @@ test("the EXECUTION record ends with the final output, not a PENDING one", async
   const [execution] = run.operations;
   assert.equal(execution.Type, "EXECUTION");
   assert.equal(execution.Status, "SUCCEEDED");
-  assert.equal(execution.EndTimestamp, T0 + 5);
+  assert.equal(execution.EndTimestamp, startOf(run) + 5);
 });
 
 test("CALLBACK answers land at the boundary and timeouts when due", async () => {
@@ -320,6 +354,7 @@ test("CALLBACK answers land at the boundary and timeouts when due", async () => 
       return undefined;
     },
   });
+  const T0 = service.now;
   const token = service.event().CheckpointToken;
   const cb = (Name, CallbackOptions) => ({
     Id: Name,

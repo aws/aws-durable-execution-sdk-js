@@ -175,7 +175,10 @@ test("a failed step has ERROR status and an exception event", async () => {
 
 test("the workflow span is a root span in the final invocation only", async () => {
   const exporter = fakeExporter();
-  await runDurable({ workflow: childWorkflow, plugins: [otel(exporter)] });
+  const run = await runDurable({
+    workflow: childWorkflow,
+    plugins: [otel(exporter)],
+  });
   const [first, second] = exporter.batches;
   assert.equal(byName(first, "workflow").length, 0);
   const workflow = one(second, "workflow");
@@ -183,7 +186,7 @@ test("the workflow span is a root span in the final invocation only", async () =
   assert.deepEqual(workflow.status, { code: STATUS_OK });
   assert.equal(workflow.attributes["durable.execution.status"], "SUCCEEDED");
   // The EXECUTION record's start, from the virtual clock.
-  assert.deepEqual(workflow.startTime, [1_700_000_000, 0]);
+  assert.deepEqual(workflow.startTime, [run.operations[0].StartTimestamp, 0]);
   assert.equal(workflow.ended, true);
   assert.deepEqual(workflow.links, []);
   assert.deepEqual(workflow.instrumentationScope, {

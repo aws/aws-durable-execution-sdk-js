@@ -134,7 +134,7 @@ export interface InMemoryService {
   client: DurableExecutionClient;
   /** The live operation records by Id, in start order. */
   ops: Map<string, Operation>;
-  /** The virtual clock in epoch seconds. */
+  /** The virtual clock in epoch seconds. It starts at the real time. */
   readonly now: number;
   /** The EXECUTION SUCCEED Payload, set on the large-result path. */
   readonly result: string | undefined;

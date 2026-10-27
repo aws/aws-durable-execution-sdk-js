@@ -11,9 +11,6 @@ export { createRetryStrategy } from "../../aws-durable-execution-sdk-js-lite/src
 export const ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:workflow:$LATEST/durable-execution/local/run";
 
-// The in-memory service starts its clock at this time, in epoch seconds.
-export const START_SECONDS = 1_700_000_000;
-
 // An exporter that keeps every record it receives.
 export function fakeExporter(extra = {}) {
   const records = [];

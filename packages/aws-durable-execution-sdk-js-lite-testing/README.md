@@ -45,7 +45,9 @@ test("an approved order is confirmed", async () => {
 
 `runDurable` invokes the handler again after each suspension, like Lambda does. It has a
 virtual clock: it moves time to the next wait, retry or callback timeout, so tests do not
-wait in real time.
+wait in real time. The clock starts at the real time, because the SDK compares scheduled
+times with `Date.now()`. `Date.now()` does not follow the virtual clock. So a workflow that
+reads `Date.now()` across a wait sees almost no time pass.
 
 ## Options
 
