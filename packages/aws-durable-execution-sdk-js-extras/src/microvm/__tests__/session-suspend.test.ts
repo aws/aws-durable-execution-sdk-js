@@ -221,6 +221,81 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     ]);
   });
 
+  it("resumes again after a conflict in the state check before delivery", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    // The MicroVM stays SUSPENDED until a resume is accepted.
+    client.microvmState = "SUSPENDED";
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, {
+        ...job,
+        path: "/only",
+        retryWindow: { seconds: 5 },
+      }),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "only", "done");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.events).toEqual([
+      "get:SUSPENDED",
+      "resume",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/only",
+      "terminate",
+    ]);
+  });
+
+  it("resumes again after a conflict in the recheck after a 502", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    // The state check sees RUNNING. The worker suspends the MicroVM before
+    // the request arrives, so the endpoint answers 502. The MicroVM stays
+    // SUSPENDED until a resume is accepted.
+    endpoint.responses = [502, 202];
+    client.getResponses = [
+      async () => ({ state: "RUNNING" }),
+      async () => {
+        client.microvmState = "SUSPENDED";
+        return { state: "SUSPENDED" };
+      },
+    ];
+    client.resumeResponses = [
+      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
+    ];
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, {
+        ...job,
+        path: "/only",
+        retryWindow: { seconds: 5 },
+      }),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "only", "done");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.events).toEqual([
+      "get:RUNNING",
+      "request:/only",
+      "get:SUSPENDED",
+      "resume",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/only",
+      "terminate",
+    ]);
+  });
+
   it("does not suspend by default when suspending is on and the session timeout is under 10 seconds", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);

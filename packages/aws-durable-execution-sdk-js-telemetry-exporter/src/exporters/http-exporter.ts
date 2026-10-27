@@ -7,7 +7,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the HTTP/Webhook exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface HttpExporterConfig {
   /** URL to POST records to. */
@@ -46,8 +45,6 @@ export interface HttpExporterConfig {
  * The endpoint should return 2xx on success; any other status throws.
  *
  * Uses native fetch (Node 22+ / Lambda runtime) — no dependencies required.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class HttpExporter implements TelemetryExporter {
   private readonly url: string;

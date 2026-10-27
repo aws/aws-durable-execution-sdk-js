@@ -14,13 +14,16 @@ import { join } from "path";
 
 import { TOOL_DESCRIPTIONS } from "./tools";
 import { MAX_ROWS } from "./readOnlyQuery";
-import { envVarFor, MCP_SETTING_KEYS } from "./envKeys";
+import { envVarFor, MCP_HOST_ONLY_ENV_VARS, MCP_SETTING_KEYS } from "./envKeys";
 import { PROMPTS } from "./prompts";
 
 const README = readFileSync(join(__dirname, "..", "README.md"), "utf8");
 
 /** The exact set of `DURABLE_TELEMETRY_*` variables this host accepts. */
-const ACCEPTED_ENV_VARS = new Set(MCP_SETTING_KEYS.map((k) => envVarFor(k)));
+const ACCEPTED_ENV_VARS = new Set([
+  ...MCP_SETTING_KEYS.map((k) => envVarFor(k)),
+  ...MCP_HOST_ONLY_ENV_VARS,
+]);
 
 /** Every `DURABLE_TELEMETRY_*` token the README actually contains, de-duplicated. */
 function envVarTokensInReadme(): string[] {

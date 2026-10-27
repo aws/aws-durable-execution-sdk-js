@@ -48,7 +48,7 @@ This monorepo contains the following packages. Most developers need only the fir
 | [@aws/durable-execution-sdk-js-telemetry-exporter](./packages/aws-durable-execution-sdk-js-telemetry-exporter)         | Durable Execution Telemetry plugin that exports a record of each execution to CloudWatch Logs, S3, DynamoDB, and others | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-telemetry-exporter)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-telemetry-exporter)         |
 | [@aws/durable-execution-sdk-js-telemetry-mcp](./packages/aws-durable-execution-sdk-js-telemetry-mcp) | MCP server that lets an AI assistant query Durable Execution Telemetry data, read-only                                  | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-telemetry-mcp)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-telemetry-mcp) |
 
-Durable Execution Telemetry is in preview (`0.1.0-alpha`). Its explorer apps are not published to npm:
+The Durable Execution Telemetry explorer apps are not published to npm:
 
 - [Durable Execution Telemetry VSCode](./packages/aws-durable-execution-sdk-js-telemetry-vscode) –
   query telemetry data in plain English from inside VS Code. Download the `.vsix` from the

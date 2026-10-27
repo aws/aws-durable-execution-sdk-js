@@ -58,3 +58,19 @@ const EXCLUDED_SET: ReadonlySet<string> = new Set(MCP_EXCLUDED_SETTING_KEYS);
 export const MCP_SETTING_KEYS: readonly string[] = SETTING_KEYS.filter(
   (k) => !EXCLUDED_SET.has(k),
 );
+
+/**
+ * Set to `true` in the server's `env` block to accept that the configured
+ * credentials can change data (see writeAccessGate.ts). It is not a setting
+ * key: the extension and desktop app only warn, so they have no such setting.
+ */
+export const ACCEPT_WRITE_ACCESS_ENV_VAR =
+  "DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS";
+
+/**
+ * `DURABLE_TELEMETRY_*` variables this host reads that are not derived from
+ * {@link SETTING_KEYS}.
+ */
+export const MCP_HOST_ONLY_ENV_VARS: readonly string[] = [
+  ACCEPT_WRITE_ACCESS_ENV_VAR,
+];

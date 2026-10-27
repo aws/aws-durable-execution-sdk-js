@@ -1,5 +1,6 @@
 import {
   AthenaClient,
+  GetWorkGroupCommand,
   StartQueryExecutionCommand,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
@@ -361,6 +362,56 @@ export async function tableExists(opts: {
   } catch (err) {
     if (err instanceof Error && err.name === "EntityNotFoundException") {
       return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * The result settings of an Athena workgroup. When `enforced` is true, the
+ * workgroup's `outputLocation` replaces any location a query submits.
+ */
+export async function getWorkGroupOutput(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  workgroup: string;
+}): Promise<{ enforced: boolean; outputLocation?: string }> {
+  const client = new AthenaClient({
+    region: opts.region,
+    credentials: opts.credentials,
+  });
+  const out = await client.send(
+    new GetWorkGroupCommand({ WorkGroup: opts.workgroup }),
+  );
+  const config = out.WorkGroup?.Configuration;
+  return {
+    enforced: config?.EnforceWorkGroupConfiguration === true,
+    outputLocation: config?.ResultConfiguration?.OutputLocation || undefined,
+  };
+}
+
+/**
+ * The S3 location of a Glue table's data (`StorageDescriptor.Location`), or
+ * `undefined` when the table does not exist or has no location.
+ */
+export async function getTableLocation(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  database: string;
+  table: string;
+}): Promise<string | undefined> {
+  const client = new GlueClient({
+    region: opts.region,
+    credentials: opts.credentials,
+  });
+  try {
+    const out = await client.send(
+      new GetTableCommand({ DatabaseName: opts.database, Name: opts.table }),
+    );
+    return out.Table?.StorageDescriptor?.Location || undefined;
+  } catch (err) {
+    if (err instanceof Error && err.name === "EntityNotFoundException") {
+      return undefined;
     }
     throw err;
   }
