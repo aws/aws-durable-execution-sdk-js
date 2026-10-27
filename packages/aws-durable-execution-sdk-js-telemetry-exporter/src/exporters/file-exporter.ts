@@ -9,7 +9,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the file exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface FileExporterConfig {
   /**
@@ -51,8 +50,6 @@ export interface FileExporterConfig {
  *   {directory}/{executionName}.json
  *
  * Works with Lambda EFS mounts, S3 File Gateway, or /tmp for testing.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class FileExporter implements TelemetryExporter {
   private readonly directory: string;

@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as ts from "typescript";
 
-const SERVER_PATH = join(__dirname, "server.ts");
+const SERVER_PATH = join(__dirname, "registerTools.ts");
 
 interface RegisteredTool {
   name: string;
@@ -100,7 +100,7 @@ const tools = parseRegisteredTools();
 const byName = new Map(tools.map((t) => [t.name, t]));
 
 describe("every declared tool parameter is read by its handler", () => {
-  it("parsed all five tools out of server.ts", () => {
+  it("parsed all five tools out of registerTools.ts", () => {
     // Non-vacuity: a silently empty parse would make every assertion below pass
     // while checking nothing.
     expect(tools.map((t) => t.name).sort()).toEqual([

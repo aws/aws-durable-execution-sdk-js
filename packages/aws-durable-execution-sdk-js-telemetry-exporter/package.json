@@ -2,7 +2,7 @@
   "name": "@aws/durable-execution-sdk-js-telemetry-exporter",
   "description": "Durable Execution Telemetry plugin for AWS Durable Execution SDK — curated execution observability",
   "license": "Apache-2.0",
-  "version": "0.1.0-alpha.1",
+  "version": "1.0.0",
   "private": false,
   "repository": {
     "type": "git",

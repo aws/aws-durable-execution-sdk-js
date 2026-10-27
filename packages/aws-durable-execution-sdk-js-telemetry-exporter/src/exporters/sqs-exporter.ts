@@ -9,7 +9,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the SQS exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface SQSExporterConfig {
   /** SQS queue URL. */
@@ -53,8 +52,6 @@ export interface SQSExporterConfig {
  *
  * Use this when you need guaranteed delivery to a single consumer or want
  * to decouple export processing from the Lambda invocation.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class SQSExporter implements TelemetryExporter {
   private readonly queueUrl: string;

@@ -8,7 +8,6 @@ import type {
 
 /**
  * Configuration for the OpenSearch exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface OpenSearchExporterConfig {
   /** OpenSearch domain endpoint (e.g. "https://my-domain.us-east-1.es.amazonaws.com"). */
@@ -48,8 +47,6 @@ export interface OpenSearchExporterConfig {
  *
  * Supports IAM (SigV4) and basic authentication. Uses native fetch — no
  * OpenSearch client library required.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class OpenSearchExporter implements TelemetryExporter {
   private readonly endpoint: string;
