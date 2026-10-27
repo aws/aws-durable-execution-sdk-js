@@ -373,6 +373,31 @@ test("CALLBACK answers land at the boundary and timeouts when due", async () => 
   assert.equal(seen.length, 4);
 });
 
+// A Lambda function that a chained invoke without Payload calls receives the event {}.
+// Measured live in us-west-2 (durable-lite-bench/results/g4-invoke-input.md).
+test("CHAINED_INVOKE without Payload passes {} and with Payload null passes null", async () => {
+  const inputs = [];
+  const service = createInMemoryService({
+    functions: { echo: ({ input }) => inputs.push(input) },
+  });
+  const start = (Id, Payload) => ({
+    Id,
+    Type: "CHAINED_INVOKE",
+    SubType: "ChainedInvoke",
+    Action: "START",
+    ChainedInvokeOptions: { FunctionName: "echo" },
+    ...(Payload !== undefined && { Payload }),
+  });
+  await checkpoint(
+    service,
+    service.event().CheckpointToken,
+    start("a"),
+    start("n", "null"),
+  );
+  assert.equal(await service.boundary(), 2);
+  assert.deepEqual(inputs, [{}, null]);
+});
+
 test("CHAINED_INVOKE runs the registered function and lands at the boundary", async () => {
   const service = createInMemoryService({
     functions: {

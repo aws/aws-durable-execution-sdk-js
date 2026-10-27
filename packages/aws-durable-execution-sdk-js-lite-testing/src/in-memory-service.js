@@ -154,7 +154,7 @@ export function createInMemoryService({
             // The service gives XAmznTraceId to the invoked function as its trace
             // header. The local function receives it as traceHeader.
             return fn({
-              input: JSON.parse(u.Payload ?? "null"),
+              input: JSON.parse(u.Payload ?? "{}"),
               traceHeader: u.ChainedInvokeOptions?.XAmznTraceId,
             });
           })

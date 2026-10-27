@@ -63,7 +63,7 @@ wait in real time.
   `undefined` for it.
 - `functions` (optional): an object that maps a `functionName` to a local function for
   `ctx.invoke`. The function receives `{ input, traceHeader }`. `input` is the parsed
-  input, or `null` without input. `traceHeader` is the `XAmznTraceId` that a plugin's
+  input, or `{}` without input, as in AWS. `traceHeader` is the `XAmznTraceId` that a plugin's
   `traceHeader` hook set, else `undefined`. Its return value is the invoke result.
   A thrown error fails the invoke with `ErrorType` set to the error's `name`.
 - `maxInvocations` (default 100): `runDurable` throws after this many invocations.
