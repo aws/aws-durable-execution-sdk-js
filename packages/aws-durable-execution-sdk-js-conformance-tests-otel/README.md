@@ -53,7 +53,8 @@ Case 11 pauses at `otel-invoke-replay-barrier` after the child invocation return
 The shared driver completes that callback after the second caller invocation
 ends. The third invocation replays the saved invoke result and returns it,
 without starting another child or exporting another terminal invoke span.
-The workflow pins the matching requirements from shared conformance PR #131.
+The workflow uses the conformance repository's `main` branch, which includes
+the matching requirements from shared conformance PR #131.
 The shared cloud run checks the service trace carrier and full X-Ray ancestry;
 local replay tests do not establish those service-side properties.
 
@@ -137,9 +138,11 @@ template.yaml` confirms the templates package.
 
 `.github/workflows/otel-conformance-tests.yml` runs on pull requests and pushes to `main`
 that touch the SDK, the OTel plugin, this package, or the workflow itself. It calls the
-conformance repo's reusable `opentelemetry-orchestrator.yml` at a pinned SHA with:
+conformance repo's reusable `opentelemetry-orchestrator.yml` from `main` with:
 
 - `sdk_ref` set to the PR head SHA, so the suite validates the change under review
+- `conformance_test_ref` defaulting to `main` for pull requests, pushes, and manual runs;
+  manual runs can override it with a conformance commit SHA or branch name
 - `checkout_sdk: true`, which checks this repo out at `.build/durable-sdk` in the
   orchestrator's workspace
 - `examples_dir` pointing at this package inside that checkout, so the orchestrator builds

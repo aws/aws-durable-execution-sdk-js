@@ -127,13 +127,17 @@ describe("otel-conformance-tests workflow", () => {
     );
   });
 
-  it("pins the shared orchestrator to a full commit SHA", () => {
-    // A branch name or an unresolved placeholder here fails every run of this workflow with
-    // an invalid reusable workflow reference, which is only visible once it is on main.
+  it("defaults the shared orchestrator and requirements to main", () => {
     const reference = workflow.match(
       /uses: aws\/aws-durable-execution-conformance-tests\/\.github\/workflows\/opentelemetry-orchestrator\.yml@(\S+)/,
     );
-    expect(reference?.[1]).toMatch(/^[0-9a-f]{40}$/);
+    expect(reference?.[1]).toBe("main");
+    expect(workflow).toMatch(
+      /conformance_test_ref:\n(?: {8}.+\n)* {8}default: "main"/,
+    );
+    expect(workflow).toContain(
+      `conformance_test_ref: \${{ inputs.conformance_test_ref || 'main' }}`,
+    );
   });
 
   it("builds this package in the prepare command", () => {
