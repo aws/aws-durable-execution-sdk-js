@@ -167,10 +167,12 @@ test("an abandoned branch does not run again when its wait ends", async () => {
       await ctx.parallel({
         completionConfig: { minSuccessful: 1 },
         branches: [
-          ({ ctx: c }) => c.step({ fn: () => "fast" }),
-          async ({ ctx: c }) => {
-            await c.wait({ seconds: 2 });
-            return c.step({ name: "must-not-run", fn: () => "late" });
+          { fn: ({ ctx: c }) => c.step({ fn: () => "fast" }) },
+          {
+            fn: async ({ ctx: c }) => {
+              await c.wait({ seconds: 2 });
+              return c.step({ name: "must-not-run", fn: () => "late" });
+            },
           },
         ],
       });
