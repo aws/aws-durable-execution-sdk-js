@@ -587,3 +587,44 @@ test("runDurable fails a step whose result is larger than 256 KiB", async () => 
   assert.equal(run.status, "FAILED");
   assert.equal(run.error.ErrorType, "InvalidParameterValueException");
 });
+
+// The limits of the OperationUpdate members in the public Lambda API reference.
+for (const [member, max, bad, valid] of [
+  ["SubType", 32, "bad subtype!", "a-Z_9"],
+  ["Name", 256, "caf\u00e9", " ~!"],
+  ["Id", 64, "a.b", "a-Z_9"],
+  ["ParentId", 64, "a/b", "a-Z_9"],
+]) {
+  test(`the service checks the length and characters of ${member}`, async () => {
+    const service = createInMemoryService();
+    const token = service.event().CheckpointToken;
+    const update = (value) => ({
+      Id: "s",
+      Type: "STEP",
+      Action: "START",
+      [member]: value,
+    });
+    const rejected = { name: "ValidationException", status: 400 };
+    for (const value of ["", "a".repeat(max + 1), bad]) {
+      await assert.rejects(checkpoint(service, token, update(value)), {
+        ...rejected,
+        message: new RegExp(`^${member} must match`),
+      });
+    }
+    const next = await checkpoint(service, token, update("a".repeat(max)));
+    await checkpoint(service, next.CheckpointToken, {
+      ...update(valid),
+      ...(member !== "Id" && { Id: "t" }),
+    });
+  });
+}
+
+test("runDurable fails a step whose subType the service rejects", async () => {
+  const run = await runDurable({
+    workflow: ({ ctx }) =>
+      ctx.step({ name: "charge", subType: "bad subtype!", fn: () => 1 }),
+  });
+  assert.equal(run.status, "FAILED");
+  assert.equal(run.invocations, 1);
+  assert.equal(run.error.ErrorType, "ValidationException");
+});

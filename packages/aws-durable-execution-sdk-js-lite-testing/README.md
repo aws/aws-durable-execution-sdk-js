@@ -100,6 +100,9 @@ fails the execution, as in AWS. It rejects:
 
 - a request body larger than 6 MiB plus 11 KiB, the service's limit on the HTTP request;
 - a member such as `Name`, `Payload` or `Error.ErrorData` that is not a string;
+- an `Id` or `ParentId` that is not 1 to 64 characters of `[a-zA-Z0-9-_]`, a `SubType` that
+  is not 1 to 32 such characters, and a `Name` that is not 1 to 256 printable ASCII
+  characters. The error is a `ValidationException`;
 - a STEP or CONTEXT `Payload` larger than 256 KiB, and a CHAINED_INVOKE `Payload` larger than
   1 MiB;
 - a `START` for an operation that exists, unless it is a STEP in status `READY`;

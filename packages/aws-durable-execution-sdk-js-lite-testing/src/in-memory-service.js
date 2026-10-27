@@ -53,6 +53,15 @@ const STRING_FIELDS =
   "Id ParentId Name Type SubType Action Payload Error.ErrorType Error.ErrorMessage Error.ErrorData".split(
     " ",
   );
+// The string members whose length and characters the service checks, from the API
+// reference of OperationUpdate. A value outside its pattern fails with ValidationException.
+const ID = /^[a-zA-Z0-9-_]{1,64}$/;
+const PATTERNS = {
+  Id: ID,
+  ParentId: ID,
+  SubType: /^[a-zA-Z0-9-_]{1,32}$/,
+  Name: /^[\x20-\x7E]{1,256}$/,
+};
 // The service's Payload limits in bytes. Other types have no limit here.
 const PAYLOAD_LIMITS = {
   STEP: 262_144,
@@ -171,7 +180,6 @@ export function createInMemoryService({
     const reject = (name, message) => {
       throw Object.assign(new Error(message), { name, status: 400 });
     };
-    const seen = new Map();
     for (const u of updates) {
       for (const path of STRING_FIELDS) {
         const v = path.split(".").reduce((o, key) => o?.[key], u);
@@ -179,6 +187,14 @@ export function createInMemoryService({
           reject("SerializationException", `${path} must be a string`);
         }
       }
+      for (const [member, pattern] of Object.entries(PATTERNS)) {
+        if (u[member] != null && !pattern.test(u[member])) {
+          reject("ValidationException", `${member} must match ${pattern}`);
+        }
+      }
+    }
+    const seen = new Map();
+    for (const u of updates) {
       const limit = PAYLOAD_LIMITS[u.Type];
       if (u.Payload != null && Buffer.byteLength(u.Payload) > limit) {
         reject(INVALID, `${u.Type} payload is larger than ${limit} bytes`);
