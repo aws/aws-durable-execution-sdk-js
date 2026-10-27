@@ -628,7 +628,8 @@ below describe each change in detail.
   without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
   version 1. The session sets the flag before the job starts. So the job itself and each later
   job of the session handle check the MicroVM state before delivery, and resume a suspended
-  MicroVM. The worker acknowledges the field with the header
+  MicroVM. A request from a job that ends before the first accepted run hook waits for that
+  hook. The worker acknowledges the field with the header
   `X-Microvm-Suspend-After: accepted`. Without that header, the session logs a warning once per
   session in each execution environment: `the worker in MicroVM <id> does not support
   suspendAfter. The MicroVM keeps running after the job.` `microvm` rejects `suspendAfter` in
