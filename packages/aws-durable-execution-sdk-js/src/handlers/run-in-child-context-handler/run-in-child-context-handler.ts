@@ -458,6 +458,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       void Promise.resolve(settled).then(markExecuting, markExecuting);
       return settled;
     };
+    // Both flags are derived from the replay mode, but note that a
+    // SUCCEEDED/FAILED operation never reaches executeChildContext -- the
+    // handler dispatches those to handleCompletedChildContext -- and
+    // ReplayChildren is only ever written on the terminal checkpoint. So in
+    // practice childReplayMode is ExecutionMode here and both flags are false;
+    // the children-replay re-run is wrapped in handleCompletedChildContext.
+    // The derivation is kept rather than hardcoded so it stays correct if the
+    // dispatch ever admits a terminal operation here.
     const wrapInfo = {
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
