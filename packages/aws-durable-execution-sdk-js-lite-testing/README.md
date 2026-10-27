@@ -75,6 +75,40 @@ wait in real time.
   waits and retry delays that are due. `service.boundary()` applies the callback answers
   and invoke results. The next checkpoint response reports the changed records.
 
+## Durable functions as invoke targets
+
+`durableFunction(createHandler, options)` returns a `functions` entry that runs a durable
+function. Each call runs a new execution with `runDurable`, with its own in-memory service.
+`options` are the `runDurable` options for the child, without `createHandler` and `input`.
+
+- A SUCCEEDED child returns its result to the caller's `ctx.invoke`.
+- A FAILED child fails the invoke with the child's `ErrorType` and `ErrorMessage`.
+- A PENDING child cannot finish in the test. So it fails the invoke with the
+  `ErrorMessage` `"PENDING"`.
+- The child's operations are in the child's service. So `run.operations` of the caller does
+  not contain them.
+
+```js
+const run = await runDurable({
+  createHandler: (client) => withDurableExecution(orderWorkflow, { client }),
+  functions: {
+    "payment-service:live": durableFunction((client) =>
+      withDurableExecution(paymentWorkflow, { client }),
+    ),
+  },
+});
+```
+
+## Recording requests and events
+
+`createHandler` receives the client and returns the handler. So a test can wrap either one.
+
+- Wrap the client to record each checkpoint request and response:
+  `(client) => withDurableExecution(workflow, { client: recording(client) })`. The client has
+  the methods `checkpoint(request)` and `getExecutionState(request)`.
+- Wrap the handler to record each invocation event:
+  `(client) => { const h = withDurableExecution(workflow, { client }); return (event, context) => { events.push(event); return h(event, context); }; }`.
+
 ## Result
 
 `runDurable` resolves to an object with these fields:
@@ -138,7 +172,7 @@ add to them or replace them for this package:
 
 ```
 src/index.js              public exports
-src/run-durable.js        runDurable: the invocation loop
+src/run-durable.js        runDurable: the invocation loop; durableFunction
 src/in-memory-service.js  createInMemoryService: records, checks, virtual clock
 src/index.d.ts            the public types
 ```

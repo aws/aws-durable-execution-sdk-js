@@ -83,3 +83,17 @@ export async function runDurable({
     }
   }
 }
+
+// Returns a `functions` entry that runs a durable function: each call runs a new execution
+// with runDurable, with its own in-memory service. options: the runDurable options for the
+// child, without createHandler and input. A SUCCEEDED child returns its result. Any other
+// child fails the invoke with the child's ErrorType and ErrorMessage. A PENDING child
+// cannot finish in the test, so it fails the invoke too.
+export function durableFunction(createHandler, options = {}) {
+  return async ({ input }) => {
+    const run = await runDurable({ ...options, createHandler, input });
+    if (run.status === "SUCCEEDED") return run.result;
+    const { ErrorType = "Error", ErrorMessage = run.status } = run.error ?? {};
+    throw Object.assign(new Error(ErrorMessage), { name: ErrorType });
+  };
+}

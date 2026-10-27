@@ -1,7 +1,11 @@
 // Compile-only check of src/index.d.ts against the lite SDK's types. See README
 // "Contributing" for the command.
 import { withDurableExecution } from "../../aws-durable-execution-sdk-js-lite/src/index.js";
-import { createInMemoryService, runDurable } from "../src/index.js";
+import {
+  createInMemoryService,
+  durableFunction,
+  runDurable,
+} from "../src/index.js";
 
 const workflow = async ({ event }: { event: { n: number } }): Promise<number> =>
   event.n + 1;
@@ -18,5 +22,15 @@ export async function check(): Promise<number | undefined> {
     createHandler: (client) => withDurableExecution(workflow, { client }),
   });
   service.advanceBy(1);
+  // durableFunction gives a functions entry.
+  await runDurable({
+    createHandler: (client) => withDurableExecution(workflow, { client }),
+    functions: {
+      child: durableFunction(
+        (client) => withDurableExecution(workflow, { client }),
+        { maxInvocations: 5 },
+      ),
+    },
+  });
   return run.result;
 }

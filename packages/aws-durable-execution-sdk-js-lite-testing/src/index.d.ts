@@ -113,6 +113,15 @@ export function runDurable<R = unknown>(
   options: RunDurableOptions,
 ): Promise<RunDurableResult<R>>;
 
+/**
+ * A `functions` entry that runs a durable function as a new execution with runDurable.
+ * A SUCCEEDED child returns its result. A FAILED or PENDING child fails the invoke.
+ */
+export function durableFunction(
+  createHandler: RunDurableOptions["createHandler"],
+  options?: Omit<RunDurableOptions, "createHandler" | "input">,
+): InvokeFunctions[string];
+
 export interface InvocationInput {
   DurableExecutionArn: string;
   CheckpointToken: string;
