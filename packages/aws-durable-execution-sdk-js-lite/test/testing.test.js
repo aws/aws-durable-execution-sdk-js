@@ -265,6 +265,20 @@ test("WAIT ends at ScheduledEndTimestamp when time advances", async () => {
   assert.equal(service.advance(), false);
 });
 
+test("the EXECUTION record ends with the final output, not a PENDING one", async () => {
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      await ctx.wait({ seconds: 5 });
+      return "done";
+    },
+  });
+  assert.equal(run.invocations, 2);
+  const [execution] = run.operations;
+  assert.equal(execution.Type, "EXECUTION");
+  assert.equal(execution.Status, "SUCCEEDED");
+  assert.equal(execution.EndTimestamp, T0 + 5);
+});
+
 test("CALLBACK answers land at the boundary and timeouts when due", async () => {
   const seen = [];
   const service = createInMemoryService({

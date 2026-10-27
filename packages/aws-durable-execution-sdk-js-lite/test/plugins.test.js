@@ -69,7 +69,7 @@ test("the factory runs once per invocation with the documented info", async () =
   assert.deepEqual(
     second.operations.map((o) => [o.Type, o.Name, o.Status]),
     [
-      ["EXECUTION", undefined, "PENDING"],
+      ["EXECUTION", undefined, "STARTED"],
       ["STEP", "a", "SUCCEEDED"],
       ["WAIT", "w", "SUCCEEDED"],
     ],

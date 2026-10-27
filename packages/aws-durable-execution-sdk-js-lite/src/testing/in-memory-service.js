@@ -406,7 +406,9 @@ export function createInMemoryService({
     // Records the invocation's final output on the EXECUTION operation.
     complete(output) {
       const op = ops.get(EXECUTION_ID);
-      if (op.Status === "STARTED") finish(op, output.Status);
+      // A PENDING output leaves the execution open for the next invocation.
+      if (op.Status === "STARTED" && output.Status !== "PENDING")
+        finish(op, output.Status);
     },
   };
 }
