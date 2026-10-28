@@ -7,7 +7,7 @@ export * from "./chartSpec";
 export * from "./configCore";
 export * from "./copilotBridge";
 export * from "./destinationTest";
-export * from "./writeAccess";
+export * from "./athenaResultLocation";
 export * from "./dynamodb";
 export * from "./explorerSession";
 export * from "./hostCapabilities";

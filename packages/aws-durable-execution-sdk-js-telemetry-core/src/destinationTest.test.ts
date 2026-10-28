@@ -33,18 +33,14 @@ jest.mock("./opensearch", () => ({
 jest.mock("./configCore", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
-jest.mock("./writeAccess", () => ({
-  checkWriteAccess: jest.fn(async () => ({
-    status: "unverified",
-    reason: "r",
-  })),
+jest.mock("./athenaResultLocation", () => ({
   // Default: results land outside the data, so the Athena probe may run.
   checkAthenaResultLocation: jest.fn(async () => ({ kind: "outside" })),
 }));
 
 import type { TelemetryConfig } from "./configCore";
 import { testDestination } from "./destinationTest";
-import { checkAthenaResultLocation, checkWriteAccess } from "./writeAccess";
+import { checkAthenaResultLocation } from "./athenaResultLocation";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
@@ -464,35 +460,5 @@ describe("testDestination — CloudWatch Logs", () => {
     );
     expect(r.ok).toBe(true);
     expect(r.checks.at(-1)?.detail).toMatch(/first invocation/);
-  });
-});
-
-describe("testDestination — write-access check", () => {
-  const aurora = baseCfg({
-    destinationType: "aurora",
-    auroraResourceArn: "arn:aws:rds:us-east-1:1:cluster:c",
-    auroraSecretArn: "arn:aws:secretsmanager:us-east-1:1:secret:s",
-  });
-
-  it("attaches the write-access result when every check passed", async () => {
-    (runAuroraQuery as jest.Mock).mockResolvedValue({ rows: [] });
-    (checkWriteAccess as jest.Mock).mockResolvedValueOnce({
-      status: "can-write",
-      findings: ["The database user is a superuser."],
-    });
-    const r = await testDestination(aurora);
-    expect(r.ok).toBe(true);
-    expect(r.writeAccess).toEqual({
-      status: "can-write",
-      findings: ["The database user is a superuser."],
-    });
-  });
-
-  it("skips the write-access check when a check failed", async () => {
-    (runAuroraQuery as jest.Mock).mockRejectedValue(new Error("unreachable"));
-    const r = await testDestination(aurora);
-    expect(r.ok).toBe(false);
-    expect(r.writeAccess).toBeUndefined();
-    expect(checkWriteAccess).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,18 @@
 /**
  * Calls the registered tools through a real MCP client, connected in memory,
- * with core's write check and this package's query paths replaced by spies.
+ * with this package's query paths replaced by spies.
  *
- * The property under test: until the user accepts, no data tool reaches its
- * query path, whatever the write check reports. Deleting any tool's
- * `if (blocked) return blocked;` fails a test here.
+ * The property under test: until the user confirms, no data tool reaches its
+ * query path. Deleting any tool's `if (blocked) return blocked;` fails a test
+ * here.
  */
-const checkWriteAccess = jest.fn();
 const testDestination = jest.fn();
+const checkAthenaResultLocation = jest.fn();
 jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => ({
   ...jest.requireActual("@aws/durable-execution-sdk-js-telemetry-core"),
-  checkWriteAccess: (...args: unknown[]) => checkWriteAccess(...args),
   testDestination: (...args: unknown[]) => testDestination(...args),
+  checkAthenaResultLocation: (...args: unknown[]) =>
+    checkAthenaResultLocation(...args),
 }));
 const runReadOnlyQuery = jest.fn();
 jest.mock("./readOnlyQuery", () => ({
@@ -41,11 +42,6 @@ const CONFIG = readConfigFromEnv({
   DURABLE_TELEMETRY_REGION: "us-east-1",
 }).config;
 
-const CAN_WRITE = {
-  status: "can-write",
-  findings: ["The database user can write table public.t."],
-};
-
 /** The data tools, each with arguments and the spy for its query path. */
 const DATA_TOOLS = [
   ["query", { sql: "SELECT 1" }, runReadOnlyQuery],
@@ -53,9 +49,19 @@ const DATA_TOOLS = [
   ["list_executions", {}, runListExecutions],
 ] as const;
 
-async function connect(acceptedByEnv: boolean): Promise<Client> {
+const S3_CONFIG = readConfigFromEnv({
+  DURABLE_TELEMETRY_DESTINATION_TYPE: "s3",
+  DURABLE_TELEMETRY_ATHENA_DATABASE: "db",
+  DURABLE_TELEMETRY_ATHENA_OUTPUT_LOCATION: "s3://bucket/telemetry/results/",
+  DURABLE_TELEMETRY_REGION: "us-east-1",
+}).config;
+
+async function connect(
+  acceptedByEnv: boolean,
+  config = CONFIG,
+): Promise<Client> {
   const server = new McpServer({ name: "s", version: "0" });
-  registerTools(server, CONFIG, acceptedByEnv);
+  registerTools(server, config, acceptedByEnv);
   // No elicitation capability, so the gate cannot ask and must block.
   const client = new Client({ name: "c", version: "0" }, { capabilities: {} });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -82,58 +88,97 @@ beforeEach(() => {
 });
 
 describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
-  it("does not reach its query path when queries could change data", async () => {
-    checkWriteAccess.mockResolvedValue(CAN_WRITE);
+  it("does not reach its query path until the user confirms", async () => {
     const client = await connect(false);
     const result = await client.callTool({ name: tool, arguments: args });
     expect(result.isError).toBe(true);
-    expect(payloadOf(result).writeAccess).toEqual(CAN_WRITE);
+    expect(payloadOf(result).error).toContain(
+      "It is your responsibility to give this server read-only credentials.",
+    );
     expect(queryPath).not.toHaveBeenCalled();
     await client.close();
   });
 
-  it("does not reach its query path when the check found nothing", async () => {
-    // Finding nothing is not proof of read-only, so the user must still accept.
-    checkWriteAccess.mockResolvedValue({ status: "unverified", reason: "r" });
-    const client = await connect(false);
-    const result = await client.callTool({ name: tool, arguments: args });
-    expect(result.isError).toBe(true);
-    expect(queryPath).not.toHaveBeenCalled();
-    await client.close();
-  });
-
-  it("reaches its query path without checking when the environment accepts", async () => {
+  it("reaches its query path when the environment confirms", async () => {
     const client = await connect(true);
     await client.callTool({ name: tool, arguments: args });
-    expect(checkWriteAccess).not.toHaveBeenCalled();
     expect(queryPath).toHaveBeenCalledTimes(1);
     await client.close();
   });
 });
 
-describe("test_destination", () => {
-  it("reports the write check and is not blocked by it", async () => {
-    testDestination.mockResolvedValue({
-      ok: true,
-      summary: "s",
-      checks: [],
-      writeAccess: CAN_WRITE,
+describe("the S3 result-location warning", () => {
+  it("names Athena results inside the table's data before the first query", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "inside",
+      finding: "Athena writes query results inside the table's data.",
     });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).toContain(
+      "Athena writes query results inside the table's data.",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("says the check did not complete when the location is undetermined", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "undetermined",
+      reason: "AccessDenied: athena:GetWorkGroup",
+    });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).toContain(
+      "The server could not check whether Athena writes query results " +
+        "inside the table's data: AccessDenied: athena:GetWorkGroup",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("adds nothing when the location is outside the data", async () => {
+    checkAthenaResultLocation.mockResolvedValue({ kind: "outside" });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).not.toMatch(/Athena/);
+    expect(checkAthenaResultLocation).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+
+  it("is not checked for other destinations", async () => {
+    const client = await connect(false);
+    await client.callTool({ name: "query", arguments: { sql: "SELECT 1" } });
+    expect(checkAthenaResultLocation).not.toHaveBeenCalled();
+    await client.close();
+  });
+});
+
+describe("test_destination", () => {
+  it("is not blocked by the gate", async () => {
+    testDestination.mockResolvedValue({ ok: true, summary: "s", checks: [] });
     const client = await connect(false);
     const result = await client.callTool({
       name: "test_destination",
       arguments: {},
     });
     expect(result.isError).toBeFalsy();
-    expect(payloadOf(result).writeAccess).toEqual(CAN_WRITE);
-    expect(checkWriteAccess).not.toHaveBeenCalled();
+    expect(testDestination).toHaveBeenCalledTimes(1);
     await client.close();
   });
 });
 
 describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
   it("does not query for a call cancelled while it waited for consent", async () => {
-    checkWriteAccess.mockResolvedValue(CAN_WRITE);
     const server = new McpServer({ name: "s", version: "0" });
     registerTools(server, CONFIG, false);
     // A client that supports the prompt, and answers it only when told to.
@@ -147,7 +192,7 @@ describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
         resolve();
         return new Promise((reply) => {
           answer = () =>
-            reply({ action: "accept", content: { acceptRisk: true } });
+            reply({ action: "accept", content: { confirmed: true } });
         });
       });
     });

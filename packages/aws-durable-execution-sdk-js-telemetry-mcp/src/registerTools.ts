@@ -6,7 +6,8 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  checkWriteAccess,
+  checkAthenaResultLocation,
+  resolveCredentials,
   testDestination,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
@@ -68,9 +69,26 @@ export function registerTools(
 ): void {
   // The three data tools call this before any query; see writeAccessGate.ts.
   const writeAccessGate = createWriteAccessGate({
-    check: () => checkWriteAccess(config),
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
+    // On S3 + Athena, results written inside the table's data add rows on
+    // every query, whatever the credentials. So the prompt names that too,
+    // and says so when the location could not be determined.
+    configurationWarning: async () => {
+      if (config.destinationType !== "s3") return undefined;
+      const location = await checkAthenaResultLocation(
+        config,
+        resolveCredentials(config.awsProfile),
+      );
+      if (location.kind === "inside") return location.finding;
+      if (location.kind === "undetermined") {
+        return (
+          "The server could not check whether Athena writes query results " +
+          `inside the table's data: ${location.reason}`
+        );
+      }
+      return undefined;
+    },
   });
   // Returns a tool result when the call must not query, or null when it may.
   // The gate can wait a long time for the user's answer, and several calls can
@@ -144,7 +162,6 @@ export function registerTools(
           ok: report.ok,
           summary: report.summary,
           checks: report.checks,
-          writeAccess: report.writeAccess,
           destinationType: config.destinationType,
           region: config.region,
           // Nothing was missing on this path; report it explicitly so the
@@ -247,7 +264,7 @@ export function registerTools(
         };
       }
 
-      // 2. Stop until the user accepts credentials that can change data.
+      // 2. Stop until the user confirms the read-only responsibility.
       const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
 
