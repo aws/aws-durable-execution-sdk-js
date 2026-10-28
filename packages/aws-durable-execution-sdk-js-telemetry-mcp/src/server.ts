@@ -21,6 +21,7 @@ import { VIEWER_DISABLED_ENV_VAR, VIEWER_PORT_ENV_VAR } from "./envKeys";
 import { ExecutionViewer, readViewerSettings } from "./executionViewer";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
+import { SERVER_INSTRUCTIONS } from "./tools";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
 
 /**
@@ -63,10 +64,13 @@ async function main(): Promise<void> {
       })
     : undefined;
 
-  const server = new McpServer({
-    name: "durable-telemetry",
-    version: DURABLE_TELEMETRY_MCP_VERSION,
-  });
+  const server = new McpServer(
+    {
+      name: "durable-telemetry",
+      version: DURABLE_TELEMETRY_MCP_VERSION,
+    },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   registerTools(server, config, writeAccessAcceptedByEnv(process.env), viewer);
   registerPrompts(server);

@@ -114,6 +114,23 @@ export const LIST_EXECUTIONS_DESCRIPTION =
   "When you show such rows to the user, link each one to its viewerUrl.";
 
 /**
+ * Sent once at connect time as the server's `instructions`. Clients that defer
+ * loading tool schemas (showing the agent only tool names until it asks) put
+ * this in the agent's prompt, and it is what lets the agent route a bare
+ * request such as "list the last 10 executions" here instead of asking which
+ * system the user means. Kept short: it is paid for on every turn.
+ */
+export const SERVER_INSTRUCTIONS =
+  "Read-only access to the execution records that AWS Lambda durable functions " +
+  "emit through the Durable Execution Telemetry exporter. Use this server " +
+  "whenever the user asks about durable executions, workflow executions, or " +
+  "durable function runs: listing recent executions, finding failures, timing, " +
+  "or step-level errors. Unqualified requests about 'executions' in this " +
+  "context mean these. Start with `list_executions` or `get_execution`; call " +
+  "`describe_schema` before writing a `query`. Results that hold an execution " +
+  "ARN carry a `viewerUrl`; link each execution you show the user to it.";
+
+/**
  * Every tool this server registers, paired with its description. The single
  * source of truth for `toolDescriptions.test.ts`, which asserts each is
  * non-empty and under the 10,000-char cap — the guard that keeps the large
