@@ -26,6 +26,7 @@ import {
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 import { askUserToAccept, createWriteAccessGate } from "./writeAccessGate";
+import { type ConsentStore, consentKey } from "./consentStore";
 import {
   type ExecutionViewer,
   VIEWER_LINK_FIELD,
@@ -79,11 +80,17 @@ export function registerTools(
   config: TelemetryConfig,
   acceptedByEnv: boolean,
   viewer?: ExecutionViewer,
+  consentStore?: ConsentStore,
 ): void {
+  const key = consentKey(config);
   // The three data tools call this before any query; see writeAccessGate.ts.
   const writeAccessGate = createWriteAccessGate({
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
+    remembered: consentStore && {
+      has: () => consentStore.has(key),
+      add: () => consentStore.add(key),
+    },
     // On S3 + Athena, results written inside the table's data add rows on
     // every query, whatever the credentials. So the prompt names that too,
     // and says so when the location could not be determined.

@@ -34,7 +34,12 @@ export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
  * The user's answer to the prompt. `undefined` means the client cannot show
  * a prompt.
  */
-export type PromptAnswer = "accept" | "decline" | "cancel" | undefined;
+export type PromptAnswer =
+  | "accept"
+  | "accept-always"
+  | "decline"
+  | "cancel"
+  | undefined;
 
 /** The one line the user is asked to confirm. */
 export const CONSENT_MESSAGE =
@@ -52,6 +57,14 @@ export interface WriteAccessGateDeps {
    * added to the prompt and to a blocked result.
    */
   configurationWarning: () => Promise<string | undefined>;
+  /**
+   * Saved "don't ask again" answers for this configuration. Optional: without
+   * it the checkbox behaves like a plain confirm.
+   */
+  remembered?: {
+    has: () => Promise<boolean>;
+    add: () => Promise<void>;
+  };
 }
 
 /**
@@ -95,13 +108,22 @@ export async function askUserToAccept(
           title: "I understand, and I want to continue",
           default: false,
         },
+        dontAskAgain: {
+          type: "boolean",
+          title: "Don't ask again for these credentials",
+          default: false,
+        },
       },
       required: ["confirmed"],
     },
   });
   if (answer.action !== "accept") return answer.action;
-  const content = answer.content as { confirmed?: unknown } | undefined;
-  return content?.confirmed === true ? "accept" : "decline";
+  const content = answer.content as
+    | { confirmed?: unknown; dontAskAgain?: unknown }
+    | undefined;
+  // "Don't ask again" only counts together with the confirm box.
+  if (content?.confirmed !== true) return "decline";
+  return content.dontAskAgain === true ? "accept-always" : "accept";
 }
 
 /** The tool-result payload returned instead of running the query. */
@@ -126,6 +148,12 @@ export function createWriteAccessGate(
 
   async function decide(): Promise<WriteAccessBlocked | null> {
     const warning = await deps.configurationWarning();
+    // A saved answer covers the fixed notice only. A configuration warning is
+    // new information, so it is always shown.
+    if (!warning && (await rememberedHas())) {
+      allowed = true;
+      return null;
+    }
     const message = warning ? `${CONSENT_MESSAGE} ${warning}` : CONSENT_MESSAGE;
     let answer: PromptAnswer;
     try {
@@ -135,11 +163,26 @@ export function createWriteAccessGate(
       // client that cannot prompt, so the user still gets the env var route.
       answer = undefined;
     }
-    if (answer === "accept") {
+    if (answer === "accept" || answer === "accept-always") {
       allowed = true;
+      if (answer === "accept-always") {
+        try {
+          await deps.remembered?.add();
+        } catch {
+          // Could not save: this session is still confirmed; the next asks again.
+        }
+      }
       return null;
     }
     return blocked(message, answer);
+  }
+
+  async function rememberedHas(): Promise<boolean> {
+    try {
+      return (await deps.remembered?.has()) ?? false;
+    } catch {
+      return false;
+    }
   }
 
   return async () => {

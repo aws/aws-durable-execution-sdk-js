@@ -21,6 +21,7 @@ import { VIEWER_DISABLED_ENV_VAR, VIEWER_PORT_ENV_VAR } from "./envKeys";
 import { ExecutionViewer, readViewerSettings } from "./executionViewer";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
+import { fileConsentStore } from "./consentStore";
 import { SERVER_INSTRUCTIONS } from "./tools";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
 
@@ -72,7 +73,13 @@ async function main(): Promise<void> {
     { instructions: SERVER_INSTRUCTIONS },
   );
 
-  registerTools(server, config, writeAccessAcceptedByEnv(process.env), viewer);
+  registerTools(
+    server,
+    config,
+    writeAccessAcceptedByEnv(process.env),
+    viewer,
+    fileConsentStore(),
+  );
   registerPrompts(server);
 
   const transport = new StdioServerTransport();
