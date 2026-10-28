@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Telemetry MCP 1.1.0
+
+- The server asks you to confirm, once per session, that giving it read-only
+  credentials is your responsibility. It no longer checks the credentials, so
+  `test_destination` and blocked data-tool results no longer return a
+  `writeAccess` field. On S3 + Athena the prompt also names a result location
+  inside the table's data. See the
+  [release notes](release-notes/telemetry-mcp-1.1.0.md).
+
 ### Coordinated release summary
 
 Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries

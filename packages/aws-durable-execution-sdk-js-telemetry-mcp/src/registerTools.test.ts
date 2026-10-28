@@ -7,9 +7,12 @@
  * here.
  */
 const testDestination = jest.fn();
+const checkAthenaResultLocation = jest.fn();
 jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => ({
   ...jest.requireActual("@aws/durable-execution-sdk-js-telemetry-core"),
   testDestination: (...args: unknown[]) => testDestination(...args),
+  checkAthenaResultLocation: (...args: unknown[]) =>
+    checkAthenaResultLocation(...args),
 }));
 const runReadOnlyQuery = jest.fn();
 jest.mock("./readOnlyQuery", () => ({
@@ -46,9 +49,19 @@ const DATA_TOOLS = [
   ["list_executions", {}, runListExecutions],
 ] as const;
 
-async function connect(acceptedByEnv: boolean): Promise<Client> {
+const S3_CONFIG = readConfigFromEnv({
+  DURABLE_TELEMETRY_DESTINATION_TYPE: "s3",
+  DURABLE_TELEMETRY_ATHENA_DATABASE: "db",
+  DURABLE_TELEMETRY_ATHENA_OUTPUT_LOCATION: "s3://bucket/telemetry/results/",
+  DURABLE_TELEMETRY_REGION: "us-east-1",
+}).config;
+
+async function connect(
+  acceptedByEnv: boolean,
+  config = CONFIG,
+): Promise<Client> {
   const server = new McpServer({ name: "s", version: "0" });
-  registerTools(server, CONFIG, acceptedByEnv);
+  registerTools(server, config, acceptedByEnv);
   // No elicitation capability, so the gate cannot ask and must block.
   const client = new Client({ name: "c", version: "0" }, { capabilities: {} });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -94,6 +107,47 @@ describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
   });
 });
 
+describe("the S3 result-location warning", () => {
+  it("names Athena results inside the table's data before the first query", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "inside",
+      finding: "Athena writes query results inside the table's data.",
+    });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).toContain(
+      "Athena writes query results inside the table's data.",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it.each([
+    { kind: "outside" },
+    { kind: "undetermined", reason: "No location." },
+  ])("adds nothing when the location is $kind", async (location) => {
+    checkAthenaResultLocation.mockResolvedValue(location);
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).not.toMatch(/Athena|No location/);
+    expect(checkAthenaResultLocation).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+
+  it("is not checked for other destinations", async () => {
+    const client = await connect(false);
+    await client.callTool({ name: "query", arguments: { sql: "SELECT 1" } });
+    expect(checkAthenaResultLocation).not.toHaveBeenCalled();
+    await client.close();
+  });
+});
+
 describe("test_destination", () => {
   it("is not blocked by the gate", async () => {
     testDestination.mockResolvedValue({ ok: true, summary: "s", checks: [] });
@@ -123,7 +177,7 @@ describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
         resolve();
         return new Promise((reply) => {
           answer = () =>
-            reply({ action: "accept", content: { acceptRisk: true } });
+            reply({ action: "accept", content: { confirmed: true } });
         });
       });
     });

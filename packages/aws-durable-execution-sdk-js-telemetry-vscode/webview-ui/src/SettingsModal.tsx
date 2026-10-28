@@ -523,8 +523,9 @@ export function SettingsModal({
                     also verifies the Glue table and runs a test query.
                   </Box>
                   <Alert type="warning">
-                    Queries can be written by a model. It is your responsibility
-                    to use read-only credentials.
+                    Queries are written by a model and run with these
+                    credentials. It is your responsibility to use read-only
+                    credentials.
                   </Alert>
                   {testResult && (
                     <Alert

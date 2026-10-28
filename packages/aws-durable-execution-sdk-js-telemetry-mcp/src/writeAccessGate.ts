@@ -25,7 +25,7 @@ import { ACCEPT_WRITE_ACCESS_ENV_VAR } from "./envKeys";
 
 export { ACCEPT_WRITE_ACCESS_ENV_VAR };
 
-/** True when the environment accepts the risk. Only `true` (any case) counts. */
+/** True when the environment confirms. Only `true` (any case) counts. */
 export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
   return /^true$/i.test((env[ACCEPT_WRITE_ACCESS_ENV_VAR] ?? "").trim());
 }
@@ -42,10 +42,16 @@ export const CONSENT_MESSAGE =
   "It is your responsibility to give this server read-only credentials.";
 
 export interface WriteAccessGateDeps {
-  /** Whether {@link ACCEPT_WRITE_ACCESS_ENV_VAR} accepts the risk. */
+  /** Whether {@link ACCEPT_WRITE_ACCESS_ENV_VAR} confirms. */
   acceptedByEnv: boolean;
   /** Shows `message` to the user and returns the answer. */
   ask: (message: string) => Promise<PromptAnswer>;
+  /**
+   * A problem with the destination's configuration that the user must also
+   * see before the first query, or `undefined` when there is none. It is
+   * added to the prompt and to a blocked result.
+   */
+  configurationWarning?: () => Promise<string | undefined>;
 }
 
 /**
@@ -83,18 +89,18 @@ export async function askUserToAccept(
     requestedSchema: {
       type: "object",
       properties: {
-        acceptRisk: {
+        confirmed: {
           type: "boolean",
           title: "I understand, and I want to continue",
           default: false,
         },
       },
-      required: ["acceptRisk"],
+      required: ["confirmed"],
     },
   });
   if (answer.action !== "accept") return answer.action;
-  const content = answer.content as { acceptRisk?: unknown } | undefined;
-  return content?.acceptRisk === true ? "accept" : "decline";
+  const content = answer.content as { confirmed?: unknown } | undefined;
+  return content?.confirmed === true ? "accept" : "decline";
 }
 
 /** The tool-result payload returned instead of running the query. */
@@ -118,9 +124,11 @@ export function createWriteAccessGate(
   let pending: Promise<WriteAccessBlocked | null> | undefined;
 
   async function decide(): Promise<WriteAccessBlocked | null> {
+    const warning = await deps.configurationWarning?.();
+    const message = warning ? `${CONSENT_MESSAGE} ${warning}` : CONSENT_MESSAGE;
     let answer: PromptAnswer;
     try {
-      answer = await deps.ask(CONSENT_MESSAGE);
+      answer = await deps.ask(message);
     } catch {
       // The client advertised prompts but the request failed. Treat it like a
       // client that cannot prompt, so the user still gets the env var route.
@@ -130,7 +138,7 @@ export function createWriteAccessGate(
       allowed = true;
       return null;
     }
-    return blocked(answer);
+    return blocked(message, answer);
   }
 
   return async () => {
@@ -142,13 +150,13 @@ export function createWriteAccessGate(
   };
 }
 
-function blocked(answer: PromptAnswer): WriteAccessBlocked {
+function blocked(message: string, answer: PromptAnswer): WriteAccessBlocked {
   const reason =
     answer === undefined
       ? "The client cannot show a confirmation prompt."
       : "The user did not confirm.";
   return {
-    error: `Refused to run queries. ${CONSENT_MESSAGE} ${reason}`,
+    error: `Refused to run queries. ${message} ${reason}`,
     howToAccept:
       `Ask the user to confirm, or to set ${ACCEPT_WRITE_ACCESS_ENV_VAR}=true ` +
       `in this server's env block and restart it. Only the user can confirm; ` +

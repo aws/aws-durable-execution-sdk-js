@@ -11,6 +11,7 @@ import {
 function gate(opts: {
   answer?: PromptAnswer | Error;
   acceptedByEnv?: boolean;
+  warning?: string;
 }) {
   const ask = jest.fn(async () => {
     if (opts.answer instanceof Error) throw opts.answer;
@@ -19,6 +20,7 @@ function gate(opts: {
   const run = createWriteAccessGate({
     ask,
     acceptedByEnv: opts.acceptedByEnv ?? false,
+    configurationWarning: async () => opts.warning,
   });
   return { run, ask };
 }
@@ -75,6 +77,18 @@ describe("createWriteAccessGate", () => {
     expect(ask).toHaveBeenCalledTimes(1);
   });
 
+  it("adds a configuration warning to the prompt and to a blocked result", async () => {
+    const { run, ask } = gate({
+      answer: "decline",
+      warning: "Results land in the data.",
+    });
+    const blocked = await run();
+    expect(ask).toHaveBeenCalledWith(
+      `${CONSENT_MESSAGE} Results land in the data.`,
+    );
+    expect(blocked?.error).toContain("Results land in the data.");
+  });
+
   it("never asks when the environment confirms", async () => {
     const { run, ask } = gate({ acceptedByEnv: true });
     expect(await run()).toBeNull();
@@ -120,7 +134,7 @@ describe("askUserToAccept", () => {
   it("accepts only when the user checks the box", async () => {
     const s = server(
       { elicitation: { form: {} } },
-      { action: "accept", content: { acceptRisk: true } },
+      { action: "accept", content: { confirmed: true } },
     );
     expect(await askUserToAccept(s, "m")).toBe("accept");
     expect(s.elicitInput).toHaveBeenCalledWith(
@@ -131,7 +145,7 @@ describe("askUserToAccept", () => {
   it("treats a submitted form with the box unchecked as a decline", async () => {
     const s = server(
       { elicitation: { form: {} } },
-      { action: "accept", content: { acceptRisk: false } },
+      { action: "accept", content: { confirmed: false } },
     );
     expect(await askUserToAccept(s, "m")).toBe("decline");
   });
@@ -185,7 +199,7 @@ describe("askUserToAccept against the MCP SDK", () => {
   it("shows the prompt and accepts when the user checks the box", async () => {
     const { server, client, received } = await connect(
       { elicitation: {} },
-      { action: "accept", content: { acceptRisk: true } },
+      { action: "accept", content: { confirmed: true } },
     );
     expect(await askUserToAccept(server.server, "risk")).toBe("accept");
     expect(received).toEqual([
@@ -203,7 +217,7 @@ describe("askUserToAccept against the MCP SDK", () => {
   it("rejects a reply that does not match the form schema", async () => {
     const { server, client } = await connect(
       { elicitation: {} },
-      { action: "accept", content: { acceptRisk: "yes" } },
+      { action: "accept", content: { confirmed: "yes" } },
     );
     await expect(askUserToAccept(server.server, "risk")).rejects.toThrow();
     await client.close();

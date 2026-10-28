@@ -6,6 +6,8 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  checkAthenaResultLocation,
+  resolveCredentials,
   testDestination,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
@@ -69,6 +71,16 @@ export function registerTools(
   const writeAccessGate = createWriteAccessGate({
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
+    // On S3 + Athena, results written inside the table's data add rows on
+    // every query, whatever the credentials. So the prompt names that too.
+    configurationWarning: async () => {
+      if (config.destinationType !== "s3") return undefined;
+      const location = await checkAthenaResultLocation(
+        config,
+        resolveCredentials(config.awsProfile),
+      );
+      return location.kind === "inside" ? location.finding : undefined;
+    },
   });
   // Returns a tool result when the call must not query, or null when it may.
   // The gate can wait a long time for the user's answer, and several calls can
