@@ -9,7 +9,8 @@
   written by the agent, and it is your responsibility to give the server
   read-only credentials.
 - On S3 + Athena the prompt also says when Athena writes query results inside
-  the table's data location, where every query adds rows. When
+  the table's data location, where every query adds rows, or that it could not
+  check the location, and why. When
   `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` skips the prompt, run
   `test_destination` to see this check.
 - The prompt's checkbox field is `confirmed` (was `acceptRisk`).

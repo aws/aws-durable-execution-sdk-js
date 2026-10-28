@@ -72,14 +72,22 @@ export function registerTools(
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
     // On S3 + Athena, results written inside the table's data add rows on
-    // every query, whatever the credentials. So the prompt names that too.
+    // every query, whatever the credentials. So the prompt names that too,
+    // and says so when the location could not be determined.
     configurationWarning: async () => {
       if (config.destinationType !== "s3") return undefined;
       const location = await checkAthenaResultLocation(
         config,
         resolveCredentials(config.awsProfile),
       );
-      return location.kind === "inside" ? location.finding : undefined;
+      if (location.kind === "inside") return location.finding;
+      if (location.kind === "undetermined") {
+        return (
+          "The server could not check whether Athena writes query results " +
+          `inside the table's data: ${location.reason}`
+        );
+      }
+      return undefined;
     },
   });
   // Returns a tool result when the call must not query, or null when it may.

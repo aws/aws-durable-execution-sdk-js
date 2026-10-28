@@ -125,17 +125,32 @@ describe("the S3 result-location warning", () => {
     await client.close();
   });
 
-  it.each([
-    { kind: "outside" },
-    { kind: "undetermined", reason: "No location." },
-  ])("adds nothing when the location is $kind", async (location) => {
-    checkAthenaResultLocation.mockResolvedValue(location);
+  it("says the check did not complete when the location is undetermined", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "undetermined",
+      reason: "AccessDenied: athena:GetWorkGroup",
+    });
     const client = await connect(false, S3_CONFIG);
     const result = await client.callTool({
       name: "query",
       arguments: { sql: "SELECT 1" },
     });
-    expect(payloadOf(result).error).not.toMatch(/Athena|No location/);
+    expect(payloadOf(result).error).toContain(
+      "The server could not check whether Athena writes query results " +
+        "inside the table's data: AccessDenied: athena:GetWorkGroup",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("adds nothing when the location is outside the data", async () => {
+    checkAthenaResultLocation.mockResolvedValue({ kind: "outside" });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).not.toMatch(/Athena/);
     expect(checkAthenaResultLocation).toHaveBeenCalledTimes(1);
     await client.close();
   });
