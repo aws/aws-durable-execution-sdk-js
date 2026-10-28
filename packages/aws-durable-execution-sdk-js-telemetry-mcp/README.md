@@ -139,8 +139,10 @@ On S3 + Athena the prompt also says when Athena writes query results inside
 the table's data location. The table then reads each result file as records,
 so every query adds rows, whatever the credentials. To find the result
 location, the server reads the Athena workgroup, which needs
-`athena:GetWorkGroup`. `test_destination` skips its own test query in that
-case and reports the problem.
+`athena:GetWorkGroup`. If it cannot read the location, the prompt says nothing
+about it. With `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` there is no prompt,
+so the location is not checked either. In both cases, run `test_destination`:
+it skips its own test query and reports the problem.
 
 A client that supports MCP form elicitation shows the prompt; confirming allows
 queries for the rest of the session. A client that does not support it gets a

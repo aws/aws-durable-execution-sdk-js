@@ -51,7 +51,7 @@ describe("getTableLocation", () => {
     expect(await getTableLocation(table)).toBeUndefined();
   });
 
-  it("rethrows any other Glue error, so the write check reports unknown", async () => {
+  it("rethrows any other Glue error, so the location check reports undetermined", async () => {
     const err = Object.assign(new Error("denied"), {
       name: "AccessDeniedException",
     });

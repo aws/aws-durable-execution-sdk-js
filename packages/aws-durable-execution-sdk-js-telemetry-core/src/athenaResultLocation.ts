@@ -5,7 +5,8 @@
  * `SELECT 1`. If the result location is inside the table's data location, the
  * table reads those files as records, so every query adds rows. Read-only
  * credentials do not prevent this, because Athena must be allowed to write its
- * results. So Test connection checks the location before it runs its probe.
+ * results. So Test connection checks the location before it runs its probe,
+ * and the MCP server names it in the consent prompt before the first query.
  */
 import type { TelemetryConfig } from "./configCore";
 import type { resolveCredentials } from "./configCore";
@@ -31,7 +32,7 @@ function withTrailingSlash(uri: string): string {
  * submits, so the workgroup is read (with `athena:GetWorkGroup`) even when
  * `athenaOutputLocation` is set. Athena uses `primary` when no workgroup is
  * configured. Test connection calls this before its Athena probe, because the
- * probe itself writes a result file.
+ * probe itself writes a result file. The MCP consent prompt calls it too.
  */
 export type AthenaResultLocation =
   | { kind: "inside"; finding: string }

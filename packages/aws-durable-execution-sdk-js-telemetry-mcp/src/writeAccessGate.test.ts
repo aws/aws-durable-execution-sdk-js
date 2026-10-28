@@ -17,12 +17,13 @@ function gate(opts: {
     if (opts.answer instanceof Error) throw opts.answer;
     return opts.answer;
   });
+  const configurationWarning = jest.fn(async () => opts.warning);
   const run = createWriteAccessGate({
     ask,
     acceptedByEnv: opts.acceptedByEnv ?? false,
-    configurationWarning: async () => opts.warning,
+    configurationWarning,
   });
-  return { run, ask };
+  return { run, ask, configurationWarning };
 }
 
 describe("createWriteAccessGate", () => {
@@ -71,10 +72,11 @@ describe("createWriteAccessGate", () => {
     expect(ask).toHaveBeenCalledTimes(2);
   });
 
-  it("shares one prompt between concurrent calls", async () => {
-    const { run, ask } = gate({ answer: "accept" });
+  it("shares one prompt and one configuration check between concurrent calls", async () => {
+    const { run, ask, configurationWarning } = gate({ answer: "accept" });
     await Promise.all([run(), run(), run()]);
     expect(ask).toHaveBeenCalledTimes(1);
+    expect(configurationWarning).toHaveBeenCalledTimes(1);
   });
 
   it("adds a configuration warning to the prompt and to a blocked result", async () => {

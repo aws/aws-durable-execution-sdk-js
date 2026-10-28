@@ -256,7 +256,7 @@ export function registerTools(
         };
       }
 
-      // 2. Stop until the user accepts credentials that can change data.
+      // 2. Stop until the user confirms the read-only responsibility.
       const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
 

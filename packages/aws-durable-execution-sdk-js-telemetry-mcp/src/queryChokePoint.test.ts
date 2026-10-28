@@ -296,7 +296,7 @@ describe("query choke point", () => {
       // whole thing this file exists to prevent.
       "sendConverse",
       "listBedrockModels",
-      // Reads an Athena workgroup's result settings for the write check.
+      // Reads an Athena workgroup's result settings for the result-location check.
       "getWorkGroupOutput",
       "listenToQueue",
       "verifyResult",

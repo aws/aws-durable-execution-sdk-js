@@ -74,7 +74,8 @@ export interface ElicitingServer {
 }
 
 /**
- * Asks the user, through MCP form elicitation, to confirm `message`. Returns `undefined` when the client cannot show a form.
+ * Asks the user, through MCP form elicitation, to confirm `message`. Returns
+ * `undefined` when the client cannot show a form.
  *
  * The form has one checkbox that defaults to unchecked. A user who submits the
  * form without checking it has not accepted, so that counts as a decline.
