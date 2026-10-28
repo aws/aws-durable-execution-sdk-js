@@ -76,9 +76,9 @@ describe("template handler references", () => {
     .map((file) => file.replace(/\.ts$/, ""));
 
   it("finds a reference in every template function", () => {
-    // 56 functions in template.yaml (26 invocation + 26 execution + 4 invoke targets)
+    // 60 functions in template.yaml (27 invocation + 27 execution + 6 invoke targets)
     // and 5 in template-long-running.yaml (4 scenarios + 1 invoke target).
-    expect(references).toHaveLength(61);
+    expect(references).toHaveLength(65);
   });
 
   it.each([
@@ -103,7 +103,7 @@ describe("template handler references", () => {
 describe("requirement coverage", () => {
   it("covers the invocation and execution suites", () => {
     expect(requirementIds(template).sort()).toEqual(
-      [...range("otel-invocation", 26), ...range("otel-execution", 26)].sort(),
+      [...range("otel-invocation", 27), ...range("otel-execution", 27)].sort(),
     );
   });
 
@@ -127,13 +127,17 @@ describe("otel-conformance-tests workflow", () => {
     );
   });
 
-  it("pins the shared orchestrator to a full commit SHA", () => {
-    // A branch name or an unresolved placeholder here fails every run of this workflow with
-    // an invalid reusable workflow reference, which is only visible once it is on main.
+  it("defaults the shared orchestrator and requirements to main", () => {
     const reference = workflow.match(
       /uses: aws\/aws-durable-execution-conformance-tests\/\.github\/workflows\/opentelemetry-orchestrator\.yml@(\S+)/,
     );
-    expect(reference?.[1]).toMatch(/^[0-9a-f]{40}$/);
+    expect(reference?.[1]).toBe("main");
+    expect(workflow).toMatch(
+      /conformance_test_ref:\n(?: {8}.+\n)* {8}default: "main"/,
+    );
+    expect(workflow).toContain(
+      `conformance_test_ref: \${{ inputs.conformance_test_ref || 'main' }}`,
+    );
   });
 
   it("builds this package in the prepare command", () => {
