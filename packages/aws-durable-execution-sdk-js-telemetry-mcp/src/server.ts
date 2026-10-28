@@ -17,6 +17,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readConfigFromEnv } from "./config";
+import { VIEWER_DISABLED_ENV_VAR, VIEWER_PORT_ENV_VAR } from "./envKeys";
+import { ExecutionViewer, readViewerSettings } from "./executionViewer";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
@@ -45,12 +47,28 @@ async function main(): Promise<void> {
     logStderr(`[durable-telemetry] warning: ${warning}`);
   }
 
+  const viewerSettings = readViewerSettings(process.env, {
+    disabled: VIEWER_DISABLED_ENV_VAR,
+    port: VIEWER_PORT_ENV_VAR,
+  });
+  for (const warning of viewerSettings.warnings) {
+    logStderr(`[durable-telemetry] warning: ${warning}`);
+  }
+  // Created now, listening only once a result first needs a link.
+  const viewer = viewerSettings.enabled
+    ? new ExecutionViewer({
+        config,
+        port: viewerSettings.port,
+        log: logStderr,
+      })
+    : undefined;
+
   const server = new McpServer({
     name: "durable-telemetry",
     version: DURABLE_TELEMETRY_MCP_VERSION,
   });
 
-  registerTools(server, config, writeAccessAcceptedByEnv(process.env));
+  registerTools(server, config, writeAccessAcceptedByEnv(process.env), viewer);
   registerPrompts(server);
 
   const transport = new StdioServerTransport();

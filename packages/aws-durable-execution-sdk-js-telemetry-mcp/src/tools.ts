@@ -79,8 +79,12 @@ export const QUERY_DESCRIPTION =
   "destinations (cloudwatch-logs-exporter, lambda-log-exporter) pass a CloudWatch " +
   "Logs Insights pipe query (e.g. `filter ... | stats ...`), NOT SQL; use " +
   "`lookbackHours` to set the time window. Results are capped at " +
-  `${MAX_ROWS} rows; "truncated" is true when the cap was hit. If required ` +
-  "environment variables are unset it names them and returns without calling AWS.";
+  `${MAX_ROWS} rows; "truncated" is true when the cap was hit. ` +
+  "Rows that hold an execution ARN also carry a `viewerUrl`: a local link " +
+  "that opens that execution's live operations and history in a browser. " +
+  "When you show such rows to the user, link each one to its viewerUrl. " +
+  "If required environment variables are unset it names them and returns " +
+  "without calling AWS.";
 
 export const DESCRIBE_SCHEMA_DESCRIPTION =
   "Describe the configured Telemetry destination's record schema and query " +
@@ -95,14 +99,19 @@ export const GET_EXECUTION_DESCRIPTION =
   "return it as machine-readable JSON. A record that does not exist is a " +
   "success with found=false, not an error. For the Athena/S3 destination you " +
   "may also pass year/month/day to prune to one partition and avoid scanning " +
-  "the whole table. Runs as a read-only query behind the same guard as `query`.";
+  "the whole table. Runs as a read-only query behind the same guard as `query`. " +
+  "The result carries a `viewerUrl` linking to the execution's live operations " +
+  "and history; give it to the user when you report on the execution.";
 
 export const LIST_EXECUTIONS_DESCRIPTION =
   "List Durable Execution Telemetry execution records as machine-readable JSON, filtered " +
   "by any of status, functionName, since, until, with a bounded limit — no SQL " +
   "required from the caller for the common case. The query is built and " +
   "executed read-only behind the same guard as `query`; results are capped at " +
-  `${MAX_ROWS} rows.`;
+  `${MAX_ROWS} rows. ` +
+  "Rows that hold an execution ARN also carry a `viewerUrl`: a local link " +
+  "that opens that execution's live operations and history in a browser. " +
+  "When you show such rows to the user, link each one to its viewerUrl.";
 
 /**
  * Every tool this server registers, paired with its description. The single

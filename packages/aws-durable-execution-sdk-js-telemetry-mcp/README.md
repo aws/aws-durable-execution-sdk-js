@@ -217,6 +217,50 @@ The server registers five tools. Call them roughly in this order.
   (`cloudwatch-logs-exporter`, `lambda-log-exporter`) pass a CloudWatch Logs
   Insights pipe query, not SQL, and use `lookbackHours` to set the time window.
 
+### Execution viewer links
+
+When a result holds execution ARNs, the server adds a link for each one:
+
+- `query` and `list_executions` rows gain a `viewerUrl` column. Rows with no
+  execution ARN get an empty string.
+- `get_execution` results gain a `viewerUrl` field.
+
+The link opens a page that shows that execution's status, operations (nested
+the way the workflow ran them), input, result, error, Lambda invocations, and
+history. The page reads them from the Lambda API (`GetDurableExecution` and
+`GetDurableExecutionHistory`) when you open it, not from the telemetry
+destination. So it works for executions whose records were truncated or sampled
+out. While an execution is running, the page reloads every 5 seconds. Links to
+child executions started by a chained invoke open those executions.
+
+Ask the agent to link the rows it shows you, or open a `viewerUrl` yourself. The
+page opens in your default browser, or in whatever browser your terminal or
+client opens links with.
+
+How the page is served:
+
+- The server starts a small web server the first time a result needs a link, not
+  at startup. It listens on `127.0.0.1` only.
+- It answers only requests addressed to that loopback address, and refuses
+  requests that a browser marks as coming from another site. So another web page
+  cannot read it or make it call AWS.
+- It is read-only. It cannot stop or start executions. Use the VS Code extension
+  or desktop app for that.
+- Every local user and process on the machine can reach a loopback port. On a
+  shared machine, turn the viewer off.
+
+The identity you use also needs `lambda:GetDurableExecution` and
+`lambda:GetDurableExecutionHistory` for the pages to load. Without them the page
+shows the AWS error, and the tools still work.
+
+| Variable                            | Effect                                                                                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DURABLE_TELEMETRY_VIEWER_DISABLED` | `true` turns the viewer off. No port is opened, and results carry no `viewerUrl`.                                                                    |
+| `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session, so links stop working when the server restarts. A fixed port keeps them working. |
+
+If the fixed port is in use, for example by another session's viewer, the server
+picks a free port instead and logs that to stderr.
+
 ### Result bounding
 
 - **Row cap.** Every result from every destination is capped at **1000 rows**
@@ -313,10 +357,16 @@ Read this before pointing the server at production data.
   flows to the agent that requested it, and from there wherever that agent's own
   configuration sends it (its model provider, its logs, its storage). This server
   chooses none of that and cannot see past its own stdout.
+- **The execution viewer shows payloads in your browser.** A `viewerUrl` page
+  shows the execution's `input`, `result`, and error, and each operation's
+  result and error, verbatim, as the Lambda API returns them. The page is served
+  only on `127.0.0.1` and only to your browser. See
+  [Execution viewer links](#execution-viewer-links), including how to turn it
+  off.
 - **This server makes no model calls of its own.** It selects no model provider
-  and contacts none. It is stdio in, JSON out, running on your machine; the only
-  outbound calls it makes are the read-only AWS API calls needed to run your
-  query.
+  and contacts none. It is stdio in, JSON out, running on your machine, plus the
+  loopback-only execution viewer; the only outbound calls it makes are the
+  read-only AWS API calls needed to run your query or show an execution.
 - **The server refuses queries that are not read-only, but your credentials are
   the boundary.** On the SQL destinations the server refuses any query that does
   not start with `SELECT`/`WITH`, contains a write keyword, contains a second

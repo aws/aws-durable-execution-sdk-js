@@ -300,8 +300,30 @@ describe("query choke point", () => {
       "getWorkGroupOutput",
       "listenToQueue",
       "verifyResult",
+      // The execution viewer's Lambda durable-execution API calls. They take an
+      // execution ARN or function name, never a query, so there is nothing for
+      // `assertReadOnly` to inspect. The two that change state (start, stop)
+      // must never be imported by this read-only host -- see the test below.
+      "listDurableFunctions",
+      "getFunctionInfo",
+      "listExecutions",
+      "getExecution",
+      "startExecution",
+      "stopExecution",
     ]);
     const unclassified = derived.filter((n) => !known.has(n));
     expect(unclassified).toEqual([]);
   });
+
+  it.each(sourceFiles.map((f) => [relative(SRC, f), f] as const))(
+    "%s imports none of core's execution-changing calls",
+    (_name, file) => {
+      // The viewer is read-only by construction: if the code cannot reach
+      // start/stop, no request to it can either.
+      const imported = importedFromCore(file);
+      expect(
+        imported.filter((n) => n === "startExecution" || n === "stopExecution"),
+      ).toEqual([]);
+    },
+  );
 });
