@@ -55,6 +55,15 @@ import {
   fetchAthenaRecord,
 } from "./athena";
 import { listenToQueue, type SqsMessageRow } from "./sqs";
+import {
+  getExecution,
+  getFunctionInfo,
+  listDurableFunctions,
+  listExecutions,
+  startExecution,
+  stopExecution,
+  type LambdaContext,
+} from "./lambdaExecutions";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
 import {
@@ -103,7 +112,27 @@ export type InboundMessage =
       year?: string;
       month?: string;
       day?: string;
-    };
+    }
+  // Execution viewer: read straight from the Lambda durable-execution APIs
+  // (lambdaExecutions.ts), independent of the configured destination. Keep in
+  // sync with OutboundMessage in webview-ui/src/types.ts.
+  | { type: "listFunctions" }
+  | { type: "getFunctionInfo"; functionName: string }
+  | { type: "listExecutions"; functionName: string; marker?: string }
+  | { type: "getExecution"; arn: string }
+  | {
+      type: "startExecution";
+      functionName: string;
+      payload: string;
+      executionName?: string;
+    }
+  | { type: "stopExecution"; arn: string };
+
+/** Optional collaborators, replaceable in tests. */
+export interface ExplorerSessionDeps {
+  /** Builds the Lambda client the execution viewer uses for a region. */
+  lambdaClientFor?: LambdaContext["clientFor"];
+}
 
 /**
  * Query execution mode chosen in the composer (kept in sync with QueryMode in
@@ -231,7 +260,10 @@ export class ExplorerSession {
   // so follow-up questions continue the session. Cleared on "newSession".
   private conversation: ConversationTurn[] = [];
 
-  constructor(private readonly host: HostPort) {}
+  constructor(
+    private readonly host: HostPort,
+    private readonly deps: ExplorerSessionDeps = {},
+  ) {}
 
   /** Entry point: handle one message from the renderer. */
   async dispatch(msg: InboundMessage): Promise<void> {
@@ -305,6 +337,22 @@ export class ExplorerSession {
             msg.month,
             msg.day,
           );
+        case "listFunctions":
+          return await this.onListFunctions();
+        case "getFunctionInfo":
+          return await this.onGetFunctionInfo(msg.functionName);
+        case "listExecutions":
+          return await this.onListExecutions(msg.functionName, msg.marker);
+        case "getExecution":
+          return await this.onGetExecution(msg.arn);
+        case "startExecution":
+          return await this.onStartExecution(
+            msg.functionName,
+            msg.payload,
+            msg.executionName,
+          );
+        case "stopExecution":
+          return await this.onStopExecution(msg.arn);
       }
     } catch (err) {
       this.host.post({
@@ -1636,4 +1684,143 @@ export class ExplorerSession {
       });
     }
   }
+
+  // ─── Execution viewer ──────────────────────────────────────────────────────
+  //
+  // Each reply names what it answers (function name / execution ARN), so the
+  // renderer can drop a late reply for something it has navigated away from.
+  // Failures come back inside the reply rather than as the global `error`
+  // toast, so they render on the page that asked.
+
+  private lambdaContext(): LambdaContext {
+    const cfg = this.readConfig();
+    return {
+      region: cfg.region,
+      credentials: resolveCredentials(cfg.awsProfile),
+      clientFor: this.deps.lambdaClientFor,
+    };
+  }
+
+  private async onListFunctions(): Promise<void> {
+    try {
+      const functions = await listDurableFunctions(
+        this.lambdaContext(),
+        (partial) =>
+          this.host.post({
+            type: "functionsList",
+            functions: partial,
+            loading: true,
+          }),
+      );
+      this.host.post({ type: "functionsList", functions, loading: false });
+    } catch (err) {
+      this.host.post({
+        type: "functionsList",
+        functions: [],
+        loading: false,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onGetFunctionInfo(functionName: string): Promise<void> {
+    try {
+      const info = await getFunctionInfo(this.lambdaContext(), functionName);
+      this.host.post({ type: "functionInfo", functionName, info });
+    } catch (err) {
+      this.host.post({
+        type: "functionInfo",
+        functionName,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onListExecutions(
+    functionName: string,
+    marker?: string,
+  ): Promise<void> {
+    try {
+      const page = await listExecutions(this.lambdaContext(), {
+        functionName,
+        marker,
+      });
+      this.host.post({
+        type: "executionsList",
+        functionName,
+        append: marker !== undefined,
+        ...page,
+      });
+    } catch (err) {
+      this.host.post({
+        type: "executionsList",
+        functionName,
+        append: marker !== undefined,
+        executions: [],
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onGetExecution(arn: string): Promise<void> {
+    try {
+      const detail = await getExecution(this.lambdaContext(), arn);
+      this.host.post({ type: "executionDetail", arn, detail });
+    } catch (err) {
+      this.host.post({
+        type: "executionDetail",
+        arn,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onStartExecution(
+    functionName: string,
+    payload: string,
+    executionName?: string,
+  ): Promise<void> {
+    try {
+      const { durableExecutionArn } = await startExecution(
+        this.lambdaContext(),
+        { functionName, payload, executionName },
+      );
+      this.host.post(
+        durableExecutionArn
+          ? { type: "executionStarted", functionName, arn: durableExecutionArn }
+          : {
+              type: "executionStarted",
+              functionName,
+              error:
+                "The invoke succeeded but returned no execution ARN. Check that durable execution is enabled on this function.",
+            },
+      );
+    } catch (err) {
+      this.host.post({
+        type: "executionStarted",
+        functionName,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onStopExecution(arn: string): Promise<void> {
+    try {
+      await stopExecution(this.lambdaContext(), arn);
+      this.host.post({ type: "executionStopped", arn });
+    } catch (err) {
+      this.host.post({
+        type: "executionStopped",
+        arn,
+        error: errorMessage(err),
+      });
+      return;
+    }
+    // Refresh so the page shows the STOPPED status without waiting for a poll.
+    await this.onGetExecution(arn);
+  }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
