@@ -70,7 +70,7 @@ export const ACCEPT_WRITE_ACCESS_ENV_VAR =
 
 /**
  * Set to `true` to turn off the local execution viewer (executionViewer.ts):
- * no port is opened and results carry no `viewerUrl`.
+ * no port is opened and results carry no `viewerLink`.
  */
 export const VIEWER_DISABLED_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_DISABLED";
 

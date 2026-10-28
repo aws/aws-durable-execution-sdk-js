@@ -19,7 +19,7 @@ describe("server instructions", () => {
     // sent on every turn, so they must also stay small.
     expect(SERVER_INSTRUCTIONS.length).toBeLessThan(1_000);
     expect(SERVER_INSTRUCTIONS).toContain("list_executions");
-    expect(SERVER_INSTRUCTIONS).toContain("viewerUrl");
+    expect(SERVER_INSTRUCTIONS).toContain("viewerLink");
     // Every tool the instructions name must be a real one.
     const named = SERVER_INSTRUCTIONS.match(/`([a-z_]+)`/g) ?? [];
     expect(named.length).toBeGreaterThan(0);

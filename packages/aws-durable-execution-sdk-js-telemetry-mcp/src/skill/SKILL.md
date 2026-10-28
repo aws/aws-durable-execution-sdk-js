@@ -50,12 +50,16 @@ authoritatively. Writing a query without it is guessing.
 
 ## Linking executions for the user
 
-Results that hold an execution ARN carry a `viewerUrl`: a column on `query` and
-`list_executions` rows, a field on `get_execution`. It is a local link that
-opens that execution's live operations, payloads, and history in the user's
-browser. When you show executions to the user, link each one to its `viewerUrl`
-(for example, make the execution name a Markdown link). Rows without an
-execution ARN have an empty `viewerUrl`; leave those unlinked. The links work
+Results that hold an execution ARN carry a `viewerLink`: a column on `query` and
+`list_executions` rows, a field on `get_execution`. It is a ready-made Markdown
+link, titled with the execution name (or "show execution" when there is none),
+that opens the execution's live operations, payloads, and history in the
+user's browser.
+
+Whenever you show executions, show each one as its `viewerLink`, exactly as
+given. Do this by default; the user does not have to ask for links. Do not
+print the raw URL, and do not rebuild the link yourself. Rows without an
+execution ARN have an empty `viewerLink`; leave those unlinked. The links work
 only while this server runs, so do not store them.
 
 ## Guarantees and limits you can rely on

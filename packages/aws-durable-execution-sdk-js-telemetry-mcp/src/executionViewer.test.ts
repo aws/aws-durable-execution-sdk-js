@@ -25,6 +25,9 @@ import { escapeHtml, renderExecutionPage } from "./executionPage";
 import {
   ExecutionViewer,
   executionArnColumnIndex,
+  executionNameColumnIndex,
+  executionNameFromRecord,
+  markdownLink,
   readViewerSettings,
   VIEWER_HOST,
   withViewerLinks,
@@ -331,35 +334,73 @@ describe("viewer links in results", () => {
     expect(executionArnColumnIndex(["status"], [["OK"]])).toBe(-1);
   });
 
-  it("appends a viewerUrl column, empty for rows with no ARN", async () => {
+  it("finds the name column under any casing", () => {
+    expect(executionNameColumnIndex(["pk", "executionName"])).toBe(1);
+    expect(executionNameColumnIndex(["execution_name"])).toBe(0);
+    expect(executionNameColumnIndex(["executionname"])).toBe(0);
+    expect(executionNameColumnIndex(["status"])).toBe(-1);
+  });
+
+  it("titles a link with the name, or 'show execution' when there is none", () => {
+    expect(markdownLink("order-1", "http://x")).toBe("[order-1](http://x)");
+    expect(markdownLink("", "http://x")).toBe("[show execution](http://x)");
+    expect(markdownLink("  ", "http://x")).toBe("[show execution](http://x)");
+    expect(markdownLink(undefined, "http://x")).toBe(
+      "[show execution](http://x)",
+    );
+  });
+
+  it("escapes link text so a name cannot break out of the link", () => {
+    expect(markdownLink("a]b[c\\d", "http://x")).toBe(
+      "[a\\]b\\[c\\\\d](http://x)",
+    );
+    const long = markdownLink("n".repeat(200), "http://x");
+    expect(long.length).toBeLessThan(100);
+    expect(long).toContain("…](http://x)");
+  });
+
+  it("reads the name from a get_execution record under any casing", () => {
+    expect(executionNameFromRecord({ execution_name: "run-7" })).toBe("run-7");
+    expect(executionNameFromRecord({ executionName: "" })).toBeUndefined();
+    expect(executionNameFromRecord(undefined)).toBeUndefined();
+  });
+
+  it("appends a viewerLink column titled by name, empty for rows with no ARN", async () => {
     viewer = makeViewer().viewer;
     const out = await withViewerLinks(
       {
-        columns: ["executionArn", "status"],
+        columns: ["execution_arn", "execution_name", "status"],
         rows: [
-          [ARN, "FAILED"],
-          ["n/a", "?"],
+          [ARN, "run-1", "FAILED"],
+          [CHILD_ARN, "", "SUCCEEDED"],
+          ["n/a", "x", "?"],
         ],
-        count: 2,
+        count: 3,
       },
       viewer,
     );
-    expect(out.columns).toEqual(["executionArn", "status", "viewerUrl"]);
-    expect(out.rows[0][2]).toMatch(
-      /^http:\/\/127\.0\.0\.1:\d+\/execution\?arn=/,
+    expect(out.columns).toEqual([
+      "execution_arn",
+      "execution_name",
+      "status",
+      "viewerLink",
+    ]);
+    expect(out.rows[0][3]).toMatch(
+      /^\[run-1\]\(http:\/\/127\.0\.0\.1:\d+\/execution\?arn=[^)]+\)$/,
     );
-    expect(out.rows[1][2]).toBe("");
-    expect(out.count).toBe(2);
+    expect(out.rows[1][3]).toMatch(/^\[show execution\]\(http:/);
+    expect(out.rows[2][3]).toBe("");
+    expect(out.count).toBe(3);
   });
 
-  it("leaves results alone with no viewer, no ARNs, or a viewerUrl already", async () => {
+  it("leaves results alone with no viewer, no ARNs, or a viewerLink already", async () => {
     viewer = makeViewer().viewer;
     const withArn = { columns: ["executionArn"], rows: [[ARN]] };
     expect(await withViewerLinks(withArn, undefined)).toBe(withArn);
     const noArn = { columns: ["status"], rows: [["OK"]] };
     expect(await withViewerLinks(noArn, viewer)).toBe(noArn);
     const taken = {
-      columns: ["executionArn", "viewerUrl"],
+      columns: ["executionArn", "viewerLink"],
       rows: [[ARN, "x"]],
     };
     expect(await withViewerLinks(taken, viewer)).toBe(taken);
@@ -391,6 +432,7 @@ describe("viewer links in results", () => {
       engine: "PostgreSQL",
       found: true,
       executionArn: ARN,
+      record: { execution_arn: ARN, execution_name: "run-1" },
     });
 
     const parse = (r: unknown) =>
@@ -401,13 +443,14 @@ describe("viewer links in results", () => {
     const q = parse(
       await client.callTool({ name: "query", arguments: { sql: "SELECT 1" } }),
     );
-    expect(q.columns).toEqual(["executionarn", "status", "viewerUrl"]);
+    expect(q.columns).toEqual(["executionarn", "status", "viewerLink"]);
     expect(q.rows[0][2]).toContain(encodeURIComponent(ARN));
+    expect(q.rows[0][2]).toMatch(/^\[show execution\]\(/);
 
     const l = parse(
       await client.callTool({ name: "list_executions", arguments: {} }),
     );
-    expect(l.columns.at(-1)).toBe("viewerUrl");
+    expect(l.columns.at(-1)).toBe("viewerLink");
 
     const g = parse(
       await client.callTool({
@@ -415,7 +458,8 @@ describe("viewer links in results", () => {
         arguments: { executionArn: ARN },
       }),
     );
-    expect(g.viewerUrl).toContain(encodeURIComponent(ARN));
+    expect(g.viewerLink).toMatch(/^\[run-1\]\(http:/);
+    expect(g.viewerLink).toContain(encodeURIComponent(ARN));
     await client.close();
   });
 });

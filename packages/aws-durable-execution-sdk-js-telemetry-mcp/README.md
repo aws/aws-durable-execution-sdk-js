@@ -221,9 +221,15 @@ The server registers five tools. Call them roughly in this order.
 
 When a result holds execution ARNs, the server adds a link for each one:
 
-- `query` and `list_executions` rows gain a `viewerUrl` column. Rows with no
-  execution ARN get an empty string.
-- `get_execution` results gain a `viewerUrl` field.
+- `query` and `list_executions` rows gain a `viewerLink` column. Rows with no
+  execution ARN get an empty string. `list_executions` also returns each
+  execution's name.
+- `get_execution` results gain a `viewerLink` field.
+
+Each `viewerLink` is a Markdown link titled with the execution name, for
+example `[order-1042](http://127.0.0.1:8765/execution?arn=…)`. An execution
+with no name is titled `show execution`. The server tells the agent to show
+these links whenever it lists executions, so you do not have to ask for them.
 
 The link opens a page that shows that execution's status, operations (nested
 the way the workflow ran them), input, result, error, Lambda invocations, and
@@ -233,9 +239,8 @@ destination. So it works for executions whose records were truncated or sampled
 out. While an execution is running, the page reloads every 5 seconds. Links to
 child executions started by a chained invoke open those executions.
 
-Ask the agent to link the rows it shows you, or open a `viewerUrl` yourself. The
-page opens in your default browser, or in whatever browser your terminal or
-client opens links with.
+Click a link to open the page. It opens in your default browser, or in whatever
+browser your terminal or client opens links with.
 
 How the page is served:
 
@@ -255,7 +260,7 @@ shows the AWS error, and the tools still work.
 
 | Variable                            | Effect                                                                                                                                               |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DURABLE_TELEMETRY_VIEWER_DISABLED` | `true` turns the viewer off. No port is opened, and results carry no `viewerUrl`.                                                                    |
+| `DURABLE_TELEMETRY_VIEWER_DISABLED` | `true` turns the viewer off. No port is opened, and results carry no `viewerLink`.                                                                    |
 | `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session, so links stop working when the server restarts. A fixed port keeps them working. |
 
 If the fixed port is in use, for example by another session's viewer, the server
@@ -357,7 +362,7 @@ Read this before pointing the server at production data.
   flows to the agent that requested it, and from there wherever that agent's own
   configuration sends it (its model provider, its logs, its storage). This server
   chooses none of that and cannot see past its own stdout.
-- **The execution viewer shows payloads in your browser.** A `viewerUrl` page
+- **The execution viewer shows payloads in your browser.** A `viewerLink` page
   shows the execution's `input`, `result`, and error, and each operation's
   result and error, verbatim, as the Lambda API returns them. The page is served
   only on `127.0.0.1` and only to your browser. See

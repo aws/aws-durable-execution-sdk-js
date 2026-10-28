@@ -28,7 +28,9 @@ import {
 import { askUserToAccept, createWriteAccessGate } from "./writeAccessGate";
 import {
   type ExecutionViewer,
-  VIEWER_URL_FIELD,
+  VIEWER_LINK_FIELD,
+  executionNameFromRecord,
+  markdownLink,
   withViewerLinks,
 } from "./executionViewer";
 
@@ -67,8 +69,9 @@ function missingConfigResult(config: TelemetryConfig) {
  * Registers the tools. The `config` and `acceptedByEnv` are captured from
  * startup (read once) so the tools never re-read the environment.
  *
- * With a `viewer`, results gain a `viewerUrl` per execution: a column on
- * `query` and `list_executions` rows, a field on `get_execution`. Without one
+ * With a `viewer`, results gain a `viewerLink` per execution (a Markdown link
+ * titled with the execution name): a column on `query` and `list_executions`
+ * rows, a field on `get_execution`. Without one
  * (disabled, or in tests) results are exactly as before.
  */
 export function registerTools(
@@ -413,9 +416,17 @@ export function registerTools(
           day,
           lookbackHours,
         });
-        const viewerUrl = await viewer?.linkFor(found.executionArn);
+        const url = await viewer?.linkFor(found.executionArn);
         return jsonResult(
-          viewerUrl ? { ...found, [VIEWER_URL_FIELD]: viewerUrl } : found,
+          url
+            ? {
+                ...found,
+                [VIEWER_LINK_FIELD]: markdownLink(
+                  executionNameFromRecord(found.record),
+                  url,
+                ),
+              }
+            : found,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

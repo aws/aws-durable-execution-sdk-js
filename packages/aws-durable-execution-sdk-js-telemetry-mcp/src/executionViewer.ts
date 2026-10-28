@@ -254,12 +254,22 @@ function errorMessage(err: unknown): string {
 // ── Links in tool results ────────────────────────────────────────────────────
 
 /** Name of the column (and field) that carries each row's viewer link. */
-export const VIEWER_URL_FIELD = "viewerUrl";
+export const VIEWER_LINK_FIELD = "viewerLink";
+
+/** Link text for an execution that has no name. */
+export const DEFAULT_LINK_TEXT = "show execution";
+
+const MAX_LINK_TEXT = 80;
+
+/** Lowercased with underscores removed, so execution_name matches executionName. */
+function normalizedColumn(name: string): string {
+  return name.toLowerCase().replace(/_/g, "");
+}
 
 /**
  * The column holding execution ARNs: one named executionArn in any casing
- * (Athena lowercases names) when it holds ARNs, else the first column that
- * does. -1 when no row holds one.
+ * (Athena lowercases names, SQL tables use execution_arn) when it holds ARNs,
+ * else the first column that does. -1 when no row holds one.
  */
 export function executionArnColumnIndex(
   columns: string[],
@@ -267,31 +277,69 @@ export function executionArnColumnIndex(
 ): number {
   const holdsArns = (i: number) =>
     rows.some((r) => isDurableExecutionArn(r[i]));
-  const named = columns.findIndex((c) => c.toLowerCase() === "executionarn");
+  const named = columns.findIndex(
+    (c) => normalizedColumn(c) === "executionarn",
+  );
   if (named >= 0 && holdsArns(named)) return named;
   return columns.findIndex((_, i) => holdsArns(i));
 }
 
+/** The execution-name column (executionName / execution_name / executionname), or -1. */
+export function executionNameColumnIndex(columns: string[]): number {
+  return columns.findIndex((c) => normalizedColumn(c) === "executionname");
+}
+
 /**
- * Appends a `viewerUrl` column to a columns/rows result: a link for each row
- * that holds an execution ARN, an empty string for the rest. Returns the
- * result unchanged when there is no viewer, no ARN column, or the result
+ * A Markdown link the agent can show as-is: `[name](url)`, or
+ * `[show execution](url)` when the execution has no name. Characters that
+ * would end the link text early are escaped, and long names are shortened.
+ */
+export function markdownLink(name: string | undefined, url: string): string {
+  let text = (name ?? "").trim() || DEFAULT_LINK_TEXT;
+  if (text.length > MAX_LINK_TEXT)
+    text = `${text.slice(0, MAX_LINK_TEXT - 1)}…`;
+  const escaped = text.replace(/[\\[\]]/g, "\\$&");
+  return `[${escaped}](${url})`;
+}
+
+/** The execution name in a record from `get_execution`, under any column casing. */
+export function executionNameFromRecord(
+  record: Record<string, string> | undefined,
+): string | undefined {
+  if (!record) return undefined;
+  for (const [key, value] of Object.entries(record)) {
+    if (normalizedColumn(key) === "executionname" && value) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Appends a `viewerLink` column to a columns/rows result: a Markdown link for
+ * each row that holds an execution ARN, an empty string for the rest. Returns
+ * the result unchanged when there is no viewer, no ARN column, or the result
  * already has a column of that name.
  */
 export async function withViewerLinks<
   T extends { columns: string[]; rows: string[][] },
 >(result: T, viewer: ExecutionViewer | undefined): Promise<T> {
-  if (!viewer || result.columns.includes(VIEWER_URL_FIELD)) return result;
-  const col = executionArnColumnIndex(result.columns, result.rows);
-  if (col < 0) return result;
-  const links = await Promise.all(
-    result.rows.map((r) => viewer.linkFor(r[col])),
+  if (!viewer || result.columns.includes(VIEWER_LINK_FIELD)) return result;
+  const arnCol = executionArnColumnIndex(result.columns, result.rows);
+  if (arnCol < 0) return result;
+  const nameCol = executionNameColumnIndex(result.columns);
+  const urls = await Promise.all(
+    result.rows.map((r) => viewer.linkFor(r[arnCol])),
   );
-  if (links.every((l) => l === undefined)) return result;
+  if (urls.every((u) => u === undefined)) return result;
   return {
     ...result,
-    columns: [...result.columns, VIEWER_URL_FIELD],
-    rows: result.rows.map((r, i) => [...r, links[i] ?? ""]),
+    columns: [...result.columns, VIEWER_LINK_FIELD],
+    rows: result.rows.map((r, i) => {
+      const url = urls[i];
+      return [
+        ...r,
+        url ? markdownLink(nameCol >= 0 ? r[nameCol] : undefined, url) : "",
+      ];
+    }),
   };
 }
 
