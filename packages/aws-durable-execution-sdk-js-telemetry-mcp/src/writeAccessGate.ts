@@ -51,7 +51,7 @@ export interface WriteAccessGateDeps {
    * see before the first query, or `undefined` when there is none. It is
    * added to the prompt and to a blocked result.
    */
-  configurationWarning?: () => Promise<string | undefined>;
+  configurationWarning: () => Promise<string | undefined>;
 }
 
 /**
@@ -124,7 +124,7 @@ export function createWriteAccessGate(
   let pending: Promise<WriteAccessBlocked | null> | undefined;
 
   async function decide(): Promise<WriteAccessBlocked | null> {
-    const warning = await deps.configurationWarning?.();
+    const warning = await deps.configurationWarning();
     const message = warning ? `${CONSENT_MESSAGE} ${warning}` : CONSENT_MESSAGE;
     let answer: PromptAnswer;
     try {
