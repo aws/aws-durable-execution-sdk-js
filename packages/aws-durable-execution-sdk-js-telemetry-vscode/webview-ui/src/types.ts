@@ -51,7 +51,146 @@ export type OutboundMessage =
       year?: string;
       month?: string;
       day?: string;
-    };
+    }
+  // Execution viewer — keep in sync with InboundMessage in core's
+  // explorerSession.ts.
+  | { type: "listFunctions" }
+  | { type: "getFunctionInfo"; functionName: string }
+  | { type: "listExecutions"; functionName: string; marker?: string }
+  | { type: "getExecution"; arn: string }
+  | {
+      type: "startExecution";
+      functionName: string;
+      payload: string;
+      executionName?: string;
+    }
+  | { type: "stopExecution"; arn: string };
+
+// ─── Execution viewer data (mirrors core's lambdaExecutions.ts) ────────────────
+
+export interface FunctionSummary {
+  name: string;
+  runtime?: string;
+  lastModified?: string;
+  packageType?: string;
+}
+
+export interface FunctionInfo {
+  name: string;
+  arn?: string;
+  runtime?: string;
+  memorySize?: number;
+  timeout?: number;
+  executionTimeoutSeconds?: number;
+  retentionDays?: number;
+  lastModified?: string;
+  codeSize?: number;
+  version?: string;
+  handler?: string;
+  description?: string;
+}
+
+export interface ExecutionRow {
+  arn: string;
+  name: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+}
+
+export interface HistoryEvent {
+  eventId?: number;
+  type?: string;
+  subType?: string;
+  name?: string;
+  id?: string;
+  parentId?: string;
+  timestamp?: string;
+}
+
+export interface OperationNode {
+  id: string;
+  parentId?: string;
+  name?: string;
+  kind?: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  attempt?: number;
+  result?: string;
+  payloadTruncated?: boolean;
+  error?: string;
+  scheduledEndTime?: string;
+  callbackId?: string;
+  invokedFunction?: string;
+  invokedExecutionArn?: string;
+  children?: OperationNode[];
+}
+
+export interface InvocationRow {
+  requestId?: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface ExecutionDetail {
+  arn: string;
+  name?: string;
+  functionArn?: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  version?: string;
+  input?: string;
+  result?: string;
+  error?: string;
+  history: HistoryEvent[];
+  operations: OperationNode[];
+  invocations: InvocationRow[];
+  historyTruncated?: boolean;
+  historyError?: string;
+}
+
+/** Execution viewer replies from the host (see core's explorerSession.ts). */
+export type ExecutionViewerMessage =
+  | {
+      type: "functionsList";
+      functions: FunctionSummary[];
+      loading: boolean;
+      error?: string;
+    }
+  | {
+      type: "functionInfo";
+      functionName: string;
+      info?: FunctionInfo;
+      error?: string;
+    }
+  | {
+      type: "executionsList";
+      functionName: string;
+      append: boolean;
+      executions: ExecutionRow[];
+      nextMarker?: string;
+      error?: string;
+    }
+  | {
+      type: "executionDetail";
+      arn: string;
+      detail?: ExecutionDetail;
+      error?: string;
+    }
+  | {
+      type: "executionStarted";
+      functionName: string;
+      arn?: string;
+      error?: string;
+    }
+  | { type: "executionStopped"; arn: string; error?: string };
 
 /** A single check within a destination connectivity test. Mirrors the
  * DestinationCheck shape produced by the host's destinationTest.ts. */
@@ -189,7 +328,8 @@ export type InboundMessage =
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
   | { type: "sqsMessages"; messages: SqsMessageRow[] }
-  | { type: "favorites"; favorites: Favorite[] };
+  | { type: "favorites"; favorites: Favorite[] }
+  | ExecutionViewerMessage;
 
 /**
  * One completed iteration of the advanced (agentic) run→verify→refine loop,

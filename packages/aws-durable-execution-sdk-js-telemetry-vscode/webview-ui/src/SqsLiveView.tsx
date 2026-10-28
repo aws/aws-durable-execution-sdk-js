@@ -15,6 +15,8 @@ interface Props {
   queueConfigured: boolean;
   onClear: () => void;
   onVisualize: () => void;
+  /** Opens a message's execution in the execution viewer. */
+  onOpenExecution?: (arn: string) => void;
 }
 
 export const MAX_DISPLAYED_MESSAGES = 500;
@@ -59,6 +61,7 @@ export function SqsLiveView({
   queueConfigured,
   onClear,
   onVisualize,
+  onOpenExecution,
 }: Props) {
   const handleToggle = () => {
     postMessage({ type: listening ? "stopListening" : "startListening" });
@@ -115,6 +118,7 @@ export function SqsLiveView({
           columns={columns}
           rows={rows}
           primaryColumns={PRIMARY_COLUMNS}
+          onOpenExecution={onOpenExecution}
         />
         {rows.length > 0 && (
           <Button variant="primary" onClick={onVisualize}>

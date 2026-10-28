@@ -6,6 +6,8 @@ import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
 import Container from "@cloudscape-design/components/container";
 import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
+import SegmentedControl from "@cloudscape-design/components/segmented-control";
 import { postMessage } from "./hostBridge";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
@@ -13,6 +15,14 @@ import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
 import { AiConsentModal } from "./AiConsentModal";
 import { AgentTranscript } from "./AgentTranscript";
+import { ExecutionDetailPage } from "./ExecutionDetailPage";
+import { FunctionDetailPage } from "./FunctionDetailPage";
+import { FunctionsListPage } from "./FunctionsListPage";
+import { StartExecutionModal } from "./StartExecutionModal";
+import {
+  isExecutionViewerMessage,
+  useExecutionViewer,
+} from "./useExecutionViewer";
 import {
   SqsLiveView,
   toTable as sqsToTable,
@@ -70,6 +80,12 @@ function starterQueryFor(s: Settings): string {
 
 type Page = "data" | "visualize";
 
+/**
+ * The two top-level areas: what the telemetry exporter wrote to the configured
+ * destination, and executions read straight from the Lambda API.
+ */
+type Area = "telemetry" | "executions";
+
 interface ResultsPayload {
   columns: string[];
   rows: string[][];
@@ -99,6 +115,12 @@ type ChatTurn =
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [area, setArea] = useState<Area>("telemetry");
+  const viewer = useExecutionViewer(area === "executions");
+  // The message handler below is created once, so it reaches the viewer
+  // through a ref rather than the first render's closure.
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
   // Active query mode (query / ask / agent). Seeded from the persisted
   // durableExecutionTelemetry.queryMode setting when config arrives, so it's remembered
   // across sessions; changing it in the composer persists it back.
@@ -162,6 +184,10 @@ export function App() {
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
+    if (isExecutionViewerMessage(msg)) {
+      viewerRef.current.apply(msg);
+      return;
+    }
     switch (msg.type) {
       case "config":
         setSettings(msg.settings);
@@ -418,6 +444,37 @@ export function App() {
 
   const handleClearTest = useCallback(() => setDestTestResult(null), []);
 
+  /** Opens an execution in the viewer, e.g. from a query result row. */
+  const handleOpenExecution = (arn: string) => {
+    setArea("executions");
+    viewer.openExecution(arn);
+  };
+
+  const exportHistory = (format: "csv" | "json", content: string) => {
+    postMessage({
+      type: "exportData",
+      format,
+      content,
+      filename: `execution-history.${format}`,
+    });
+  };
+
+  const breadcrumbs = [
+    { text: "Durable functions", href: "#functions" },
+    ...(viewer.page !== "functions" && viewer.fnName
+      ? [{ text: viewer.fnName, href: "#function" }]
+      : []),
+    ...(viewer.page === "execution" && viewer.arn
+      ? [
+          {
+            text:
+              viewer.detail?.name || viewer.arn.split("/").pop() || "Execution",
+            href: "#execution",
+          },
+        ]
+      : []),
+  ];
+
   const handleListModels = (s: Settings) => {
     setBedrockModelsError("");
     setBedrockModelsLoading(true);
@@ -431,11 +488,22 @@ export function App() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              {settings.destinationType !== "sqs" && chat.length > 0 && (
-                <Button iconName="add-plus" onClick={handleNewSession}>
-                  New session
-                </Button>
-              )}
+              <SegmentedControl
+                label="View"
+                selectedId={area}
+                onChange={({ detail }) => setArea(detail.selectedId as Area)}
+                options={[
+                  { id: "telemetry", text: "Telemetry" },
+                  { id: "executions", text: "Executions" },
+                ]}
+              />
+              {area === "telemetry" &&
+                settings.destinationType !== "sqs" &&
+                chat.length > 0 && (
+                  <Button iconName="add-plus" onClick={handleNewSession}>
+                    New session
+                  </Button>
+                )}
               <Button
                 iconName="settings"
                 variant="icon"
@@ -455,7 +523,75 @@ export function App() {
           Durable Execution Telemetry
         </Header>
 
-        {settings.destinationType === "sqs" ? (
+        {area === "executions" ? (
+          <SpaceBetween size="m">
+            <BreadcrumbGroup
+              items={breadcrumbs}
+              ariaLabel="Execution viewer"
+              onFollow={(e) => {
+                e.preventDefault();
+                const target = e.detail.href.slice(1);
+                if (
+                  target === "functions" ||
+                  target === "function" ||
+                  target === "execution"
+                ) {
+                  viewer.goTo(target);
+                }
+              }}
+            />
+            {viewer.page === "functions" && (
+              <FunctionsListPage
+                region={settings.region}
+                functions={viewer.functions}
+                error={viewer.functionsError || undefined}
+                loading={viewer.functionsLoading}
+                onRefresh={viewer.loadFunctions}
+                onSelect={viewer.openFunction}
+              />
+            )}
+            {viewer.page === "function" && viewer.fnName && (
+              <FunctionDetailPage
+                functionName={viewer.fnName}
+                info={viewer.fnInfo}
+                infoError={viewer.fnInfoError || undefined}
+                executions={viewer.executions}
+                executionsError={viewer.execError || undefined}
+                hasMore={viewer.hasMoreExecutions}
+                loading={viewer.execLoading}
+                onLoadMore={viewer.loadMoreExecutions}
+                onRefresh={viewer.refreshExecutions}
+                onStart={viewer.startForCurrentFunction}
+                onOpenExecution={viewer.openExecution}
+              />
+            )}
+            {viewer.page === "execution" && viewer.arn && (
+              <ExecutionDetailPage
+                arn={viewer.arn}
+                detail={viewer.detail}
+                error={viewer.detailError || undefined}
+                loading={viewer.detailLoading}
+                stopping={viewer.stopping}
+                stopError={viewer.stopError || undefined}
+                onRefresh={viewer.refreshDetail}
+                onStop={viewer.stop}
+                onStartNew={viewer.startFromDetail}
+                onOpenExecution={viewer.openExecution}
+                onExportHistory={exportHistory}
+              />
+            )}
+            <StartExecutionModal
+              visible={viewer.start !== null}
+              functionName={viewer.start?.functionName ?? ""}
+              initialPayload={viewer.start?.payload}
+              initialName={viewer.start?.name}
+              starting={viewer.starting}
+              error={viewer.startError || undefined}
+              onDismiss={viewer.closeStart}
+              onStart={viewer.submitStart}
+            />
+          </SpaceBetween>
+        ) : settings.destinationType === "sqs" ? (
           <>
             {page === "data" && (
               <SqsLiveView
@@ -465,6 +601,7 @@ export function App() {
                 queueConfigured={!!settings.sqsQueueUrl}
                 onClear={() => setSqsMessages([])}
                 onVisualize={() => setPage("visualize")}
+                onOpenExecution={handleOpenExecution}
               />
             )}
 
@@ -572,6 +709,7 @@ export function App() {
                                     pageSize={5}
                                     query={turn.results.finalQuery}
                                     destinationType={settings.destinationType}
+                                    onOpenExecution={handleOpenExecution}
                                   />
                                   <Button
                                     onClick={() => {

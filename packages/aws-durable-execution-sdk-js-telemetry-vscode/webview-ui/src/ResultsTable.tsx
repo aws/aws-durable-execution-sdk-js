@@ -9,8 +9,10 @@ import Pagination from "@cloudscape-design/components/pagination";
 import Spinner from "@cloudscape-design/components/spinner";
 import Modal from "@cloudscape-design/components/modal";
 import { useState } from "react";
+import Button from "@cloudscape-design/components/button";
 import { RecordDetail } from "./RecordDetail";
 import { postMessage } from "./hostBridge";
+import { executionArnColumn, looksLikeExecutionArn } from "./executionFormat";
 
 interface Props {
   columns: string[];
@@ -78,6 +80,11 @@ interface Props {
   query?: string;
   /** Destination this result came from, stored alongside a saved favorite. */
   destinationType?: string;
+  /**
+   * Opens an execution in the execution viewer. When set, and a column holds
+   * execution ARNs, each such row gets an Open link.
+   */
+  onOpenExecution?: (arn: string) => void;
 }
 
 export function ResultsTable({
@@ -95,6 +102,7 @@ export function ResultsTable({
   pageSize = 25,
   query,
   destinationType,
+  onOpenExecution,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const [detailItem, setDetailItem] = useState<Record<string, string> | null>(
@@ -129,12 +137,44 @@ export function ResultsTable({
   const hasFetchableDetail = idColumn != null && columns.includes(idColumn);
   const hasDetail = hasInMemoryDetail || hasFetchableDetail;
 
-  const columnDefs = displayColumns.map((col) => ({
-    id: col,
-    header: col,
-    cell: (item: Record<string, string>) => item[col] || "",
-    sortingField: col,
-  }));
+  const arnColumn = onOpenExecution
+    ? executionArnColumn(columns, rows, idColumn)
+    : undefined;
+
+  const columnDefs = [
+    ...(arnColumn && onOpenExecution
+      ? [
+          {
+            id: "__openExecution",
+            header: "Execution",
+            cell: (item: Record<string, string>) =>
+              looksLikeExecutionArn(item[arnColumn]) ? (
+                // Stop the click here so it opens the execution rather than
+                // also selecting the row and opening the record modal.
+                // biome-ignore lint/a11y/noStaticElementInteractions: wrapper only stops propagation; the Button inside is the control.
+                // biome-ignore lint/a11y/useKeyWithClickEvents: as above.
+                <span onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="inline-link"
+                    ariaLabel={`Open execution ${item[arnColumn]}`}
+                    onClick={() => onOpenExecution(item[arnColumn])}
+                  >
+                    Open
+                  </Button>
+                </span>
+              ) : (
+                ""
+              ),
+          },
+        ]
+      : []),
+    ...displayColumns.map((col) => ({
+      id: col,
+      header: col,
+      cell: (item: Record<string, string>) => item[col] || "",
+      sortingField: col,
+    })),
+  ];
 
   // __rowIndex (added below, then columns are applied) gives every row a
   // stable identity for selection, independent of column contents, which may
