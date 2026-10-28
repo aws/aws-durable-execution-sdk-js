@@ -1,112 +1,84 @@
-import type { WriteAccessResult } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
   ACCEPT_WRITE_ACCESS_ENV_VAR,
   askUserToAccept,
+  CONSENT_MESSAGE,
   createWriteAccessGate,
   type ElicitingServer,
   type PromptAnswer,
   writeAccessAcceptedByEnv,
 } from "./writeAccessGate";
 
-const CAN_WRITE: WriteAccessResult = {
-  status: "can-write",
-  findings: ["The database user is a superuser."],
-};
-
 function gate(opts: {
-  result: WriteAccessResult;
   answer?: PromptAnswer | Error;
   acceptedByEnv?: boolean;
 }) {
-  const check = jest.fn(async () => opts.result);
   const ask = jest.fn(async () => {
     if (opts.answer instanceof Error) throw opts.answer;
     return opts.answer;
   });
   const run = createWriteAccessGate({
-    check,
     ask,
     acceptedByEnv: opts.acceptedByEnv ?? false,
   });
-  return { run, check, ask };
+  return { run, ask };
 }
 
 describe("createWriteAccessGate", () => {
-  it.each([
-    CAN_WRITE,
-    { status: "unverified", reason: "Nothing found." },
-  ] as WriteAccessResult[])(
-    "asks the user when the check reports $status",
-    async (result) => {
-      const { run, ask } = gate({ result, answer: "accept" });
-      expect(await run()).toBeNull();
-      expect(ask).toHaveBeenCalledTimes(1);
-    },
-  );
+  it("asks the user to confirm the read-only responsibility", async () => {
+    const { run, ask } = gate({ answer: "accept" });
+    expect(await run()).toBeNull();
+    expect(ask).toHaveBeenCalledWith(CONSENT_MESSAGE);
+    expect(CONSENT_MESSAGE).toContain(
+      "It is your responsibility to give this server read-only credentials.",
+    );
+  });
 
-  it("blocks with the findings when the user declines", async () => {
-    const { run } = gate({ result: CAN_WRITE, answer: "decline" });
+  it("blocks with the message when the user declines", async () => {
+    const { run } = gate({ answer: "decline" });
     const blocked = await run();
-    expect(blocked?.writeAccess).toEqual(CAN_WRITE);
-    expect(blocked?.error).toContain("The database user is a superuser.");
-    expect(blocked?.error).toContain("The user did not accept the risk.");
+    expect(blocked?.error).toContain(CONSENT_MESSAGE);
+    expect(blocked?.error).toContain("The user did not confirm.");
     expect(blocked?.howToAccept).toContain(ACCEPT_WRITE_ACCESS_ENV_VAR);
   });
 
-  it("tells an unverified user that the credentials are unconfirmed", async () => {
-    const { run, ask } = gate({
-      result: { status: "unverified", reason: "Nothing found." },
-      answer: "decline",
-    });
-    const blocked = await run();
-    expect(ask.mock.calls[0]).toEqual([
-      expect.stringContaining(
-        "could not confirm that its credentials are read-only. Nothing found.",
-      ),
-    ]);
-    expect(blocked?.error).toContain("Nothing found.");
-  });
-
   it("blocks when the client cannot show a prompt", async () => {
-    const { run } = gate({ result: CAN_WRITE, answer: undefined });
+    const { run } = gate({ answer: undefined });
     expect((await run())?.error).toContain(
-      "The client cannot show an accept prompt.",
+      "The client cannot show a confirmation prompt.",
     );
   });
 
   it("blocks like a client without prompts when the prompt request fails", async () => {
-    const { run } = gate({ result: CAN_WRITE, answer: new Error("timeout") });
+    const { run } = gate({ answer: new Error("timeout") });
     expect((await run())?.error).toContain(
-      "The client cannot show an accept prompt.",
+      "The client cannot show a confirmation prompt.",
     );
   });
 
-  it("checks and asks only once after the user accepts", async () => {
-    const { run, check, ask } = gate({ result: CAN_WRITE, answer: "accept" });
+  it("asks only once after the user confirms", async () => {
+    const { run, ask } = gate({ answer: "accept" });
     await run();
     expect(await run()).toBeNull();
-    expect(check).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledTimes(1);
   });
 
   it("asks again on the next call after a decline", async () => {
-    const { run, ask } = gate({ result: CAN_WRITE, answer: "decline" });
+    const { run, ask } = gate({ answer: "decline" });
     await run();
     await run();
     expect(ask).toHaveBeenCalledTimes(2);
   });
 
-  it("shares one check and one prompt between concurrent calls", async () => {
-    const { run, check, ask } = gate({ result: CAN_WRITE, answer: "accept" });
+  it("shares one prompt between concurrent calls", async () => {
+    const { run, ask } = gate({ answer: "accept" });
     await Promise.all([run(), run(), run()]);
-    expect(check).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledTimes(1);
   });
 
-  it("skips the check entirely when the environment accepts the risk", async () => {
-    const { run, check } = gate({ result: CAN_WRITE, acceptedByEnv: true });
+  it("never asks when the environment confirms", async () => {
+    const { run, ask } = gate({ acceptedByEnv: true });
     expect(await run()).toBeNull();
-    expect(check).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
   });
 });
 

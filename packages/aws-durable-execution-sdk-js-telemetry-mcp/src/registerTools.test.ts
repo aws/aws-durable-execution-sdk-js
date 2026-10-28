@@ -1,16 +1,14 @@
 /**
  * Calls the registered tools through a real MCP client, connected in memory,
- * with core's write check and this package's query paths replaced by spies.
+ * with this package's query paths replaced by spies.
  *
- * The property under test: until the user accepts, no data tool reaches its
- * query path, whatever the write check reports. Deleting any tool's
- * `if (blocked) return blocked;` fails a test here.
+ * The property under test: until the user confirms, no data tool reaches its
+ * query path. Deleting any tool's `if (blocked) return blocked;` fails a test
+ * here.
  */
-const checkWriteAccess = jest.fn();
 const testDestination = jest.fn();
 jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => ({
   ...jest.requireActual("@aws/durable-execution-sdk-js-telemetry-core"),
-  checkWriteAccess: (...args: unknown[]) => checkWriteAccess(...args),
   testDestination: (...args: unknown[]) => testDestination(...args),
 }));
 const runReadOnlyQuery = jest.fn();
@@ -40,11 +38,6 @@ const CONFIG = readConfigFromEnv({
     "arn:aws:secretsmanager:us-east-1:1:secret:s",
   DURABLE_TELEMETRY_REGION: "us-east-1",
 }).config;
-
-const CAN_WRITE = {
-  status: "can-write",
-  findings: ["The database user can write table public.t."],
-};
 
 /** The data tools, each with arguments and the spy for its query path. */
 const DATA_TOOLS = [
@@ -82,58 +75,41 @@ beforeEach(() => {
 });
 
 describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
-  it("does not reach its query path when queries could change data", async () => {
-    checkWriteAccess.mockResolvedValue(CAN_WRITE);
+  it("does not reach its query path until the user confirms", async () => {
     const client = await connect(false);
     const result = await client.callTool({ name: tool, arguments: args });
     expect(result.isError).toBe(true);
-    expect(payloadOf(result).writeAccess).toEqual(CAN_WRITE);
+    expect(payloadOf(result).error).toContain(
+      "It is your responsibility to give this server read-only credentials.",
+    );
     expect(queryPath).not.toHaveBeenCalled();
     await client.close();
   });
 
-  it("does not reach its query path when the check found nothing", async () => {
-    // Finding nothing is not proof of read-only, so the user must still accept.
-    checkWriteAccess.mockResolvedValue({ status: "unverified", reason: "r" });
-    const client = await connect(false);
-    const result = await client.callTool({ name: tool, arguments: args });
-    expect(result.isError).toBe(true);
-    expect(queryPath).not.toHaveBeenCalled();
-    await client.close();
-  });
-
-  it("reaches its query path without checking when the environment accepts", async () => {
+  it("reaches its query path when the environment confirms", async () => {
     const client = await connect(true);
     await client.callTool({ name: tool, arguments: args });
-    expect(checkWriteAccess).not.toHaveBeenCalled();
     expect(queryPath).toHaveBeenCalledTimes(1);
     await client.close();
   });
 });
 
 describe("test_destination", () => {
-  it("reports the write check and is not blocked by it", async () => {
-    testDestination.mockResolvedValue({
-      ok: true,
-      summary: "s",
-      checks: [],
-      writeAccess: CAN_WRITE,
-    });
+  it("is not blocked by the gate", async () => {
+    testDestination.mockResolvedValue({ ok: true, summary: "s", checks: [] });
     const client = await connect(false);
     const result = await client.callTool({
       name: "test_destination",
       arguments: {},
     });
     expect(result.isError).toBeFalsy();
-    expect(payloadOf(result).writeAccess).toEqual(CAN_WRITE);
-    expect(checkWriteAccess).not.toHaveBeenCalled();
+    expect(testDestination).toHaveBeenCalledTimes(1);
     await client.close();
   });
 });
 
 describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
   it("does not query for a call cancelled while it waited for consent", async () => {
-    checkWriteAccess.mockResolvedValue(CAN_WRITE);
     const server = new McpServer({ name: "s", version: "0" });
     registerTools(server, CONFIG, false);
     // A client that supports the prompt, and answers it only when told to.

@@ -6,7 +6,6 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  checkWriteAccess,
   testDestination,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
@@ -68,7 +67,6 @@ export function registerTools(
 ): void {
   // The three data tools call this before any query; see writeAccessGate.ts.
   const writeAccessGate = createWriteAccessGate({
-    check: () => checkWriteAccess(config),
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
   });
@@ -144,7 +142,6 @@ export function registerTools(
           ok: report.ok,
           summary: report.summary,
           checks: report.checks,
-          writeAccess: report.writeAccess,
           destinationType: config.destinationType,
           region: config.region,
           // Nothing was missing on this path; report it explicitly so the

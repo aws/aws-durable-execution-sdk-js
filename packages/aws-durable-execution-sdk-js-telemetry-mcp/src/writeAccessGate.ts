@@ -1,27 +1,26 @@
 /**
- * Stops the data tools until the user accepts the risk that queries could
- * change data.
+ * Stops the data tools until the user confirms, once per process, that giving
+ * this server read-only credentials is their responsibility.
  *
- * WHY THIS GATE ALWAYS ASKS.
+ * WHY THE SERVER ASKS INSTEAD OF CHECKING.
  *
  * 1. The agent writes the SQL this server runs, and the agent can be
  *    prompt-injected.
  * 2. `assertReadOnly` reads query text. On Aurora and Redshift a SELECT can
- *    still write through a function, so it cannot block every write.
- * 3. Core's `checkWriteAccess` reports either `can-write` (it found a way) or
- *    `unverified` (it found none, could not look, or failed). It never reports
- *    read-only, because no check can show that.
- * 4. So the user accepts once per process before the first query, and the
- *    prompt says which of the two results the check gave.
+ *    still change data through functions, sequences and extensions, so it
+ *    cannot block every write.
+ * 3. No check of the credentials can show they are read-only, so the server
+ *    does not try. The credentials' permissions are the only real protection,
+ *    and only the user controls them.
+ * 4. So the user confirms that responsibility before the first query.
  *
- * WHO CAN ACCEPT.
+ * WHO CAN CONFIRM.
  *
- * Only the user. Acceptance comes from an elicitation prompt that the client
+ * Only the user. Confirmation comes from an elicitation prompt that the client
  * shows to the user, or from the {@link ACCEPT_WRITE_ACCESS_ENV_VAR} variable
- * in the client's server config. There is deliberately no tool that accepts,
+ * in the client's server config. There is deliberately no tool that confirms,
  * because the agent could call it on the user's behalf.
  */
-import type { WriteAccessResult } from "@aws/durable-execution-sdk-js-telemetry-core";
 import { ACCEPT_WRITE_ACCESS_ENV_VAR } from "./envKeys";
 
 export { ACCEPT_WRITE_ACCESS_ENV_VAR };
@@ -37,9 +36,12 @@ export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
  */
 export type PromptAnswer = "accept" | "decline" | "cancel" | undefined;
 
+/** The one line the user is asked to confirm. */
+export const CONSENT_MESSAGE =
+  "Queries are written by the agent and run with this server's credentials. " +
+  "It is your responsibility to give this server read-only credentials.";
+
 export interface WriteAccessGateDeps {
-  /** Runs core's check against the configured destination. */
-  check: () => Promise<WriteAccessResult>;
   /** Whether {@link ACCEPT_WRITE_ACCESS_ENV_VAR} accepts the risk. */
   acceptedByEnv: boolean;
   /** Shows `message` to the user and returns the answer. */
@@ -66,8 +68,7 @@ export interface ElicitingServer {
 }
 
 /**
- * Asks the user, through MCP form elicitation, to accept credentials that can
- * change data. Returns `undefined` when the client cannot show a form.
+ * Asks the user, through MCP form elicitation, to confirm `message`. Returns `undefined` when the client cannot show a form.
  *
  * The form has one checkbox that defaults to unchecked. A user who submits the
  * form without checking it has not accepted, so that counts as a decline.
@@ -84,7 +85,7 @@ export async function askUserToAccept(
       properties: {
         acceptRisk: {
           type: "boolean",
-          title: "I accept that queries in this session can change data",
+          title: "I understand, and I want to continue",
           default: false,
         },
       },
@@ -99,7 +100,6 @@ export async function askUserToAccept(
 /** The tool-result payload returned instead of running the query. */
 export interface WriteAccessBlocked {
   error: string;
-  writeAccess: WriteAccessResult;
   howToAccept: string;
 }
 
@@ -107,22 +107,20 @@ export interface WriteAccessBlocked {
  * Returns a function that the data tools call before each query. It resolves
  * to `null` when the query may run, or to a {@link WriteAccessBlocked} payload.
  *
- * Once the query may run, it may run for the rest of the process, so the
- * check and the prompt happen at most once after acceptance. A blocked result
- * is not remembered: the next tool call checks and asks again.
+ * Once the user confirms, queries may run for the rest of the process. A
+ * blocked result is not remembered: the next tool call asks again.
  */
 export function createWriteAccessGate(
   deps: WriteAccessGateDeps,
 ): () => Promise<WriteAccessBlocked | null> {
   let allowed = deps.acceptedByEnv;
-  // Concurrent tool calls share one check and one prompt.
+  // Concurrent tool calls share one prompt.
   let pending: Promise<WriteAccessBlocked | null> | undefined;
 
   async function decide(): Promise<WriteAccessBlocked | null> {
-    const result = await deps.check();
     let answer: PromptAnswer;
     try {
-      answer = await deps.ask(promptMessage(result));
+      answer = await deps.ask(CONSENT_MESSAGE);
     } catch {
       // The client advertised prompts but the request failed. Treat it like a
       // client that cannot prompt, so the user still gets the env var route.
@@ -132,7 +130,7 @@ export function createWriteAccessGate(
       allowed = true;
       return null;
     }
-    return blocked(result, answer);
+    return blocked(answer);
   }
 
   return async () => {
@@ -144,39 +142,16 @@ export function createWriteAccessGate(
   };
 }
 
-function describe(result: WriteAccessResult): string {
-  if (result.status === "can-write") {
-    return `The credentials this server uses can change data. ${result.findings.join(" ")}`;
-  }
-  return (
-    "The server could not confirm that its credentials are read-only. " +
-    result.reason
-  );
-}
-
-function promptMessage(result: WriteAccessResult): string {
-  return (
-    `${describe(result)} ` +
-    "Queries are written by the agent, and the server's read-only check " +
-    "reads query text, so it cannot block every write. Accept to continue " +
-    "for this session."
-  );
-}
-
-function blocked(
-  result: WriteAccessResult,
-  answer: PromptAnswer,
-): WriteAccessBlocked {
+function blocked(answer: PromptAnswer): WriteAccessBlocked {
   const reason =
     answer === undefined
-      ? "The client cannot show an accept prompt."
-      : "The user did not accept the risk.";
+      ? "The client cannot show a confirmation prompt."
+      : "The user did not confirm.";
   return {
-    error: `Refused to run queries. ${describe(result)} ${reason}`,
-    writeAccess: result,
+    error: `Refused to run queries. ${CONSENT_MESSAGE} ${reason}`,
     howToAccept:
-      `Ask the user to switch to read-only credentials, or to set ` +
-      `${ACCEPT_WRITE_ACCESS_ENV_VAR}=true in this server's env block and ` +
-      `restart it. Only the user can accept; there is no tool for it.`,
+      `Ask the user to confirm, or to set ${ACCEPT_WRITE_ACCESS_ENV_VAR}=true ` +
+      `in this server's env block and restart it. Only the user can confirm; ` +
+      `there is no tool for it.`,
   };
 }

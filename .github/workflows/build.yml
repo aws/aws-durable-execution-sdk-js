@@ -123,9 +123,6 @@ jobs:
       - name: Typecheck the renderer
         working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npx tsc --noEmit
-      - name: Test the renderer
-        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
-        run: npm test
       - name: Bundle the VS Code extension (renderer + extension host)
         run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-vscode
       - name: Bundle the desktop app

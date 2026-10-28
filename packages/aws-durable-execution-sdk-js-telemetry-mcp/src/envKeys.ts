@@ -60,9 +60,10 @@ export const MCP_SETTING_KEYS: readonly string[] = SETTING_KEYS.filter(
 );
 
 /**
- * Set to `true` in the server's `env` block to accept that the configured
- * credentials can change data (see writeAccessGate.ts). It is not a setting
- * key: the extension and desktop app only warn, so they have no such setting.
+ * Set to `true` in the server's `env` block to confirm, permanently, that
+ * giving this server read-only credentials is the user's responsibility (see
+ * writeAccessGate.ts). It is not a setting key: the extension and desktop app
+ * only show a warning, so they have no such setting.
  */
 export const ACCEPT_WRITE_ACCESS_ENV_VAR =
   "DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS";
