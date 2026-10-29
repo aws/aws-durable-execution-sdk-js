@@ -12,12 +12,13 @@
  * credentials, so it must be reachable by the user's own browser and nothing
  * else:
  *   - Every execution page needs this process's session token: 32 random
- *     bytes, made at startup, held only in memory, and carried in the links
- *     it hands out (`/s/<token>/execution?arn=…`). The first request with the
- *     token gets an HttpOnly, SameSite=Strict cookie and, for a page load, a
- *     redirect to the same URL without the token, so the token stays out of
- *     browser history. Anything without the token or the cookie gets 403
- *     before any AWS call. This is the same scheme Jupyter and the VS Code
+ *     bytes, made at startup, held only in memory, and carried in the path of
+ *     every page URL (`/s/<token>/execution?arn=…`). The page's own links are
+ *     relative, and its refresh reloads the same URL, so they keep the token.
+ *     A request without it gets 403 before any AWS call. There is no cookie:
+ *     browsers send cookies to every port on a host, so a cookie would hand
+ *     the token to any other server on 127.0.0.1 that the browser loads. A
+ *     URL path goes only to this port. This is the same scheme Jupyter and the VS Code
  *     server use for loopback servers opened from a terminal link; no managed
  *     authentication service fits a server that runs on the developer's own
  *     machine.
@@ -92,8 +93,10 @@ export const MAX_CACHED_PAGES = 16;
  * shared page once. A request that would go over it gets 503.
  */
 export const MAX_UNSENT_BYTES = 64 * 1024 * 1024;
-/** A response that makes no write progress for this long is closed. */
+/** A page not delivered this long after it is written is closed. */
 export const RESPONSE_TIMEOUT_MS = 60_000;
+/** One page fetch, across every Lambda call and retry, is aborted after this. */
+export const FETCH_DEADLINE_MS = 60_000;
 /** A single Lambda request that takes longer than this fails. */
 export const LAMBDA_REQUEST_TIMEOUT_MS = 30_000;
 /** Most child executions one page can add to the linked set. */
@@ -121,7 +124,6 @@ export class ExecutionViewer {
   private allowedHosts = new Set<string>();
   /** This process's session token; see EXPOSURE above. */
   private readonly token = randomBytes(32).toString("base64url");
-  private cookieName = "";
   /** ARNs this process linked, oldest first (a Set keeps insertion order). */
   private readonly linked = new Set<string>();
   /**
@@ -184,7 +186,7 @@ export class ExecutionViewer {
         requestTimeoutMs: LAMBDA_REQUEST_TIMEOUT_MS,
       },
       arn,
-      { maxHistoryBytes: MAX_HISTORY_BYTES },
+      { maxHistoryBytes: MAX_HISTORY_BYTES, deadlineMs: FETCH_DEADLINE_MS },
     )
       .then((detail) => {
         // Child executions this page links to become servable too, up to a
@@ -195,19 +197,34 @@ export class ExecutionViewer {
         )) {
           this.allow(child);
         }
+        // Then the parent itself, so the page being viewed is always newer
+        // than the children it added and is never the one pushed out.
+        this.allow(arn);
         const page = Buffer.from(renderExecutionPage(detail), "utf-8");
-        this.cache.delete(arn);
-        this.cache.set(arn, { page, at: Date.now() });
-        while (this.cache.size > MAX_CACHED_PAGES) {
-          const oldest = this.cache.keys().next().value;
-          if (oldest === undefined) break;
-          this.cache.delete(oldest);
-        }
+        // A page whose history failed is not cached: the next reload should
+        // try again rather than show the same failure for 5 s.
+        if (!detail.historyError) this.remember(arn, page);
         return page;
       })
       .finally(() => this.fetching.delete(arn));
     this.fetching.set(arn, p);
     return p;
+  }
+
+  /** Caches `page` for PAGE_CACHE_MS, then drops it. */
+  private remember(arn: string, page: Buffer): void {
+    const entry = { page, at: Date.now() };
+    this.cache.delete(arn);
+    this.cache.set(arn, entry);
+    while (this.cache.size > MAX_CACHED_PAGES) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest === undefined) break;
+      this.cache.delete(oldest);
+    }
+    // Drop the entry when it expires, so an expired page is not held.
+    setTimeout(() => {
+      if (this.cache.get(arn) === entry) this.cache.delete(arn);
+    }, PAGE_CACHE_MS).unref();
   }
 
   /** Starts the listener once; resolves to its origin, or undefined on failure. */
@@ -250,9 +267,6 @@ export class ExecutionViewer {
   private listenOn(port: number): Promise<string> {
     return new Promise((resolve, reject) => {
       const server = createServer((req, res) => {
-        // A client that stops reading would otherwise hold its response, and
-        // the page it shares, for as long as the socket stays open.
-        res.setTimeout(RESPONSE_TIMEOUT_MS, () => res.destroy());
         this.handle(req, res).catch((err: unknown) => {
           this.log(`execution viewer request failed: ${errorMessage(err)}`);
           if (!res.headersSent) {
@@ -271,9 +285,6 @@ export class ExecutionViewer {
         const bound = (server.address() as AddressInfo).port;
         this.server = server;
         this.origin = `http://${VIEWER_HOST}:${bound}`;
-        // Cookies are per host, not per port, so each port's viewer needs its
-        // own cookie name or two sessions would overwrite each other's.
-        this.cookieName = `durable_viewer_${bound}`;
         this.allowedHosts = new Set([
           `${VIEWER_HOST}:${bound}`,
           `localhost:${bound}`,
@@ -332,21 +343,23 @@ export class ExecutionViewer {
       send(res, 200, VIEWER_CSS, "text/css; charset=utf-8");
       return;
     }
-    // "/s/<token>/execution" carries the token; "/execution" relies on the
-    // cookie set by an earlier request that carried it.
+    // Every page lives under "/s/<token>/". Anything else is either the
+    // stylesheet (handled above) or not a page this server gives out.
+    const prefix = "/s/";
     let path = url.pathname;
-    let tokenInPath: string | undefined;
-    if (path.startsWith("/s/")) {
-      const end = path.indexOf("/", 3);
-      tokenInPath = end < 0 ? path.slice(3) : path.slice(3, end);
-      path = end < 0 ? "/" : path.slice(end);
+    let candidate: string | undefined;
+    if (path.startsWith(prefix)) {
+      const end = path.indexOf("/", prefix.length);
+      if (end > prefix.length) {
+        candidate = path.slice(prefix.length, end);
+        path = path.slice(end);
+      }
     }
     if (path !== "/execution") {
       send(res, 404, renderErrorPage("Not found", "No such page."));
       return;
     }
-    const pathOk = tokenInPath !== undefined && this.isToken(tokenInPath);
-    if (!pathOk && !this.isToken(this.cookieFrom(req))) {
+    if (!this.isToken(candidate)) {
       send(
         res,
         403,
@@ -356,19 +369,6 @@ export class ExecutionViewer {
         ),
       );
       return;
-    }
-    if (pathOk) {
-      res.setHeader(
-        "Set-Cookie",
-        `${this.cookieName}=${this.token}; Path=/; HttpOnly; SameSite=Strict`,
-      );
-      // A browser page load: move to the URL without the token, so the token
-      // is not kept in history. Other clients are answered directly.
-      if (req.headers["sec-fetch-dest"] === "document") {
-        res.setHeader("Location", `/execution${url.search}`);
-        sendHead(res, 303);
-        return;
-      }
     }
 
     const arn = url.searchParams.get("arn") ?? "";
@@ -427,23 +427,7 @@ export class ExecutionViewer {
         }
       };
       send(res, 200, body);
-      // "finish" fires once the page is handed to the socket, not once the
-      // client has read it, so watch the socket's own write queue.
-      const socket = res.socket;
-      if (!socket || socket.destroyed || socket.writableLength === 0) {
-        release();
-      } else {
-        const onDrain = () => {
-          if (socket.writableLength === 0) done();
-        };
-        const done = () => {
-          socket.off("drain", onDrain);
-          socket.off("close", done);
-          release();
-        };
-        socket.on("drain", onDrain);
-        socket.once("close", done);
-      }
+      this.trackDelivery(res, release);
     } catch (err) {
       send(
         res,
@@ -461,15 +445,60 @@ export class ExecutionViewer {
     return a.length === b.length && timingSafeEqual(a, b);
   }
 
-  /** The value of this viewer's cookie in `req`, if it sent one. */
-  private cookieFrom(req: IncomingMessage): string | undefined {
-    for (const part of (req.headers.cookie ?? "").split(";")) {
-      const eq = part.indexOf("=");
-      if (eq > 0 && part.slice(0, eq).trim() === this.cookieName) {
-        return part.slice(eq + 1).trim();
+  /**
+   * Calls `release` once the page has left this process: the client has read
+   * it, or the connection closed. A response not delivered within
+   * RESPONSE_TIMEOUT_MS of being written is closed, so a client that stops
+   * reading cannot hold the page. The timer starts only now, after the page
+   * is written: a client waiting on a slow Lambda fetch is not cut off.
+   *
+   * A pipelined response has no socket until the one before it finishes, and
+   * Node holds its data until then; it is tracked from "finish" onward.
+   */
+  private trackDelivery(res: ServerResponse, release: () => void): void {
+    let done = false;
+    // The request's connection: known even for a pipelined response that has
+    // no socket yet. A queued response emits nothing when that connection
+    // dies, so it is watched directly.
+    const conn = res.req.socket;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(deadline);
+      conn.off("close", finish);
+      release();
+    };
+    const deadline = setTimeout(() => {
+      res.destroy();
+      finish();
+    }, RESPONSE_TIMEOUT_MS);
+    deadline.unref();
+    conn.once("close", finish);
+    // "finish" fires once the page is handed to the socket, not once the
+    // client has read it, so then watch the socket's own write queue.
+    const watchSocket = () => {
+      const socket = res.socket;
+      if (!socket || socket.destroyed || socket.writableLength === 0) {
+        finish();
+        return;
       }
-    }
-    return undefined;
+      const onDrain = () => {
+        if (socket.writableLength === 0) cleanup();
+      };
+      const cleanup = () => {
+        socket.off("drain", onDrain);
+        socket.off("close", cleanup);
+        finish();
+      };
+      socket.on("drain", onDrain);
+      socket.once("close", cleanup);
+    };
+    if (res.writableFinished) watchSocket();
+    else res.once("finish", watchSocket);
+    // Closed before it finished: the client went away.
+    res.once("close", () => {
+      if (!res.writableFinished) finish();
+    });
   }
 
   private busy(res: ServerResponse): void {

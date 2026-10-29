@@ -253,12 +253,13 @@ How the page is served:
 
 - The server starts a small web server the first time a result needs a link, not
   at startup. It listens on `127.0.0.1` only.
-- Every link carries a session token: a random value the server makes at
-  startup and keeps only in memory. A page request without it is refused before
-  any AWS call. When your browser opens a link, the server stores the token in
-  a cookie that scripts cannot read, then moves to the same address without the
-  token, so it is not kept in your browser history. Links stop working when the
-  server restarts, because the token is new each time.
+- Every link carries a session token in its address: a random value the server
+  makes at startup and keeps only in memory. A page request without it is
+  refused before any AWS call. The page's own links and its automatic reload
+  keep the token, so moving around the viewer works. The server sets no cookie:
+  browsers send a cookie to every port on `127.0.0.1`, so a cookie would hand
+  the token to any other local server the browser loads. Links stop working when
+  the server restarts, because the token is new each time.
 - It shows only executions it linked in a tool result during this session, plus
   up to 1,000 child executions per page that those pages link to. It answers any
   other execution ARN with "Link not recognized". So a caller that reaches the
@@ -272,28 +273,33 @@ How the page is served:
   requests that a browser marks as coming from another site, requests with
   another site's `Origin`, and anything other than a page and its stylesheet.
   These checks are a second layer behind the token: another web page does not
-  have the token, so it cannot make the server call AWS in any browser.
+  have the token, so in any browser it cannot make the server call AWS.
 - A link clicked inside a web page on another site is refused, because the
   browser marks it as cross-site. Links opened from a terminal, an agent's chat,
   or the address bar work.
 - It loads at most four executions at a time, and answers further requests with
   a "Busy" page that tries again after 5 seconds. A finished page is reused for
-  5 seconds, so reloads do not call Lambda again within that time. Each Lambda
-  request fails after 30 seconds, and a response the browser stops reading is
-  closed after 60 seconds.
+  5 seconds, then dropped, so a second tab or a quick reload does not call Lambda
+  again. Each Lambda call stops after 30 seconds without progress, and loading
+  one execution is abandoned after 60 seconds in total, including the SDK's
+  retries; the page then shows the error. A page the browser has not finished
+  reading 60 seconds after it was sent is closed.
 - It stops loading history after about 8 MB per execution; the limit is checked
   after each page of history, so one page can go over it. A page shows at most
   64 KB of each payload, 2 MB of payload text in total, 2,000 operations,
-  2,000 history events, and 256 characters of each name or ID. It holds at
-  most 64 MB of pages that browsers have not finished reading.
+  2,000 history events, 256 characters of each name, and 2,048 characters of
+  each ARN, callback ID, or error message. It holds at most 64 MB of pages that
+  browsers have not finished reading, plus at most 16 recent pages in the
+  5-second reuse cache.
 - It is read-only. It cannot stop or start executions. Use the VS Code extension
   or desktop app for that.
 - Every local user and process that can reach this machine's loopback can reach
   the port. That includes other users logged in to a shared or remote
   development host, and containers on the host network. Without the token they
-  can read nothing. The token is in every link the agent shows, so anyone who
-  can read your agent's chat, its transcripts, or your terminal can also read
-  the linked executions while the server runs. On a shared machine where
+  can read nothing. The token is in every link the agent shows and in your
+  browser history while the server runs, so anyone who can read your agent's
+  chat, its transcripts, your terminal, or your browser history can also read
+  the linked executions until the server restarts. On a shared machine where
   others can see those, turn the viewer off.
 
 The identity you use also needs `lambda:GetDurableExecution` and

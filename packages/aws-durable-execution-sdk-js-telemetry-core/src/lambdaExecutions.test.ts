@@ -522,3 +522,56 @@ describe("request timeout", () => {
     }
   }, 20_000);
 });
+
+describe("a response body that stalls after its headers", () => {
+  async function stallingEndpoint() {
+    const { createServer } = await import("node:http");
+    // Sends status and headers, part of the body, then goes silent.
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write('{"DurableExecutionArn":"');
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    const prev = process.env.AWS_ENDPOINT_URL_LAMBDA;
+    process.env.AWS_ENDPOINT_URL_LAMBDA = `http://127.0.0.1:${port}`;
+    return () => {
+      if (prev === undefined) delete process.env.AWS_ENDPOINT_URL_LAMBDA;
+      else process.env.AWS_ENDPOINT_URL_LAMBDA = prev;
+      server.closeAllConnections();
+      server.close();
+    };
+  }
+  const credentials = async () => ({ accessKeyId: "a", secretAccessKey: "b" });
+
+  it("is ended by the request timeout, which also sets a socket timeout", async () => {
+    const restore = await stallingEndpoint();
+    try {
+      const started = Date.now();
+      await expect(
+        getExecution(
+          { region: "us-west-2", credentials, requestTimeoutMs: 300 },
+          ARN,
+        ),
+      ).rejects.toThrow();
+      expect(Date.now() - started).toBeLessThan(15_000);
+    } finally {
+      restore();
+    }
+  }, 20_000);
+
+  it("is ended by the overall deadline, across retries", async () => {
+    const restore = await stallingEndpoint();
+    try {
+      const started = Date.now();
+      await expect(
+        getExecution({ region: "us-west-2", credentials }, ARN, {
+          deadlineMs: 500,
+        }),
+      ).rejects.toThrow();
+      expect(Date.now() - started).toBeLessThan(3_000);
+    } finally {
+      restore();
+    }
+  }, 10_000);
+});

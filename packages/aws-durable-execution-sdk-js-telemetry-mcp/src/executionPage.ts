@@ -52,6 +52,15 @@ export function executionPath(arn: string): string {
   return `/execution?arn=${arnParam}`;
 }
 
+/**
+ * A link from one execution page to another, relative to the current page.
+ * Pages are served at "/s/<token>/execution", so "execution?arn=…" resolves
+ * under the same token without this module knowing it.
+ */
+export function relativeExecutionHref(arn: string): string {
+  return executionPath(arn).slice(1);
+}
+
 /** Most characters shown for one payload; the rest is cut with a note. */
 export const MAX_PAYLOAD_CHARS = 64 * 1024;
 /** Most payload characters shown on one page; later payloads are omitted. */
@@ -140,10 +149,10 @@ function operationRows(
           ? `<div class="note">Wait ends ${escapeHtml(formatTime(op.scheduledEndTime))}</div>`
           : "",
         op.callbackId
-          ? `<div class="note">Callback <code>${escapeHtml(op.callbackId)}</code></div>`
+          ? `<div class="note">Callback <code>${escapeHtml(op.callbackId, MAX_LONG_FIELD_CHARS)}</code></div>`
           : "",
         op.invokedExecutionArn
-          ? `<div class="note">Invoked <a href="${escapeHtml(executionPath(op.invokedExecutionArn), Number.POSITIVE_INFINITY)}">${escapeHtml(op.invokedFunction || "execution")}</a></div>`
+          ? `<div class="note">Invoked <a href="${escapeHtml(relativeExecutionHref(op.invokedExecutionArn), Number.POSITIVE_INFINITY)}">${escapeHtml(op.invokedFunction || "execution")}</a></div>`
           : op.invokedFunction
             ? `<div class="note">Invoked ${escapeHtml(op.invokedFunction)}</div>`
             : "",

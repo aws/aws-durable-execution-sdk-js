@@ -28,7 +28,7 @@ import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 /** The subset of LambdaClient this module calls; tests pass a fake. */
 export interface LambdaSender {
   // biome-ignore lint/suspicious/noExplicitAny: commands are heterogeneous; each call site narrows the output.
-  send(command: any): Promise<any>;
+  send(command: any, options?: { abortSignal?: AbortSignal }): Promise<any>;
 }
 
 export interface LambdaContext {
@@ -267,8 +267,11 @@ function clientFor(ctx: LambdaContext, region = ctx.region): LambdaSender {
         ...(ctx.requestTimeoutMs !== undefined
           ? {
               // Without throwOnRequestTimeout the SDK only logs a warning.
+              // requestTimeout ends when the response headers arrive, so a
+              // body that stalls after them needs socketTimeout as well.
               requestHandler: {
                 requestTimeout: ctx.requestTimeoutMs,
+                socketTimeout: ctx.requestTimeoutMs,
                 throwOnRequestTimeout: true,
               },
             }
@@ -425,10 +428,16 @@ export async function getExecution(
     maxHistoryEvents?: number;
     /**
      * Stop paging once the history held, measured as the length of its
-     * payloads plus a fixed overhead per event, reaches this many bytes. Payloads can be large, so an event count alone does not
+     * payloads, names and IDs plus a fixed overhead per event, reaches this
+     * many bytes. It is checked after each page, so one page can go over it. Payloads can be large, so an event count alone does not
      * bound memory. Unset means no byte limit.
      */
     maxHistoryBytes?: number;
+    /**
+     * Abort the whole fetch, across every call and every SDK retry, after this
+     * many milliseconds. Unset means no overall deadline.
+     */
+    deadlineMs?: number;
   } = {},
 ): Promise<ExecutionDetail> {
   if (!isDurableExecutionArn(arn)) {
@@ -436,8 +445,13 @@ export async function getExecution(
   }
   const maxEvents = opts.maxHistoryEvents ?? MAX_HISTORY_EVENTS;
   const lambda = clientFor(ctx, regionFromExecutionArn(arn));
+  const sendOptions =
+    opts.deadlineMs !== undefined
+      ? { abortSignal: AbortSignal.timeout(opts.deadlineMs) }
+      : undefined;
   const e = await lambda.send(
     new GetDurableExecutionCommand({ DurableExecutionArn: arn }),
+    sendOptions,
   );
 
   const raw: HistoryApiEvent[] = [];
@@ -454,6 +468,7 @@ export async function getExecution(
           MaxItems: Math.min(HISTORY_PAGE_SIZE, maxEvents - raw.length),
           Marker: marker,
         }),
+        sendOptions,
       );
       const events: HistoryApiEvent[] = page.Events ?? [];
       raw.push(...events);

@@ -36,6 +36,7 @@ import {
   ExecutionViewer,
   executionArnColumnIndex,
   MAX_CHILDREN_PER_PAGE,
+  RESPONSE_TIMEOUT_MS,
   executionNameColumnIndex,
   executionNameFromRecord,
   markdownLink,
@@ -205,7 +206,8 @@ describe("execution page", () => {
       }),
     );
     expect(html).toContain(
-      `href="/execution?arn=${escapeHtml(encodeURIComponent(CHILD_ARN))}"`,
+      // Relative, so it resolves under the current page's /s/<token>/.
+      `href="execution?arn=${escapeHtml(encodeURIComponent(CHILD_ARN))}"`,
     );
   });
 
@@ -624,24 +626,13 @@ describe("security fixes", () => {
     expect(
       (await get(origin, page, { headers: { Origin: origin } })).status,
     ).toBe(200);
-    // A page load with the token is moved to the URL without it, with the
-    // cookie set; the page then loads with the cookie alone.
-    const first = await get(origin, page, {
-      headers: { "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none" },
-    });
-    expect(first.status).toBe(303);
-    expect(first.headers.location).toBe(page);
-    const cookie = String(first.headers["set-cookie"]).split(";")[0];
-    const second = await get(origin, page, {
-      noToken: true,
-      headers: {
-        Cookie: cookie,
-        Origin: origin,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Site": "same-origin",
-      },
-    });
-    expect(second.status).toBe(200);
+    expect(
+      (
+        await get(origin, page, {
+          headers: { "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none" },
+        })
+      ).status,
+    ).toBe(200);
     expect(
       (
         await get(origin, "/viewer.css", {
@@ -900,7 +891,6 @@ describe("round-2 fixes", () => {
       id: `o${i}`,
       name: quote,
       kind: quote,
-      callbackId: quote,
       status: "SUCCEEDED",
     }));
     const html = renderExecutionPage(detail({ name: quote, operations: ops }));
@@ -910,9 +900,9 @@ describe("round-2 fixes", () => {
     expect((html.match(/<tr>/g) ?? []).length).toBeLessThanOrEqual(
       MAX_OPERATION_ROWS + 3,
     );
-    // Each '"' escapes to 6 bytes; three capped fields per row.
+    // Each '"' escapes to 6 bytes; two capped fields per row.
     expect(html.length).toBeLessThan(
-      MAX_OPERATION_ROWS * 3 * MAX_FIELD_CHARS * 6 * 1.2,
+      MAX_OPERATION_ROWS * 2 * MAX_FIELD_CHARS * 6 * 1.2,
     );
   });
 
@@ -960,48 +950,76 @@ describe("session token", () => {
     for (const path of [
       `/s/${"A".repeat(43)}${page}`,
       `${prefix.slice(0, -1)}${page}`,
-      `/s/${page}`,
     ]) {
       expect((await get(origin, path, { noToken: true })).status).toBe(403);
     }
+    // No token segment at all is not a page this server gives out.
+    expect((await get(origin, `/s/${page}`, { noToken: true })).status).toBe(
+      404,
+    );
     expect(made.regions).toEqual([]);
   });
 
-  it("refuses a cookie from another viewer", async () => {
-    const a = makeViewer().viewer;
-    viewer = makeViewer().viewer;
-    await a.linkFor(ARN);
-    await viewer.linkFor(ARN);
-    const originA = (await a.start()) ?? "";
-    const originB = (await viewer.start()) ?? "";
-    const first = await get(originA, page, {
-      headers: { "Sec-Fetch-Dest": "document" },
+  it("sets no cookie, and keeps the token in the page's own links", async () => {
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) =>
+          cmd.constructor.name === "GetDurableExecutionCommand"
+            ? {
+                DurableExecutionArn: cmd.input.DurableExecutionArn,
+                Status: "RUNNING",
+              }
+            : {
+                Events: [
+                  {
+                    EventType: "ChainedInvokeStarted",
+                    Id: "i",
+                    ChainedInvokeStartedDetails: {
+                      FunctionName: "child",
+                      DurableExecutionArn: CHILD_ARN,
+                    },
+                  },
+                ],
+              },
+      }),
     });
-    const cookieA = String(first.headers["set-cookie"]).split(";")[0];
-    // Same name on B's port, A's value: B must not accept it.
-    const portB = new URL(originB).port;
-    const forged = cookieA.replace(
-      /^durable_viewer_\d+=/,
-      `durable_viewer_${portB}=`,
-    );
+    const link = (await viewer.linkFor(ARN)) ?? "";
+    const origin = (await viewer.start()) ?? "";
+    const res = await get(origin, page, {
+      headers: { "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none" },
+    });
+    // Served directly: no redirect, and no cookie for other 127.0.0.1 servers.
+    expect(res.status).toBe(200);
+    expect(res.headers["set-cookie"]).toBeUndefined();
+    expect(res.headers.location).toBeUndefined();
+    // The meta refresh reloads the same URL; the child link is relative.
+    expect(res.body).toMatch(/<meta http-equiv="refresh" content="\d+">/);
+    const href = res.body.match(/href="(execution\?arn=[^"]+)"/)?.[1] ?? "";
+    const childUrl = new URL(href, link);
+    expect(childUrl.pathname).toBe(new URL(link).pathname);
     expect(
-      (await get(originB, page, { noToken: true, headers: { Cookie: forged } }))
-        .status,
-    ).toBe(403);
-    await a.close();
+      (
+        await get(origin, childUrl.pathname + childUrl.search, {
+          noToken: true,
+        })
+      ).status,
+    ).toBe(200);
   });
 
-  it("sets an HttpOnly, SameSite=Strict cookie named for its port", async () => {
-    viewer = makeViewer().viewer;
-    await viewer.linkFor(ARN);
+  it("refuses a request whose only credential is a cookie", async () => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    const link = (await viewer.linkFor(ARN)) ?? "";
     const origin = (await viewer.start()) ?? "";
-    const res = await get(origin, page);
-    const set = String(res.headers["set-cookie"]);
-    expect(set).toMatch(
-      new RegExp(
-        `^durable_viewer_${new URL(origin).port}=[A-Za-z0-9_-]{43}; Path=/; HttpOnly; SameSite=Strict$`,
-      ),
-    );
+    const token = new URL(link).pathname.split("/")[2];
+    const port = new URL(origin).port;
+    const res = await get(origin, page, {
+      noToken: true,
+      headers: { Cookie: `durable_viewer_${port}=${token}` },
+    });
+    expect(res.status).toBe(403);
+    expect(made.regions).toEqual([]);
   });
 
   it("is new for every viewer", async () => {
@@ -1011,5 +1029,120 @@ describe("session token", () => {
     const lb = (await viewer.linkFor(ARN)) ?? "";
     expect(new URL(la).pathname).not.toBe(new URL(lb).pathname);
     await a.close();
+  });
+});
+
+describe("round-3 fixes", () => {
+  let viewer: ExecutionViewer;
+  afterEach(async () => {
+    await viewer?.close();
+  });
+
+  it("shows a full real-length callback ID", () => {
+    const id = `${"c".repeat(300)}-${"d".repeat(63)}`;
+    const html = renderExecutionPage(
+      detail({ operations: [{ id: "o", status: "STARTED", callbackId: id }] }),
+    );
+    expect(html).toContain(id);
+  });
+
+  it("keeps viewed parents linked when they add many children", async () => {
+    const parents = Array.from(
+      { length: 10 },
+      (_, i) =>
+        `arn:aws:lambda:us-east-1:123456789012:function:p:1/durable-execution/p${i}/1`,
+    );
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) => {
+          const arn = cmd.input.DurableExecutionArn as string;
+          if (cmd.constructor.name === "GetDurableExecutionCommand") {
+            return { DurableExecutionArn: arn, Status: "SUCCEEDED" };
+          }
+          const p = arn.split("/")[2];
+          return {
+            Events: Array.from({ length: 1000 }, (_, i) => ({
+              EventType: "ChainedInvokeStarted",
+              Id: `i${i}`,
+              ChainedInvokeStartedDetails: {
+                FunctionName: "c",
+                DurableExecutionArn: `arn:aws:lambda:us-east-1:123456789012:function:c:1/durable-execution/${p}-c${i}/1`,
+              },
+            })),
+          };
+        },
+      }),
+    });
+    // Ten open pages, linked first and then each loaded: 10 parents plus
+    // 10,000 children fill the 10,000-entry set exactly.
+    for (const p of parents) await viewer.linkFor(p);
+    const origin = (await viewer.start()) ?? "";
+    const path = (p: string) => `/execution?arn=${encodeURIComponent(p)}`;
+    for (const p of parents)
+      expect((await get(origin, path(p))).status).toBe(200);
+    // Each parent is re-linked after its own children, so every page being
+    // viewed still reloads. Before the fix, all ten reloads got 404.
+    for (const p of parents) {
+      expect((await get(origin, path(p), { method: "HEAD" })).status).toBe(200);
+    }
+  });
+
+  it("does not cache a page whose history failed", async () => {
+    let historyCalls = 0;
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string } }) => {
+          if (cmd.constructor.name === "GetDurableExecutionCommand") {
+            return { DurableExecutionArn: ARN, Status: "RUNNING" };
+          }
+          historyCalls++;
+          throw new Error("ThrottlingException");
+        },
+      }),
+    });
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const path = `/execution?arn=${encodeURIComponent(ARN)}`;
+    expect((await get(origin, path)).body).toContain("History unavailable");
+    await get(origin, path);
+    expect(historyCalls).toBe(2);
+  });
+
+  it("does not cut off a client waiting on a slow fetch", async () => {
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => {
+      release = r;
+    });
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string } }) => {
+          await slow;
+          return cmd.constructor.name === "GetDurableExecutionCommand"
+            ? { DurableExecutionArn: ARN, Status: "SUCCEEDED" }
+            : { Events: [] };
+        },
+      }),
+    });
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    // The delivery timer must not be armed while the fetch runs. With it
+    // shortened to 50 ms for this test, a 300 ms fetch would otherwise reset
+    // the connection.
+    const realSetTimeout = global.setTimeout;
+    const spy = jest
+      .spyOn(global, "setTimeout")
+      .mockImplementation(((fn: () => void, ms?: number) =>
+        realSetTimeout(fn, ms === RESPONSE_TIMEOUT_MS ? 50 : ms)) as never);
+    try {
+      const pending = get(origin, `/execution?arn=${encodeURIComponent(ARN)}`);
+      await new Promise((r) => realSetTimeout(r, 300));
+      release();
+      expect((await pending).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
