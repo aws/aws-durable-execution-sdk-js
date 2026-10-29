@@ -30,6 +30,7 @@ import {
   MAX_PAGE_PAYLOAD_CHARS,
   MAX_PAYLOAD_CHARS,
   renderExecutionPage,
+  VIEWER_CSS,
 } from "./executionPage";
 import { isDurableExecutionArn } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
@@ -714,16 +715,25 @@ describe("security fixes", () => {
     for (const a of arns) await viewer.linkFor(a);
     const origin = (await viewer.start()) ?? "";
     const path = (a: string) => `/execution?arn=${encodeURIComponent(a)}`;
-    // Three requests for one execution share a fetch; five more distinct ones
-    // fill the cap of four and then get 503.
-    const pending = [
-      get(origin, path(arns[0])),
-      get(origin, path(arns[0])),
-      get(origin, path(arns[0])),
-      ...arns.slice(1).map((a) => get(origin, path(a))),
-    ];
-    await new Promise((r) => setTimeout(r, 100));
+    // Waits until `n` fetches are blocked on the fake Lambda, so the test
+    // does not depend on timing or on the order requests arrive.
+    const inFlightReaches = async (n: number) => {
+      while (inFlight < n) await new Promise((r) => setTimeout(r, 5));
+    };
+    // One fetch for arns[0], then three more distinct ones fill the cap of 4.
+    const pending = [get(origin, path(arns[0]))];
+    await inFlightReaches(1);
+    pending.push(...arns.slice(1, 4).map((a) => get(origin, path(a))));
+    await inFlightReaches(4);
+    // Two more requests for arns[0] share its fetch; two new executions get
+    // 503 at once, while the cap is full.
+    pending.push(get(origin, path(arns[0])), get(origin, path(arns[0])));
+    const refused = await Promise.all(
+      arns.slice(4).map((a) => get(origin, path(a))),
+    );
+    expect(refused.map((r) => r.status)).toEqual([503, 503]);
     release();
+    pending.push(...refused.map((r) => Promise.resolve(r)));
     const statuses = (await Promise.all(pending)).map((r) => r.status);
     expect(statuses.filter((s) => s === 200)).toHaveLength(6);
     expect(statuses.filter((s) => s === 503)).toHaveLength(2);
@@ -1144,5 +1154,60 @@ describe("round-3 fixes", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("page text for retries and partial history", () => {
+  it("shows a pending retry with its next attempt time", () => {
+    const html = renderExecutionPage(
+      detail({
+        status: "RUNNING",
+        operations: [
+          {
+            id: "s",
+            name: "charge",
+            status: "PENDING",
+            attempt: 1,
+            nextAttemptTime: "2025-01-01T00:00:31.000Z",
+            error: '{"errorMessage":"try 1"}',
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("status-pending");
+    expect(html).toContain("Next attempt 2025-01-01 00:00:31 UTC");
+  });
+
+  it("says history is incomplete when some was read before a failure", () => {
+    const html = renderExecutionPage(
+      detail({
+        history: [{ eventId: 1, type: "StepStarted" }],
+        operations: [{ id: "s", status: "RUNNING" }],
+        historyError: "ThrottlingException",
+      }),
+    );
+    expect(html).toContain(
+      "History is incomplete: reading it failed after 1 events",
+    );
+    expect(html).not.toContain("operations are not shown");
+  });
+
+  it("says history is unavailable when none was read", () => {
+    const html = renderExecutionPage(detail({ historyError: "AccessDenied" }));
+    expect(html).toContain("History unavailable, so operations are not shown");
+  });
+
+  it("does not reload forever when the status is empty", () => {
+    expect(renderExecutionPage(detail({ status: "" }))).not.toContain(
+      'http-equiv="refresh"',
+    );
+  });
+
+  it("styles an incomplete operation", () => {
+    const html = renderExecutionPage(
+      detail({ operations: [{ id: "s", status: "INCOMPLETE" }] }),
+    );
+    expect(html).toContain('class="status status-incomplete"');
+    expect(VIEWER_CSS).toContain(".status-incomplete");
   });
 });

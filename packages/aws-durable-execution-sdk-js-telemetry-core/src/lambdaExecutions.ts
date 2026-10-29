@@ -105,8 +105,14 @@ export interface OperationNode {
   startTime?: string;
   endTime?: string;
   durationMs?: number;
-  /** Highest attempt number seen (steps with retries). */
+  /** How many times the operation started: 2 after one retry. */
   attempt?: number;
+  /**
+   * When status is PENDING: when the next attempt is due. A failed attempt
+   * that will be retried is PENDING, not FAILED; its `error` is the error of
+   * that last attempt.
+   */
+  nextAttemptTime?: string;
   /** Serialized result payload, as checkpointed. */
   result?: string;
   /** True when the service truncated the result or error payload. */
@@ -175,7 +181,8 @@ const HISTORY_PAGE_SIZE = 1000;
 const MAX_EXECUTION_ARN_LENGTH = 2048;
 const EXECUTION_MARKER = "/durable-execution/";
 
-function isRegionLike(s: string): boolean {
+/** Whether `s` has the shape of an AWS region name, such as `eu-west-1`. */
+export function isRegionLike(s: string): boolean {
   if (s.length === 0 || s.length > 32) return false;
   for (const c of s) {
     if (!((c >= "a" && c <= "z") || (c >= "0" && c <= "9") || c === "-")) {
@@ -503,7 +510,9 @@ export async function getExecution(
     result: e.Result ?? undefined,
     error: e.Error ? formatError(e.Error) : undefined,
     history: raw.map(toHistoryEvent),
-    operations: buildOperations(raw),
+    operations: buildOperations(raw, {
+      executionEnded: TERMINAL_EXECUTION_STATUSES.includes(e.Status ?? ""),
+    }),
     invocations: buildInvocations(raw),
     ...(historyTruncated ? { historyTruncated } : {}),
     ...(historyError ? { historyError } : {}),
@@ -589,7 +598,7 @@ function kindOf(type: string, subType?: string): string {
 interface DetailFields {
   Result?: { Payload?: string; Truncated?: boolean };
   Error?: { Payload?: ErrorObject; Truncated?: boolean };
-  RetryDetails?: { CurrentAttempt?: number };
+  RetryDetails?: { CurrentAttempt?: number; NextAttemptDelaySeconds?: number };
   ScheduledEndTimestamp?: Date;
   CallbackId?: string;
   FunctionName?: string;
@@ -611,8 +620,19 @@ function detailsOf(ev: HistoryApiEvent): DetailFields | undefined {
  * nests operations (map → iterations → steps, parallel → branches → steps).
  * Execution- and invocation-level events are not operations and are skipped.
  */
-export function buildOperations(events: HistoryApiEvent[]): OperationNode[] {
+export function buildOperations(
+  events: HistoryApiEvent[],
+  opts: {
+    /**
+     * Whether the execution has ended. Operations still open then are marked
+     * INCOMPLETE rather than shown as running.
+     */
+    executionEnded?: boolean;
+  } = {},
+): OperationNode[] {
   const byId = new Map<string, OperationNode>();
+  const starts = new Map<string, number>();
+  const reported = new Map<string, number>();
   for (const ev of events) {
     const type = ev.EventType ?? "";
     const id = ev.Id;
@@ -629,16 +649,22 @@ export function buildOperations(events: HistoryApiEvent[]): OperationNode[] {
     if (!node.kind) node.kind = kindOf(type, ev.SubType);
     const ts = ev.EventTimestamp?.toISOString();
     const details = detailsOf(ev);
-    const attempt = details?.RetryDetails?.CurrentAttempt;
-    if (attempt !== undefined) {
-      node.attempt = Math.max(node.attempt ?? 0, attempt);
+    const current = details?.RetryDetails?.CurrentAttempt;
+    if (current !== undefined) {
+      reported.set(id, Math.max(reported.get(id) ?? 0, current));
     }
 
     if (type.endsWith("Started")) {
-      // A Started after a terminal event is a retry: the operation is live
-      // again. The first start time is kept so duration covers every attempt.
+      // Each Started event is one attempt. A Started after a failure is a
+      // retry: the operation is live again, and the earlier attempt's error
+      // no longer describes it. The first start time is kept so the duration
+      // covers every attempt.
+      starts.set(id, (starts.get(id) ?? 0) + 1);
       node.status = "RUNNING";
       node.endTime = undefined;
+      node.nextAttemptTime = undefined;
+      node.error = undefined;
+      node.payloadTruncated = undefined;
       if (!node.startTime) node.startTime = ts;
       if (details?.ScheduledEndTimestamp) {
         node.scheduledEndTime = details.ScheduledEndTimestamp.toISOString();
@@ -653,19 +679,47 @@ export function buildOperations(events: HistoryApiEvent[]): OperationNode[] {
 
     const status = terminalStatus(type);
     if (!status) continue;
-    node.status = status;
-    node.endTime = ts;
-    if (!node.startTime) node.startTime = ts;
     const result = details?.Result;
     if (result?.Payload !== undefined) node.result = result.Payload;
     const error = details?.Error;
     if (error?.Payload) node.error = formatError(error.Payload);
     if (result?.Truncated || error?.Truncated) node.payloadTruncated = true;
+    if (!node.startTime) node.startTime = ts;
+    const delay = details?.RetryDetails?.NextAttemptDelaySeconds;
+    if (status === "FAILED" && delay !== undefined && ts) {
+      // A failure with a scheduled retry: the operation is waiting, not done.
+      node.status = "PENDING";
+      node.endTime = undefined;
+      node.nextAttemptTime = new Date(
+        new Date(ts).getTime() + delay * 1000,
+      ).toISOString();
+      continue;
+    }
+    node.status = status;
+    node.endTime = ts;
+    node.nextAttemptTime = undefined;
+  }
+
+  for (const [id, node] of byId) {
+    // Count Started events: each is one attempt. The service's CurrentAttempt
+    // runs one behind that count in recorded histories, so it is only used
+    // when it is higher, e.g. when earlier events fell outside the history read.
+    const n = Math.max(starts.get(id) ?? 0, reported.get(id) ?? 0);
+    if (n > 0) node.attempt = n;
+    if (
+      opts.executionEnded &&
+      (node.status === "RUNNING" || node.status === "PENDING")
+    ) {
+      node.status = "INCOMPLETE";
+      node.nextAttemptTime = undefined;
+    }
   }
 
   const roots: OperationNode[] = [];
   for (const node of byId.values()) {
-    if (node.startTime && node.endTime) {
+    // Without a Started event the start time is the end event's own time, so
+    // there is no real duration to report.
+    if (starts.has(node.id) && node.startTime && node.endTime) {
       node.durationMs =
         new Date(node.endTime).getTime() - new Date(node.startTime).getTime();
     }

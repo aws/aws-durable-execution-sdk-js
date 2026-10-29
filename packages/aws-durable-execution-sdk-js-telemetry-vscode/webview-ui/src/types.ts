@@ -55,14 +55,21 @@ export type OutboundMessage =
   // Execution viewer — keep in sync with InboundMessage in core's
   // explorerSession.ts.
   | { type: "listFunctions" }
-  | { type: "getFunctionInfo"; functionName: string }
-  | { type: "listExecutions"; functionName: string; marker?: string }
+  | { type: "getFunctionInfo"; functionName: string; region?: string }
+  | {
+      type: "listExecutions";
+      functionName: string;
+      marker?: string;
+      region?: string;
+    }
   | { type: "getExecution"; arn: string }
   | {
       type: "startExecution";
       functionName: string;
       payload: string;
       executionName?: string;
+      qualifier?: string;
+      region?: string;
     }
   | { type: "stopExecution"; arn: string };
 
@@ -123,6 +130,8 @@ export interface OperationNode {
   payloadTruncated?: boolean;
   error?: string;
   scheduledEndTime?: string;
+  /** PENDING operations: when the next attempt is due. */
+  nextAttemptTime?: string;
   callbackId?: string;
   invokedFunction?: string;
   invokedExecutionArn?: string;

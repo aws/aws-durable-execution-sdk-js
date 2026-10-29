@@ -163,10 +163,12 @@ describe("buildOperations", () => {
     expect(op).toMatchObject({
       status: "RUNNING",
       startTime: t(0).toISOString(),
-      attempt: 1,
+      attempt: 2,
     });
     expect(op.endTime).toBeUndefined();
     expect(op.durationMs).toBeUndefined();
+    // The first attempt's error no longer describes the running attempt.
+    expect(op.error).toBeUndefined();
   });
 
   it("records wait, callback, and chained-invoke details", () => {
@@ -574,4 +576,107 @@ describe("a response body that stalls after its headers", () => {
       restore();
     }
   }, 10_000);
+});
+
+describe("buildOperations: retries and finished executions (#1118)", () => {
+  const failed = (s: number, delay?: number, attempt = 1): HistoryApiEvent => ({
+    EventType: "StepFailed",
+    Id: "s",
+    EventTimestamp: t(s),
+    StepFailedDetails: {
+      Error: { Payload: { ErrorType: "Boom", ErrorMessage: `try ${attempt}` } },
+      RetryDetails: {
+        CurrentAttempt: attempt,
+        ...(delay !== undefined ? { NextAttemptDelaySeconds: delay } : {}),
+      },
+    },
+  });
+  const started = (s: number): HistoryApiEvent => ({
+    EventType: "StepStarted",
+    Id: "s",
+    EventTimestamp: t(s),
+  });
+
+  it("shows a step waiting for its retry as PENDING with the next attempt time", () => {
+    const [op] = buildOperations([started(0), failed(1, 30)]);
+    expect(op).toMatchObject({
+      status: "PENDING",
+      attempt: 1,
+      nextAttemptTime: t(31).toISOString(),
+    });
+    expect(op.endTime).toBeUndefined();
+    expect(op.durationMs).toBeUndefined();
+    // The error of the attempt that is being retried stays visible.
+    expect(JSON.parse(op.error ?? "")).toMatchObject({ errorMessage: "try 1" });
+  });
+
+  it("drops an earlier attempt's error once the step succeeds", () => {
+    const [op] = buildOperations([
+      started(0),
+      failed(1, 30),
+      started(31),
+      {
+        EventType: "StepSucceeded",
+        Id: "s",
+        EventTimestamp: t(32),
+        StepSucceededDetails: {
+          Result: { Payload: '"ok"' },
+          RetryDetails: undefined,
+        },
+      },
+    ]);
+    expect(op).toMatchObject({
+      status: "SUCCEEDED",
+      attempt: 2,
+      result: '"ok"',
+      durationMs: 32_000,
+    });
+    expect(op.error).toBeUndefined();
+    expect(op.nextAttemptTime).toBeUndefined();
+  });
+
+  it("shows the final failure, with no retry left, as FAILED", () => {
+    const [op] = buildOperations([
+      started(0),
+      failed(1, 5),
+      started(6),
+      failed(7, undefined, 2),
+    ]);
+    expect(op).toMatchObject({
+      status: "FAILED",
+      attempt: 2,
+      endTime: t(7).toISOString(),
+    });
+    expect(JSON.parse(op.error ?? "")).toMatchObject({ errorMessage: "try 2" });
+  });
+
+  it("marks operations still open in a finished execution as INCOMPLETE", () => {
+    const [running, waiting] = buildOperations(
+      [
+        { EventType: "StepStarted", Id: "a", EventTimestamp: t(0) },
+        { EventType: "StepStarted", Id: "b", EventTimestamp: t(1) },
+        {
+          EventType: "StepFailed",
+          Id: "b",
+          EventTimestamp: t(2),
+          StepFailedDetails: {
+            Error: { Payload: { ErrorMessage: "x" } },
+            RetryDetails: { CurrentAttempt: 1, NextAttemptDelaySeconds: 10 },
+          },
+        },
+      ],
+      { executionEnded: true },
+    );
+    expect(running.status).toBe("INCOMPLETE");
+    expect(waiting.status).toBe("INCOMPLETE");
+    expect(waiting.nextAttemptTime).toBeUndefined();
+  });
+
+  it("reports no duration for an operation with no Started event", () => {
+    const [op] = buildOperations([
+      { EventType: "WaitSucceeded", Id: "w", EventTimestamp: t(5) },
+    ]);
+    expect(op.status).toBe("SUCCEEDED");
+    expect(op.durationMs).toBeUndefined();
+  });
 });

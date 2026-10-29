@@ -244,7 +244,10 @@ history. The page reads them from the Lambda API (`GetDurableExecution` and
 `GetDurableExecutionHistory`) when you open it, not from the telemetry
 destination. So it works for executions whose records were truncated or sampled
 out. While an execution is running, the page reloads every 5 seconds. Links to
-child executions started by a chained invoke open those executions.
+child executions started by a chained invoke open those executions. A step
+waiting to retry shows as PENDING, with the time of its next attempt and the
+error of the attempt that failed. An operation still open when the execution
+ended shows as INCOMPLETE.
 
 Click a link to open the page. It opens in your default browser, or in whatever
 browser your terminal or client opens links with.

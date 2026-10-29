@@ -79,7 +79,8 @@ export function ExecutionDetailPage({
     if (!stopping) setConfirmStop(false);
   }, [stopping]);
 
-  const live = detail && !isTerminal(detail.status);
+  // An empty status is not "running"; polling also skips it.
+  const live = detail && !!detail.status && !isTerminal(detail.status);
   const title = detail?.name || arn.split("/").pop() || "Execution";
 
   return (
@@ -154,16 +155,26 @@ export function ExecutionDetailPage({
           </Container>
 
           {detail.historyError && (
-            <Alert type="warning" header="History unavailable">
-              The summary above loaded, but the history call failed, so
-              operations are not shown: {detail.historyError}
+            <Alert
+              type="warning"
+              header={
+                detail.history.length > 0
+                  ? "History incomplete"
+                  : "History unavailable"
+              }
+            >
+              {detail.history.length > 0
+                ? `Reading the history failed after ${detail.history.length.toLocaleString()} events, so later operations are missing and some shown here may look unfinished: `
+                : "The summary above loaded, but the history call failed, so operations are not shown: "}
+              {detail.historyError}
             </Alert>
           )}
           {detail.historyTruncated && (
             <Alert type="info">
               This execution has more history than the viewer loads (
               {detail.history.length.toLocaleString()} events shown). Operations
-              started after that point are missing.
+              started after that point are missing, and some shown here may look
+              unfinished because their later events were not loaded.
             </Alert>
           )}
 
@@ -364,6 +375,12 @@ function OperationModal({
             />
             <Field label="Operation ID" value={<Copyable value={op.id} />} />
             {op.parentId && <Field label="Parent ID" value={op.parentId} />}
+            {op.nextAttemptTime && (
+              <Field
+                label="Next attempt"
+                value={<Timestamp iso={op.nextAttemptTime} />}
+              />
+            )}
             {op.scheduledEndTime && (
               <Field
                 label="Wait ends"

@@ -159,6 +159,22 @@ describe("ExecutionDetailPage", () => {
     assert.doesNotMatch(html, /Live/);
   });
 
+  it("says history is incomplete when some was read before a failure", () => {
+    const html = render({
+      ...detail,
+      history: [{ eventId: 1, type: "StepStarted" }],
+      historyTruncated: false,
+      historyError: "ThrottlingException",
+    });
+    assert.match(html, /History incomplete/);
+    assert.match(html, /failed after 1 events/);
+    assert.doesNotMatch(html, /operations are not shown/);
+  });
+
+  it("does not show an execution with no status as live", () => {
+    assert.doesNotMatch(render({ ...detail, status: "" }), /Live/);
+  });
+
   it("shows a load error", () => {
     const html = render(null, "AccessDeniedException");
     assert.match(html, /Couldn(&#x27;|')t load execution/);

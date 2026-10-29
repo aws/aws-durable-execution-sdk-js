@@ -145,6 +145,9 @@ function operationRows(
     {
       const name = escapeHtml(op.name || op.id);
       const extra = [
+        op.nextAttemptTime
+          ? `<div class="note">Next attempt ${escapeHtml(formatTime(op.nextAttemptTime))}</div>`
+          : "",
         op.scheduledEndTime
           ? `<div class="note">Wait ends ${escapeHtml(formatTime(op.scheduledEndTime))}</div>`
           : "",
@@ -238,16 +241,22 @@ export function renderExecutionPage(
   const payloads = `${codeBlock(budget, "Input", detail.input) || `<p class="empty">No input recorded.</p>`}
   ${codeBlock(budget, "Result", detail.result)}
   ${codeBlock(budget, "Error", detail.error)}`;
-  const live = !TERMINAL_EXECUTION_STATUSES.includes(detail.status);
+  // An empty status is not "running": without it the page would reload
+  // forever.
+  const live =
+    detail.status !== "" &&
+    !TERMINAL_EXECUTION_STATUSES.includes(detail.status);
   const title = detail.name || detail.arn.split("/").pop() || "Execution";
   const opCount = countOperations(detail.operations);
 
   const notices = [
     detail.historyError
-      ? `<p class="warning">History unavailable, so operations are not shown: ${escapeHtml(detail.historyError, MAX_LONG_FIELD_CHARS)}</p>`
+      ? detail.history.length > 0
+        ? `<p class="warning">History is incomplete: reading it failed after ${detail.history.length} events, so later operations are missing and some shown here may look unfinished: ${escapeHtml(detail.historyError, MAX_LONG_FIELD_CHARS)}</p>`
+        : `<p class="warning">History unavailable, so operations are not shown: ${escapeHtml(detail.historyError, MAX_LONG_FIELD_CHARS)}</p>`
       : "",
     detail.historyTruncated
-      ? `<p class="warning">This execution has more history than the viewer loads (${detail.history.length} events shown). Operations started after that point are missing.</p>`
+      ? `<p class="warning">This execution has more history than the viewer loads (${detail.history.length} events shown). Operations started after that point are missing, and some shown here may look unfinished because their later events were not loaded.</p>`
       : "",
   ].join("");
 
@@ -360,7 +369,7 @@ summary{cursor:pointer;color:var(--link)}
 .status-succeeded{color:#29ad32}
 .status-failed,.status-timed_out{color:#ff5d64}
 .status-running,.status-pending{color:#42b4ff}
-.status-stopped,.status-cancelled,.status-unknown{color:var(--muted)}
+.status-stopped,.status-cancelled,.status-incomplete,.status-unknown{color:var(--muted)}
 .warning{border-left:4px solid #f89256;padding:8px 12px;background:var(--panel)}
 .error{border-left:4px solid #ff5d64;padding:8px 12px;background:var(--panel)}
 ${DEPTH_RULES}

@@ -28,6 +28,7 @@ export function statusType(
       return "error";
     case "STOPPED":
     case "CANCELLED":
+    case "INCOMPLETE":
       return "stopped";
     case "RUNNING":
       return "in-progress";
@@ -78,19 +79,43 @@ export function flattenOperations(nodes: OperationNode[]): OperationNode[] {
   return out;
 }
 
+const MAX_EXECUTION_ARN_LENGTH = 2048;
+const EXECUTION_MARKER = "/durable-execution/";
+
+const isDigits = (s: string, n: number) => s.length === n && /^[0-9]+$/.test(s);
+const isRegionLike = (s: string) =>
+  s.length > 0 && s.length <= 32 && /^[a-z0-9-]+$/.test(s);
+const isExecutionTail = (s: string) =>
+  /^[A-Za-z0-9._/-]+$/.test(s) &&
+  !s.startsWith("/") &&
+  !s.endsWith("/") &&
+  !s.includes("//");
+
 /**
- * Cheap shape check for "this value is an execution ARN", used only to decide
- * whether to offer an Open link. The host validates the ARN properly before it
- * calls AWS, so this only needs to avoid offering links on unrelated values.
+ * Whether `value` is a durable execution ARN, by the same rules as core's
+ * `isDurableExecutionArn` (a parity test checks they agree). The renderer
+ * cannot import core, which pulls in the AWS SDK, so the rules are repeated
+ * here; an Open link is then offered only for values the host will accept.
  */
 export function looksLikeExecutionArn(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > MAX_EXECUTION_ARN_LENGTH) {
+    return false;
+  }
+  if (/\s/.test(value)) return false;
+  const at = value.indexOf(EXECUTION_MARKER);
+  if (at < 0 || at + EXECUTION_MARKER.length === value.length) return false;
+  if (!isExecutionTail(value.slice(at + EXECUTION_MARKER.length))) return false;
+  const parts = value.slice(0, at).split(":");
+  if (parts.length !== 7 && parts.length !== 8) return false;
+  const [arn, partition, service, region, account, resource, name] = parts;
   return (
-    typeof value === "string" &&
-    value.startsWith("arn:") &&
-    value.includes(":lambda:") &&
-    value.includes(":function:") &&
-    value.includes("/durable-execution/") &&
-    !/\s/.test(value)
+    arn === "arn" &&
+    partition.startsWith("aws") &&
+    service === "lambda" &&
+    isRegionLike(region) &&
+    isDigits(account, 12) &&
+    resource === "function" &&
+    name.length > 0
   );
 }
 
@@ -99,6 +124,18 @@ export function functionNameFromExecutionArn(arn: string): string | undefined {
   const head = arn.split("/durable-execution/")[0];
   const parts = head.split(":");
   return parts[5] === "function" ? parts[6] || undefined : undefined;
+}
+
+/** The region an execution ARN names, e.g. `eu-west-1`. */
+export function regionFromExecutionArn(arn: string): string | undefined {
+  const parts = arn.split("/durable-execution/")[0].split(":");
+  return parts[2] === "lambda" ? parts[3] || undefined : undefined;
+}
+
+/** The `:version`/`:alias` qualifier of a function ARN, if it has one. */
+export function qualifierFromFunctionArn(arn: string): string | undefined {
+  const parts = arn.split(":");
+  return parts.length > 7 ? parts[7] || undefined : undefined;
 }
 
 /** The function ARN without its `:version`/`:alias` qualifier. */
@@ -159,23 +196,27 @@ export function historyToCsv(events: HistoryEvent[]): string {
   return [HISTORY_COLUMNS.join(","), ...rows].join("\n");
 }
 
+/** Lowercased with underscores removed, so execution_arn matches executionArn. */
+const normalizedColumn = (name: string) => name.toLowerCase().replace(/_/g, "");
+
 /**
- * The column whose values are execution ARNs: the row identifier column when it
- * holds ARNs, else a column named executionArn in any casing (Athena lowercases
- * column names). Undefined when no row has an ARN.
+ * The column whose values are execution ARNs, by the same rules as the MCP
+ * server: the row identifier column when it holds ARNs, else one named
+ * executionArn in any casing (Athena lowercases names, SQL tables use
+ * execution_arn), else the first column that holds one. Undefined when no row
+ * has an ARN.
  */
 export function executionArnColumn(
   columns: string[],
   rows: string[][],
   idColumn?: string,
 ): string | undefined {
-  const candidates = [
-    ...(idColumn ? [idColumn] : []),
-    ...columns.filter((c) => c.toLowerCase() === "executionarn"),
-  ];
-  for (const col of candidates) {
+  const holdsArns = (col: string) => {
     const i = columns.indexOf(col);
-    if (i >= 0 && rows.some((r) => looksLikeExecutionArn(r[i]))) return col;
-  }
-  return undefined;
+    return i >= 0 && rows.some((r) => looksLikeExecutionArn(r[i]));
+  };
+  if (idColumn && holdsArns(idColumn)) return idColumn;
+  const named = columns.find((c) => normalizedColumn(c) === "executionarn");
+  if (named && holdsArns(named)) return named;
+  return columns.find(holdsArns);
 }
