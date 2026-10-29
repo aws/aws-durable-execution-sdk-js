@@ -80,10 +80,10 @@ export const QUERY_DESCRIPTION =
   "Logs Insights pipe query (e.g. `filter ... | stats ...`), NOT SQL; use " +
   "`lookbackHours` to set the time window. Results are capped at " +
   `${MAX_ROWS} rows; "truncated" is true when the cap was hit. ` +
-  "Rows that hold an execution ARN also carry a `viewerLink`: a Markdown link, " +
-  "titled with the execution name, that opens the execution's live operations " +
-  "and history. Always show each such row's viewerLink as-is, without being " +
-  "asked, and do not print the raw URL. " +
+  "While the local viewer is on, rows that hold an execution ARN also carry a " +
+  "`viewerLink`: a Markdown link, titled with the execution name, that opens " +
+  "the execution's operations and history. Whenever a row has one, show it " +
+  "as-is without being asked, and do not print the raw URL. " +
   "If required environment variables are unset it names them and returns " +
   "without calling AWS.";
 
@@ -101,9 +101,10 @@ export const GET_EXECUTION_DESCRIPTION =
   "success with found=false, not an error. For the Athena/S3 destination you " +
   "may also pass year/month/day to prune to one partition and avoid scanning " +
   "the whole table. Runs as a read-only query behind the same guard as `query`. " +
-  "The result carries a `viewerLink`: a Markdown link, titled with the " +
-  "execution name, to the execution's live operations and history. Always " +
-  "include it as-is when you report on the execution; do not print the raw URL.";
+  "While the local viewer is on, a found record carries a `viewerLink`: a " +
+  "Markdown link, titled with the execution name, to the execution's " +
+  "operations and history. When it is present, include it as-is when you " +
+  "report on the execution; do not print the raw URL.";
 
 export const LIST_EXECUTIONS_DESCRIPTION =
   "List Durable Execution Telemetry execution records as machine-readable JSON, filtered " +
@@ -111,10 +112,10 @@ export const LIST_EXECUTIONS_DESCRIPTION =
   "required from the caller for the common case. The query is built and " +
   "executed read-only behind the same guard as `query`; results are capped at " +
   `${MAX_ROWS} rows. ` +
-  "Rows that hold an execution ARN also carry a `viewerLink`: a Markdown link, " +
-  "titled with the execution name, that opens the execution's live operations " +
-  "and history. Always show each such row's viewerLink as-is, without being " +
-  "asked, and do not print the raw URL.";
+  "While the local viewer is on, rows that hold an execution ARN also carry a " +
+  "`viewerLink`: a Markdown link, titled with the execution name, that opens " +
+  "the execution's operations and history. Whenever a row has one, show it " +
+  "as-is without being asked, and do not print the raw URL.";
 
 /**
  * Sent once at connect time as the server's `instructions`. Clients that defer
@@ -130,11 +131,11 @@ export const SERVER_INSTRUCTIONS =
   "durable function runs: listing recent executions, finding failures, timing, " +
   "or step-level errors. Unqualified requests about 'executions' in this " +
   "context mean these. Start with `list_executions` or `get_execution`; call " +
-  "`describe_schema` before writing a `query`. Results that hold an execution " +
-  "ARN carry a `viewerLink`, a ready-made Markdown link titled with the " +
-  "execution name. Whenever you show executions, always show each one as its " +
-  "viewerLink, even when the user did not ask for links, and never print the " +
-  "raw URL.";
+  "`describe_schema` before writing a `query`. While the local viewer is on, " +
+  "results that hold an execution ARN carry a `viewerLink`, a ready-made " +
+  "Markdown link titled with the execution name. Whenever you show an " +
+  "execution that has one, show it as its viewerLink, even when the user did " +
+  "not ask for links, and never print the raw URL.";
 
 /**
  * Every tool this server registers, paired with its description. The single

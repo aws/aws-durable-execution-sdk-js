@@ -192,6 +192,19 @@ describe("execution page", () => {
     expect(refreshHref(ARN)).toMatch(/^execution\?arn=[^&]+&refresh=1$/);
   });
 
+  it("points Refresh at the requested ARN, not the one Lambda returned", () => {
+    // The server serves only ARNs it linked. If Lambda spells the ARN another
+    // way, a Refresh link built from it would get 404.
+    const returned = `${ARN}-as-returned`;
+    const html = renderExecutionPage(
+      detail({ arn: returned }),
+      new Date(),
+      ARN,
+    );
+    expect(html).toContain(`href="${escapeHtml(refreshHref(ARN))}"`);
+    expect(html).not.toContain(`href="${escapeHtml(refreshHref(returned))}"`);
+  });
+
   it("links a chained invoke to the child execution on the same origin", () => {
     const html = renderExecutionPage(
       detail({

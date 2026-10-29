@@ -7,6 +7,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -109,6 +110,43 @@ describe("fileConsentStore hardening", () => {
     await fileConsentStore(join(sub, "a.json")).add("k");
     expect(readFileSync(victim, "utf-8")).toBe("keep");
     expect(await fileConsentStore(join(sub, "a.json")).has("k")).toBe(true);
+  });
+
+  // A lock path that is not a regular file was not made by the store. An old
+  // one used to make every save retry forever.
+  const old = new Date(Date.now() - 60_000);
+  it.each([
+    [
+      "an old directory",
+      (lock: string) => {
+        mkdirSync(lock);
+        utimesSync(lock, old, old);
+      },
+    ],
+    [
+      "a dangling symlink",
+      (lock: string) => symlinkSync(join(dir, "missing"), lock),
+    ],
+  ])("fails at once when the lock path is %s", async (_name, plant) => {
+    const sub = join(dir, "d");
+    mkdirSync(sub, { mode: 0o700 });
+    plant(join(sub, "a.json.lock"));
+    const started = Date.now();
+    await expect(
+      fileConsentStore(join(sub, "a.json")).add("k"),
+    ).rejects.toThrow(/not a regular file/);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("removes an old lock file left by a session that died", async () => {
+    const sub = join(dir, "d");
+    mkdirSync(sub, { mode: 0o700 });
+    const lock = join(sub, "a.json.lock");
+    writeFileSync(lock, "");
+    utimesSync(lock, old, old);
+    await fileConsentStore(join(sub, "a.json")).add("k");
+    expect(await fileConsentStore(join(sub, "a.json")).has("k")).toBe(true);
+    expect(readdirSync(sub)).toEqual(["a.json"]);
   });
 });
 

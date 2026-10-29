@@ -26,6 +26,10 @@ export interface LambdaSender {
 }
 
 export interface LambdaContext {
+  /**
+   * The default region, for calls that do not name one. `getExecution` uses
+   * the region in the execution ARN instead.
+   */
   region: string;
   credentials: AwsCredentialIdentityProvider;
   /**
@@ -145,7 +149,7 @@ const MAX_EXECUTION_ARN_LENGTH = 2048;
 const EXECUTION_MARKER = "/durable-execution/";
 
 /** Whether `s` has the shape of an AWS region name, such as `eu-west-1`. */
-export function isRegionLike(s: string): boolean {
+function isRegionLike(s: string): boolean {
   if (s.length === 0 || s.length > 32) return false;
   for (const c of s) {
     if (!((c >= "a" && c <= "z") || (c >= "0" && c <= "9") || c === "-")) {
@@ -256,8 +260,7 @@ function durationBetween(start?: Date, end?: Date): number | undefined {
 /**
  * Fetches one durable execution: its summary from GetDurableExecution, plus its
  * full history (paged, bounded by `maxHistoryEvents` and `maxHistoryBytes`)
- * folded into an operation
- * tree. The client targets the region named in the ARN, so a link from a
+ * folded into an operation tree. The client targets the region named in the ARN, so a link from a
  * telemetry record in another region still resolves.
  *
  * A history failure does not fail the call: the summary is still useful, and
@@ -271,8 +274,9 @@ export async function getExecution(
     /**
      * Stop paging once the history held, measured as the length of its
      * payloads, names and IDs plus a fixed overhead per event, reaches this
-     * many bytes. It is checked after each page, so one page can go over it. Payloads can be large, so an event count alone does not
-     * bound memory. Unset means no byte limit.
+     * many bytes. It is checked after each page, so one page can go over it.
+     * Payloads can be large, so an event count alone does not bound memory.
+     * Unset means no byte limit.
      */
     maxHistoryBytes?: number;
     /**
@@ -460,7 +464,9 @@ export function buildOperations(
   opts: {
     /**
      * Whether the execution has ended. Operations still open then are marked
-     * INCOMPLETE rather than shown as running.
+     * INCOMPLETE rather than shown as running. A terminal execution event in
+     * `events` also counts, because the summary can be read before the
+     * history and so be older than it.
      */
     executionEnded?: boolean;
   } = {},
@@ -468,9 +474,13 @@ export function buildOperations(
   const byId = new Map<string, OperationNode>();
   const starts = new Map<string, number>();
   const reported = new Map<string, number>();
+  let executionEnded = opts.executionEnded ?? false;
   for (const ev of events) {
     const type = ev.EventType ?? "";
     const id = ev.Id;
+    if (type.startsWith("Execution") && terminalStatus(type)) {
+      executionEnded = true;
+    }
     if (!id || type.startsWith("Execution") || type.startsWith("Invocation")) {
       continue;
     }
@@ -521,8 +531,11 @@ export function buildOperations(
     if (result?.Truncated || error?.Truncated) node.payloadTruncated = true;
     if (!node.startTime) node.startTime = ts;
     const delay = details?.RetryDetails?.NextAttemptDelaySeconds;
-    if (status === "FAILED" && delay !== undefined && ts) {
-      // A failure with a scheduled retry: the operation is waiting, not done.
+    if (delay !== undefined && ts) {
+      // A next attempt is scheduled, so the operation is waiting, not done.
+      // A step records this on a failure with a retry left. A
+      // waitForCondition records it on a check that succeeded but whose
+      // condition is not met yet.
       node.status = "PENDING";
       node.endTime = undefined;
       node.nextAttemptTime = new Date(
@@ -539,10 +552,12 @@ export function buildOperations(
     // Count Started events: each is one attempt. The service's CurrentAttempt
     // runs one behind that count in recorded histories, so it is only used
     // when it is higher, e.g. when earlier events fell outside the history read.
+    // A single attempt is not reported: every operation has one, so only a
+    // retry is worth showing.
     const n = Math.max(starts.get(id) ?? 0, reported.get(id) ?? 0);
-    if (n > 0) node.attempt = n;
+    if (n > 1) node.attempt = n;
     if (
-      opts.executionEnded &&
+      executionEnded &&
       (node.status === "RUNNING" || node.status === "PENDING")
     ) {
       node.status = "INCOMPLETE";

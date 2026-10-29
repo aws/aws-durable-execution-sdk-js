@@ -76,7 +76,9 @@ export const VIEWER_DISABLED_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_DISABLED";
 
 /**
  * Loopback port for the execution viewer. Unset or 0 picks a free port each
- * session; a fixed port keeps links valid across restarts.
+ * session. A fixed port keeps the address the same across sessions. Links
+ * from an earlier session still stop working, because each session makes a
+ * new token.
  */
 export const VIEWER_PORT_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_PORT";
 

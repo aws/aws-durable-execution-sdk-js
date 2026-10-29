@@ -14,7 +14,6 @@ import type {
 } from "@aws/durable-execution-sdk-js-telemetry-core";
 import { TERMINAL_EXECUTION_STATUSES } from "@aws/durable-execution-sdk-js-telemetry-core";
 
-/** Seconds between automatic reloads while an execution is still running. */
 /** Seconds a client is told to wait before retrying a Busy response. */
 export const REFRESH_SECONDS = 5;
 
@@ -246,12 +245,15 @@ export function renderErrorPage(
 }
 
 /**
- * The execution page. `renderedAt` is shown so a reader can tell a live page
- * from a stale one.
+ * The execution page. `renderedAt` is shown so a reader can tell a current
+ * page from an old one. `requestedArn` is the ARN in the page's own URL. The
+ * Refresh link uses it, because the server serves only ARNs it linked, and
+ * the ARN Lambda returns in `detail` may be spelled differently.
  */
 export function renderExecutionPage(
   detail: ExecutionDetail,
   renderedAt: Date = new Date(),
+  requestedArn: string = detail.arn,
 ): string {
   // Execution-level payloads first, so input and result are shown even when
   // operations use up the page's budget.
@@ -262,8 +264,7 @@ export function renderExecutionPage(
   const payloads = `${codeBlock(budget, "Input", detail.input) || `<p class="empty">No input recorded.</p>`}
   ${codeBlock(budget, "Result", detail.result)}
   ${codeBlock(budget, "Error", detail.error)}`;
-  // An empty status is not "running": without it the page would reload
-  // forever.
+  // An empty status is not "running", so the page does not call it running.
   const live =
     detail.status !== "" &&
     !TERMINAL_EXECUTION_STATUSES.includes(detail.status);
@@ -288,7 +289,7 @@ export function renderExecutionPage(
     live
       ? `Still running. Last updated ${escapeHtml(formatTime(renderedAt.toISOString()))}; refresh for the latest.`
       : `Last updated ${escapeHtml(formatTime(renderedAt.toISOString()))}.`
-  } ${refreshLink(detail.arn, "Refresh")}</p>
+  } ${refreshLink(requestedArn, "Refresh")}</p>
 </header>
 <section class="summary">
 ${field("Started", escapeHtml(formatTime(detail.startTime)))}

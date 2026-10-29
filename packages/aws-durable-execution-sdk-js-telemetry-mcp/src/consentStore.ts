@@ -22,7 +22,6 @@ import {
   open,
   readFile,
   rename,
-  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -125,7 +124,11 @@ const STALE_LOCK_MS = 10_000;
 /**
  * Runs `fn` while holding `lockPath`, a file created with "wx" so only one
  * session can hold it. Waits up to LOCK_WAIT_MS for another holder, and
- * removes a lock older than STALE_LOCK_MS.
+ * removes a lock file older than STALE_LOCK_MS.
+ *
+ * Every pass checks the deadline, so the wait always ends. A lock path that is
+ * not a regular file, such as a directory or a symlink, was not made by this
+ * code. So it is reported at once instead of being removed or waited on.
  */
 async function withLock(
   lockPath: string,
@@ -139,14 +142,20 @@ async function withLock(
       break;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      const age = await stat(lockPath).then(
-        (s) => Date.now() - s.mtimeMs,
-        () => 0,
-      );
-      if (age > STALE_LOCK_MS) {
-        await unlink(lockPath).catch(() => {});
-        continue;
+      // lstat, not stat: a symlink is judged as itself, not by its target.
+      const info = await lstat(lockPath).catch(() => undefined);
+      if (info && !info.isFile()) {
+        throw new Error(`${lockPath} is not a regular file; remove it`);
       }
+      // An unlink that fails falls through to the deadline and the wait.
+      const stale = info && Date.now() - info.mtimeMs > STALE_LOCK_MS;
+      const removed =
+        stale &&
+        (await unlink(lockPath).then(
+          () => true,
+          () => false,
+        ));
+      if (removed) continue;
       if (Date.now() > deadline) {
         throw new Error(`timed out waiting for ${lockPath}`);
       }
