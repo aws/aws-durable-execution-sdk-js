@@ -25,7 +25,7 @@ const cfg = (extra: Record<string, string> = {}) =>
   readConfigFromEnv({ ...base, ...extra }).config;
 
 describe("consentKey", () => {
-  it("changes with the credentials or destination", () => {
+  it("changes with the profile or destination", () => {
     const k = consentKey(cfg());
     expect(consentKey(cfg())).toBe(k);
     expect(

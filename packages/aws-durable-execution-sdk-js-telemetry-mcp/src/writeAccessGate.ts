@@ -65,6 +65,8 @@ export interface WriteAccessGateDeps {
     has: () => Promise<boolean>;
     add: () => Promise<void>;
   };
+  /** Diagnostics sink, for failures the user should be able to find. */
+  log?: (message: string) => void;
 }
 
 /**
@@ -168,8 +170,12 @@ export function createWriteAccessGate(
       if (answer === "accept-always") {
         try {
           await deps.remembered?.add();
-        } catch {
-          // Could not save: this session is still confirmed; the next asks again.
+        } catch (err) {
+          // This session is still confirmed; the next one asks again. Say why,
+          // or the user is asked every session with no explanation.
+          deps.log?.(
+            `could not save "Don't ask again", so the next session asks again: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
       return null;

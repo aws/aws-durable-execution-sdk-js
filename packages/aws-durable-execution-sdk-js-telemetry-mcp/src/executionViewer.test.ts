@@ -25,6 +25,8 @@ import { readConfigFromEnv } from "./config";
 import {
   escapeHtml,
   executionPath,
+  MAX_FIELD_CHARS,
+  MAX_OPERATION_ROWS,
   MAX_PAGE_PAYLOAD_CHARS,
   MAX_PAYLOAD_CHARS,
   renderExecutionPage,
@@ -33,6 +35,7 @@ import { isDurableExecutionArn } from "@aws/durable-execution-sdk-js-telemetry-c
 import {
   ExecutionViewer,
   executionArnColumnIndex,
+  MAX_CHILDREN_PER_PAGE,
   executionNameColumnIndex,
   executionNameFromRecord,
   markdownLink,
@@ -720,5 +723,165 @@ describe("security fixes", () => {
       "Not shown: this page already shows as much payload",
     );
     expect(html.length).toBeLessThan(MAX_PAGE_PAYLOAD_CHARS + 500_000);
+  });
+});
+
+describe("round-2 fixes", () => {
+  let viewer: ExecutionViewer;
+  afterEach(async () => {
+    await viewer?.close();
+  });
+
+  /** A viewer whose fake Lambda counts calls; history from `events`. */
+  function counting(events: () => unknown[] = () => []) {
+    const calls = { n: 0 };
+    const v = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) => {
+          calls.n++;
+          return cmd.constructor.name === "GetDurableExecutionCommand"
+            ? {
+                DurableExecutionArn: cmd.input.DurableExecutionArn,
+                Status: "RUNNING",
+              }
+            : { Events: events() };
+        },
+      }),
+    });
+    return { v, calls };
+  }
+
+  it("serves a repeat request from the page cache, without calling Lambda", async () => {
+    const { v, calls } = counting();
+    viewer = v;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const path = `/execution?arn=${encodeURIComponent(ARN)}`;
+    expect((await get(origin, path)).status).toBe(200);
+    const after = calls.n;
+    for (let i = 0; i < 5; i++)
+      expect((await get(origin, path)).status).toBe(200);
+    expect(calls.n).toBe(after);
+  });
+
+  it("answers 503 with a self-reloading page when unsent bytes would pass the ceiling", async () => {
+    // '"' escapes to 6 bytes, so each page is about 12 MB: more than the
+    // kernel's socket buffer absorbs for a client that stops reading.
+    const big = '"'.repeat(MAX_PAYLOAD_CHARS);
+    const { v } = counting(() =>
+      Array.from({ length: 40 }, (_, i) => ({
+        EventType: "StepSucceeded",
+        Id: `s${i}`,
+        StepSucceededDetails: { Result: { Payload: big } },
+      })),
+    );
+    viewer = v;
+    // 40 distinct linked executions; clients never read past the status line.
+    const arns = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/u${i}/1`,
+    );
+    for (const a of arns) await viewer.linkFor(a);
+    const origin = (await viewer.start()) ?? "";
+    const port = Number(new URL(origin).port);
+    const statuses: string[] = [];
+    const sockets: import("node:net").Socket[] = [];
+    for (const a of arns) {
+      const sock = connect(port, "127.0.0.1");
+      sockets.push(sock);
+      sock.pause(); // stop reading after the response starts
+      const line = await new Promise<string>((resolve) => {
+        sock.once("readable", () => {
+          const chunk = sock.read(64) as Buffer | null;
+          resolve(
+            (chunk ?? Buffer.alloc(0)).toString("latin1").split("\r\n")[0],
+          );
+        });
+        sock.write(
+          `GET /execution?arn=${encodeURIComponent(a)} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n\r\n`,
+        );
+      });
+      statuses.push(line);
+    }
+    for (const s of sockets) s.destroy();
+    expect(statuses.filter((s) => s.includes(" 200 ")).length).toBeGreaterThan(
+      0,
+    );
+    const busy = statuses.filter((s) => s.includes(" 503 ")).length;
+    expect(busy).toBeGreaterThan(0);
+    // 64 MB of ~12 MB pages: a handful are served before the rest are refused.
+    expect(statuses.filter((s) => s.includes(" 200 ")).length).toBeLessThan(10);
+  }, 30_000);
+
+  it("lets at most MAX_CHILDREN_PER_PAGE children into the linked set", async () => {
+    const children = Array.from(
+      { length: MAX_CHILDREN_PER_PAGE + 5 },
+      (_, i) =>
+        `arn:aws:lambda:us-east-1:123456789012:function:c:1/durable-execution/k${i}/1`,
+    );
+    const { v } = counting(() =>
+      children.map((c, i) => ({
+        EventType: "ChainedInvokeStarted",
+        Id: `i${i}`,
+        ChainedInvokeStartedDetails: {
+          FunctionName: "c",
+          DurableExecutionArn: c,
+        },
+      })),
+    );
+    viewer = v;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    expect(
+      (await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`)).status,
+    ).toBe(200);
+    const head = (a: string) =>
+      get(origin, `/execution?arn=${encodeURIComponent(a)}`, {
+        method: "HEAD",
+      });
+    expect((await head(children[0])).status).toBe(200);
+    expect((await head(children[MAX_CHILDREN_PER_PAGE])).status).toBe(404);
+  });
+
+  it("strips bidi, zero-width, and C1 characters from link text", () => {
+    expect(markdownLink("a\u202Eb\u200Bc\u009Bd\uFEFFe", "http://x")).toBe(
+      "[a b c d e](http://x)",
+    );
+  });
+
+  it("caps every rendered field and the operations table", () => {
+    const quote = '"'.repeat(MAX_FIELD_CHARS * 4);
+    const ops = Array.from({ length: MAX_OPERATION_ROWS + 50 }, (_, i) => ({
+      id: `o${i}`,
+      name: quote,
+      kind: quote,
+      callbackId: quote,
+      status: "SUCCEEDED",
+    }));
+    const html = renderExecutionPage(detail({ name: quote, operations: ops }));
+    expect(html).toContain(
+      `Showing the first ${MAX_OPERATION_ROWS.toLocaleString("en-US")} operations`,
+    );
+    expect((html.match(/<tr>/g) ?? []).length).toBeLessThanOrEqual(
+      MAX_OPERATION_ROWS + 3,
+    );
+    // Each '"' escapes to 6 bytes; three capped fields per row.
+    expect(html.length).toBeLessThan(
+      MAX_OPERATION_ROWS * 3 * MAX_FIELD_CHARS * 6 * 1.2,
+    );
+  });
+
+  it("bounds the page even when payloads grow under HTML escaping", () => {
+    const quotes = '"'.repeat(MAX_PAYLOAD_CHARS);
+    const ops = Array.from({ length: 60 }, (_, i) => ({
+      id: `s${i}`,
+      status: "SUCCEEDED",
+      result: quotes,
+    }));
+    const html = renderExecutionPage(detail({ operations: ops }));
+    // 2 MB of payload characters, each at most 6 bytes once escaped.
+    expect(html.length).toBeLessThan(MAX_PAGE_PAYLOAD_CHARS * 6 + 1_000_000);
   });
 });

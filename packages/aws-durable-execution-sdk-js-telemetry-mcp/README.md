@@ -254,9 +254,14 @@ How the page is served:
 - The server starts a small web server the first time a result needs a link, not
   at startup. It listens on `127.0.0.1` only.
 - It shows only executions it linked in a tool result during this session, plus
-  the child executions those pages link to. It answers any other execution ARN
-  with "Link not recognized". So a caller cannot make it fetch an execution of
-  its choosing.
+  up to 1,000 child executions per page that those pages link to. It answers any
+  other execution ARN with "Link not recognized". So a caller that reaches the
+  port cannot make it fetch an execution of its choosing.
+- `get_execution` links an execution only when the destination holds a record
+  for it. `query` links every execution ARN its result rows hold, and the agent
+  writes that SQL, so an agent can link an ARN by selecting it as a literal. An
+  agent steered by injected text could therefore make one more execution
+  viewable to anything that reaches the port.
 - It answers only requests addressed to that loopback address. It refuses
   requests that a browser marks as coming from another site, requests with
   another site's `Origin`, and anything other than a page and its stylesheet.
@@ -268,9 +273,15 @@ How the page is served:
   browser marks it as cross-site. Links opened from a terminal, an agent's chat,
   or the address bar work.
 - It loads at most four executions at a time, and answers further requests with
-  "Busy". It loads at most 8 MB of history per execution, shows at most 64 KB of
-  each payload and 2 MB of payloads per page, and lists at most 2,000 history
-  events.
+  a "Busy" page that tries again after 5 seconds. A finished page is reused for
+  5 seconds, so reloads do not call Lambda again within that time. Each Lambda
+  request fails after 30 seconds, and a response the browser stops reading is
+  closed after 60 seconds.
+- It stops loading history after about 8 MB per execution; the limit is checked
+  after each page of history, so one page can go over it. A page shows at most
+  64 KB of each payload, 2 MB of payload text in total, 2,000 operations,
+  2,000 history events, and 256 characters of each name or ID. It holds at
+  most 64 MB of pages that browsers have not finished reading.
 - It is read-only. It cannot stop or start executions. Use the VS Code extension
   or desktop app for that.
 - Every local user and process that can reach this machine's loopback can reach

@@ -53,6 +53,7 @@ import {
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
+  REFRESH_SECONDS,
   executionPath,
   renderErrorPage,
   renderExecutionPage,
@@ -66,8 +67,27 @@ export const VIEWER_HOST = "127.0.0.1";
 export const MAX_LINKED_EXECUTIONS = 10_000;
 /** Most execution fetches in progress at once; more requests get 503. */
 export const MAX_CONCURRENT_FETCHES = 4;
-/** History the viewer loads per execution, measured as its JSON length. */
+/**
+ * History the viewer loads per execution, measured as payload and field
+ * lengths plus a fixed overhead per event. It is checked after each history
+ * page, so one page can go over it.
+ */
 export const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
+/** How long a finished page is served again without asking Lambda. */
+export const PAGE_CACHE_MS = REFRESH_SECONDS * 1000;
+/** Most finished pages kept in the cache. */
+export const MAX_CACHED_PAGES = 16;
+/**
+ * Most bytes of page held for responses not yet fully sent, counting each
+ * shared page once. A request that would go over it gets 503.
+ */
+export const MAX_UNSENT_BYTES = 64 * 1024 * 1024;
+/** A response that makes no write progress for this long is closed. */
+export const RESPONSE_TIMEOUT_MS = 60_000;
+/** A single Lambda request that takes longer than this fails. */
+export const LAMBDA_REQUEST_TIMEOUT_MS = 30_000;
+/** Most child executions one page can add to the linked set. */
+export const MAX_CHILDREN_PER_PAGE = 1000;
 
 export interface ExecutionViewerOptions {
   config: TelemetryConfig;
@@ -97,6 +117,11 @@ export class ExecutionViewer {
    * request would multiply that by the number of concurrent requests.
    */
   private readonly fetching = new Map<string, Promise<Buffer>>();
+  /** Finished pages, oldest first, reused for {@link PAGE_CACHE_MS}. */
+  private readonly cache = new Map<string, { page: Buffer; at: number }>();
+  /** Pages held by responses still being sent, with how many hold each. */
+  private readonly unsent = new Map<Buffer, number>();
+  private unsentBytes = 0;
 
   constructor(private readonly options: ExecutionViewerOptions) {}
 
@@ -124,8 +149,16 @@ export class ExecutionViewer {
     }
   }
 
-  /** One page build per execution at a time; undefined when the cap is reached. */
+  /**
+   * The page for `arn`: a cached page younger than {@link PAGE_CACHE_MS}, the
+   * build already in progress, or a new build. Undefined when the fetch cap is
+   * reached.
+   */
   private pageOnce(arn: string): Promise<Buffer> | undefined {
+    const cached = this.cache.get(arn);
+    if (cached && Date.now() - cached.at < PAGE_CACHE_MS) {
+      return Promise.resolve(cached.page);
+    }
     const shared = this.fetching.get(arn);
     if (shared) return shared;
     if (this.fetching.size >= MAX_CONCURRENT_FETCHES) return undefined;
@@ -135,14 +168,29 @@ export class ExecutionViewer {
         region: config.region,
         credentials: resolveCredentials(config.awsProfile),
         clientFor: this.options.lambdaClientFor,
+        requestTimeoutMs: LAMBDA_REQUEST_TIMEOUT_MS,
       },
       arn,
       { maxHistoryBytes: MAX_HISTORY_BYTES },
     )
       .then((detail) => {
-        // Child executions this page links to become servable too.
-        for (const child of childExecutionArns(detail)) this.allow(child);
-        return Buffer.from(renderExecutionPage(detail), "utf-8");
+        // Child executions this page links to become servable too, up to a
+        // cap, so one page cannot push every earlier link out of the set.
+        for (const child of childExecutionArns(detail).slice(
+          0,
+          MAX_CHILDREN_PER_PAGE,
+        )) {
+          this.allow(child);
+        }
+        const page = Buffer.from(renderExecutionPage(detail), "utf-8");
+        this.cache.delete(arn);
+        this.cache.set(arn, { page, at: Date.now() });
+        while (this.cache.size > MAX_CACHED_PAGES) {
+          const oldest = this.cache.keys().next().value;
+          if (oldest === undefined) break;
+          this.cache.delete(oldest);
+        }
+        return page;
       })
       .finally(() => this.fetching.delete(arn));
     this.fetching.set(arn, p);
@@ -189,6 +237,9 @@ export class ExecutionViewer {
   private listenOn(port: number): Promise<string> {
     return new Promise((resolve, reject) => {
       const server = createServer((req, res) => {
+        // A client that stops reading would otherwise hold its response, and
+        // the page it shares, for as long as the socket stays open.
+        res.setTimeout(RESPONSE_TIMEOUT_MS, () => res.destroy());
         this.handle(req, res).catch((err: unknown) => {
           this.log(`execution viewer request failed: ${errorMessage(err)}`);
           if (!res.headersSent) {
@@ -299,19 +350,49 @@ export class ExecutionViewer {
     }
     const page = this.pageOnce(arn);
     if (!page) {
-      res.setHeader("Retry-After", "5");
-      send(
-        res,
-        503,
-        renderErrorPage(
-          "Busy",
-          "The viewer is loading other executions. Try again in a few seconds.",
-        ),
-      );
+      this.busy(res);
       return;
     }
     try {
-      send(res, 200, await page);
+      const body = await page;
+      // Count each shared page once: many responses can hold the same one.
+      const holders = this.unsent.get(body) ?? 0;
+      if (holders === 0 && this.unsentBytes + body.length > MAX_UNSENT_BYTES) {
+        this.busy(res);
+        return;
+      }
+      this.unsent.set(body, holders + 1);
+      if (holders === 0) this.unsentBytes += body.length;
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        const left = (this.unsent.get(body) ?? 1) - 1;
+        if (left > 0) {
+          this.unsent.set(body, left);
+        } else {
+          this.unsent.delete(body);
+          this.unsentBytes -= body.length;
+        }
+      };
+      send(res, 200, body);
+      // "finish" fires once the page is handed to the socket, not once the
+      // client has read it, so watch the socket's own write queue.
+      const socket = res.socket;
+      if (!socket || socket.destroyed || socket.writableLength === 0) {
+        release();
+      } else {
+        const onDrain = () => {
+          if (socket.writableLength === 0) done();
+        };
+        const done = () => {
+          socket.off("drain", onDrain);
+          socket.off("close", done);
+          release();
+        };
+        socket.on("drain", onDrain);
+        socket.once("close", done);
+      }
     } catch (err) {
       send(
         res,
@@ -319,6 +400,19 @@ export class ExecutionViewer {
         renderErrorPage("Couldn't load execution", errorMessage(err)),
       );
     }
+  }
+
+  private busy(res: ServerResponse): void {
+    res.setHeader("Retry-After", String(REFRESH_SECONDS));
+    send(
+      res,
+      503,
+      renderErrorPage(
+        "Busy",
+        "The viewer is loading other executions. This page tries again in a few seconds.",
+        true,
+      ),
+    );
   }
 
   private log(message: string): void {
@@ -436,8 +530,17 @@ function collapseControls(s: string): string {
   let spaced = false;
   for (const c of s) {
     const code = c.codePointAt(0) ?? 0;
+    // C0 and C1 controls, DEL, line and paragraph separators, zero-width
+    // characters, bidirectional overrides and isolates, and the BOM.
     const control =
-      code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029;
+      code < 0x20 ||
+      (code >= 0x7f && code <= 0x9f) ||
+      (code >= 0x200b && code <= 0x200f) ||
+      code === 0x2028 ||
+      code === 0x2029 ||
+      (code >= 0x202a && code <= 0x202e) ||
+      (code >= 0x2066 && code <= 0x2069) ||
+      code === 0xfeff;
     if (control || c === " ") {
       if (!spaced) out += " ";
       spaced = true;
@@ -447,6 +550,23 @@ function collapseControls(s: string): string {
     }
   }
   return out;
+}
+
+/**
+ * The execution ARN in a record from `get_execution`: a field named
+ * executionArn in any casing (or `pk`, the DynamoDB key) that holds an ARN.
+ */
+export function executionArnFromRecord(
+  record: Record<string, string> | undefined,
+): string | undefined {
+  if (!record) return undefined;
+  for (const [key, value] of Object.entries(record)) {
+    const k = normalizedColumn(key);
+    if ((k === "executionarn" || k === "pk") && isDurableExecutionArn(value)) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 /** The execution name in a record from `get_execution`, under any column casing. */

@@ -338,6 +338,39 @@ describe("getExecution", () => {
     ).toHaveLength(3);
   });
 
+  it.each([
+    [
+      "Input",
+      {
+        ChainedInvokeStartedDetails: { Input: { Payload: "x".repeat(5000) } },
+        EventType: "ChainedInvokeStarted",
+      },
+    ],
+    [
+      "Error",
+      {
+        StepFailedDetails: {
+          Error: { Payload: { ErrorMessage: "x".repeat(5000) } },
+        },
+        EventType: "StepFailed",
+      },
+    ],
+    ["Name", { EventType: "StepStarted", Name: "x".repeat(5000) }],
+  ])("counts %s toward the byte budget", async (_label, event) => {
+    const { ctx, calls } = fakeContext({
+      GetDurableExecutionCommand: () => summary,
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [{ Id: "s", ...event }],
+        NextMarker: "more",
+      }),
+    });
+    const detail = await getExecution(ctx, ARN, { maxHistoryBytes: 12_000 });
+    expect(detail.historyTruncated).toBe(true);
+    expect(
+      calls.filter((c) => c.command === "GetDurableExecutionHistoryCommand"),
+    ).toHaveLength(3);
+  });
+
   it("reports a history failure without failing the call", async () => {
     const { ctx } = fakeContext({
       GetDurableExecutionCommand: () => summary,
@@ -453,4 +486,39 @@ describe("listing and starting", () => {
       },
     ]);
   });
+});
+
+describe("request timeout", () => {
+  it("fails a real Lambda call that never answers", async () => {
+    const { createServer } = await import("node:net");
+    // Accepts the connection and never sends a byte, like a network path
+    // that went silent.
+    const silent = createServer(() => {});
+    await new Promise<void>((r) => silent.listen(0, "127.0.0.1", r));
+    const port = (silent.address() as { port: number }).port;
+    const prev = process.env.AWS_ENDPOINT_URL_LAMBDA;
+    process.env.AWS_ENDPOINT_URL_LAMBDA = `http://127.0.0.1:${port}`;
+    try {
+      const started = Date.now();
+      await expect(
+        getExecution(
+          {
+            region: "us-west-2",
+            credentials: async () => ({
+              accessKeyId: "a",
+              secretAccessKey: "b",
+            }),
+            requestTimeoutMs: 300,
+          },
+          ARN,
+        ),
+      ).rejects.toThrow(/requestTimeout/);
+      // The SDK retries a timeout a few times; it must still end promptly.
+      expect(Date.now() - started).toBeLessThan(15_000);
+    } finally {
+      if (prev === undefined) delete process.env.AWS_ENDPOINT_URL_LAMBDA;
+      else process.env.AWS_ENDPOINT_URL_LAMBDA = prev;
+      silent.close();
+    }
+  }, 20_000);
 });

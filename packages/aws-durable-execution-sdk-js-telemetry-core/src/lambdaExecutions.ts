@@ -40,6 +40,13 @@ export interface LambdaContext {
    * can differ from the configured one.
    */
   clientFor?: (region: string) => LambdaSender;
+  /**
+   * Fail any single Lambda request that takes longer than this. Unset means
+   * the SDK default, which is no limit: a connection that goes silent then
+   * holds the call until the operating system drops it, often minutes later.
+   * Ignored when `clientFor` is set.
+   */
+  requestTimeoutMs?: number;
 }
 
 export interface FunctionSummary {
@@ -140,7 +147,10 @@ export interface ExecutionDetail {
   history: HistoryEvent[];
   operations: OperationNode[];
   invocations: InvocationRow[];
-  /** True when history paging stopped at {@link MAX_HISTORY_EVENTS}. */
+  /**
+   * True when history paging stopped early: at {@link MAX_HISTORY_EVENTS}, or
+   * at the caller's `maxHistoryBytes`, with more history left to read.
+   */
   historyTruncated?: boolean;
   /** Set when the history call failed; the execution summary is still valid. */
   historyError?: string;
@@ -210,7 +220,8 @@ function parseExecutionArn(value: unknown): { region: string } | undefined {
   if (/\s/.test(value)) return undefined;
   const at = value.indexOf(EXECUTION_MARKER);
   if (at < 0 || at + EXECUTION_MARKER.length === value.length) return undefined;
-  // Execution names and invocation ids use letters, digits, '-', '_' and '.'.
+  // Lambda names executions and invocations with letters, digits, '-' and '_'.
+  // '.' is also accepted, as a superset that some tests and tools use.
   // Rejecting everything else keeps characters such as ')' out of links built
   // from an ARN, where they would end a Markdown link early.
   if (!isExecutionTail(value.slice(at + EXECUTION_MARKER.length))) {
@@ -250,7 +261,19 @@ export function regionFromExecutionArn(arn: string): string | undefined {
 function clientFor(ctx: LambdaContext, region = ctx.region): LambdaSender {
   return ctx.clientFor
     ? ctx.clientFor(region)
-    : new LambdaClient({ region, credentials: ctx.credentials });
+    : new LambdaClient({
+        region,
+        credentials: ctx.credentials,
+        ...(ctx.requestTimeoutMs !== undefined
+          ? {
+              // Without throwOnRequestTimeout the SDK only logs a warning.
+              requestHandler: {
+                requestTimeout: ctx.requestTimeoutMs,
+                throwOnRequestTimeout: true,
+              },
+            }
+          : {}),
+      });
 }
 
 function durationBetween(start?: Date, end?: Date): number | undefined {
@@ -485,6 +508,11 @@ function approximateEventBytes(ev: HistoryApiEvent): number {
   const details = detailsOf(ev) as
     | (DetailFields & { Input?: { Payload?: string } })
     | undefined;
+  bytes +=
+    (ev.Name?.length ?? 0) +
+    (ev.Id?.length ?? 0) +
+    (ev.SubType?.length ?? 0) +
+    (ev.ParentId?.length ?? 0);
   bytes += details?.Result?.Payload?.length ?? 0;
   bytes += details?.Input?.Payload?.length ?? 0;
   const err = details?.Error?.Payload;

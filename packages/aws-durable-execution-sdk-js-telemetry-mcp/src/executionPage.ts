@@ -19,8 +19,21 @@ export const REFRESH_SECONDS = 5;
 /** Deepest indentation class the stylesheet defines; deeper nesting reuses it. */
 const MAX_DEPTH_CLASS = 8;
 
-export function escapeHtml(value: unknown): string {
-  return String(value ?? "")
+/** Longest single field (name, kind, ID, …) the page shows; the rest is cut. */
+export const MAX_FIELD_CHARS = 256;
+/** Longest ARN or error message the page shows. */
+export const MAX_LONG_FIELD_CHARS = 2048;
+/** Most operation rows the page shows, across the whole tree. */
+export const MAX_OPERATION_ROWS = 2000;
+
+/**
+ * Escapes `value` for HTML, first cutting it to `max` characters. Every field
+ * is bounded, so execution data cannot make a page arbitrarily large.
+ */
+export function escapeHtml(value: unknown, max = MAX_FIELD_CHARS): string {
+  let text = String(value ?? "");
+  if (text.length > max) text = `${text.slice(0, max - 1)}…`;
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -46,9 +59,12 @@ export const MAX_PAGE_PAYLOAD_CHARS = 2 * 1024 * 1024;
 /** Most history rows shown in the history table. */
 export const MAX_HISTORY_ROWS = 2000;
 
-/** Payload characters still available on the page being rendered. */
+/** What is still available on the page being rendered. */
 interface PayloadBudget {
+  /** Payload characters. */
   remaining: number;
+  /** Operation rows. */
+  rows: number;
 }
 
 function formatTime(iso?: string): string {
@@ -101,7 +117,7 @@ function codeBlock(
     pretty = `${pretty.slice(0, limit)}\n… shortened in the viewer: ${total.toLocaleString("en-US")} characters in full`;
   }
   budget.remaining -= Math.min(limit, pretty.length);
-  return `<details><summary>${escapeHtml(label)}</summary><pre>${escapeHtml(pretty)}</pre></details>`;
+  return `<details><summary>${escapeHtml(label)}</summary><pre>${escapeHtml(pretty, Number.POSITIVE_INFINITY)}</pre></details>`;
 }
 
 function field(label: string, valueHtml: string): string {
@@ -113,8 +129,11 @@ function operationRows(
   depth: number,
   budget: PayloadBudget,
 ): string {
-  return nodes
-    .map((op) => {
+  const out: string[] = [];
+  for (const op of nodes) {
+    if (budget.rows <= 0) break;
+    budget.rows--;
+    {
       const name = escapeHtml(op.name || op.id);
       const extra = [
         op.scheduledEndTime
@@ -124,7 +143,7 @@ function operationRows(
           ? `<div class="note">Callback <code>${escapeHtml(op.callbackId)}</code></div>`
           : "",
         op.invokedExecutionArn
-          ? `<div class="note">Invoked <a href="${escapeHtml(executionPath(op.invokedExecutionArn))}">${escapeHtml(op.invokedFunction || "execution")}</a></div>`
+          ? `<div class="note">Invoked <a href="${escapeHtml(executionPath(op.invokedExecutionArn), Number.POSITIVE_INFINITY)}">${escapeHtml(op.invokedFunction || "execution")}</a></div>`
           : op.invokedFunction
             ? `<div class="note">Invoked ${escapeHtml(op.invokedFunction)}</div>`
             : "",
@@ -143,9 +162,10 @@ function operationRows(
 <td>${escapeHtml(op.attempt ?? "—")}</td>
 <td>${extra}</td>
 </tr>`;
-      return row + operationRows(op.children ?? [], depth + 1, budget);
-    })
-    .join("\n");
+      out.push(row, operationRows(op.children ?? [], depth + 1, budget));
+    }
+  }
+  return out.join("\n");
 }
 
 function invocationRows(rows: InvocationRow[], budget: PayloadBudget): string {
@@ -179,11 +199,16 @@ ${body}
 </html>`;
 }
 
-export function renderErrorPage(title: string, message: string): string {
+/** An error page; `retry` makes it reload itself, for errors that pass. */
+export function renderErrorPage(
+  title: string,
+  message: string,
+  retry = false,
+): string {
   return layout(
     title,
-    `<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message)}</p>`,
-    false,
+    `<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message, MAX_LONG_FIELD_CHARS)}</p>`,
+    retry,
   );
 }
 
@@ -197,7 +222,10 @@ export function renderExecutionPage(
 ): string {
   // Execution-level payloads first, so input and result are shown even when
   // operations use up the page's budget.
-  const budget: PayloadBudget = { remaining: MAX_PAGE_PAYLOAD_CHARS };
+  const budget: PayloadBudget = {
+    remaining: MAX_PAGE_PAYLOAD_CHARS,
+    rows: MAX_OPERATION_ROWS,
+  };
   const payloads = `${codeBlock(budget, "Input", detail.input) || `<p class="empty">No input recorded.</p>`}
   ${codeBlock(budget, "Result", detail.result)}
   ${codeBlock(budget, "Error", detail.error)}`;
@@ -207,7 +235,7 @@ export function renderExecutionPage(
 
   const notices = [
     detail.historyError
-      ? `<p class="warning">History unavailable, so operations are not shown: ${escapeHtml(detail.historyError)}</p>`
+      ? `<p class="warning">History unavailable, so operations are not shown: ${escapeHtml(detail.historyError, MAX_LONG_FIELD_CHARS)}</p>`
       : "",
     detail.historyTruncated
       ? `<p class="warning">This execution has more history than the viewer loads (${detail.history.length} events shown). Operations started after that point are missing.</p>`
@@ -229,12 +257,17 @@ ${field("Ended", escapeHtml(formatTime(detail.endTime)))}
 ${field("Duration", escapeHtml(formatDuration(detail.durationMs)))}
 ${field("Invocations", escapeHtml(detail.invocations.length))}
 ${field("Version", escapeHtml(detail.version ?? "—"))}
-${field("Function", `<code>${escapeHtml(detail.functionArn ?? "—")}</code>`)}
-${field("Execution ARN", `<code>${escapeHtml(detail.arn)}</code>`)}
+${field("Function", `<code>${escapeHtml(detail.functionArn ?? "—", MAX_LONG_FIELD_CHARS)}</code>`)}
+${field("Execution ARN", `<code>${escapeHtml(detail.arn, MAX_LONG_FIELD_CHARS)}</code>`)}
 </section>
 ${notices}
 <section>
   <h2>Operations (${opCount})</h2>
+  ${
+    opCount > MAX_OPERATION_ROWS
+      ? `<p class="note">Showing the first ${MAX_OPERATION_ROWS.toLocaleString("en-US")} operations.</p>`
+      : ""
+  }
   ${
     opCount > 0
       ? `<table><thead><tr><th>Operation</th><th>Kind</th><th>Status</th><th>Started</th><th>Duration</th><th>Attempt</th><th>Details</th></tr></thead>

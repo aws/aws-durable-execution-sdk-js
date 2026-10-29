@@ -30,6 +30,7 @@ import { type ConsentStore, consentKey } from "./consentStore";
 import {
   type ExecutionViewer,
   VIEWER_LINK_FIELD,
+  executionArnFromRecord,
   executionNameFromRecord,
   markdownLink,
   withViewerLinks,
@@ -87,6 +88,8 @@ export function registerTools(
   const writeAccessGate = createWriteAccessGate({
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
+    // stdout is the MCP transport, so diagnostics go to stderr.
+    log: (message) => process.stderr.write(`[durable-telemetry] ${message}\n`),
     remembered: consentStore && {
       has: () => consentStore.has(key),
       add: () => consentStore.add(key),
@@ -423,7 +426,14 @@ export function registerTools(
           day,
           lookbackHours,
         });
-        const url = await viewer?.linkFor(found.executionArn);
+        // Link only an execution the destination actually holds. Linking the
+        // agent's argument would let anything that steers the agent make an
+        // arbitrary ARN servable by the viewer.
+        const url = found.found
+          ? await viewer?.linkFor(
+              executionArnFromRecord(found.record) ?? found.executionArn,
+            )
+          : undefined;
         return jsonResult(
           url
             ? {
