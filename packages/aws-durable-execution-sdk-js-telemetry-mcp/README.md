@@ -127,12 +127,13 @@ needs read access to whichever destination you point at.
 > - **OpenSearch:** map the identity to a role with read-only index permissions
 >   on the telemetry index.
 
-### Confirming the read-only responsibility
+### Confirming read-only credentials
 
 Before the first `query`, `get_execution` or `list_executions` call in a
-session, the server asks you to confirm one line: queries are written by the
-agent, and it is your responsibility to give this server read-only
-credentials. The server does not check the credentials, because no check can
+session, the server asks you to confirm one line: "I confirm that this
+server's credentials are read-only." Queries are written by the agent, so
+giving this server read-only credentials is your responsibility. The server
+does not check the credentials, because no check can
 show that a `SELECT` cannot change data.
 
 On S3 + Athena the prompt also says when Athena writes query results inside
@@ -140,14 +141,15 @@ the table's data location. The table then reads each result file as records,
 so every query adds rows, whatever the credentials. To find the result
 location, the server reads the Athena workgroup, which needs
 `athena:GetWorkGroup`. If it cannot read the location, the prompt says the
-check did not complete, and why. With `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` there is no prompt,
+check did not complete, and why. With `DURABLE_TELEMETRY_CONFIRMED_READONLY=true` there is no prompt,
 so the location is not checked either. In both cases, run `test_destination`:
 it skips its own test query and reports the problem.
 
 A client that supports MCP form elicitation shows the prompt; confirming allows
 queries for the rest of the session. A client that does not support it gets a
 tool error. To confirm permanently, set
-`DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
+`DURABLE_TELEMETRY_CONFIRMED_READONLY=true` in the server's `env` block. The
+prompt names this variable too. Only
 you can confirm: no tool confirms on the agent's behalf.
 
 ### Destinations and their required variables
