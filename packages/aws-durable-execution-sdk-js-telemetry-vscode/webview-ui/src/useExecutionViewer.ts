@@ -76,6 +76,10 @@ export function useExecutionViewer(active: boolean) {
   const [stopError, setStopError] = useState("");
 
   const [start, setStart] = useState<StartRequest | null>(null);
+  // The open start request, readable from the message handler, which is
+  // created once and would otherwise see the first render's `start`.
+  const startRef = useRef<StartRequest | null>(null);
+  startRef.current = start;
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
 
@@ -132,6 +136,10 @@ export function useExecutionViewer(active: boolean) {
       setFnInfo(null);
       setExecutions([]);
       setExecMarker(undefined);
+      // A list request for the previous function may still be out; its reply
+      // will be dropped, so clear its loading state or this page never loads.
+      setExecLoading(false);
+      setExecError("");
     }
     fetchDetail(target, true);
   };
@@ -227,6 +235,8 @@ export function useExecutionViewer(active: boolean) {
         return;
       case "executionStarted":
         setStarting(false);
+        // The user closed the modal before the reply came: do not move them.
+        if (!startRef.current) return;
         if (msg.error || !msg.arn) {
           setStartError(msg.error ?? "No execution ARN was returned.");
           return;
