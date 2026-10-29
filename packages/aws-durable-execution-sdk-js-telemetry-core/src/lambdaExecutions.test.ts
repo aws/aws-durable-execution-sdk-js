@@ -4,6 +4,8 @@ import {
   buildOperations,
   getExecution,
   isDurableExecutionArn,
+  listDurableFunctions,
+  listExecutions,
   regionFromExecutionArn,
   type LambdaContext,
 } from "./lambdaExecutions";
@@ -388,6 +390,61 @@ describe("getExecution", () => {
       /Not a durable execution ARN/,
     );
     expect(calls).toEqual([]);
+  });
+});
+
+describe("listing", () => {
+  it("keeps only durable functions, across pages, sorted, with progress", async () => {
+    const { ctx } = fakeContext({
+      ListFunctionsCommand: (input) =>
+        input.Marker
+          ? { Functions: [{ FunctionName: "b", DurableConfig: {} }] }
+          : {
+              Functions: [
+                { FunctionName: "plain" },
+                { FunctionName: "c", DurableConfig: {}, Runtime: "nodejs22.x" },
+              ],
+              NextMarker: "m",
+            },
+    });
+    const progress: string[][] = [];
+    const fns = await listDurableFunctions(ctx, (p) =>
+      progress.push(p.map((f) => f.name)),
+    );
+    expect(fns.map((f) => f.name)).toEqual(["b", "c"]);
+    expect(progress).toEqual([["c"], ["b", "c"]]);
+  });
+
+  it("lists executions newest-first with durations and an optional marker", async () => {
+    const { ctx, calls } = fakeContext({
+      ListDurableExecutionsByFunctionCommand: () => ({
+        DurableExecutions: [
+          {
+            DurableExecutionArn: ARN,
+            DurableExecutionName: "order-1",
+            Status: "SUCCEEDED",
+            StartTimestamp: t(0),
+            EndTimestamp: t(3),
+          },
+        ],
+        NextMarker: "",
+      }),
+    });
+    const res = await listExecutions(ctx, { functionName: "order-processor" });
+    expect(calls[0].input).toMatchObject({ ReverseOrder: true, MaxItems: 50 });
+    expect(res).toEqual({
+      executions: [
+        {
+          arn: ARN,
+          name: "order-1",
+          status: "SUCCEEDED",
+          startTime: t(0).toISOString(),
+          endTime: t(3).toISOString(),
+          durationMs: 3000,
+        },
+      ],
+      nextMarker: undefined,
+    });
   });
 });
 

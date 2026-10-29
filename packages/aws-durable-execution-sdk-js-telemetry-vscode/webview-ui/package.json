@@ -7,7 +7,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "watch": "node build.mjs --watch"
+    "watch": "node build.mjs --watch",
+    "test": "node test.mjs"
   },
   "dependencies": {
     "@cloudscape-design/code-view": "^3.0.185",

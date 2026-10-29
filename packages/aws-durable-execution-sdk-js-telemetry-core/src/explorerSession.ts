@@ -55,6 +55,14 @@ import {
   fetchAthenaRecord,
 } from "./athena";
 import { listenToQueue, type SqsMessageRow } from "./sqs";
+import {
+  getExecution,
+  getFunctionInfo,
+  listDurableFunctions,
+  listExecutions,
+  isRegionLike,
+  type LambdaContext,
+} from "./lambdaExecutions";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
 import {
@@ -103,7 +111,27 @@ export type InboundMessage =
       year?: string;
       month?: string;
       day?: string;
-    };
+    }
+  // Execution viewer: read straight from the Lambda durable-execution APIs
+  // (lambdaExecutions.ts), independent of the configured destination. Keep in
+  // sync with OutboundMessage in webview-ui/src/types.ts.
+  | { type: "listFunctions" }
+  // `region` names the function's region when it differs from the configured
+  // one, e.g. for a function reached from an execution in another region.
+  | { type: "getFunctionInfo"; functionName: string; region?: string }
+  | {
+      type: "listExecutions";
+      functionName: string;
+      marker?: string;
+      region?: string;
+    }
+  | { type: "getExecution"; arn: string };
+
+/** Optional collaborators, replaceable in tests. */
+export interface ExplorerSessionDeps {
+  /** Builds the Lambda client the execution viewer uses for a region. */
+  lambdaClientFor?: LambdaContext["clientFor"];
+}
 
 /**
  * Query execution mode chosen in the composer (kept in sync with QueryMode in
@@ -231,7 +259,10 @@ export class ExplorerSession {
   // so follow-up questions continue the session. Cleared on "newSession".
   private conversation: ConversationTurn[] = [];
 
-  constructor(private readonly host: HostPort) {}
+  constructor(
+    private readonly host: HostPort,
+    private readonly deps: ExplorerSessionDeps = {},
+  ) {}
 
   /** Entry point: handle one message from the renderer. */
   async dispatch(msg: InboundMessage): Promise<void> {
@@ -305,6 +336,18 @@ export class ExplorerSession {
             msg.month,
             msg.day,
           );
+        case "listFunctions":
+          return await this.onListFunctions();
+        case "getFunctionInfo":
+          return await this.onGetFunctionInfo(msg.functionName, msg.region);
+        case "listExecutions":
+          return await this.onListExecutions(
+            msg.functionName,
+            msg.marker,
+            msg.region,
+          );
+        case "getExecution":
+          return await this.onGetExecution(msg.arn);
       }
     } catch (err) {
       this.host.post({
@@ -1636,4 +1679,110 @@ export class ExplorerSession {
       });
     }
   }
+
+  // ─── Execution viewer ──────────────────────────────────────────────────────
+  //
+  // Each reply names what it answers (function name / execution ARN), so the
+  // renderer can drop a late reply for something it has navigated away from.
+  // Failures come back inside the reply rather than as the global `error`
+  // toast, so they render on the page that asked.
+
+  /**
+   * The Lambda context for a call. `region` comes from the renderer, so it is
+   * used only when it has the shape of a region name; otherwise the
+   * configured region applies.
+   */
+  private lambdaContext(region?: string): LambdaContext {
+    const cfg = this.readConfig();
+    return {
+      region: region && isRegionLike(region) ? region : cfg.region,
+      credentials: resolveCredentials(cfg.awsProfile),
+      clientFor: this.deps.lambdaClientFor,
+    };
+  }
+
+  private async onListFunctions(): Promise<void> {
+    try {
+      const functions = await listDurableFunctions(
+        this.lambdaContext(),
+        (partial) =>
+          this.host.post({
+            type: "functionsList",
+            functions: partial,
+            loading: true,
+          }),
+      );
+      this.host.post({ type: "functionsList", functions, loading: false });
+    } catch (err) {
+      this.host.post({
+        type: "functionsList",
+        functions: [],
+        loading: false,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onGetFunctionInfo(
+    functionName: string,
+    region?: string,
+  ): Promise<void> {
+    try {
+      const info = await getFunctionInfo(
+        this.lambdaContext(region),
+        functionName,
+      );
+      this.host.post({ type: "functionInfo", functionName, info });
+    } catch (err) {
+      this.host.post({
+        type: "functionInfo",
+        functionName,
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onListExecutions(
+    functionName: string,
+    marker?: string,
+    region?: string,
+  ): Promise<void> {
+    try {
+      const page = await listExecutions(this.lambdaContext(region), {
+        functionName,
+        marker,
+      });
+      this.host.post({
+        type: "executionsList",
+        functionName,
+        append: marker !== undefined,
+        ...page,
+      });
+    } catch (err) {
+      this.host.post({
+        type: "executionsList",
+        functionName,
+        append: marker !== undefined,
+        executions: [],
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  private async onGetExecution(arn: string): Promise<void> {
+    try {
+      const detail = await getExecution(this.lambdaContext(), arn);
+      this.host.post({ type: "executionDetail", arn, detail });
+    } catch (err) {
+      this.host.post({
+        type: "executionDetail",
+        arn,
+        error: errorMessage(err),
+      });
+    }
+  }
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

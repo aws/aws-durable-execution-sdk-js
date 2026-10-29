@@ -4,16 +4,20 @@
  *
  * Everything else in this package reads what the telemetry exporter wrote to a
  * destination. This module is the other source: the durable-execution APIs
- * Lambda itself serves (`GetDurableExecution`, `GetDurableExecutionHistory`).
- * It works for any durable function, whether or not it runs the telemetry
- * plugin, and it is what the execution viewer is built on. It only reads.
+ * Lambda itself serves (`ListDurableExecutionsByFunction`,
+ * `GetDurableExecution`, `GetDurableExecutionHistory`). It works for any
+ * durable function, whether or not it runs the telemetry plugin, and it is what
+ * the execution viewer in every host is built on. It only reads.
  *
  * Host-free like the rest of core: no `vscode`, `electron`, or MCP import.
  */
 import {
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
+  GetFunctionConfigurationCommand,
   LambdaClient,
+  ListDurableExecutionsByFunctionCommand,
+  ListFunctionsCommand,
   type ErrorObject,
   type Event as HistoryApiEvent,
 } from "@aws-sdk/client-lambda";
@@ -41,6 +45,37 @@ export interface LambdaContext {
    * Ignored when `clientFor` is set.
    */
   requestTimeoutMs?: number;
+}
+
+export interface FunctionSummary {
+  name: string;
+  runtime?: string;
+  lastModified?: string;
+  packageType?: string;
+}
+
+export interface FunctionInfo {
+  name: string;
+  arn?: string;
+  runtime?: string;
+  memorySize?: number;
+  timeout?: number;
+  executionTimeoutSeconds?: number;
+  retentionDays?: number;
+  lastModified?: string;
+  codeSize?: number;
+  version?: string;
+  handler?: string;
+  description?: string;
+}
+
+export interface ExecutionRow {
+  arn: string;
+  name: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
 }
 
 /** One event in a durable execution's history, flattened for display. */
@@ -251,6 +286,92 @@ function clientFor(ctx: LambdaContext, region = ctx.region): LambdaSender {
 
 function durationBetween(start?: Date, end?: Date): number | undefined {
   return start && end ? end.getTime() - start.getTime() : undefined;
+}
+
+/**
+ * Lists functions in the region that have durable execution enabled. Pages
+ * through ListFunctions (50 per page) and reports each partial list so a UI can
+ * fill in progressively.
+ */
+export async function listDurableFunctions(
+  ctx: LambdaContext,
+  onProgress?: (partial: FunctionSummary[]) => void,
+): Promise<FunctionSummary[]> {
+  const lambda = clientFor(ctx);
+  const out: FunctionSummary[] = [];
+  const byName = (a: FunctionSummary, b: FunctionSummary) =>
+    a.name.localeCompare(b.name);
+  let marker: string | undefined;
+  do {
+    const res = await lambda.send(
+      new ListFunctionsCommand({ Marker: marker, MaxItems: 50 }),
+    );
+    for (const f of res.Functions ?? []) {
+      if (f.DurableConfig && f.FunctionName) {
+        out.push({
+          name: f.FunctionName,
+          runtime: f.Runtime,
+          lastModified: f.LastModified,
+          packageType: f.PackageType,
+        });
+      }
+    }
+    marker = res.NextMarker;
+    onProgress?.([...out].sort(byName));
+  } while (marker);
+  return out.sort(byName);
+}
+
+/** Fetches configuration for a single durable function. */
+export async function getFunctionInfo(
+  ctx: LambdaContext,
+  functionName: string,
+): Promise<FunctionInfo> {
+  const c = await clientFor(ctx).send(
+    new GetFunctionConfigurationCommand({ FunctionName: functionName }),
+  );
+  return {
+    name: c.FunctionName ?? functionName,
+    arn: c.FunctionArn,
+    runtime: c.Runtime,
+    memorySize: c.MemorySize,
+    timeout: c.Timeout,
+    executionTimeoutSeconds: c.DurableConfig?.ExecutionTimeout,
+    retentionDays: c.DurableConfig?.RetentionPeriodInDays,
+    lastModified: c.LastModified,
+    codeSize: c.CodeSize,
+    version: c.Version,
+    handler: c.Handler,
+    description: c.Description || undefined,
+  };
+}
+
+/** Lists durable executions for a function, newest first, one page at a time. */
+export async function listExecutions(
+  ctx: LambdaContext,
+  opts: { functionName: string; qualifier?: string; marker?: string },
+): Promise<{ executions: ExecutionRow[]; nextMarker?: string }> {
+  const res = await clientFor(ctx).send(
+    new ListDurableExecutionsByFunctionCommand({
+      FunctionName: opts.functionName,
+      Qualifier: opts.qualifier,
+      ReverseOrder: true,
+      MaxItems: 50,
+      Marker: opts.marker,
+    }),
+  );
+  const executions: ExecutionRow[] = (res.DurableExecutions ?? []).map(
+    // biome-ignore lint/suspicious/noExplicitAny: narrowed field-by-field below.
+    (e: any) => ({
+      arn: e.DurableExecutionArn ?? "",
+      name: e.DurableExecutionName ?? "",
+      status: e.Status ?? "",
+      startTime: e.StartTimestamp?.toISOString(),
+      endTime: e.EndTimestamp?.toISOString(),
+      durationMs: durationBetween(e.StartTimestamp, e.EndTimestamp),
+    }),
+  );
+  return { executions, nextMarker: res.NextMarker || undefined };
 }
 
 /**
