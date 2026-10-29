@@ -243,8 +243,9 @@ the way the workflow ran them), input, result, error, Lambda invocations, and
 history. The page reads them from the Lambda API (`GetDurableExecution` and
 `GetDurableExecutionHistory`) when you open it, not from the telemetry
 destination. So it works for executions whose records were truncated or sampled
-out. While an execution is running, the page reloads every 5 seconds. Links to
-child executions started by a chained invoke open those executions. A step
+out. The page does not reload itself: click its **Refresh** button to load the
+latest state. Links to child executions started by a chained invoke open those
+executions. A step
 waiting to retry shows as PENDING, with the time of its next attempt and the
 error of the attempt that failed. An operation still open when the execution
 ended shows as INCOMPLETE.
@@ -258,8 +259,8 @@ How the page is served:
   at startup. It listens on `127.0.0.1` only.
 - Every link carries a session token in its address: a random value the server
   makes at startup and keeps only in memory. A page request without it is
-  refused before any AWS call. The page's own links and its automatic reload
-  keep the token, so moving around the viewer works. The server sets no cookie:
+  refused before any AWS call. The page's own links, including Refresh, keep the
+  token, so moving around the viewer works. The server sets no cookie:
   browsers send a cookie to every port on `127.0.0.1`, so a cookie would hand
   the token to any other local server the browser loads. Links stop working when
   the server restarts, because the token is new each time.
@@ -281,9 +282,9 @@ How the page is served:
   browser marks it as cross-site. Links opened from a terminal, an agent's chat,
   or the address bar work.
 - It loads at most four executions at a time, and answers further requests with
-  a "Busy" page that tries again after 5 seconds. A finished page is reused for
-  5 seconds, then dropped, so a second tab or a quick reload does not call Lambda
-  again. Each Lambda call stops after 30 seconds without progress, and loading
+  a "Busy" page with a **Try again** link. A finished page is reused for 5
+  seconds, then dropped, so opening the same link again at once does not call
+  Lambda again; **Refresh** always reads current data. Each Lambda call stops after 30 seconds without progress, and loading
   one execution is abandoned after 60 seconds in total, including the SDK's
   retries; the page then shows the error. A page the browser has not finished
   reading 60 seconds after it was sent is closed.

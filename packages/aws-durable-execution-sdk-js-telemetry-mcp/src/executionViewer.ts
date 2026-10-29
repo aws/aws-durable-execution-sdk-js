@@ -14,7 +14,7 @@
  *   - Every execution page needs this process's session token: 32 random
  *     bytes, made at startup, held only in memory, and carried in the path of
  *     every page URL (`/s/<token>/execution?arn=…`). The page's own links are
- *     relative, and its refresh reloads the same URL, so they keep the token.
+ *     relative, including its Refresh link, so they keep the token.
  *     A request without it gets 403 before any AWS call. There is no cookie:
  *     browsers send cookies to every port on a host, so a cookie would hand
  *     the token to any other server on 127.0.0.1 that the browser loads. A
@@ -64,6 +64,7 @@ import {
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
+  REFRESH_PARAM,
   REFRESH_SECONDS,
   executionPath,
   renderErrorPage,
@@ -169,9 +170,11 @@ export class ExecutionViewer {
    * build already in progress, or a new build. Undefined when the fetch cap is
    * reached.
    */
-  private pageOnce(arn: string): Promise<Buffer> | undefined {
+  private pageOnce(arn: string, fresh = false): Promise<Buffer> | undefined {
     const cached = this.cache.get(arn);
-    if (cached && Date.now() - cached.at < PAGE_CACHE_MS) {
+    // A Refresh click asks for current data, so it skips the cache. It still
+    // shares a fetch already in progress, and still counts toward the cap.
+    if (!fresh && cached && Date.now() - cached.at < PAGE_CACHE_MS) {
       return Promise.resolve(cached.page);
     }
     const shared = this.fetching.get(arn);
@@ -399,9 +402,9 @@ export class ExecutionViewer {
       sendHead(res, 200);
       return;
     }
-    const page = this.pageOnce(arn);
+    const page = this.pageOnce(arn, url.searchParams.has(REFRESH_PARAM));
     if (!page) {
-      this.busy(res);
+      this.busy(res, arn);
       return;
     }
     try {
@@ -409,7 +412,7 @@ export class ExecutionViewer {
       // Count each shared page once: many responses can hold the same one.
       const holders = this.unsent.get(body) ?? 0;
       if (holders === 0 && this.unsentBytes + body.length > MAX_UNSENT_BYTES) {
-        this.busy(res);
+        this.busy(res, arn);
         return;
       }
       this.unsent.set(body, holders + 1);
@@ -432,7 +435,7 @@ export class ExecutionViewer {
       send(
         res,
         502,
-        renderErrorPage("Couldn't load execution", errorMessage(err)),
+        renderErrorPage("Couldn't load execution", errorMessage(err), arn),
       );
     }
   }
@@ -501,15 +504,15 @@ export class ExecutionViewer {
     });
   }
 
-  private busy(res: ServerResponse): void {
+  private busy(res: ServerResponse, arn: string): void {
     res.setHeader("Retry-After", String(REFRESH_SECONDS));
     send(
       res,
       503,
       renderErrorPage(
         "Busy",
-        "The viewer is loading other executions. This page tries again in a few seconds.",
-        true,
+        "The viewer is loading other executions. Try again in a few seconds.",
+        arn,
       ),
     );
   }
@@ -521,7 +524,7 @@ export class ExecutionViewer {
 
 const SECURITY_HEADERS: Record<string, string> = {
   // No script, no frames, no forms, no outbound loads: styles from this origin
-  // only. A meta refresh is a navigation, which this does not restrict.
+  // only.
   "Content-Security-Policy":
     "default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   "X-Content-Type-Options": "nosniff",

@@ -26,6 +26,7 @@ import {
   escapeHtml,
   executionPath,
   MAX_FIELD_CHARS,
+  refreshHref,
   MAX_OPERATION_ROWS,
   MAX_PAGE_PAYLOAD_CHARS,
   MAX_PAYLOAD_CHARS,
@@ -180,15 +181,15 @@ describe("execution page", () => {
     expect(escapeHtml(`"'&<>`)).toBe("&quot;&#39;&amp;&lt;&gt;");
   });
 
-  it("refreshes itself only while the execution is running", () => {
-    expect(renderExecutionPage(detail({ status: "RUNNING" }))).toContain(
-      'http-equiv="refresh"',
-    );
-    for (const status of ["SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED"]) {
-      expect(renderExecutionPage(detail({ status }))).not.toContain(
-        'http-equiv="refresh"',
-      );
+  it("never reloads itself, and offers a Refresh link instead", () => {
+    for (const status of ["RUNNING", "SUCCEEDED", "FAILED", ""]) {
+      const html = renderExecutionPage(detail({ status }));
+      expect(html).not.toContain("http-equiv");
+      expect(html).toContain(`href="${escapeHtml(refreshHref(ARN))}"`);
+      // An inline icon: the page still loads nothing but its stylesheet.
+      expect(html).toMatch(/<a class="refresh"[^>]*><svg /);
     }
+    expect(refreshHref(ARN)).toMatch(/^execution\?arn=[^&]+&refresh=1$/);
   });
 
   it("links a chained invoke to the child execution on the same origin", () => {
@@ -260,7 +261,8 @@ describe("ExecutionViewer server", () => {
     });
     expect(res.status).toBe(200);
     expect(res.body).toContain("&lt;b&gt;charge&lt;/b&gt;");
-    expect(res.body).toContain('http-equiv="refresh"');
+    expect(res.body).not.toContain("http-equiv");
+    expect(res.body).toContain('class="refresh"');
     // The client targets the region the ARN names, not the configured one.
     expect(new Set(made.regions)).toEqual(new Set(["eu-west-1"]));
     expect(res.headers["content-security-policy"]).toContain(
@@ -1003,8 +1005,18 @@ describe("session token", () => {
     expect(res.status).toBe(200);
     expect(res.headers["set-cookie"]).toBeUndefined();
     expect(res.headers.location).toBeUndefined();
-    // The meta refresh reloads the same URL; the child link is relative.
-    expect(res.body).toMatch(/<meta http-equiv="refresh" content="\d+">/);
+    // The Refresh link and the child link are relative, so both resolve
+    // under the same /s/<token>/ path.
+    const refresh = res.body.match(/class="refresh" href="([^"]+)"/)?.[1] ?? "";
+    const refreshUrl = new URL(refresh.replace(/&amp;/g, "&"), link);
+    expect(refreshUrl.pathname).toBe(new URL(link).pathname);
+    expect(
+      (
+        await get(origin, refreshUrl.pathname + refreshUrl.search, {
+          noToken: true,
+        })
+      ).status,
+    ).toBe(200);
     const href = res.body.match(/href="(execution\?arn=[^"]+)"/)?.[1] ?? "";
     const childUrl = new URL(href, link);
     expect(childUrl.pathname).toBe(new URL(link).pathname);
@@ -1197,9 +1209,9 @@ describe("page text for retries and partial history", () => {
     expect(html).toContain("History unavailable, so operations are not shown");
   });
 
-  it("does not reload forever when the status is empty", () => {
+  it("does not call an execution with no status running", () => {
     expect(renderExecutionPage(detail({ status: "" }))).not.toContain(
-      'http-equiv="refresh"',
+      "Still running",
     );
   });
 
@@ -1209,5 +1221,74 @@ describe("page text for retries and partial history", () => {
     );
     expect(html).toContain('class="status status-incomplete"');
     expect(VIEWER_CSS).toContain(".status-incomplete");
+  });
+});
+
+describe("Refresh link", () => {
+  let viewer: ExecutionViewer;
+  afterEach(async () => {
+    await viewer?.close();
+  });
+
+  it("skips the page cache, so a click always shows current data", async () => {
+    let calls = 0;
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string } }) => {
+          calls++;
+          return cmd.constructor.name === "GetDurableExecutionCommand"
+            ? { DurableExecutionArn: ARN, Status: "RUNNING" }
+            : { Events: [] };
+        },
+      }),
+    });
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const page = `/execution?arn=${encodeURIComponent(ARN)}`;
+    await get(origin, page);
+    const first = calls;
+    await get(origin, page); // within 5 s: served from the cache
+    expect(calls).toBe(first);
+    await get(origin, `${page}&refresh=1`); // Refresh: read again
+    expect(calls).toBe(first * 2);
+  });
+
+  it("puts a Try again link, not a reload, on the Busy page", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) => {
+          await gate;
+          return cmd.constructor.name === "GetDurableExecutionCommand"
+            ? {
+                DurableExecutionArn: cmd.input.DurableExecutionArn,
+                Status: "RUNNING",
+              }
+            : { Events: [] };
+        },
+      }),
+    });
+    const arns = Array.from(
+      { length: 5 },
+      (_, i) =>
+        `arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/b${i}/1`,
+    );
+    for (const a of arns) await viewer.linkFor(a);
+    const origin = (await viewer.start()) ?? "";
+    const path = (a: string) => `/execution?arn=${encodeURIComponent(a)}`;
+    const pending = arns.slice(0, 4).map((a) => get(origin, path(a)));
+    await new Promise((r) => setTimeout(r, 50));
+    const busy = await get(origin, path(arns[4]));
+    expect(busy.status).toBe(503);
+    expect(busy.body).not.toContain("http-equiv");
+    expect(busy.body).toContain(`href="${escapeHtml(refreshHref(arns[4]))}"`);
+    expect(busy.body).toContain("Try again");
+    release();
+    await Promise.all(pending);
   });
 });

@@ -2,7 +2,8 @@
  * Server-rendered HTML for the local execution viewer (executionViewer.ts).
  *
  * The page is plain HTML and CSS with no script: everything interactive is a
- * link, a `<details>` disclosure, or a meta refresh while the execution runs.
+ * link or a `<details>` disclosure. The page never reloads itself; its Refresh
+ * link loads it again when the reader wants current data.
  * With no script there is nothing for injected content to execute, and every
  * value from AWS still goes through {@link escapeHtml}.
  */
@@ -14,7 +15,24 @@ import type {
 import { TERMINAL_EXECUTION_STATUSES } from "@aws/durable-execution-sdk-js-telemetry-core";
 
 /** Seconds between automatic reloads while an execution is still running. */
+/** Seconds a client is told to wait before retrying a Busy response. */
 export const REFRESH_SECONDS = 5;
+
+/** Query parameter that makes the server skip its page cache. */
+export const REFRESH_PARAM = "refresh";
+
+/** The Refresh link's target: this page again, read fresh from Lambda. */
+export function refreshHref(arn: string): string {
+  return `${relativeExecutionHref(arn)}&${REFRESH_PARAM}=1`;
+}
+
+/** A refresh icon drawn inline, so the page loads nothing else. */
+const REFRESH_ICON =
+  '<svg class="icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12.2 1.6v3.1H9.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function refreshLink(arn: string, label: string): string {
+  return `<a class="refresh" href="${escapeHtml(refreshHref(arn), Number.POSITIVE_INFINITY)}" title="${escapeHtml(label)}">${REFRESH_ICON}<span>${escapeHtml(label)}</span></a>`;
+}
 
 /** Deepest indentation class the stylesheet defines; deeper nesting reuses it. */
 const MAX_DEPTH_CLASS = 8;
@@ -193,13 +211,12 @@ function invocationRows(rows: InvocationRow[], budget: PayloadBudget): string {
     .join("\n");
 }
 
-function layout(title: string, body: string, refresh: boolean): string {
+function layout(title: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-${refresh ? `<meta http-equiv="refresh" content="${REFRESH_SECONDS}">` : ""}
 <title>${escapeHtml(title)}</title>
 <link rel="stylesheet" href="/viewer.css">
 </head>
@@ -211,16 +228,20 @@ ${body}
 </html>`;
 }
 
-/** An error page; `retry` makes it reload itself, for errors that pass. */
+/**
+ * An error page. With `retryArn`, it offers a "Try again" link to that
+ * execution's page, for errors that pass, such as Busy.
+ */
 export function renderErrorPage(
   title: string,
   message: string,
-  retry = false,
+  retryArn?: string,
 ): string {
   return layout(
     title,
-    `<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message, MAX_LONG_FIELD_CHARS)}</p>`,
-    retry,
+    `<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message, MAX_LONG_FIELD_CHARS)}</p>${
+      retryArn ? `<p>${refreshLink(retryArn, "Try again")}</p>` : ""
+    }`,
   );
 }
 
@@ -265,9 +286,9 @@ export function renderExecutionPage(
   <h1>${escapeHtml(title)} ${statusBadge(detail.status)}</h1>
   <p class="meta">${
     live
-      ? `Live — refreshes every ${REFRESH_SECONDS}s. Last updated ${escapeHtml(formatTime(renderedAt.toISOString()))}.`
-      : `Rendered ${escapeHtml(formatTime(renderedAt.toISOString()))}.`
-  }</p>
+      ? `Still running. Last updated ${escapeHtml(formatTime(renderedAt.toISOString()))}; refresh for the latest.`
+      : `Last updated ${escapeHtml(formatTime(renderedAt.toISOString()))}.`
+  } ${refreshLink(detail.arn, "Refresh")}</p>
 </header>
 <section class="summary">
 ${field("Started", escapeHtml(formatTime(detail.startTime)))}
@@ -330,7 +351,7 @@ ${detail.history
     </tbody></table>
   </details>
 </section>`;
-  return layout(`${title} — durable execution`, body, live);
+  return layout(`${title} — durable execution`, body);
 }
 
 function countOperations(nodes: OperationNode[]): number {
@@ -357,6 +378,9 @@ code,pre{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
 code{word-break:break-all}
 pre{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;overflow:auto;max-height:420px;white-space:pre-wrap;word-break:break-word}
 .meta,.empty,.note{color:var(--muted)}
+.refresh{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 10px;border:1px solid var(--border);border-radius:12px;text-decoration:none;color:var(--link);background:var(--panel);font-size:13px}
+.refresh:hover{border-color:var(--link)}
+.icon{flex:none}
 .note{font-size:12px}
 .summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px 24px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px}
 .label{font-weight:700}
