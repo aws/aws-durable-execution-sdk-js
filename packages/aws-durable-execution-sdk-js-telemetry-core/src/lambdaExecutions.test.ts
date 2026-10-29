@@ -559,9 +559,10 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
     const [op] = buildOperations([started(0), failed(1, 30)]);
     expect(op).toMatchObject({
       status: "PENDING",
-      attempt: 1,
       nextAttemptTime: t(31).toISOString(),
     });
+    // One attempt is not a retry, so no attempt count is shown.
+    expect(op.attempt).toBeUndefined();
     expect(op.endTime).toBeUndefined();
     expect(op.durationMs).toBeUndefined();
     // The error of the attempt that is being retried stays visible.
@@ -628,6 +629,58 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
     expect(running.status).toBe("INCOMPLETE");
     expect(waiting.status).toBe("INCOMPLETE");
     expect(waiting.nextAttemptTime).toBeUndefined();
+  });
+
+  // waitForCondition records a check whose condition is not met yet as a
+  // StepSucceeded that schedules the next check.
+  const unmetCheck = (s: number): HistoryApiEvent => ({
+    EventType: "StepSucceeded",
+    Id: "s",
+    SubType: "WaitForCondition",
+    EventTimestamp: t(s),
+    StepSucceededDetails: {
+      Result: { Payload: "1" },
+      RetryDetails: { CurrentAttempt: 1, NextAttemptDelaySeconds: 5 },
+    },
+  });
+
+  it("shows a waitForCondition between checks as PENDING", () => {
+    const [op] = buildOperations([started(0), unmetCheck(1)]);
+    expect(op).toMatchObject({
+      status: "PENDING",
+      nextAttemptTime: t(6).toISOString(),
+      result: "1",
+    });
+    expect(op.endTime).toBeUndefined();
+    expect(op.durationMs).toBeUndefined();
+  });
+
+  it("shows a waitForCondition left between checks in an ended execution as INCOMPLETE", () => {
+    const [op] = buildOperations([started(0), unmetCheck(1)], {
+      executionEnded: true,
+    });
+    expect(op.status).toBe("INCOMPLETE");
+    expect(op.nextAttemptTime).toBeUndefined();
+    expect(op.endTime).toBeUndefined();
+  });
+
+  it("treats a terminal execution event in the history as the end", () => {
+    // The summary is read before the history, so it can still say RUNNING
+    // after the history already holds the execution's end.
+    const [op] = buildOperations([
+      started(0),
+      { EventType: "ExecutionTimedOut", Id: "x", EventTimestamp: t(9) },
+    ]);
+    expect(op.status).toBe("INCOMPLETE");
+  });
+
+  it("reports no attempt count for operations that ran once", () => {
+    const ops = buildOperations([
+      { EventType: "WaitStarted", Id: "w", EventTimestamp: t(0) },
+      { EventType: "WaitSucceeded", Id: "w", EventTimestamp: t(1) },
+      { EventType: "CallbackStarted", Id: "c", EventTimestamp: t(0) },
+    ]);
+    expect(ops.map((o) => o.attempt)).toEqual([undefined, undefined]);
   });
 
   it("reports no duration for an operation with no Started event", () => {

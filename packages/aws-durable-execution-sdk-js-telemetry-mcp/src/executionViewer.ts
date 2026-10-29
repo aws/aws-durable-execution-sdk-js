@@ -1,6 +1,6 @@
 /**
  * A local, read-only web page per durable execution, so tool results can link
- * each row to its execution's live history.
+ * each row to its execution's operations and history.
  *
  * WHY A WEB SERVER IN AN MCP SERVER: tool results are text in an agent's chat.
  * The useful thing to put next to an execution ARN there is a link that opens
@@ -18,8 +18,8 @@
  *     A request without it gets 403 before any AWS call. There is no cookie:
  *     browsers send cookies to every port on a host, so a cookie would hand
  *     the token to any other server on 127.0.0.1 that the browser loads. A
- *     URL path goes only to this port. This is the same scheme Jupyter and the VS Code
- *     server use for loopback servers opened from a terminal link; no managed
+ *     URL path goes only to this port. This is the same scheme Jupyter and
+ *     the VS Code server use for loopback servers opened from a terminal link; no managed
  *     authentication service fits a server that runs on the developer's own
  *     machine.
  *   - It listens on 127.0.0.1 only. There is no setting to widen the bind.
@@ -28,8 +28,8 @@
  *     caller that reaches the port cannot make it fetch an execution of its
  *     choosing, in another account or region.
  *   - It rejects any request whose Host header is not this listener's own
- *     loopback address, so a DNS-rebinding page cannot reach it under a
- *     hostname it controls.
+ *     address, as `127.0.0.1:<port>` or `localhost:<port>`, so a
+ *     DNS-rebinding page cannot reach it under a hostname it controls.
  *   - It rejects requests a browser marks as cross-site (Sec-Fetch-Site), so
  *     another web page cannot make it call AWS by embedding or prefetching a
  *     viewer URL. Opening a link from the agent, a terminal, or the address
@@ -41,8 +41,7 @@
  *     payload text it renders, so requests cannot exhaust the process memory.
  *   - It is read-only: GET and HEAD only (HEAD makes no AWS call), and the
  *     only AWS calls it makes are GetDurableExecution and
- *     GetDurableExecutionHistory. Stopping or starting
- *     executions stays in the VS Code and desktop apps.
+ *     GetDurableExecutionHistory.
  *   - It sends no CORS headers, so no other origin can read its responses.
  * The checks below the token stay as a second layer: they limit what a leaked
  * link can do, and they cost nothing.
@@ -203,7 +202,10 @@ export class ExecutionViewer {
         // Then the parent itself, so the page being viewed is always newer
         // than the children it added and is never the one pushed out.
         this.allow(arn);
-        const page = Buffer.from(renderExecutionPage(detail), "utf-8");
+        const page = Buffer.from(
+          renderExecutionPage(detail, new Date(), arn),
+          "utf-8",
+        );
         // A page whose history failed is not cached: the next reload should
         // try again rather than show the same failure for 5 s.
         if (!detail.historyError) this.remember(arn, page);

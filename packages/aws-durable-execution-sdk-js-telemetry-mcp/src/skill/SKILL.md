@@ -50,13 +50,15 @@ authoritatively. Writing a query without it is guessing.
 
 ## Linking executions for the user
 
-Results that hold an execution ARN carry a `viewerLink`: a column on `query` and
-`list_executions` rows, a field on `get_execution`. It is a ready-made Markdown
-link, titled with the execution name (or "show execution" when there is none),
-that opens the execution's live operations, payloads, and history in the
-user's browser.
+While the local viewer is on, results that hold an execution ARN carry a
+`viewerLink`: a column on `query` and `list_executions` rows, a field on a found
+`get_execution` record. It is a ready-made Markdown link, titled with the
+execution name (or "show execution" when there is none), that opens the
+execution's operations, payloads, and history in the user's browser. The viewer
+is off when `DURABLE_TELEMETRY_VIEWER_DISABLED` is set or its server failed to
+start; results then have no `viewerLink`.
 
-Whenever you show executions, show each one as its `viewerLink`, exactly as
+Whenever you show an execution that has a `viewerLink`, show it exactly as
 given. Do this by default; the user does not have to ask for links. Do not
 print the raw URL, and do not rebuild the link yourself. Rows without an
 execution ARN have an empty `viewerLink`; leave those unlinked. The links work

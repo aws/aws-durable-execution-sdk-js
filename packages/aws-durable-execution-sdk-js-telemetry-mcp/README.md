@@ -234,7 +234,7 @@ When a result holds execution ARNs, the server adds a link for each one:
 - `get_execution` results gain a `viewerLink` field.
 
 Each `viewerLink` is a Markdown link titled with the execution name, for
-example `[order-1042](http://127.0.0.1:8765/execution?arn=…)`. An execution
+example `[order-1042](http://127.0.0.1:8765/s/<token>/execution?arn=…)`. An execution
 with no name is titled `show execution`. The server tells the agent to show
 these links whenever it lists executions, so you do not have to ask for them.
 
@@ -245,9 +245,9 @@ history. The page reads them from the Lambda API (`GetDurableExecution` and
 destination. So it works for executions whose records were truncated or sampled
 out. The page does not reload itself: click its **Refresh** button to load the
 latest state. Links to child executions started by a chained invoke open those
-executions. A step
-waiting to retry shows as PENDING, with the time of its next attempt and the
-error of the attempt that failed. An operation still open when the execution
+executions. A step waiting to retry shows as PENDING, with the time of its next
+attempt and the error of the attempt that failed. A `waitForCondition` waiting
+for its next check also shows as PENDING, with the time of that check. An operation still open when the execution
 ended shows as INCOMPLETE.
 
 Click a link to open the page. It opens in your default browser, or in whatever
@@ -273,7 +273,8 @@ How the page is served:
   writes that SQL, so an agent can link an ARN by selecting it as a literal. An
   agent steered by injected text could therefore make one more execution
   viewable to anyone who has a link.
-- It answers only requests addressed to that loopback address. It refuses
+- It answers only requests addressed to its own address, as `127.0.0.1:<port>`
+  or `localhost:<port>`. It refuses
   requests that a browser marks as coming from another site, requests with
   another site's `Origin`, and anything other than a page and its stylesheet.
   These checks are a second layer behind the token: another web page does not
@@ -284,8 +285,10 @@ How the page is served:
 - It loads at most four executions at a time, and answers further requests with
   a "Busy" page with a **Try again** link. A finished page is reused for 5
   seconds, then dropped, so opening the same link again at once does not call
-  Lambda again; **Refresh** always reads current data. Each Lambda call stops after 30 seconds without progress, and loading
-  one execution is abandoned after 60 seconds in total, including the SDK's
+  Lambda again. **Refresh** skips that reuse and reads Lambda again. If a read
+  of the same execution is already running, Refresh shows its result instead.
+  Each Lambda call stops after 30 seconds without progress, and loading one
+  execution is abandoned after 60 seconds in total, including the SDK's
   retries; the page then shows the error. A page the browser has not finished
   reading 60 seconds after it was sent is closed.
 - It stops loading history after about 8 MB per execution; the limit is checked
