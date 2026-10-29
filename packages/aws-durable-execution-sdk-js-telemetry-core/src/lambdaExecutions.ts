@@ -260,8 +260,8 @@ function durationBetween(start?: Date, end?: Date): number | undefined {
 /**
  * Fetches one durable execution: its summary from GetDurableExecution, plus its
  * full history (paged, bounded by `maxHistoryEvents` and `maxHistoryBytes`)
- * folded into an operation tree. The client targets the region named in the ARN, so a link from a
- * telemetry record in another region still resolves.
+ * folded into an operation tree. The client targets the region named in the
+ * ARN, so a link from a telemetry record in another region still resolves.
  *
  * A history failure does not fail the call: the summary is still useful, and
  * the failure is reported as `historyError` rather than hidden.
@@ -336,18 +336,26 @@ export async function getExecution(
     historyError = err instanceof Error ? err.message : String(err);
   }
 
+  // The summary is read before the history. So the execution can end in
+  // between, and then the summary still says it is running while the history
+  // holds its end. The history is newer, so its end wins.
+  const summaryStatus = e.Status ?? "";
+  const end = TERMINAL_EXECUTION_STATUSES.includes(summaryStatus)
+    ? undefined
+    : executionEndOf(raw);
+  const endTimestamp: Date | undefined = end?.at ?? e.EndTimestamp;
   return {
     arn: e.DurableExecutionArn ?? arn,
     name: e.DurableExecutionName ?? undefined,
     functionArn: e.FunctionArn ?? undefined,
-    status: e.Status ?? "",
+    status: end?.status ?? summaryStatus,
     startTime: e.StartTimestamp?.toISOString(),
-    endTime: e.EndTimestamp?.toISOString(),
-    durationMs: durationBetween(e.StartTimestamp, e.EndTimestamp),
+    endTime: endTimestamp?.toISOString(),
+    durationMs: durationBetween(e.StartTimestamp, endTimestamp),
     version: e.Version ?? undefined,
     input: e.InputPayload ?? undefined,
-    result: e.Result ?? undefined,
-    error: e.Error ? formatError(e.Error) : undefined,
+    result: e.Result ?? end?.result,
+    error: e.Error ? formatError(e.Error) : end?.error,
     history: raw.map(toHistoryEvent),
     operations: buildOperations(raw, {
       executionEnded: TERMINAL_EXECUTION_STATUSES.includes(e.Status ?? ""),
@@ -356,6 +364,45 @@ export async function getExecution(
     ...(historyTruncated ? { historyTruncated } : {}),
     ...(historyError ? { historyError } : {}),
   };
+}
+
+/**
+ * The execution's end as the history records it: the last terminal
+ * `Execution*` event, with its status, time, result, and error.
+ */
+function executionEndOf(
+  events: HistoryApiEvent[],
+): { status: string; at?: Date; result?: string; error?: string } | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    const type = ev.EventType ?? "";
+    const status = type.startsWith("Execution")
+      ? terminalStatus(type)
+      : undefined;
+    if (!status) continue;
+    const details = detailsOf(ev);
+    return {
+      status,
+      at: ev.EventTimestamp,
+      result: details?.Result?.Payload,
+      error: details?.Error?.Payload
+        ? formatError(details.Error.Payload)
+        : undefined,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * When the next attempt is due, from an event's time and its
+ * `NextAttemptDelaySeconds`. Undefined when the delay is not a finite number
+ * or the time it gives is not a valid date. Lambda writes the history, but a
+ * malformed value must not fail the whole page.
+ */
+function nextAttemptAt(ts: string, delay: unknown): string | undefined {
+  if (typeof delay !== "number" || !Number.isFinite(delay)) return undefined;
+  const at = new Date(new Date(ts).getTime() + delay * 1000);
+  return Number.isFinite(at.getTime()) ? at.toISOString() : undefined;
 }
 
 /** Fixed allowance for an event's non-payload fields. */
@@ -530,17 +577,17 @@ export function buildOperations(
     if (error?.Payload) node.error = formatError(error.Payload);
     if (result?.Truncated || error?.Truncated) node.payloadTruncated = true;
     if (!node.startTime) node.startTime = ts;
-    const delay = details?.RetryDetails?.NextAttemptDelaySeconds;
-    if (delay !== undefined && ts) {
+    const next = ts
+      ? nextAttemptAt(ts, details?.RetryDetails?.NextAttemptDelaySeconds)
+      : undefined;
+    if (next) {
       // A next attempt is scheduled, so the operation is waiting, not done.
       // A step records this on a failure with a retry left. A
       // waitForCondition records it on a check that succeeded but whose
       // condition is not met yet.
       node.status = "PENDING";
       node.endTime = undefined;
-      node.nextAttemptTime = new Date(
-        new Date(ts).getTime() + delay * 1000,
-      ).toISOString();
+      node.nextAttemptTime = next;
       continue;
     }
     node.status = status;

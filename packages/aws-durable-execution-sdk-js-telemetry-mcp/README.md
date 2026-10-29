@@ -150,12 +150,12 @@ tool error. To confirm permanently, set
 `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
 you can confirm: no tool confirms on the agent's behalf.
 
-Ticking **Don't ask again** together with the confirm box
-saves the answer, so later sessions with the same destination settings, region,
-and profile skip the prompt. Changing any of them asks again, and so does an
-S3 + Athena configuration warning. Saved answers live in
-`~/.durable-telemetry/accepted-credentials.json`, as hashes of those settings;
-delete the file to be asked again.
+Ticking **Don't ask again** together with the confirm box saves the answer, so
+later sessions with the same destination settings, region, and profile skip the
+prompt. Changing any of them asks again, and so does an S3 + Athena
+configuration warning. Saved answers live in
+`~/.durable-telemetry/accepted-credentials/`, one empty file per answer, named
+by a hash of those settings. Delete the directory to be asked again.
 
 ### Destinations and their required variables
 
@@ -234,9 +234,10 @@ When a result holds execution ARNs, the server adds a link for each one:
 - `get_execution` results gain a `viewerLink` field.
 
 Each `viewerLink` is a Markdown link titled with the execution name, for
-example `[order-1042](http://127.0.0.1:8765/s/<token>/execution?arn=…)`. An execution
-with no name is titled `show execution`. The server tells the agent to show
-these links whenever it lists executions, so you do not have to ask for them.
+example `[order-1042](http://127.0.0.1:8765/s/<token>/execution?arn=…)`. An
+execution with no name is titled `show execution`. The server tells the agent to
+show these links whenever it lists executions, so you do not have to ask for
+them.
 
 The link opens a page that shows that execution's status, operations (nested
 the way the workflow ran them), input, result, error, Lambda invocations, and
@@ -247,8 +248,10 @@ out. The page does not reload itself: click its **Refresh** button to load the
 latest state. Links to child executions started by a chained invoke open those
 executions. A step waiting to retry shows as PENDING, with the time of its next
 attempt and the error of the attempt that failed. A `waitForCondition` waiting
-for its next check also shows as PENDING, with the time of that check. An operation still open when the execution
-ended shows as INCOMPLETE.
+for its next check also shows as PENDING, with the time of that check. An
+operation still open when the execution ended shows as INCOMPLETE. If the
+execution ended between the server's two reads, the page shows the end the
+history records.
 
 Click a link to open the page. It opens in your default browser, or in whatever
 browser your terminal or client opens links with.
@@ -318,8 +321,8 @@ shows the AWS error, and the tools still work.
 | `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session. A fixed port keeps the address the same across sessions. |
 
 If the fixed port is in use, for example by another session's viewer, the server
-picks a free port instead and logs that to stderr. Links from earlier sessions then point at
-whatever holds that port, which may not be this viewer. With either setting,
+picks a free port instead and logs that to stderr. Links from earlier sessions
+then point at whatever holds that port, which may not be this viewer. With either setting,
 links work only in the session that made them. A link from an earlier session
 opens "Link not valid", or nothing; ask the agent again for a fresh one.
 

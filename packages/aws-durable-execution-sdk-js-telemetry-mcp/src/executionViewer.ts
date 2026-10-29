@@ -19,9 +19,9 @@
  *     browsers send cookies to every port on a host, so a cookie would hand
  *     the token to any other server on 127.0.0.1 that the browser loads. A
  *     URL path goes only to this port. This is the same scheme Jupyter and
- *     the VS Code server use for loopback servers opened from a terminal link; no managed
- *     authentication service fits a server that runs on the developer's own
- *     machine.
+ *     the VS Code server use for loopback servers opened from a terminal
+ *     link. No managed authentication service fits a server that runs on the
+ *     developer's own machine.
  *   - It listens on 127.0.0.1 only. There is no setting to widen the bind.
  *   - It serves only executions this process linked in a tool result, plus
  *     the child executions those pages link to. Any other ARN gets 404, so a
