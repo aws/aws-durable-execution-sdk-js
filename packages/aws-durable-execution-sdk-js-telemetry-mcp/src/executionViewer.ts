@@ -12,19 +12,30 @@
  * credentials, so it must be reachable by the user's own browser and nothing
  * else:
  *   - It listens on 127.0.0.1 only. There is no setting to widen the bind.
+ *   - It serves only executions this process linked in a tool result, plus
+ *     the child executions those pages link to. Any other ARN gets 404, so a
+ *     caller that reaches the port cannot make it fetch an execution of its
+ *     choosing, in another account or region.
  *   - It rejects any request whose Host header is not this listener's own
  *     loopback address, so a DNS-rebinding page cannot reach it under a
  *     hostname it controls.
  *   - It rejects requests a browser marks as cross-site (Sec-Fetch-Site), so
  *     another web page cannot make it call AWS by embedding or prefetching a
  *     viewer URL. Opening a link from the agent, a terminal, or the address
- *     bar is "none"; links within the viewer are "same-origin".
- *   - It is read-only: GET and HEAD only, and the only AWS calls it makes are
- *     GetDurableExecution and GetDurableExecutionHistory. Stopping or starting
+ *     bar is "none"; links within the viewer are "same-origin". For browsers
+ *     that send no fetch metadata, it also rejects a foreign Origin header,
+ *     and any Sec-Fetch-Dest other than a page or its stylesheet.
+ *   - It runs at most MAX_CONCURRENT_FETCHES fetches at once, shares one fetch
+ *     between requests for the same execution, and caps the history and the
+ *     payload text it renders, so requests cannot exhaust the process memory.
+ *   - It is read-only: GET and HEAD only (HEAD makes no AWS call), and the
+ *     only AWS calls it makes are GetDurableExecution and
+ *     GetDurableExecutionHistory. Stopping or starting
  *     executions stays in the VS Code and desktop apps.
  *   - It sends no CORS headers, so no other origin can read its responses.
  * Loopback still means every local user and process on this machine can reach
- * the port; on a shared machine, disable the viewer (see README).
+ * the port, and can read an execution it knows a linked ARN for; on a shared
+ * machine, disable the viewer (see README).
  */
 import {
   createServer,
@@ -34,6 +45,7 @@ import {
 } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
+  type ExecutionDetail,
   getExecution,
   isDurableExecutionArn,
   resolveCredentials,
@@ -49,6 +61,13 @@ import {
 
 /** The only address the viewer listens on. */
 export const VIEWER_HOST = "127.0.0.1";
+
+/** Most executions one process remembers as linked; the oldest are forgotten. */
+export const MAX_LINKED_EXECUTIONS = 10_000;
+/** Most execution fetches in progress at once; more requests get 503. */
+export const MAX_CONCURRENT_FETCHES = 4;
+/** History the viewer loads per execution, measured as its JSON length. */
+export const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
 
 export interface ExecutionViewerOptions {
   config: TelemetryConfig;
@@ -70,14 +89,54 @@ export class ExecutionViewer {
   private starting: Promise<string | undefined> | undefined;
   private origin: string | undefined;
   private allowedHosts = new Set<string>();
+  /** ARNs this process linked, oldest first (a Set keeps insertion order). */
+  private readonly linked = new Set<string>();
+  /** Fetches in progress, shared between requests for the same execution. */
+  private readonly fetching = new Map<string, Promise<ExecutionDetail>>();
 
   constructor(private readonly options: ExecutionViewerOptions) {}
 
-  /** A viewer URL for `arn`, or undefined when it is not an execution ARN. */
+  /**
+   * A viewer URL for `arn`, or undefined when it is not an execution ARN.
+   * Making the link is what lets the server serve that execution.
+   */
   async linkFor(arn: unknown): Promise<string | undefined> {
     if (!isDurableExecutionArn(arn)) return undefined;
     const origin = await this.start();
-    return origin ? `${origin}${executionPath(arn)}` : undefined;
+    if (!origin) return undefined;
+    this.allow(arn);
+    return `${origin}${executionPath(arn)}`;
+  }
+
+  private allow(arn: string): void {
+    // Re-adding moves it to the newest end, so a link shown again is the last
+    // to be forgotten.
+    this.linked.delete(arn);
+    this.linked.add(arn);
+    while (this.linked.size > MAX_LINKED_EXECUTIONS) {
+      const oldest = this.linked.values().next().value;
+      if (oldest === undefined) break;
+      this.linked.delete(oldest);
+    }
+  }
+
+  /** One fetch per execution at a time; undefined when the cap is reached. */
+  private fetchOnce(arn: string): Promise<ExecutionDetail> | undefined {
+    const shared = this.fetching.get(arn);
+    if (shared) return shared;
+    if (this.fetching.size >= MAX_CONCURRENT_FETCHES) return undefined;
+    const { config } = this.options;
+    const p = getExecution(
+      {
+        region: config.region,
+        credentials: resolveCredentials(config.awsProfile),
+        clientFor: this.options.lambdaClientFor,
+      },
+      arn,
+      { maxHistoryBytes: MAX_HISTORY_BYTES },
+    ).finally(() => this.fetching.delete(arn));
+    this.fetching.set(arn, p);
+    return p;
   }
 
   /** Starts the listener once; resolves to its origin, or undefined on failure. */
@@ -149,6 +208,11 @@ export class ExecutionViewer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse) {
+    // Browsers send origin-form ("/path"). Anything else is not from one.
+    if (!(req.url ?? "").startsWith("/")) {
+      send(res, 400, renderErrorPage("Bad request", "Unsupported request."));
+      return;
+    }
     if (!this.allowedHosts.has((req.headers.host ?? "").toLowerCase())) {
       send(
         res,
@@ -158,7 +222,17 @@ export class ExecutionViewer {
       return;
     }
     const site = req.headers["sec-fetch-site"];
-    if (site !== undefined && site !== "none" && site !== "same-origin") {
+    const origin = req.headers.origin;
+    const dest = req.headers["sec-fetch-dest"];
+    if (
+      (site !== undefined && site !== "none" && site !== "same-origin") ||
+      // Browsers without fetch metadata still send Origin on cross-site
+      // requests that carry one.
+      (origin !== undefined && origin !== this.origin) ||
+      // Only a page, or that page's stylesheet, loads from here: never an
+      // image, script, frame, or fetch().
+      (dest !== undefined && dest !== "document" && dest !== "style")
+    ) {
       send(
         res,
         403,
@@ -197,16 +271,39 @@ export class ExecutionViewer {
       );
       return;
     }
-    const { config } = this.options;
-    try {
-      const detail = await getExecution(
-        {
-          region: config.region,
-          credentials: resolveCredentials(config.awsProfile),
-          clientFor: this.options.lambdaClientFor,
-        },
-        arn,
+    if (!this.linked.has(arn)) {
+      send(
+        res,
+        404,
+        renderErrorPage(
+          "Link not recognized",
+          "This server only shows executions it linked in this session. Ask the agent for the execution again to get a fresh link.",
+        ),
       );
+      return;
+    }
+    if (req.method === "HEAD") {
+      // Answer HEAD from headers alone: it must not cost an AWS call.
+      sendHead(res, 200);
+      return;
+    }
+    const fetch = this.fetchOnce(arn);
+    if (!fetch) {
+      res.setHeader("Retry-After", "5");
+      send(
+        res,
+        503,
+        renderErrorPage(
+          "Busy",
+          "The viewer is loading other executions. Try again in a few seconds.",
+        ),
+      );
+      return;
+    }
+    try {
+      const detail = await fetch;
+      // Child executions this page links to become servable too.
+      for (const child of childExecutionArns(detail)) this.allow(child);
       send(res, 200, renderExecutionPage(detail));
     } catch (err) {
       send(
@@ -232,7 +329,30 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Referrer-Policy": "no-referrer",
   "Cache-Control": "no-store",
   "Cross-Origin-Resource-Policy": "same-origin",
+  "Cross-Origin-Opener-Policy": "same-origin",
 };
+
+/** Every chained-invoke child execution in a detail's operation tree. */
+function childExecutionArns(detail: ExecutionDetail): string[] {
+  const out: string[] = [];
+  const walk = (ops: ExecutionDetail["operations"]) => {
+    for (const op of ops) {
+      if (isDurableExecutionArn(op.invokedExecutionArn)) {
+        out.push(op.invokedExecutionArn);
+      }
+      walk(op.children ?? []);
+    }
+  };
+  walk(detail.operations);
+  return out;
+}
+
+function sendHead(res: ServerResponse, status: number): void {
+  res.statusCode = status;
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end();
+}
 
 function send(
   res: ServerResponse,
@@ -295,11 +415,31 @@ export function executionNameColumnIndex(columns: string[]): number {
  * would end the link text early are escaped, and long names are shortened.
  */
 export function markdownLink(name: string | undefined, url: string): string {
-  let text = (name ?? "").trim() || DEFAULT_LINK_TEXT;
+  // Control characters and line breaks would end the link text; collapse them.
+  let text = collapseControls(name ?? "").trim() || DEFAULT_LINK_TEXT;
   if (text.length > MAX_LINK_TEXT)
     text = `${text.slice(0, MAX_LINK_TEXT - 1)}…`;
-  const escaped = text.replace(/[\\[\]]/g, "\\$&");
+  const escaped = text.replace(/[\\[\]<>`]/g, "\\$&");
   return `[${escaped}](${url})`;
+}
+
+/** Each run of control characters or line separators becomes one space. */
+function collapseControls(s: string): string {
+  let out = "";
+  let spaced = false;
+  for (const c of s) {
+    const code = c.codePointAt(0) ?? 0;
+    const control =
+      code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029;
+    if (control || c === " ") {
+      if (!spaced) out += " ";
+      spaced = true;
+    } else {
+      out += c;
+      spaced = false;
+    }
+  }
+  return out;
 }
 
 /** The execution name in a record from `get_execution`, under any column casing. */

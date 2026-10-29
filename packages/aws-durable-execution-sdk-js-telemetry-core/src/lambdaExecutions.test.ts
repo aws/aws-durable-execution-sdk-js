@@ -53,6 +53,10 @@ describe("isDurableExecutionArn / regionFromExecutionArn", () => {
     "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
     "arn:aws:s3:us-east-1:123456789012:function:f:1/durable-execution/e/i",
     `${ARN} trailing`,
+    `${ARN})--evil(`,
+    "arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/e/",
+    "arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/a//b",
+    "arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/<x>",
     `${ARN}\n`,
   ])("rejects %j", (value) => {
     expect(isDurableExecutionArn(value)).toBe(false);
@@ -311,6 +315,27 @@ describe("getExecution", () => {
     expect(
       calls.filter((c) => c.command === "GetDurableExecutionHistoryCommand"),
     ).toHaveLength(1);
+  });
+
+  it("stops paging at the byte budget and says so", async () => {
+    const { ctx, calls } = fakeContext({
+      GetDurableExecutionCommand: () => summary,
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [
+          {
+            EventType: "StepSucceeded",
+            Id: "s",
+            StepSucceededDetails: { Result: { Payload: "x".repeat(5000) } },
+          },
+        ],
+        NextMarker: "more",
+      }),
+    });
+    const detail = await getExecution(ctx, ARN, { maxHistoryBytes: 12_000 });
+    expect(detail.historyTruncated).toBe(true);
+    expect(
+      calls.filter((c) => c.command === "GetDurableExecutionHistoryCommand"),
+    ).toHaveLength(3);
   });
 
   it("reports a history failure without failing the call", async () => {

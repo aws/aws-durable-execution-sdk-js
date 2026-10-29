@@ -1,8 +1,12 @@
 import {
+  chmodSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -66,5 +70,44 @@ describe("fileConsentStore", () => {
     expect(await fileConsentStore(file).has("a")).toBe(false);
     await fileConsentStore(file).add("a");
     expect(await fileConsentStore(file).has("a")).toBe(true);
+  });
+});
+
+describe("fileConsentStore hardening", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "consent-h-"));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("tightens an existing loose directory to 0700", async () => {
+    const sub = join(dir, "d");
+    mkdirSync(sub, { mode: 0o755 });
+    chmodSync(sub, 0o755);
+    await fileConsentStore(join(sub, "a.json")).add("k");
+    expect(statSync(sub).mode & 0o777).toBe(0o700);
+  });
+
+  it("refuses to write through a symlinked directory", async () => {
+    const target = join(dir, "target");
+    mkdirSync(target);
+    const link = join(dir, "link");
+    symlinkSync(target, link);
+    await expect(
+      fileConsentStore(join(link, "a.json")).add("k"),
+    ).rejects.toThrow(/not a directory/);
+    expect(readdirSync(target)).toEqual([]);
+  });
+
+  it("uses a fresh temp name, so a planted symlink is never written through", async () => {
+    const sub = join(dir, "d");
+    mkdirSync(sub, { mode: 0o700 });
+    const victim = join(dir, "victim");
+    writeFileSync(victim, "keep");
+    // The old predictable temp name.
+    symlinkSync(victim, join(sub, `a.json.${process.pid}.tmp`));
+    await fileConsentStore(join(sub, "a.json")).add("k");
+    expect(readFileSync(victim, "utf-8")).toBe("keep");
+    expect(await fileConsentStore(join(sub, "a.json")).has("k")).toBe(true);
   });
 });

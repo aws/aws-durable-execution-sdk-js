@@ -16,12 +16,20 @@ jest.mock("./tools", () => ({
 }));
 
 import { request } from "node:http";
+import { connect } from "node:net";
 import type { ExecutionDetail } from "@aws/durable-execution-sdk-js-telemetry-core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readConfigFromEnv } from "./config";
-import { escapeHtml, renderExecutionPage } from "./executionPage";
+import {
+  escapeHtml,
+  executionPath,
+  MAX_PAGE_PAYLOAD_CHARS,
+  MAX_PAYLOAD_CHARS,
+  renderExecutionPage,
+} from "./executionPage";
+import { isDurableExecutionArn } from "@aws/durable-execution-sdk-js-telemetry-core";
 import {
   ExecutionViewer,
   executionArnColumnIndex,
@@ -230,6 +238,7 @@ describe("ExecutionViewer server", () => {
   it("serves the same page under localhost", async () => {
     viewer = makeViewer().viewer;
     const origin = (await viewer.start()) ?? "";
+    await viewer.linkFor(ARN);
     const port = new URL(origin).port;
     const res = await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`, {
       headers: { Host: `localhost:${port}` },
@@ -267,6 +276,7 @@ describe("ExecutionViewer server", () => {
   it("accepts navigation within the viewer (same-origin)", async () => {
     viewer = makeViewer().viewer;
     const origin = (await viewer.start()) ?? "";
+    await viewer.linkFor(ARN);
     const res = await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`, {
       headers: { "Sec-Fetch-Site": "same-origin" },
     });
@@ -298,6 +308,7 @@ describe("ExecutionViewer server", () => {
       }),
     });
     const origin = (await viewer.start()) ?? "";
+    await viewer.linkFor(ARN);
     const res = await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`);
     expect(res.status).toBe(502);
     expect(res.body).toContain("ExpiredTokenException");
@@ -488,4 +499,226 @@ describe("readViewerSettings", () => {
       expect(s.warnings).toHaveLength(1);
     },
   );
+});
+
+describe("security fixes", () => {
+  let viewer: ExecutionViewer;
+  afterEach(async () => {
+    await viewer?.close();
+  });
+
+  const otherAccount =
+    "arn:aws:lambda:ap-southeast-2:999999999999:function:x:1/durable-execution/a/b";
+
+  it("serves only executions it linked, and makes no AWS call for others", async () => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const res = await get(
+      origin,
+      `/execution?arn=${encodeURIComponent(otherAccount)}`,
+    );
+    expect(res.status).toBe(404);
+    expect(res.body).toContain("Link not recognized");
+    expect(made.regions).toEqual([]);
+    expect(
+      (await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`)).status,
+    ).toBe(200);
+  });
+
+  it("serves a child execution once its parent's page has linked it", async () => {
+    const regions: string[] = [];
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: (region) => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) => {
+          regions.push(region);
+          if (cmd.constructor.name === "GetDurableExecutionCommand") {
+            return {
+              DurableExecutionArn: cmd.input.DurableExecutionArn,
+              Status: "SUCCEEDED",
+            };
+          }
+          return {
+            Events:
+              cmd.input.DurableExecutionArn === ARN
+                ? [
+                    {
+                      EventType: "ChainedInvokeStarted",
+                      Id: "i",
+                      ChainedInvokeStartedDetails: {
+                        FunctionName: "child",
+                        DurableExecutionArn: CHILD_ARN,
+                      },
+                    },
+                  ]
+                : [],
+          };
+        },
+      }),
+    });
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const child = `/execution?arn=${encodeURIComponent(CHILD_ARN)}`;
+    expect((await get(origin, child)).status).toBe(404);
+    expect(
+      (await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`)).status,
+    ).toBe(200);
+    expect((await get(origin, child)).status).toBe(200);
+  });
+
+  it.each([
+    ["a foreign Origin", { Origin: "https://evil.example" }],
+    ["an image load", { "Sec-Fetch-Dest": "image" }],
+    ["a fetch()", { "Sec-Fetch-Dest": "empty" }],
+  ])("rejects %s before calling AWS", async (_label, headers) => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const res = await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`, {
+      headers,
+    });
+    expect(res.status).toBe(403);
+    expect(made.regions).toEqual([]);
+  });
+
+  it("accepts its own Origin and a document or stylesheet load", async () => {
+    viewer = makeViewer().viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const page = `/execution?arn=${encodeURIComponent(ARN)}`;
+    expect(
+      (
+        await get(origin, page, {
+          headers: { Origin: origin, "Sec-Fetch-Dest": "document" },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await get(origin, "/viewer.css", {
+          headers: { "Sec-Fetch-Dest": "style" },
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it("answers HEAD without calling AWS", async () => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const res = await get(origin, `/execution?arn=${encodeURIComponent(ARN)}`, {
+      method: "HEAD",
+    });
+    expect(res.status).toBe(200);
+    expect(made.regions).toEqual([]);
+  });
+
+  it("rejects an absolute-form request line", async () => {
+    viewer = makeViewer().viewer;
+    const origin = (await viewer.start()) ?? "";
+    const port = Number(new URL(origin).port);
+    const status = await new Promise<string>((resolve, reject) => {
+      const sock = connect(port, "127.0.0.1", () => {
+        sock.write(
+          `GET http://evil.example/execution HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+        );
+      });
+      let data = "";
+      sock.on("data", (c) => {
+        data += c;
+      });
+      sock.on("end", () => resolve(data.split("\r\n")[0]));
+      sock.on("error", reject);
+    });
+    expect(status).toBe("HTTP/1.1 400 Bad Request");
+  });
+
+  it("sends Cross-Origin-Opener-Policy", async () => {
+    viewer = makeViewer().viewer;
+    const origin = (await viewer.start()) ?? "";
+    expect(
+      (await get(origin, "/viewer.css")).headers["cross-origin-opener-policy"],
+    ).toBe("same-origin");
+  });
+
+  it("caps concurrent fetches and shares one fetch per execution", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    viewer = new ExecutionViewer({
+      config: CONFIG,
+      lambdaClientFor: () => ({
+        send: async (cmd: { constructor: { name: string }; input: any }) => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await gate;
+          inFlight--;
+          return cmd.constructor.name === "GetDurableExecutionCommand"
+            ? {
+                DurableExecutionArn: cmd.input.DurableExecutionArn,
+                Status: "SUCCEEDED",
+              }
+            : { Events: [] };
+        },
+      }),
+    });
+    const arns = Array.from(
+      { length: 6 },
+      (_, i) =>
+        `arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/e${i}/1`,
+    );
+    for (const a of arns) await viewer.linkFor(a);
+    const origin = (await viewer.start()) ?? "";
+    const path = (a: string) => `/execution?arn=${encodeURIComponent(a)}`;
+    // Three requests for one execution share a fetch; five more distinct ones
+    // fill the cap of four and then get 503.
+    const pending = [
+      get(origin, path(arns[0])),
+      get(origin, path(arns[0])),
+      get(origin, path(arns[0])),
+      ...arns.slice(1).map((a) => get(origin, path(a))),
+    ];
+    await new Promise((r) => setTimeout(r, 100));
+    release();
+    const statuses = (await Promise.all(pending)).map((r) => r.status);
+    expect(statuses.filter((s) => s === 200)).toHaveLength(6);
+    expect(statuses.filter((s) => s === 503)).toHaveLength(2);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  it("keeps link text and URL inside the Markdown link", async () => {
+    viewer = makeViewer().viewer;
+    const link = markdownLink(
+      "a\n\n![x](https://evil.example/p.png) `c` <b>",
+      "http://x/y",
+    );
+    expect(link).not.toContain("\n");
+    expect(link).toBe(
+      "[a !\\[x\\](https://evil.example/p.png) \\`c\\` \\<b\\>](http://x/y)",
+    );
+    expect(executionPath(ARN)).not.toMatch(/[()!*'~]/);
+    expect(isDurableExecutionArn(`${ARN})--evil(`)).toBe(false);
+  });
+
+  it("caps payload text on the page", () => {
+    const big = "x".repeat(MAX_PAYLOAD_CHARS * 2);
+    const ops = Array.from({ length: 60 }, (_, i) => ({
+      id: `s${i}`,
+      status: "SUCCEEDED",
+      result: big,
+    }));
+    const html = renderExecutionPage(detail({ input: big, operations: ops }));
+    expect(html).toContain("shortened in the viewer");
+    expect(html).toContain(
+      "Not shown: this page already shows as much payload",
+    );
+    expect(html.length).toBeLessThan(MAX_PAGE_PAYLOAD_CHARS + 500_000);
+  });
 });

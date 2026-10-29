@@ -110,7 +110,7 @@ export async function askUserToAccept(
         },
         dontAskAgain: {
           type: "boolean",
-          title: "Don't ask again for these credentials",
+          title: "Don't ask again",
           default: false,
         },
       },

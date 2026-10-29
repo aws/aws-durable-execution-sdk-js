@@ -14,8 +14,16 @@
  * with shell access could write it too, which is no different from it editing
  * the server's config to set the variable.
  */
-import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { TelemetryConfig } from "@aws/durable-execution-sdk-js-telemetry-core";
@@ -75,13 +83,29 @@ export function fileConsentStore(file = defaultConsentFile()): ConsentStore {
         ...data.accepted.filter((e) => e.key !== key),
         { key, acceptedAt: new Date().toISOString() },
       ].slice(-MAX_ENTRIES);
-      await mkdir(dirname(file), { recursive: true, mode: 0o700 });
-      // Write then rename, so a crash cannot leave a half-written file.
-      const tmp = `${file}.${process.pid}.tmp`;
-      await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, {
-        mode: 0o600,
-      });
-      await rename(tmp, file);
+      const dir = dirname(file);
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      // Refuse a symlinked directory, and tighten one that already existed
+      // with looser permissions; mkdir changes neither.
+      const info = await lstat(dir);
+      if (!info.isDirectory()) {
+        throw new Error(`${dir} is not a directory; not saving the answer.`);
+      }
+      if ((info.mode & 0o077) !== 0) await chmod(dir, 0o700);
+      // Write then rename, so a crash cannot leave a half-written file. The
+      // temp name is random and opened with "wx", so a file or symlink planted
+      // at a predictable path cannot redirect the write.
+      const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
+      try {
+        await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, {
+          mode: 0o600,
+          flag: "wx",
+        });
+        await rename(tmp, file);
+      } catch (err) {
+        await unlink(tmp).catch(() => {});
+        throw err;
+      }
     },
   };
 }

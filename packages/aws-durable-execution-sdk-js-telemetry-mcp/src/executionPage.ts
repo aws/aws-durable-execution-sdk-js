@@ -30,7 +30,25 @@ export function escapeHtml(value: unknown): string {
 
 /** The viewer's own link to an execution (relative, so it stays same-origin). */
 export function executionPath(arn: string): string {
-  return `/execution?arn=${encodeURIComponent(arn)}`;
+  // encodeURIComponent leaves ( ) ! * ' ~ as they are. Encode them too, so a
+  // URL placed in a Markdown link can never end the link early.
+  const arnParam = encodeURIComponent(arn).replace(
+    /[()!*'~]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `/execution?arn=${arnParam}`;
+}
+
+/** Most characters shown for one payload; the rest is cut with a note. */
+export const MAX_PAYLOAD_CHARS = 64 * 1024;
+/** Most payload characters shown on one page; later payloads are omitted. */
+export const MAX_PAGE_PAYLOAD_CHARS = 2 * 1024 * 1024;
+/** Most history rows shown in the history table. */
+export const MAX_HISTORY_ROWS = 2000;
+
+/** Payload characters still available on the page being rendered. */
+interface PayloadBudget {
+  remaining: number;
 }
 
 function formatTime(iso?: string): string {
@@ -67,9 +85,22 @@ function statusBadge(status?: string): string {
   return `<span class="status status-${cls}">${escapeHtml(s)}</span>`;
 }
 
-function codeBlock(label: string, text?: string): string {
-  const pretty = prettyJson(text);
+function codeBlock(
+  budget: PayloadBudget,
+  label: string,
+  text?: string,
+): string {
+  let pretty = prettyJson(text);
   if (pretty === undefined) return "";
+  if (budget.remaining <= 0) {
+    return `<details><summary>${escapeHtml(label)}</summary><p class="note">Not shown: this page already shows as much payload as the viewer allows.</p></details>`;
+  }
+  const limit = Math.min(MAX_PAYLOAD_CHARS, budget.remaining);
+  if (pretty.length > limit) {
+    const total = pretty.length;
+    pretty = `${pretty.slice(0, limit)}\n… shortened in the viewer: ${total.toLocaleString("en-US")} characters in full`;
+  }
+  budget.remaining -= Math.min(limit, pretty.length);
   return `<details><summary>${escapeHtml(label)}</summary><pre>${escapeHtml(pretty)}</pre></details>`;
 }
 
@@ -77,7 +108,11 @@ function field(label: string, valueHtml: string): string {
   return `<div class="field"><div class="label">${escapeHtml(label)}</div><div class="value">${valueHtml}</div></div>`;
 }
 
-function operationRows(nodes: OperationNode[], depth: number): string {
+function operationRows(
+  nodes: OperationNode[],
+  depth: number,
+  budget: PayloadBudget,
+): string {
   return nodes
     .map((op) => {
       const name = escapeHtml(op.name || op.id);
@@ -96,8 +131,8 @@ function operationRows(nodes: OperationNode[], depth: number): string {
         op.payloadTruncated
           ? `<div class="note">Payload truncated by Lambda.</div>`
           : "",
-        codeBlock("Result", op.result),
-        codeBlock("Error", op.error),
+        codeBlock(budget, "Result", op.result),
+        codeBlock(budget, "Error", op.error),
       ].join("");
       const row = `<tr>
 <td class="d${Math.min(depth, MAX_DEPTH_CLASS)}">${name}</td>
@@ -108,19 +143,19 @@ function operationRows(nodes: OperationNode[], depth: number): string {
 <td>${escapeHtml(op.attempt ?? "—")}</td>
 <td>${extra}</td>
 </tr>`;
-      return row + operationRows(op.children ?? [], depth + 1);
+      return row + operationRows(op.children ?? [], depth + 1, budget);
     })
     .join("\n");
 }
 
-function invocationRows(rows: InvocationRow[]): string {
+function invocationRows(rows: InvocationRow[], budget: PayloadBudget): string {
   return rows
     .map(
       (i) => `<tr>
 <td><code>${escapeHtml(i.requestId ?? "—")}</code></td>
 <td>${escapeHtml(formatTime(i.startTime))}</td>
 <td>${escapeHtml(formatDuration(i.durationMs))}</td>
-<td>${codeBlock("Error", i.error)}</td>
+<td>${codeBlock(budget, "Error", i.error)}</td>
 </tr>`,
     )
     .join("\n");
@@ -160,6 +195,12 @@ export function renderExecutionPage(
   detail: ExecutionDetail,
   renderedAt: Date = new Date(),
 ): string {
+  // Execution-level payloads first, so input and result are shown even when
+  // operations use up the page's budget.
+  const budget: PayloadBudget = { remaining: MAX_PAGE_PAYLOAD_CHARS };
+  const payloads = `${codeBlock(budget, "Input", detail.input) || `<p class="empty">No input recorded.</p>`}
+  ${codeBlock(budget, "Result", detail.result)}
+  ${codeBlock(budget, "Error", detail.error)}`;
   const live = !TERMINAL_EXECUTION_STATUSES.includes(detail.status);
   const title = detail.name || detail.arn.split("/").pop() || "Execution";
   const opCount = countOperations(detail.operations);
@@ -198,16 +239,14 @@ ${notices}
     opCount > 0
       ? `<table><thead><tr><th>Operation</th><th>Kind</th><th>Status</th><th>Started</th><th>Duration</th><th>Attempt</th><th>Details</th></tr></thead>
 <tbody>
-${operationRows(detail.operations, 0)}
+${operationRows(detail.operations, 0, budget)}
 </tbody></table>`
       : `<p class="empty">No operations recorded.</p>`
   }
 </section>
 <section>
   <h2>Payloads</h2>
-  ${codeBlock("Input", detail.input) || `<p class="empty">No input recorded.</p>`}
-  ${codeBlock("Result", detail.result)}
-  ${codeBlock("Error", detail.error)}
+  ${payloads}
 </section>
 <section>
   <h2>Invocations (${detail.invocations.length})</h2>
@@ -215,7 +254,7 @@ ${operationRows(detail.operations, 0)}
     detail.invocations.length > 0
       ? `<table><thead><tr><th>Request ID</th><th>Started</th><th>Duration</th><th>Error</th></tr></thead>
 <tbody>
-${invocationRows(detail.invocations)}
+${invocationRows(detail.invocations, budget)}
 </tbody></table>`
       : `<p class="empty">No completed invocations.</p>`
   }
@@ -223,9 +262,15 @@ ${invocationRows(detail.invocations)}
 <section>
   <details>
     <summary>History (${detail.history.length} events)</summary>
+    ${
+      detail.history.length > MAX_HISTORY_ROWS
+        ? `<p class="note">Showing the first ${MAX_HISTORY_ROWS.toLocaleString("en-US")} events.</p>`
+        : ""
+    }
     <table><thead><tr><th>#</th><th>Type</th><th>Subtype</th><th>Operation</th><th>Time</th></tr></thead>
     <tbody>
 ${detail.history
+  .slice(0, MAX_HISTORY_ROWS)
   .map(
     (e) =>
       `<tr><td>${escapeHtml(e.eventId ?? "—")}</td><td>${escapeHtml(e.type ?? "—")}</td><td>${escapeHtml(e.subType || "—")}</td><td>${escapeHtml(e.name || "—")}</td><td>${escapeHtml(formatTime(e.timestamp))}</td></tr>`,

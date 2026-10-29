@@ -150,7 +150,7 @@ tool error. To confirm permanently, set
 `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
 you can confirm: no tool confirms on the agent's behalf.
 
-Ticking **Don't ask again for these credentials** together with the confirm box
+Ticking **Don't ask again** together with the confirm box
 saves the answer, so later sessions with the same destination settings, region,
 and profile skip the prompt. Changing any of them asks again, and so does an
 S3 + Athena configuration warning. Saved answers live in
@@ -253,12 +253,30 @@ How the page is served:
 
 - The server starts a small web server the first time a result needs a link, not
   at startup. It listens on `127.0.0.1` only.
-- It answers only requests addressed to that loopback address, and refuses
-  requests that a browser marks as coming from another site. So another web page
-  cannot read it or make it call AWS.
+- It shows only executions it linked in a tool result during this session, plus
+  the child executions those pages link to. It answers any other execution ARN
+  with "Link not recognized". So a caller cannot make it fetch an execution of
+  its choosing.
+- It answers only requests addressed to that loopback address. It refuses
+  requests that a browser marks as coming from another site, requests with
+  another site's `Origin`, and anything other than a page and its stylesheet.
+  In current browsers (Chrome, Edge, Firefox, Safari 16.4 and later), another
+  web page cannot read it or make it call AWS. Older browsers that send none of
+  these headers can still make it fetch a linked execution, without reading the
+  result.
+- A link clicked inside a web page on another site is refused, because the
+  browser marks it as cross-site. Links opened from a terminal, an agent's chat,
+  or the address bar work.
+- It loads at most four executions at a time, and answers further requests with
+  "Busy". It loads at most 8 MB of history per execution, shows at most 64 KB of
+  each payload and 2 MB of payloads per page, and lists at most 2,000 history
+  events.
 - It is read-only. It cannot stop or start executions. Use the VS Code extension
   or desktop app for that.
-- Every local user and process on the machine can reach a loopback port. On a
+- Every local user and process that can reach this machine's loopback can reach
+  the port. That includes other users logged in to a shared or remote
+  development host, and containers on the host network. Any of them that knows
+  the address of a linked execution can read that execution's payloads. On a
   shared machine, turn the viewer off.
 
 The identity you use also needs `lambda:GetDurableExecution` and
@@ -268,10 +286,13 @@ shows the AWS error, and the tools still work.
 | Variable                            | Effect                                                                                                                                               |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DURABLE_TELEMETRY_VIEWER_DISABLED` | `true` turns the viewer off. No port is opened, and results carry no `viewerLink`.                                                                    |
-| `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session, so links stop working when the server restarts. A fixed port keeps them working. |
+| `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session. A fixed port keeps the address the same across sessions. |
 
 If the fixed port is in use, for example by another session's viewer, the server
-picks a free port instead and logs that to stderr.
+picks a free port instead and logs that to stderr. Links from earlier sessions then point at
+whatever holds that port, which may not be this viewer. With either setting,
+links work only in the session that made them. A link from an earlier session
+opens "Link not recognized", or nothing; ask the agent again for a fresh one.
 
 ### Result bounding
 

@@ -175,6 +175,21 @@ function isRegionLike(s: string): boolean {
   return true;
 }
 
+function isExecutionTail(s: string): boolean {
+  for (const c of s) {
+    const ok =
+      (c >= "a" && c <= "z") ||
+      (c >= "A" && c <= "Z") ||
+      (c >= "0" && c <= "9") ||
+      c === "-" ||
+      c === "_" ||
+      c === "." ||
+      c === "/";
+    if (!ok) return false;
+  }
+  return !s.startsWith("/") && !s.endsWith("/") && !s.includes("//");
+}
+
 function isDigits(s: string, length: number): boolean {
   if (s.length !== length) return false;
   for (const c of s) if (c < "0" || c > "9") return false;
@@ -195,6 +210,12 @@ function parseExecutionArn(value: unknown): { region: string } | undefined {
   if (/\s/.test(value)) return undefined;
   const at = value.indexOf(EXECUTION_MARKER);
   if (at < 0 || at + EXECUTION_MARKER.length === value.length) return undefined;
+  // Execution names and invocation ids use letters, digits, '-', '_' and '.'.
+  // Rejecting everything else keeps characters such as ')' out of links built
+  // from an ARN, where they would end a Markdown link early.
+  if (!isExecutionTail(value.slice(at + EXECUTION_MARKER.length))) {
+    return undefined;
+  }
   const parts = value.slice(0, at).split(":");
   if (parts.length !== 7 && parts.length !== 8) return undefined;
   const [arn, partition, service, region, account, resource, name] = parts;
@@ -366,7 +387,8 @@ export async function stopExecution(
 
 /**
  * Fetches one durable execution: its summary from GetDurableExecution, plus its
- * full history (paged, bounded by `maxHistoryEvents`) folded into an operation
+ * full history (paged, bounded by `maxHistoryEvents` and `maxHistoryBytes`)
+ * folded into an operation
  * tree. The client targets the region named in the ARN, so a link from a
  * telemetry record in another region still resolves.
  *
@@ -376,7 +398,15 @@ export async function stopExecution(
 export async function getExecution(
   ctx: LambdaContext,
   arn: string,
-  opts: { maxHistoryEvents?: number } = {},
+  opts: {
+    maxHistoryEvents?: number;
+    /**
+     * Stop paging once the history held, measured as its JSON length, reaches
+     * this many bytes. Payloads can be large, so an event count alone does not
+     * bound memory. Unset means no byte limit.
+     */
+    maxHistoryBytes?: number;
+  } = {},
 ): Promise<ExecutionDetail> {
   if (!isDurableExecutionArn(arn)) {
     throw new Error(`Not a durable execution ARN: ${arn}`);
@@ -388,6 +418,7 @@ export async function getExecution(
   );
 
   const raw: HistoryApiEvent[] = [];
+  let historyBytes = 0;
   let historyTruncated = false;
   let historyError: string | undefined;
   try {
@@ -401,9 +432,18 @@ export async function getExecution(
           Marker: marker,
         }),
       );
-      raw.push(...(page.Events ?? []));
+      const events: HistoryApiEvent[] = page.Events ?? [];
+      raw.push(...events);
+      if (opts.maxHistoryBytes !== undefined) {
+        historyBytes += JSON.stringify(events).length;
+      }
       marker = page.NextMarker || undefined;
-      if (marker && raw.length >= maxEvents) {
+      if (
+        marker &&
+        (raw.length >= maxEvents ||
+          (opts.maxHistoryBytes !== undefined &&
+            historyBytes >= opts.maxHistoryBytes))
+      ) {
         historyTruncated = true;
         break;
       }
