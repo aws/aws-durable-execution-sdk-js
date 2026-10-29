@@ -4,6 +4,7 @@ import {
   CONSENT_MESSAGE,
   createWriteAccessGate,
   type ElicitingServer,
+  PERSIST_HINT,
   type PromptAnswer,
   writeAccessAcceptedByEnv,
 } from "./writeAccessGate";
@@ -140,7 +141,7 @@ describe("askUserToAccept", () => {
     );
     expect(await askUserToAccept(s, "m")).toBe("accept");
     expect(s.elicitInput).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "m" }),
+      expect.objectContaining({ message: `m ${PERSIST_HINT}` }),
     );
   });
 
@@ -205,8 +206,12 @@ describe("askUserToAccept against the MCP SDK", () => {
     );
     expect(await askUserToAccept(server.server, "risk")).toBe("accept");
     expect(received).toEqual([
-      expect.objectContaining({ mode: "form", message: "risk" }),
+      expect.objectContaining({
+        mode: "form",
+        message: `risk ${PERSIST_HINT}`,
+      }),
     ]);
+    expect(PERSIST_HINT).toContain(`${ACCEPT_WRITE_ACCESS_ENV_VAR}=true`);
     await client.close();
   });
 
@@ -223,85 +228,5 @@ describe("askUserToAccept against the MCP SDK", () => {
     );
     await expect(askUserToAccept(server.server, "risk")).rejects.toThrow();
     await client.close();
-  });
-});
-
-describe("don't ask again", () => {
-  const store = () => {
-    const keys = new Set<string>();
-    return {
-      keys,
-      remembered: {
-        has: async () => keys.has("k"),
-        add: async () => {
-          keys.add("k");
-        },
-      },
-    };
-  };
-  const gate = (
-    r: ReturnType<typeof store>,
-    ask: () => Promise<PromptAnswer>,
-    warning?: string,
-  ) =>
-    createWriteAccessGate({
-      acceptedByEnv: false,
-      ask,
-      configurationWarning: async () => warning,
-      remembered: r.remembered,
-    });
-
-  it("saves the answer, and a later session is not asked", async () => {
-    const r = store();
-    expect(await gate(r, async () => "accept-always")()).toBeNull();
-    expect(r.keys.has("k")).toBe(true);
-    const ask = jest.fn(async () => "decline" as const);
-    expect(await gate(r, ask)()).toBeNull();
-    expect(ask).not.toHaveBeenCalled();
-  });
-
-  it("does not save a plain confirm", async () => {
-    const r = store();
-    expect(await gate(r, async () => "accept")()).toBeNull();
-    expect(r.keys.size).toBe(0);
-  });
-
-  it("still asks when there is a configuration warning", async () => {
-    const r = store();
-    r.keys.add("k");
-    const ask = jest.fn(async () => "accept" as const);
-    expect(await gate(r, ask, "Results land inside the data.")()).toBeNull();
-    expect(ask).toHaveBeenCalledTimes(1);
-  });
-
-  it("still confirms the session when saving fails", async () => {
-    const g = createWriteAccessGate({
-      acceptedByEnv: false,
-      ask: async () => "accept-always",
-      configurationWarning: async () => undefined,
-      remembered: {
-        has: async () => false,
-        add: async () => {
-          throw new Error("EACCES");
-        },
-      },
-    });
-    expect(await g()).toBeNull();
-  });
-
-  it("counts only together with the confirm box", async () => {
-    const fake = (content: unknown) => ({
-      getClientCapabilities: () => ({ elicitation: { form: {} } }),
-      elicitInput: async () => ({ action: "accept" as const, content }),
-    });
-    expect(
-      await askUserToAccept(fake({ confirmed: true, dontAskAgain: true }), "m"),
-    ).toBe("accept-always");
-    expect(
-      await askUserToAccept(
-        fake({ confirmed: false, dontAskAgain: true }),
-        "m",
-      ),
-    ).toBe("decline");
   });
 });

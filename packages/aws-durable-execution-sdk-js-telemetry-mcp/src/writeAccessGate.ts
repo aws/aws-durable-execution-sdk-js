@@ -20,10 +20,6 @@
  * shows to the user, or from the {@link ACCEPT_WRITE_ACCESS_ENV_VAR} variable
  * in the client's server config. There is deliberately no tool that confirms,
  * because the agent could call it on the user's behalf.
- *
- * A prompt answer with "Don't ask again" is saved for later sessions with the
- * same destination settings (consentStore.ts). The saved answer is still the
- * user's answer to the prompt, and no tool writes it.
  */
 import { ACCEPT_WRITE_ACCESS_ENV_VAR } from "./envKeys";
 
@@ -38,17 +34,21 @@ export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
  * The user's answer to the prompt. `undefined` means the client cannot show
  * a prompt.
  */
-export type PromptAnswer =
-  | "accept"
-  | "accept-always"
-  | "decline"
-  | "cancel"
-  | undefined;
+export type PromptAnswer = "accept" | "decline" | "cancel" | undefined;
 
 /** The one line the user is asked to confirm. */
 export const CONSENT_MESSAGE =
   "Queries are written by the agent and run with this server's credentials. " +
   "It is your responsibility to give this server read-only credentials.";
+
+/**
+ * Added to the prompt only. A user who confirms is otherwise not told how to
+ * stop the prompt in later sessions. A blocked result already names the
+ * variable in `howToAccept`.
+ */
+export const PERSIST_HINT =
+  `To stop this prompt in later sessions, set ${ACCEPT_WRITE_ACCESS_ENV_VAR}=true ` +
+  "in this server's env block and restart it.";
 
 export interface WriteAccessGateDeps {
   /** Whether {@link ACCEPT_WRITE_ACCESS_ENV_VAR} confirms. */
@@ -61,16 +61,6 @@ export interface WriteAccessGateDeps {
    * added to the prompt and to a blocked result.
    */
   configurationWarning: () => Promise<string | undefined>;
-  /**
-   * Saved "don't ask again" answers for this configuration. Optional: without
-   * it the checkbox behaves like a plain confirm.
-   */
-  remembered?: {
-    has: () => Promise<boolean>;
-    add: () => Promise<void>;
-  };
-  /** Diagnostics sink, for failures the user should be able to find. */
-  log?: (message: string) => void;
 }
 
 /**
@@ -105,7 +95,7 @@ export async function askUserToAccept(
 ): Promise<PromptAnswer> {
   if (!server.getClientCapabilities()?.elicitation?.form) return undefined;
   const answer = await server.elicitInput({
-    message,
+    message: `${message} ${PERSIST_HINT}`,
     requestedSchema: {
       type: "object",
       properties: {
@@ -114,22 +104,13 @@ export async function askUserToAccept(
           title: "I understand, and I want to continue",
           default: false,
         },
-        dontAskAgain: {
-          type: "boolean",
-          title: "Don't ask again",
-          default: false,
-        },
       },
       required: ["confirmed"],
     },
   });
   if (answer.action !== "accept") return answer.action;
-  const content = answer.content as
-    | { confirmed?: unknown; dontAskAgain?: unknown }
-    | undefined;
-  // "Don't ask again" only counts together with the confirm box.
-  if (content?.confirmed !== true) return "decline";
-  return content.dontAskAgain === true ? "accept-always" : "accept";
+  const content = answer.content as { confirmed?: unknown } | undefined;
+  return content?.confirmed === true ? "accept" : "decline";
 }
 
 /** The tool-result payload returned instead of running the query. */
@@ -154,12 +135,6 @@ export function createWriteAccessGate(
 
   async function decide(): Promise<WriteAccessBlocked | null> {
     const warning = await deps.configurationWarning();
-    // A saved answer covers the fixed notice only. A configuration warning is
-    // new information, so it is always shown.
-    if (!warning && (await rememberedHas())) {
-      allowed = true;
-      return null;
-    }
     const message = warning ? `${CONSENT_MESSAGE} ${warning}` : CONSENT_MESSAGE;
     let answer: PromptAnswer;
     try {
@@ -169,30 +144,11 @@ export function createWriteAccessGate(
       // client that cannot prompt, so the user still gets the env var route.
       answer = undefined;
     }
-    if (answer === "accept" || answer === "accept-always") {
+    if (answer === "accept") {
       allowed = true;
-      if (answer === "accept-always") {
-        try {
-          await deps.remembered?.add();
-        } catch (err) {
-          // This session is still confirmed; the next one asks again. Say why,
-          // or the user is asked every session with no explanation.
-          deps.log?.(
-            `could not save "Don't ask again", so the next session asks again: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
       return null;
     }
     return blocked(message, answer);
-  }
-
-  async function rememberedHas(): Promise<boolean> {
-    try {
-      return (await deps.remembered?.has()) ?? false;
-    } catch {
-      return false;
-    }
   }
 
   return async () => {
