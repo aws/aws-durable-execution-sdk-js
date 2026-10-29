@@ -173,6 +173,121 @@ describe("CheckpointManager", () => {
       expect(settled).not.toHaveBeenCalled();
     });
 
+    it("should complete an in-flight forced checkpoint after disposal", async () => {
+      let finishCheckpoint!: (
+        value: CheckpointDurableExecutionResponse,
+      ) => void;
+      mockState.checkpoint.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishCheckpoint = resolve;
+          }),
+      );
+      const forced = checkpointHandler.forceCheckpoint();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+      expect(mockState.checkpoint.mock.calls[0][0].Updates).toEqual([]);
+
+      checkpointHandler.dispose();
+      finishCheckpoint({
+        CheckpointToken: mockNewTaskToken,
+        NewExecutionState: undefined,
+      });
+
+      await expect(forced).resolves.toBeUndefined();
+      expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    });
+
+    it("should report an accepted in-flight execution result as sent after disposal", async () => {
+      let finishCheckpoint!: (
+        value: CheckpointDurableExecutionResponse,
+      ) => void;
+      mockState.checkpoint.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishCheckpoint = resolve;
+          }),
+      );
+      const result = checkpointHandler.checkpointExecutionResult("execution", {
+        Type: OperationType.EXECUTION,
+        Action: OperationAction.SUCCEED,
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+      expect(mockState.checkpoint.mock.calls[0][0].Updates).toEqual([
+        expect.objectContaining({
+          Type: OperationType.EXECUTION,
+          Action: OperationAction.SUCCEED,
+        }),
+      ]);
+
+      checkpointHandler.dispose();
+      // A terminal execution update can be accepted without another checkpoint token.
+      finishCheckpoint({ NewExecutionState: undefined });
+
+      await expect(result).resolves.toBe("sent");
+      expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["termination", "disposal"] as const)(
+      "should preserve queued-work semantics during %s",
+      async (transition) => {
+        let finishCheckpoint!: (
+          value: CheckpointDurableExecutionResponse,
+        ) => void;
+        mockState.checkpoint.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishCheckpoint = resolve;
+            }),
+        );
+        const active = checkpointHandler.checkpoint("active-step", {});
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+
+        const settled = jest.fn();
+        const queued = checkpointHandler.checkpoint("queued-step", {});
+        void queued.then(settled, settled);
+        // Force waiters attached to the active request must survive either transition.
+        const forced = checkpointHandler.forceCheckpoint();
+        const result = checkpointHandler.checkpointExecutionResult(
+          "execution",
+          {
+            Type: OperationType.EXECUTION,
+            Action: OperationAction.SUCCEED,
+          },
+        );
+        const drained = checkpointHandler.waitForQueueCompletion();
+        if (transition === "termination") checkpointHandler.setTerminating();
+        else checkpointHandler.dispose();
+        finishCheckpoint({
+          CheckpointToken: mockNewTaskToken,
+          NewExecutionState: undefined,
+        });
+
+        await expect(active).resolves.toBeUndefined();
+        await expect(forced).resolves.toBeUndefined();
+        await drained;
+        expect(checkpointHandler.getQueueStatus()).toEqual({
+          queueLength: 0,
+          isProcessing: false,
+        });
+        if (transition === "termination") {
+          await expect(queued).resolves.toBeUndefined();
+          await expect(result).resolves.toBe("sent");
+          expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
+          expect(mockState.checkpoint.mock.calls[1][0].Updates).toEqual([
+            expect.objectContaining({ Id: hashId("queued-step") }),
+            expect.objectContaining({ Id: hashId("execution") }),
+          ]);
+        } else {
+          await expect(result).resolves.toBe("abandoned");
+          expect(settled).not.toHaveBeenCalled();
+          expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+        }
+      },
+    );
+
     it("should abandon execution results after disposal", async () => {
       checkpointHandler.dispose();
       const result = checkpointHandler.checkpointExecutionResult("execution", {

@@ -148,7 +148,12 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
-   * Releases everything this manager armed, and refuses to arm anything further.
+   * Clears currently armed timers and closes checkpoint admission.
+   *
+   * An already in-flight checkpoint retains its completion behavior. Its continuation can
+   * still rearm a poll timer in forceRefreshAndCheckStatus or a termination timer through
+   * processQueue's finally block. That pre-existing timer race is outside this checkpoint
+   * admission fix; processQueue still prevents any subsequent dispatch after disposal.
    *
    * Timers outlive the invocation that armed them. Nothing else clears them on the normal
    * path: cleanupAllOperations is only reached through executeTermination, and
@@ -173,6 +178,8 @@ export class CheckpointManager implements Checkpoint {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Close admission while processQueue abandons queued work after any active batch.
+    this.setTerminating();
 
     if (this.terminationTimer) {
       clearTimeout(this.terminationTimer);
@@ -220,7 +227,7 @@ export class CheckpointManager implements Checkpoint {
   }
 
   async forceCheckpoint(): Promise<void> {
-    if (this.isTerminating || this.disposed) {
+    if (this.isTerminating) {
       log("⚠️", "Force checkpoint skipped - manager is terminating or disposed");
       return new Promise(() => {}); // Never resumes work from an ended invocation
     }
@@ -297,7 +304,7 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<CheckpointOutcome> {
-    if (this.isTerminating || this.checkpointTokenRevoked || this.disposed) {
+    if (this.isTerminating || this.checkpointTokenRevoked) {
       log("⚠️", "Execution result not checkpointed - manager is inactive:", {
         stepId,
         checkpointTokenRevoked: this.checkpointTokenRevoked,
@@ -336,7 +343,7 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<void> {
-    if (this.isTerminating || this.disposed) {
+    if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - manager is terminating or disposed:", {
         stepId,
       });
