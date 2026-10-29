@@ -97,12 +97,6 @@ const PERMITTED_OUTSIDE_CHOKE_POINT: Record<
       "the test_destination tool. Core's own connectivity probe; it issues fixed " +
       "read-only statements that no caller can influence.",
   },
-  checkWriteAccess: {
-    file: "registerTools.ts",
-    reason:
-      "the write-access gate before the first data query. It issues fixed " +
-      "catalog SELECTs and a Glue GetTable that no caller can influence.",
-  },
 };
 
 /** Every non-test `.ts` file under this package's src, recursively. */
@@ -302,7 +296,7 @@ describe("query choke point", () => {
       // whole thing this file exists to prevent.
       "sendConverse",
       "listBedrockModels",
-      // Reads an Athena workgroup's result settings for the write check.
+      // Reads an Athena workgroup's result settings for the result-location check.
       "getWorkGroupOutput",
       "listenToQueue",
       "verifyResult",

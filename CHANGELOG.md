@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Telemetry MCP 1.1.0
+
+- The server asks you to confirm, once per session, that giving it read-only
+  credentials is your responsibility. It no longer checks the credentials, so
+  `test_destination` and blocked data-tool results no longer return a
+  `writeAccess` field. On S3 + Athena the prompt also names a result location
+  inside the table's data. See the
+  [release notes](release-notes/telemetry-mcp-1.1.0.md).
+
 ### Coordinated release summary
 
 Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
@@ -628,7 +637,8 @@ below describe each change in detail.
   without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
   version 1. The session sets the flag before the job starts. So the job itself and each later
   job of the session handle check the MicroVM state before delivery, and resume a suspended
-  MicroVM. The worker acknowledges the field with the header
+  MicroVM. A request from a job that ends before the first accepted run hook waits for that
+  hook. The worker acknowledges the field with the header
   `X-Microvm-Suspend-After: accepted`. Without that header, the session logs a warning once per
   session in each execution environment: `the worker in MicroVM <id> does not support
   suspendAfter. The MicroVM keeps running after the job.` `microvm` rejects `suspendAfter` in

@@ -420,16 +420,10 @@ Redshift needs one credential action, chosen by how you connect:
 >   save and to write Athena results. Scope `s3:PutObject` to the results bucket.
 >   If the Glue table already exists, omit the two Glue write actions.
 >
-> **Test connection** in Settings looks for ways that queries could change
-> data. On Aurora it checks superuser status, writable tables, sequences, and
-> other roles' `SECURITY DEFINER` functions. On Redshift it checks superuser
-> status, writable tables, Lambda UDFs and `SECURITY DEFINER` functions. On
-> S3 + Athena it checks whether query results land inside the table's data,
-> where every query would add rows; it skips its own test query in that case.
-> A passing test always shows a warning. Either it lists what it found, or it
-> says it could not confirm the credentials are read-only. Finding nothing
-> proves nothing, so checking the credentials is your responsibility. The
-> warning does not stop you from saving.
+> The Settings page repeats this as a one-line warning. For S3 + Athena,
+> **Test connection** also checks where Athena writes query results. If they
+> would land inside the table's data, every query would add rows, so the test
+> skips its own test query and reports the problem.
 
 ## How Queries Are Generated
 
