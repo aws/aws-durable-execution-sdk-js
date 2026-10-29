@@ -401,8 +401,8 @@ export async function getExecution(
   opts: {
     maxHistoryEvents?: number;
     /**
-     * Stop paging once the history held, measured as its JSON length, reaches
-     * this many bytes. Payloads can be large, so an event count alone does not
+     * Stop paging once the history held, measured as the length of its
+     * payloads plus a fixed overhead per event, reaches this many bytes. Payloads can be large, so an event count alone does not
      * bound memory. Unset means no byte limit.
      */
     maxHistoryBytes?: number;
@@ -435,7 +435,7 @@ export async function getExecution(
       const events: HistoryApiEvent[] = page.Events ?? [];
       raw.push(...events);
       if (opts.maxHistoryBytes !== undefined) {
-        historyBytes += JSON.stringify(events).length;
+        for (const ev of events) historyBytes += approximateEventBytes(ev);
       }
       marker = page.NextMarker || undefined;
       if (
@@ -470,6 +470,32 @@ export async function getExecution(
     ...(historyTruncated ? { historyTruncated } : {}),
     ...(historyError ? { historyError } : {}),
   };
+}
+
+/** Fixed allowance for an event's non-payload fields. */
+const EVENT_OVERHEAD_BYTES = 256;
+
+/**
+ * An event's size for the history byte budget: its payload strings plus a
+ * fixed overhead. Cheaper than serializing the event, which would allocate a
+ * second copy of every payload just to measure it.
+ */
+function approximateEventBytes(ev: HistoryApiEvent): number {
+  let bytes = EVENT_OVERHEAD_BYTES;
+  const details = detailsOf(ev) as
+    | (DetailFields & { Input?: { Payload?: string } })
+    | undefined;
+  bytes += details?.Result?.Payload?.length ?? 0;
+  bytes += details?.Input?.Payload?.length ?? 0;
+  const err = details?.Error?.Payload;
+  if (err) {
+    bytes +=
+      (err.ErrorMessage?.length ?? 0) +
+      (err.ErrorType?.length ?? 0) +
+      (err.ErrorData?.length ?? 0);
+    for (const line of err.StackTrace ?? []) bytes += line.length;
+  }
+  return bytes;
 }
 
 function toHistoryEvent(ev: HistoryApiEvent): HistoryEvent {
