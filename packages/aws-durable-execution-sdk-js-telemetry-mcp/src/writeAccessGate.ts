@@ -17,17 +17,17 @@
  * WHO CAN CONFIRM.
  *
  * Only the user. Confirmation comes from an elicitation prompt that the client
- * shows to the user, or from the {@link ACCEPT_WRITE_ACCESS_ENV_VAR} variable
+ * shows to the user, or from the {@link CONFIRMED_READONLY_ENV_VAR} variable
  * in the client's server config. There is deliberately no tool that confirms,
  * because the agent could call it on the user's behalf.
  */
-import { ACCEPT_WRITE_ACCESS_ENV_VAR } from "./envKeys";
+import { CONFIRMED_READONLY_ENV_VAR } from "./envKeys";
 
-export { ACCEPT_WRITE_ACCESS_ENV_VAR };
+export { CONFIRMED_READONLY_ENV_VAR };
 
 /** True when the environment confirms. Only `true` (any case) counts. */
 export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
-  return /^true$/i.test((env[ACCEPT_WRITE_ACCESS_ENV_VAR] ?? "").trim());
+  return /^true$/i.test((env[CONFIRMED_READONLY_ENV_VAR] ?? "").trim());
 }
 
 /**
@@ -47,11 +47,11 @@ export const CONSENT_MESSAGE =
  * variable in `howToAccept`.
  */
 export const PERSIST_HINT =
-  `To stop this prompt in later sessions, set ${ACCEPT_WRITE_ACCESS_ENV_VAR}=true ` +
+  `To stop this prompt in later sessions, set ${CONFIRMED_READONLY_ENV_VAR}=true ` +
   "in this server's env block and restart it.";
 
 export interface WriteAccessGateDeps {
-  /** Whether {@link ACCEPT_WRITE_ACCESS_ENV_VAR} confirms. */
+  /** Whether {@link CONFIRMED_READONLY_ENV_VAR} confirms. */
   acceptedByEnv: boolean;
   /** Shows `message` to the user and returns the answer. */
   ask: (message: string) => Promise<PromptAnswer>;
@@ -168,7 +168,7 @@ function blocked(message: string, answer: PromptAnswer): WriteAccessBlocked {
   return {
     error: `Refused to run queries. ${message} ${reason}`,
     howToAccept:
-      `Ask the user to confirm, or to set ${ACCEPT_WRITE_ACCESS_ENV_VAR}=true ` +
+      `Ask the user to confirm, or to set ${CONFIRMED_READONLY_ENV_VAR}=true ` +
       `in this server's env block and restart it. Only the user can confirm; ` +
       `there is no tool for it.`,
   };

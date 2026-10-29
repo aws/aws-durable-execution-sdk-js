@@ -65,13 +65,13 @@ export const MCP_SETTING_KEYS: readonly string[] = SETTING_KEYS.filter(
  * writeAccessGate.ts). It is not a setting key: the extension and desktop app
  * only show a warning, so they have no such setting.
  */
-export const ACCEPT_WRITE_ACCESS_ENV_VAR =
-  "DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS";
+export const CONFIRMED_READONLY_ENV_VAR =
+  "DURABLE_TELEMETRY_CONFIRMED_READONLY";
 
 /**
  * `DURABLE_TELEMETRY_*` variables this host reads that are not derived from
  * {@link SETTING_KEYS}.
  */
 export const MCP_HOST_ONLY_ENV_VARS: readonly string[] = [
-  ACCEPT_WRITE_ACCESS_ENV_VAR,
+  CONFIRMED_READONLY_ENV_VAR,
 ];

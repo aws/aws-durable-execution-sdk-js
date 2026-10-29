@@ -1,5 +1,5 @@
 import {
-  ACCEPT_WRITE_ACCESS_ENV_VAR,
+  CONFIRMED_READONLY_ENV_VAR,
   askUserToAccept,
   CONSENT_MESSAGE,
   createWriteAccessGate,
@@ -42,7 +42,7 @@ describe("createWriteAccessGate", () => {
     const blocked = await run();
     expect(blocked?.error).toContain(CONSENT_MESSAGE);
     expect(blocked?.error).toContain("The user did not confirm.");
-    expect(blocked?.howToAccept).toContain(ACCEPT_WRITE_ACCESS_ENV_VAR);
+    expect(blocked?.howToAccept).toContain(CONFIRMED_READONLY_ENV_VAR);
   });
 
   it("blocks when the client cannot show a prompt", async () => {
@@ -108,7 +108,7 @@ describe("writeAccessAcceptedByEnv", () => {
     ["", false],
   ])("%j → %s", (value, expected) => {
     expect(
-      writeAccessAcceptedByEnv({ [ACCEPT_WRITE_ACCESS_ENV_VAR]: value }),
+      writeAccessAcceptedByEnv({ [CONFIRMED_READONLY_ENV_VAR]: value }),
     ).toBe(expected);
   });
 
@@ -211,7 +211,7 @@ describe("askUserToAccept against the MCP SDK", () => {
         message: `risk ${PERSIST_HINT}`,
       }),
     ]);
-    expect(PERSIST_HINT).toContain(`${ACCEPT_WRITE_ACCESS_ENV_VAR}=true`);
+    expect(PERSIST_HINT).toContain(`${CONFIRMED_READONLY_ENV_VAR}=true`);
     await client.close();
   });
 

@@ -140,14 +140,14 @@ the table's data location. The table then reads each result file as records,
 so every query adds rows, whatever the credentials. To find the result
 location, the server reads the Athena workgroup, which needs
 `athena:GetWorkGroup`. If it cannot read the location, the prompt says the
-check did not complete, and why. With `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` there is no prompt,
+check did not complete, and why. With `DURABLE_TELEMETRY_CONFIRMED_READONLY=true` there is no prompt,
 so the location is not checked either. In both cases, run `test_destination`:
 it skips its own test query and reports the problem.
 
 A client that supports MCP form elicitation shows the prompt; confirming allows
 queries for the rest of the session. A client that does not support it gets a
 tool error. To confirm permanently, set
-`DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. The
+`DURABLE_TELEMETRY_CONFIRMED_READONLY=true` in the server's `env` block. The
 prompt names this variable too. Only
 you can confirm: no tool confirms on the agent's behalf.
 
