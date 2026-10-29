@@ -184,7 +184,7 @@ const MAX_EXECUTION_ARN_LENGTH = 2048;
 const EXECUTION_MARKER = "/durable-execution/";
 
 /** Whether `s` has the shape of an AWS region name, such as `eu-west-1`. */
-function isRegionLike(s: string): boolean {
+export function isRegionLike(s: string): boolean {
   if (s.length === 0 || s.length > 32) return false;
   for (const c of s) {
     if (!((c >= "a" && c <= "z") || (c >= "0" && c <= "9") || c === "-")) {
