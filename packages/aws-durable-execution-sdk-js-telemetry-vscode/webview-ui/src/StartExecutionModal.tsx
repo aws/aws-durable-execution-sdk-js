@@ -11,6 +11,8 @@ import { useEffect, useState } from "react";
 interface Props {
   visible: boolean;
   functionName: string;
+  /** The version or alias it starts; unset means $LATEST. */
+  qualifier?: string;
   initialPayload?: string;
   initialName?: string;
   starting: boolean;
@@ -23,6 +25,7 @@ interface Props {
 export function StartExecutionModal({
   visible,
   functionName,
+  qualifier,
   initialPayload,
   initialName,
   starting,
@@ -73,8 +76,8 @@ export function StartExecutionModal({
     >
       <SpaceBetween size="s">
         <Box>
-          Invokes <b>{functionName}</b> asynchronously and opens the new
-          execution.
+          Invokes <b>{functionName}</b>, version <b>{qualifier ?? "$LATEST"}</b>
+          , asynchronously and opens the new execution.
         </Box>
         {error && <Alert type="error">{error}</Alert>}
         <FormField

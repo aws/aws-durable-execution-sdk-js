@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { postMessage } from "./hostBridge";
 import {
   functionNameFromExecutionArn,
+  qualifierFromFunctionArn,
+  regionFromExecutionArn,
   isTerminal,
   nextExecutionName,
   prettyJson,
@@ -47,6 +49,10 @@ export interface StartRequest {
   functionName: string;
   payload: string;
   name: string;
+  /** The version or alias to start; unset means $LATEST. */
+  qualifier?: string;
+  /** The function's region, when it differs from the configured one. */
+  region?: string;
 }
 
 export function useExecutionViewer(active: boolean) {
@@ -59,6 +65,7 @@ export function useExecutionViewer(active: boolean) {
 
   const [fnName, setFnName] = useState<string | null>(null);
   const fnNameRef = useRef<string | null>(null);
+  const fnRegionRef = useRef<string | undefined>(undefined);
   const [fnInfo, setFnInfo] = useState<FunctionInfo | null>(null);
   const [fnInfoError, setFnInfoError] = useState("");
   const [executions, setExecutions] = useState<ExecutionRow[]>([]);
@@ -99,11 +106,22 @@ export function useExecutionViewer(active: boolean) {
 
   const fetchExecutions = (name: string, marker?: string) => {
     setExecLoading(true);
-    postMessage({ type: "listExecutions", functionName: name, marker });
+    postMessage({
+      type: "listExecutions",
+      functionName: name,
+      marker,
+      region: fnRegionRef.current,
+    });
   };
 
-  const openFunction = (name: string) => {
+  /**
+   * Opens a function's page. `region` is set when the function was reached
+   * from an execution in another region; functions picked from the list are
+   * in the configured region.
+   */
+  const openFunction = (name: string, region?: string) => {
     fnNameRef.current = name;
+    fnRegionRef.current = region;
     setFnName(name);
     setFnInfo(null);
     setFnInfoError("");
@@ -111,7 +129,7 @@ export function useExecutionViewer(active: boolean) {
     setExecMarker(undefined);
     setExecError("");
     setPage("function");
-    postMessage({ type: "getFunctionInfo", functionName: name });
+    postMessage({ type: "getFunctionInfo", functionName: name, region });
     fetchExecutions(name);
   };
 
@@ -132,8 +150,13 @@ export function useExecutionViewer(active: boolean) {
     // Keep the breadcrumb meaningful when the execution was opened from a
     // query result rather than from its function's page.
     const owner = functionNameFromExecutionArn(target);
-    if (owner && owner !== fnNameRef.current) {
+    const ownerRegion = regionFromExecutionArn(target);
+    if (
+      owner &&
+      (owner !== fnNameRef.current || ownerRegion !== fnRegionRef.current)
+    ) {
       fnNameRef.current = owner;
+      fnRegionRef.current = ownerRegion;
       setFnName(owner);
       setFnInfo(null);
       setExecutions([]);
@@ -161,7 +184,7 @@ export function useExecutionViewer(active: boolean) {
     if (target === "function" && fnNameRef.current) {
       // Arriving here from an execution opened elsewhere: load the page.
       if (executions.length === 0 && !execLoading) {
-        openFunction(fnNameRef.current);
+        openFunction(fnNameRef.current, fnRegionRef.current);
         return;
       }
     }
@@ -169,22 +192,33 @@ export function useExecutionViewer(active: boolean) {
     setPage(target);
   };
 
-  const openStart = (functionName: string, fromDetail?: ExecutionDetail) => {
+  const openStart = (
+    functionName: string,
+    fromDetail?: ExecutionDetail,
+    target: { qualifier?: string; region?: string } = {},
+  ) => {
     setStartError("");
     setStart({
       functionName,
       payload: prettyJson(fromDetail?.input) ?? "{}",
       name: fromDetail ? nextExecutionName(fromDetail.name) : "",
+      ...target,
     });
   };
 
   const startForCurrentFunction = () => {
-    if (fnNameRef.current) openStart(fnNameRef.current);
+    if (fnNameRef.current) {
+      openStart(fnNameRef.current, undefined, { region: fnRegionRef.current });
+    }
   };
 
+  /** Starts the same function, on the same version or alias, in its region. */
   const startFromDetail = () => {
     if (!detail?.functionArn) return;
-    openStart(unqualifiedFunctionArn(detail.functionArn), detail);
+    openStart(unqualifiedFunctionArn(detail.functionArn), detail, {
+      qualifier: qualifierFromFunctionArn(detail.functionArn),
+      region: regionFromExecutionArn(detail.arn),
+    });
   };
 
   const submitStart = (payload: string, executionName?: string) => {
@@ -196,6 +230,8 @@ export function useExecutionViewer(active: boolean) {
       functionName: start.functionName,
       payload,
       executionName,
+      qualifier: start.qualifier,
+      region: start.region,
     });
   };
 

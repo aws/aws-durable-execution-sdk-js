@@ -547,7 +547,7 @@ export function App() {
                 error={viewer.functionsError || undefined}
                 loading={viewer.functionsLoading}
                 onRefresh={viewer.loadFunctions}
-                onSelect={viewer.openFunction}
+                onSelect={(name) => viewer.openFunction(name)}
               />
             )}
             {viewer.page === "function" && viewer.fnName && (
@@ -583,6 +583,7 @@ export function App() {
             <StartExecutionModal
               visible={viewer.start !== null}
               functionName={viewer.start?.functionName ?? ""}
+              qualifier={viewer.start?.qualifier}
               initialPayload={viewer.start?.payload}
               initialName={viewer.start?.name}
               starting={viewer.starting}

@@ -19,8 +19,10 @@ import {
   chmod,
   lstat,
   mkdir,
+  open,
   readFile,
   rename,
+  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -78,11 +80,6 @@ export function fileConsentStore(file = defaultConsentFile()): ConsentStore {
       return (await read()).accepted.some((e) => e.key === key);
     },
     async add(key) {
-      const data = await read();
-      data.accepted = [
-        ...data.accepted.filter((e) => e.key !== key),
-        { key, acceptedAt: new Date().toISOString() },
-      ].slice(-MAX_ENTRIES);
       const dir = dirname(file);
       await mkdir(dir, { recursive: true, mode: 0o700 });
       // Refuse a symlinked directory, and tighten one that already existed
@@ -92,20 +89,73 @@ export function fileConsentStore(file = defaultConsentFile()): ConsentStore {
         throw new Error(`${dir} is not a directory; not saving the answer.`);
       }
       if ((info.mode & 0o077) !== 0) await chmod(dir, 0o700);
-      // Write then rename, so a crash cannot leave a half-written file. The
-      // temp name is random and opened with "wx", so a file or symlink planted
-      // at a predictable path cannot redirect the write.
-      const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
-      try {
-        await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, {
-          mode: 0o600,
-          flag: "wx",
-        });
-        await rename(tmp, file);
-      } catch (err) {
-        await unlink(tmp).catch(() => {});
-        throw err;
-      }
+      // Several sessions can save at once. Without a lock each reads the file,
+      // adds its key, and renames its copy over the others, so the last one
+      // wins and the rest lose their answers.
+      await withLock(`${file}.lock`, async () => {
+        const data = await read();
+        data.accepted = [
+          ...data.accepted.filter((e) => e.key !== key),
+          { key, acceptedAt: new Date().toISOString() },
+        ].slice(-MAX_ENTRIES);
+        // Write then rename, so a crash cannot leave a half-written file. The
+        // temp name is random and opened with "wx", so a file or symlink planted
+        // at a predictable path cannot redirect the write.
+        const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
+        try {
+          await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, {
+            mode: 0o600,
+            flag: "wx",
+          });
+          await rename(tmp, file);
+        } catch (err) {
+          await unlink(tmp).catch(() => {});
+          throw err;
+        }
+      });
     },
   };
+}
+
+/** How long to wait for another session's lock before giving up. */
+const LOCK_WAIT_MS = 2000;
+/** A lock older than this was left by a session that died; it is removed. */
+const STALE_LOCK_MS = 10_000;
+
+/**
+ * Runs `fn` while holding `lockPath`, a file created with "wx" so only one
+ * session can hold it. Waits up to LOCK_WAIT_MS for another holder, and
+ * removes a lock older than STALE_LOCK_MS.
+ */
+async function withLock(
+  lockPath: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      const handle = await open(lockPath, "wx", 0o600);
+      await handle.close();
+      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      const age = await stat(lockPath).then(
+        (s) => Date.now() - s.mtimeMs,
+        () => 0,
+      );
+      if (age > STALE_LOCK_MS) {
+        await unlink(lockPath).catch(() => {});
+        continue;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for ${lockPath}`);
+      }
+      await new Promise((r) => setTimeout(r, 10 + Math.random() * 20));
+    }
+  }
+  try {
+    await fn();
+  } finally {
+    await unlink(lockPath).catch(() => {});
+  }
 }

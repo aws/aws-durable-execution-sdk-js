@@ -111,3 +111,40 @@ describe("fileConsentStore hardening", () => {
     expect(await fileConsentStore(join(sub, "a.json")).has("k")).toBe(true);
   });
 });
+
+describe("fileConsentStore concurrency", () => {
+  it("keeps every key when separate processes save at once", async () => {
+    const { spawn } = await import("node:child_process");
+    const dir = mkdtempSync(join(tmpdir(), "consent-c-"));
+    const file = join(dir, "accepted.json");
+    // Each child imports the store fresh and adds its own key, as a separate
+    // MCP server session would.
+    const script = `
+      const { fileConsentStore } = require(${JSON.stringify(join(__dirname, "consentStore.ts"))});
+      fileConsentStore(process.argv[1]).add(process.argv[2]).then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
+    `;
+    try {
+      const codes = await Promise.all(
+        Array.from(
+          { length: 8 },
+          (_, i) =>
+            new Promise<number>((resolve) => {
+              const child = spawn(
+                process.execPath,
+                ["--import", "tsx", "-e", script, file, `k${i}`],
+                { stdio: "inherit" },
+              );
+              child.on("exit", (code) => resolve(code ?? 1));
+            }),
+        ),
+      );
+      expect(codes).toEqual(Array(8).fill(0));
+      for (let i = 0; i < 8; i++) {
+        expect(await fileConsentStore(file).has(`k${i}`)).toBe(true);
+      }
+      expect(readdirSync(dir).sort()).toEqual(["accepted.json"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

@@ -62,6 +62,7 @@ import {
   listExecutions,
   startExecution,
   stopExecution,
+  isRegionLike,
   type LambdaContext,
 } from "./lambdaExecutions";
 import { ensureLimit } from "./schema";
@@ -117,14 +118,23 @@ export type InboundMessage =
   // (lambdaExecutions.ts), independent of the configured destination. Keep in
   // sync with OutboundMessage in webview-ui/src/types.ts.
   | { type: "listFunctions" }
-  | { type: "getFunctionInfo"; functionName: string }
-  | { type: "listExecutions"; functionName: string; marker?: string }
+  // `region` names the function's region when it differs from the configured
+  // one, e.g. for a function reached from an execution in another region.
+  | { type: "getFunctionInfo"; functionName: string; region?: string }
+  | {
+      type: "listExecutions";
+      functionName: string;
+      marker?: string;
+      region?: string;
+    }
   | { type: "getExecution"; arn: string }
   | {
       type: "startExecution";
       functionName: string;
       payload: string;
       executionName?: string;
+      qualifier?: string;
+      region?: string;
     }
   | { type: "stopExecution"; arn: string };
 
@@ -340,9 +350,13 @@ export class ExplorerSession {
         case "listFunctions":
           return await this.onListFunctions();
         case "getFunctionInfo":
-          return await this.onGetFunctionInfo(msg.functionName);
+          return await this.onGetFunctionInfo(msg.functionName, msg.region);
         case "listExecutions":
-          return await this.onListExecutions(msg.functionName, msg.marker);
+          return await this.onListExecutions(
+            msg.functionName,
+            msg.marker,
+            msg.region,
+          );
         case "getExecution":
           return await this.onGetExecution(msg.arn);
         case "startExecution":
@@ -350,6 +364,8 @@ export class ExplorerSession {
             msg.functionName,
             msg.payload,
             msg.executionName,
+            msg.qualifier,
+            msg.region,
           );
         case "stopExecution":
           return await this.onStopExecution(msg.arn);
@@ -1692,10 +1708,15 @@ export class ExplorerSession {
   // Failures come back inside the reply rather than as the global `error`
   // toast, so they render on the page that asked.
 
-  private lambdaContext(): LambdaContext {
+  /**
+   * The Lambda context for a call. `region` comes from the renderer, so it is
+   * used only when it has the shape of a region name; otherwise the
+   * configured region applies.
+   */
+  private lambdaContext(region?: string): LambdaContext {
     const cfg = this.readConfig();
     return {
-      region: cfg.region,
+      region: region && isRegionLike(region) ? region : cfg.region,
       credentials: resolveCredentials(cfg.awsProfile),
       clientFor: this.deps.lambdaClientFor,
     };
@@ -1723,9 +1744,15 @@ export class ExplorerSession {
     }
   }
 
-  private async onGetFunctionInfo(functionName: string): Promise<void> {
+  private async onGetFunctionInfo(
+    functionName: string,
+    region?: string,
+  ): Promise<void> {
     try {
-      const info = await getFunctionInfo(this.lambdaContext(), functionName);
+      const info = await getFunctionInfo(
+        this.lambdaContext(region),
+        functionName,
+      );
       this.host.post({ type: "functionInfo", functionName, info });
     } catch (err) {
       this.host.post({
@@ -1739,9 +1766,10 @@ export class ExplorerSession {
   private async onListExecutions(
     functionName: string,
     marker?: string,
+    region?: string,
   ): Promise<void> {
     try {
-      const page = await listExecutions(this.lambdaContext(), {
+      const page = await listExecutions(this.lambdaContext(region), {
         functionName,
         marker,
       });
@@ -1779,11 +1807,13 @@ export class ExplorerSession {
     functionName: string,
     payload: string,
     executionName?: string,
+    qualifier?: string,
+    region?: string,
   ): Promise<void> {
     try {
       const { durableExecutionArn } = await startExecution(
-        this.lambdaContext(),
-        { functionName, payload, executionName },
+        this.lambdaContext(region),
+        { functionName, payload, executionName, qualifier },
       );
       this.host.post(
         durableExecutionArn
