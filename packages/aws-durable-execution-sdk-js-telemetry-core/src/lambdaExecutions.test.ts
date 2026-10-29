@@ -684,7 +684,6 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
         EventTimestamp: t(1),
         StepSucceededDetails: {
           Result: { Payload: "1" },
-          // biome-ignore lint/suspicious/noExplicitAny: a value the SDK type forbids.
           RetryDetails: { NextAttemptDelaySeconds: delay as any },
         },
       },
