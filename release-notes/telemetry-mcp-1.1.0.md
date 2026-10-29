@@ -5,15 +5,17 @@
 - The server no longer checks whether its credentials can change data. No
   check could show that a `SELECT` cannot write, so every result led to the
   same prompt. Before the first `query`, `get_execution` or `list_executions`
-  call in a session, the server now asks you to confirm one line: queries are
-  written by the agent, and it is your responsibility to give the server
-  read-only credentials.
+  call in a session, the server now asks you to confirm one line: "I confirm
+  that this server's credentials are read-only." Queries are written by the
+  agent, so giving the server read-only credentials is your responsibility.
 - On S3 + Athena the prompt also says when Athena writes query results inside
   the table's data location, where every query adds rows, or that it could not
   check the location, and why. When
   `DURABLE_TELEMETRY_CONFIRMED_READONLY=true` skips the prompt, run
   `test_destination` to see this check.
-- The prompt's checkbox field is `confirmed` (was `acceptRisk`).
+- The prompt has no checkbox. Accepting the prompt confirms. Declining or
+  cancelling it refuses. The checkbox defaulted to unchecked, so a plain
+  Submit counted as a decline.
 - **Renamed:** `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS` is now
   `DURABLE_TELEMETRY_CONFIRMED_READONLY`. The old name is no longer read. If
   your server's `env` block sets the old name, rename it, or the prompt comes

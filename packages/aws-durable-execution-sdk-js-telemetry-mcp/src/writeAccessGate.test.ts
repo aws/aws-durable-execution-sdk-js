@@ -32,30 +32,31 @@ describe("createWriteAccessGate", () => {
     const { run, ask } = gate({ answer: "accept" });
     expect(await run()).toBeNull();
     expect(ask).toHaveBeenCalledWith(CONSENT_MESSAGE);
-    expect(CONSENT_MESSAGE).toContain(
-      "It is your responsibility to give this server read-only credentials.",
+    expect(CONSENT_MESSAGE).toBe(
+      "I confirm that this server's credentials are read-only.",
     );
   });
 
-  it("blocks with the message when the user declines", async () => {
+  it("blocks with the reason when the user declines", async () => {
     const { run } = gate({ answer: "decline" });
     const blocked = await run();
-    expect(blocked?.error).toContain(CONSENT_MESSAGE);
-    expect(blocked?.error).toContain("The user did not confirm.");
+    expect(blocked?.error).toBe(
+      "Refused to run queries. The user did not confirm that this server's credentials are read-only.",
+    );
     expect(blocked?.howToAccept).toContain(CONFIRMED_READONLY_ENV_VAR);
   });
 
   it("blocks when the client cannot show a prompt", async () => {
     const { run } = gate({ answer: undefined });
     expect((await run())?.error).toContain(
-      "The client cannot show a confirmation prompt.",
+      "The client cannot show a prompt to confirm",
     );
   });
 
   it("blocks like a client without prompts when the prompt request fails", async () => {
     const { run } = gate({ answer: new Error("timeout") });
     expect((await run())?.error).toContain(
-      "The client cannot show a confirmation prompt.",
+      "The client cannot show a prompt to confirm",
     );
   });
 
@@ -134,23 +135,30 @@ describe("askUserToAccept", () => {
     expect(s.elicitInput).not.toHaveBeenCalled();
   });
 
-  it("accepts only when the user checks the box", async () => {
-    const s = server(
-      { elicitation: { form: {} } },
-      { action: "accept", content: { confirmed: true } },
-    );
-    expect(await askUserToAccept(s, "m")).toBe("accept");
-    expect(s.elicitInput).toHaveBeenCalledWith(
-      expect.objectContaining({ message: `m ${PERSIST_HINT}` }),
+  // Claude Code 2.1.312 cuts a prompt after about 169 characters.
+  it("keeps the prompt short enough to be shown whole", () => {
+    expect(`${CONSENT_MESSAGE} ${PERSIST_HINT}`.length).toBeLessThanOrEqual(
+      160,
     );
   });
 
-  it("treats a submitted form with the box unchecked as a decline", async () => {
+  it("asks with a form that has no fields, and accepts on submit", async () => {
+    const s = server({ elicitation: { form: {} } }, { action: "accept" });
+    expect(await askUserToAccept(s, "m")).toBe("accept");
+    expect(s.elicitInput).toHaveBeenCalledWith({
+      message: `m ${PERSIST_HINT}`,
+      requestedSchema: { type: "object", properties: {} },
+    });
+  });
+
+  // Claude Code 2.1.312 answered a plain Submit of the old checkbox form with
+  // { confirmed: false }. A submitted form now confirms whatever it carries.
+  it("accepts a submitted form whatever its content", async () => {
     const s = server(
       { elicitation: { form: {} } },
       { action: "accept", content: { confirmed: false } },
     );
-    expect(await askUserToAccept(s, "m")).toBe("decline");
+    expect(await askUserToAccept(s, "m")).toBe("accept");
   });
 
   it.each(["decline", "cancel"] as const)(
@@ -163,8 +171,8 @@ describe("askUserToAccept", () => {
 });
 
 // Runs askUserToAccept against the real SDK server and client, connected in
-// memory. This proves the SDK accepts the form schema, validates the reply
-// against it, and reports a client without elicitation as unable to ask.
+// memory. This proves the SDK accepts a form with no fields, and reports a
+// client without elicitation as unable to ask.
 describe("askUserToAccept against the MCP SDK", () => {
   async function connect(
     clientCapabilities: Record<string, unknown>,
@@ -199,16 +207,17 @@ describe("askUserToAccept against the MCP SDK", () => {
     return { server, client, received };
   }
 
-  it("shows the prompt and accepts when the user checks the box", async () => {
+  it("shows the prompt and accepts when the user submits it", async () => {
     const { server, client, received } = await connect(
       { elicitation: {} },
-      { action: "accept", content: { confirmed: true } },
+      { action: "accept", content: {} },
     );
     expect(await askUserToAccept(server.server, "risk")).toBe("accept");
     expect(received).toEqual([
       expect.objectContaining({
         mode: "form",
         message: `risk ${PERSIST_HINT}`,
+        requestedSchema: { type: "object", properties: {} },
       }),
     ]);
     expect(PERSIST_HINT).toContain(`${CONFIRMED_READONLY_ENV_VAR}=true`);
@@ -218,15 +227,6 @@ describe("askUserToAccept against the MCP SDK", () => {
   it("returns undefined when the client did not declare elicitation", async () => {
     const { server, client } = await connect({}, { action: "accept" });
     expect(await askUserToAccept(server.server, "risk")).toBeUndefined();
-    await client.close();
-  });
-
-  it("rejects a reply that does not match the form schema", async () => {
-    const { server, client } = await connect(
-      { elicitation: {} },
-      { action: "accept", content: { confirmed: "yes" } },
-    );
-    await expect(askUserToAccept(server.server, "risk")).rejects.toThrow();
     await client.close();
   });
 });

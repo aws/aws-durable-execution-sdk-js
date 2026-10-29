@@ -36,19 +36,22 @@ export function writeAccessAcceptedByEnv(env: NodeJS.ProcessEnv): boolean {
  */
 export type PromptAnswer = "accept" | "decline" | "cancel" | undefined;
 
-/** The one line the user is asked to confirm. */
+/**
+ * The line the user confirms. It is written as the user's own statement,
+ * because accepting the form is the confirmation.
+ *
+ * The prompt is kept short. Claude Code 2.1.312 shows about the first 169
+ * characters of a prompt and cuts the rest.
+ */
 export const CONSENT_MESSAGE =
-  "Queries are written by the agent and run with this server's credentials. " +
-  "It is your responsibility to give this server read-only credentials.";
+  "I confirm that this server's credentials are read-only.";
 
 /**
  * Added to the prompt only. A user who confirms is otherwise not told how to
  * stop the prompt in later sessions. A blocked result already names the
  * variable in `howToAccept`.
  */
-export const PERSIST_HINT =
-  `To stop this prompt in later sessions, set ${CONFIRMED_READONLY_ENV_VAR}=true ` +
-  "in this server's env block and restart it.";
+export const PERSIST_HINT = `To stop asking, set ${CONFIRMED_READONLY_ENV_VAR}=true.`;
 
 export interface WriteAccessGateDeps {
   /** Whether {@link CONFIRMED_READONLY_ENV_VAR} confirms. */
@@ -73,11 +76,7 @@ export interface ElicitingServer {
     message: string;
     requestedSchema: {
       type: "object";
-      properties: Record<
-        string,
-        { type: "boolean"; title: string; default: boolean }
-      >;
-      required: string[];
+      properties: Record<string, never>;
     };
   }): Promise<{ action: "accept" | "decline" | "cancel"; content?: unknown }>;
 }
@@ -86,8 +85,9 @@ export interface ElicitingServer {
  * Asks the user, through MCP form elicitation, to confirm `message`. Returns
  * `undefined` when the client cannot show a form.
  *
- * The form has one checkbox that defaults to unchecked. A user who submits the
- * form without checking it has not accepted, so that counts as a decline.
+ * The form has no fields. Accepting the form is the confirmation. A checkbox
+ * that defaults to unchecked made a plain Submit count as a decline, and in
+ * Claude Code that refused users who meant to confirm.
  */
 export async function askUserToAccept(
   server: ElicitingServer,
@@ -96,21 +96,9 @@ export async function askUserToAccept(
   if (!server.getClientCapabilities()?.elicitation?.form) return undefined;
   const answer = await server.elicitInput({
     message: `${message} ${PERSIST_HINT}`,
-    requestedSchema: {
-      type: "object",
-      properties: {
-        confirmed: {
-          type: "boolean",
-          title: "I understand, and I want to continue",
-          default: false,
-        },
-      },
-      required: ["confirmed"],
-    },
+    requestedSchema: { type: "object", properties: {} },
   });
-  if (answer.action !== "accept") return answer.action;
-  const content = answer.content as { confirmed?: unknown } | undefined;
-  return content?.confirmed === true ? "accept" : "decline";
+  return answer.action;
 }
 
 /** The tool-result payload returned instead of running the query. */
@@ -148,7 +136,7 @@ export function createWriteAccessGate(
       allowed = true;
       return null;
     }
-    return blocked(message, answer);
+    return blocked(warning, answer);
   }
 
   return async () => {
@@ -160,13 +148,16 @@ export function createWriteAccessGate(
   };
 }
 
-function blocked(message: string, answer: PromptAnswer): WriteAccessBlocked {
+function blocked(
+  warning: string | undefined,
+  answer: PromptAnswer,
+): WriteAccessBlocked {
   const reason =
     answer === undefined
-      ? "The client cannot show a confirmation prompt."
-      : "The user did not confirm.";
+      ? "The client cannot show a prompt to confirm that this server's credentials are read-only."
+      : "The user did not confirm that this server's credentials are read-only.";
   return {
-    error: `Refused to run queries. ${message} ${reason}`,
+    error: `Refused to run queries. ${reason}${warning ? ` ${warning}` : ""}`,
     howToAccept:
       `Ask the user to confirm, or to set ${CONFIRMED_READONLY_ENV_VAR}=true ` +
       `in this server's env block and restart it. Only the user can confirm; ` +

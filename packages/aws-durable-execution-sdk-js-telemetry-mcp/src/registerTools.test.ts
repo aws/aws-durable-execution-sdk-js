@@ -93,7 +93,7 @@ describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
     const result = await client.callTool({ name: tool, arguments: args });
     expect(result.isError).toBe(true);
     expect(payloadOf(result).error).toContain(
-      "It is your responsibility to give this server read-only credentials.",
+      "confirm that this server's credentials are read-only.",
     );
     expect(queryPath).not.toHaveBeenCalled();
     await client.close();

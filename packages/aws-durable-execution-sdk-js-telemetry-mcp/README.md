@@ -127,12 +127,13 @@ needs read access to whichever destination you point at.
 > - **OpenSearch:** map the identity to a role with read-only index permissions
 >   on the telemetry index.
 
-### Confirming the read-only responsibility
+### Confirming read-only credentials
 
 Before the first `query`, `get_execution` or `list_executions` call in a
-session, the server asks you to confirm one line: queries are written by the
-agent, and it is your responsibility to give this server read-only
-credentials. The server does not check the credentials, because no check can
+session, the server asks you to confirm one line: "I confirm that this
+server's credentials are read-only." Queries are written by the agent, so
+giving this server read-only credentials is your responsibility. The server
+does not check the credentials, because no check can
 show that a `SELECT` cannot change data.
 
 On S3 + Athena the prompt also says when Athena writes query results inside
