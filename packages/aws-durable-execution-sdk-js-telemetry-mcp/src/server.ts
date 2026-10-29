@@ -19,6 +19,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { readConfigFromEnv } from "./config";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
+import { fileConsentStore } from "./consentStore";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
 
 /**
@@ -50,7 +51,12 @@ async function main(): Promise<void> {
     version: DURABLE_TELEMETRY_MCP_VERSION,
   });
 
-  registerTools(server, config, writeAccessAcceptedByEnv(process.env));
+  registerTools(
+    server,
+    config,
+    writeAccessAcceptedByEnv(process.env),
+    fileConsentStore(),
+  );
   registerPrompts(server);
 
   const transport = new StdioServerTransport();
