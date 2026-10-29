@@ -79,7 +79,9 @@ export function useExecutionViewer(active: boolean) {
   // The open start request, readable from the message handler, which is
   // created once and would otherwise see the first render's `start`.
   const startRef = useRef<StartRequest | null>(null);
-  startRef.current = start;
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
 
@@ -234,9 +236,10 @@ export function useExecutionViewer(active: boolean) {
         setDetailError(msg.error ?? "");
         return;
       case "executionStarted":
+        // The reply is for a start the user has since closed, or for another
+        // function's start: do not touch the modal now open, or move them.
+        if (startRef.current?.functionName !== msg.functionName) return;
         setStarting(false);
-        // The user closed the modal before the reply came: do not move them.
-        if (!startRef.current) return;
         if (msg.error || !msg.arn) {
           setStartError(msg.error ?? "No execution ARN was returned.");
           return;
@@ -292,7 +295,11 @@ export function useExecutionViewer(active: boolean) {
     startForCurrentFunction,
     startFromDetail,
     submitStart,
-    closeStart: () => setStart(null),
+    closeStart: () => {
+      // Its reply, if one is still out, will be dropped as stale.
+      setStart(null);
+      setStarting(false);
+    },
     apply,
   };
 }
