@@ -8,9 +8,28 @@
  * `TOOL_DESCRIPTIONS` is the single source of truth the server registers from,
  * so asserting over it covers exactly the descriptions that ship.
  */
-import { TOOL_DESCRIPTIONS } from "./tools";
+import { SERVER_INSTRUCTIONS, TOOL_DESCRIPTIONS } from "./tools";
 
 const DESCRIPTION_CAP = 10_000;
+
+describe("server instructions", () => {
+  it("route bare execution requests here, and stay short", () => {
+    // Clients that defer tool schemas show the agent these instructions and
+    // little else, so they must name the tools and the viewer links. They are
+    // sent on every turn, so they must also stay small.
+    expect(SERVER_INSTRUCTIONS.length).toBeLessThan(1_000);
+    expect(SERVER_INSTRUCTIONS).toContain("list_executions");
+    expect(SERVER_INSTRUCTIONS).toContain("viewerLink");
+    // Every tool the instructions name must be a real one.
+    const named = SERVER_INSTRUCTIONS.match(/`([a-z_]+)`/g) ?? [];
+    expect(named.length).toBeGreaterThan(0);
+    const tools = new Set(TOOL_DESCRIPTIONS.map((t) => t.name));
+    for (const token of named) {
+      const name = token.replace(/`/g, "");
+      if (name.includes("_")) expect(tools.has(name)).toBe(true);
+    }
+  });
+});
 
 describe("tool descriptions", () => {
   it("registers exactly the five expected tools", () => {

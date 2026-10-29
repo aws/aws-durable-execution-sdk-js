@@ -69,9 +69,23 @@ export const ACCEPT_WRITE_ACCESS_ENV_VAR =
   "DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS";
 
 /**
+ * Set to `true` to turn off the local execution viewer (executionViewer.ts):
+ * no port is opened and results carry no `viewerLink`.
+ */
+export const VIEWER_DISABLED_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_DISABLED";
+
+/**
+ * Loopback port for the execution viewer. Unset or 0 picks a free port each
+ * session; a fixed port keeps links valid across restarts.
+ */
+export const VIEWER_PORT_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_PORT";
+
+/**
  * `DURABLE_TELEMETRY_*` variables this host reads that are not derived from
  * {@link SETTING_KEYS}.
  */
 export const MCP_HOST_ONLY_ENV_VARS: readonly string[] = [
   ACCEPT_WRITE_ACCESS_ENV_VAR,
+  VIEWER_DISABLED_ENV_VAR,
+  VIEWER_PORT_ENV_VAR,
 ];

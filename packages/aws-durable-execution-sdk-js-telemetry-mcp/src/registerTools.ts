@@ -26,6 +26,15 @@ import {
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 import { askUserToAccept, createWriteAccessGate } from "./writeAccessGate";
+import { type ConsentStore, consentKey } from "./consentStore";
+import {
+  type ExecutionViewer,
+  VIEWER_LINK_FIELD,
+  executionArnFromRecord,
+  executionNameFromRecord,
+  markdownLink,
+  withViewerLinks,
+} from "./executionViewer";
 
 /** Wrap a JSON-serializable payload in the MCP text-content result shape. */
 function jsonResult(payload: unknown, isError = false) {
@@ -61,16 +70,30 @@ function missingConfigResult(config: TelemetryConfig) {
 /**
  * Registers the tools. The `config` and `acceptedByEnv` are captured from
  * startup (read once) so the tools never re-read the environment.
+ *
+ * With a `viewer`, results gain a `viewerLink` per execution (a Markdown link
+ * titled with the execution name): a column on `query` and `list_executions`
+ * rows, a field on `get_execution`. Without one
+ * (disabled, or in tests) results are exactly as before.
  */
 export function registerTools(
   server: McpServer,
   config: TelemetryConfig,
   acceptedByEnv: boolean,
+  viewer?: ExecutionViewer,
+  consentStore?: ConsentStore,
 ): void {
+  const key = consentKey(config);
   // The three data tools call this before any query; see writeAccessGate.ts.
   const writeAccessGate = createWriteAccessGate({
     acceptedByEnv,
     ask: (message) => askUserToAccept(server.server, message),
+    // stdout is the MCP transport, so diagnostics go to stderr.
+    log: (message) => process.stderr.write(`[durable-telemetry] ${message}\n`),
+    remembered: consentStore && {
+      has: () => consentStore.has(key),
+      add: () => consentStore.add(key),
+    },
     // On S3 + Athena, results written inside the table's data add rows on
     // every query, whatever the credentials. So the prompt names that too,
     // and says so when the location could not be determined.
@@ -282,9 +305,10 @@ export function registerTools(
           timeRangeMs,
           maxRows: limit,
         });
+        const linked = await withViewerLinks(result, viewer);
         const payload = {
-          columns: result.columns,
-          rows: result.rows,
+          columns: linked.columns,
+          rows: linked.rows,
           count: result.count,
           truncated: result.truncated,
           engine: result.engine,
@@ -395,14 +419,31 @@ export function registerTools(
       const blocked = await blockedByWriteAccess(extra.signal);
       if (blocked) return blocked;
       try {
+        const found = await runGetExecution(config, {
+          executionArn,
+          year,
+          month,
+          day,
+          lookbackHours,
+        });
+        // Link only an execution the destination actually holds. Linking the
+        // agent's argument would let anything that steers the agent make an
+        // arbitrary ARN servable by the viewer.
+        const url = found.found
+          ? await viewer?.linkFor(
+              executionArnFromRecord(found.record) ?? found.executionArn,
+            )
+          : undefined;
         return jsonResult(
-          await runGetExecution(config, {
-            executionArn,
-            year,
-            month,
-            day,
-            lookbackHours,
-          }),
+          url
+            ? {
+                ...found,
+                [VIEWER_LINK_FIELD]: markdownLink(
+                  executionNameFromRecord(found.record),
+                  url,
+                ),
+              }
+            : found,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -476,14 +517,17 @@ export function registerTools(
       if (blocked) return blocked;
       try {
         return jsonResult(
-          await runListExecutions(config, {
-            status,
-            functionName,
-            since,
-            until,
-            limit,
-            lookbackHours,
-          }),
+          await withViewerLinks(
+            await runListExecutions(config, {
+              status,
+              functionName,
+              since,
+              until,
+              limit,
+              lookbackHours,
+            }),
+            viewer,
+          ),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

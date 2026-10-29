@@ -150,6 +150,13 @@ tool error. To confirm permanently, set
 `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
 you can confirm: no tool confirms on the agent's behalf.
 
+Ticking **Don't ask again** together with the confirm box
+saves the answer, so later sessions with the same destination settings, region,
+and profile skip the prompt. Changing any of them asks again, and so does an
+S3 + Athena configuration warning. Saved answers live in
+`~/.durable-telemetry/accepted-credentials.json`, as hashes of those settings;
+delete the file to be asked again.
+
 ### Destinations and their required variables
 
 `DURABLE_TELEMETRY_DESTINATION_TYPE` selects the backend. Seven destination types
@@ -216,6 +223,102 @@ The server registers five tools. Call them roughly in this order.
   statement is refused before any AWS call. For the CloudWatch Logs destinations
   (`cloudwatch-logs-exporter`, `lambda-log-exporter`) pass a CloudWatch Logs
   Insights pipe query, not SQL, and use `lookbackHours` to set the time window.
+
+### Execution viewer links
+
+When a result holds execution ARNs, the server adds a link for each one:
+
+- `query` and `list_executions` rows gain a `viewerLink` column. Rows with no
+  execution ARN get an empty string. `list_executions` also returns each
+  execution's name.
+- `get_execution` results gain a `viewerLink` field.
+
+Each `viewerLink` is a Markdown link titled with the execution name, for
+example `[order-1042](http://127.0.0.1:8765/execution?arn=…)`. An execution
+with no name is titled `show execution`. The server tells the agent to show
+these links whenever it lists executions, so you do not have to ask for them.
+
+The link opens a page that shows that execution's status, operations (nested
+the way the workflow ran them), input, result, error, Lambda invocations, and
+history. The page reads them from the Lambda API (`GetDurableExecution` and
+`GetDurableExecutionHistory`) when you open it, not from the telemetry
+destination. So it works for executions whose records were truncated or sampled
+out. The page does not reload itself: click its **Refresh** button to load the
+latest state. Links to child executions started by a chained invoke open those
+executions. A step
+waiting to retry shows as PENDING, with the time of its next attempt and the
+error of the attempt that failed. An operation still open when the execution
+ended shows as INCOMPLETE.
+
+Click a link to open the page. It opens in your default browser, or in whatever
+browser your terminal or client opens links with.
+
+How the page is served:
+
+- The server starts a small web server the first time a result needs a link, not
+  at startup. It listens on `127.0.0.1` only.
+- Every link carries a session token in its address: a random value the server
+  makes at startup and keeps only in memory. A page request without it is
+  refused before any AWS call. The page's own links, including Refresh, keep the
+  token, so moving around the viewer works. The server sets no cookie:
+  browsers send a cookie to every port on `127.0.0.1`, so a cookie would hand
+  the token to any other local server the browser loads. Links stop working when
+  the server restarts, because the token is new each time.
+- It shows only executions it linked in a tool result during this session, plus
+  up to 1,000 child executions per page that those pages link to. It answers any
+  other execution ARN with "Link not recognized". So a caller that reaches the
+  port cannot make it fetch an execution of its choosing.
+- `get_execution` links an execution only when the destination holds a record
+  for it. `query` links every execution ARN its result rows hold, and the agent
+  writes that SQL, so an agent can link an ARN by selecting it as a literal. An
+  agent steered by injected text could therefore make one more execution
+  viewable to anyone who has a link.
+- It answers only requests addressed to that loopback address. It refuses
+  requests that a browser marks as coming from another site, requests with
+  another site's `Origin`, and anything other than a page and its stylesheet.
+  These checks are a second layer behind the token: another web page does not
+  have the token, so in any browser it cannot make the server call AWS.
+- A link clicked inside a web page on another site is refused, because the
+  browser marks it as cross-site. Links opened from a terminal, an agent's chat,
+  or the address bar work.
+- It loads at most four executions at a time, and answers further requests with
+  a "Busy" page with a **Try again** link. A finished page is reused for 5
+  seconds, then dropped, so opening the same link again at once does not call
+  Lambda again; **Refresh** always reads current data. Each Lambda call stops after 30 seconds without progress, and loading
+  one execution is abandoned after 60 seconds in total, including the SDK's
+  retries; the page then shows the error. A page the browser has not finished
+  reading 60 seconds after it was sent is closed.
+- It stops loading history after about 8 MB per execution; the limit is checked
+  after each page of history, so one page can go over it. A page shows at most
+  64 KB of each payload, 2 MB of payload text in total, 2,000 operations,
+  2,000 history events, 256 characters of each name, and 2,048 characters of
+  each ARN, callback ID, or error message. It holds at most 64 MB of pages that
+  browsers have not finished reading, plus at most 16 recent pages in the
+  5-second reuse cache.
+- It is read-only. It cannot start or stop executions.
+- Every local user and process that can reach this machine's loopback can reach
+  the port. That includes other users logged in to a shared or remote
+  development host, and containers on the host network. Without the token they
+  can read nothing. The token is in every link the agent shows and in your
+  browser history while the server runs, so anyone who can read your agent's
+  chat, its transcripts, your terminal, or your browser history can also read
+  the linked executions until the server restarts. On a shared machine where
+  others can see those, turn the viewer off.
+
+The identity you use also needs `lambda:GetDurableExecution` and
+`lambda:GetDurableExecutionHistory` for the pages to load. Without them the page
+shows the AWS error, and the tools still work.
+
+| Variable                            | Effect                                                                                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DURABLE_TELEMETRY_VIEWER_DISABLED` | `true` turns the viewer off. No port is opened, and results carry no `viewerLink`.                                                                    |
+| `DURABLE_TELEMETRY_VIEWER_PORT`     | The port to listen on. Unset or `0` picks a free port each session. A fixed port keeps the address the same across sessions. |
+
+If the fixed port is in use, for example by another session's viewer, the server
+picks a free port instead and logs that to stderr. Links from earlier sessions then point at
+whatever holds that port, which may not be this viewer. With either setting,
+links work only in the session that made them. A link from an earlier session
+opens "Link not valid", or nothing; ask the agent again for a fresh one.
 
 ### Result bounding
 
@@ -313,10 +416,16 @@ Read this before pointing the server at production data.
   flows to the agent that requested it, and from there wherever that agent's own
   configuration sends it (its model provider, its logs, its storage). This server
   chooses none of that and cannot see past its own stdout.
+- **The execution viewer shows payloads in your browser.** A `viewerLink` page
+  shows the execution's `input`, `result`, and error, and each operation's
+  result and error, verbatim, as the Lambda API returns them. The page is served
+  only on `127.0.0.1` and only to your browser. See
+  [Execution viewer links](#execution-viewer-links), including how to turn it
+  off.
 - **This server makes no model calls of its own.** It selects no model provider
-  and contacts none. It is stdio in, JSON out, running on your machine; the only
-  outbound calls it makes are the read-only AWS API calls needed to run your
-  query.
+  and contacts none. It is stdio in, JSON out, running on your machine, plus the
+  loopback-only execution viewer; the only outbound calls it makes are the
+  read-only AWS API calls needed to run your query or show an execution.
 - **The server refuses queries that are not read-only, but your credentials are
   the boundary.** On the SQL destinations the server refuses any query that does
   not start with `SELECT`/`WITH`, contains a write keyword, contains a second
