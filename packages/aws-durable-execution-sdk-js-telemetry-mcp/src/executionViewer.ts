@@ -91,8 +91,12 @@ export class ExecutionViewer {
   private allowedHosts = new Set<string>();
   /** ARNs this process linked, oldest first (a Set keeps insertion order). */
   private readonly linked = new Set<string>();
-  /** Fetches in progress, shared between requests for the same execution. */
-  private readonly fetching = new Map<string, Promise<ExecutionDetail>>();
+  /**
+   * Pages being built, shared between requests for the same execution. The
+   * rendered HTML is shared too: one page can be megabytes, and a copy per
+   * request would multiply that by the number of concurrent requests.
+   */
+  private readonly fetching = new Map<string, Promise<Buffer>>();
 
   constructor(private readonly options: ExecutionViewerOptions) {}
 
@@ -120,8 +124,8 @@ export class ExecutionViewer {
     }
   }
 
-  /** One fetch per execution at a time; undefined when the cap is reached. */
-  private fetchOnce(arn: string): Promise<ExecutionDetail> | undefined {
+  /** One page build per execution at a time; undefined when the cap is reached. */
+  private pageOnce(arn: string): Promise<Buffer> | undefined {
     const shared = this.fetching.get(arn);
     if (shared) return shared;
     if (this.fetching.size >= MAX_CONCURRENT_FETCHES) return undefined;
@@ -134,7 +138,13 @@ export class ExecutionViewer {
       },
       arn,
       { maxHistoryBytes: MAX_HISTORY_BYTES },
-    ).finally(() => this.fetching.delete(arn));
+    )
+      .then((detail) => {
+        // Child executions this page links to become servable too.
+        for (const child of childExecutionArns(detail)) this.allow(child);
+        return Buffer.from(renderExecutionPage(detail), "utf-8");
+      })
+      .finally(() => this.fetching.delete(arn));
     this.fetching.set(arn, p);
     return p;
   }
@@ -287,8 +297,8 @@ export class ExecutionViewer {
       sendHead(res, 200);
       return;
     }
-    const fetch = this.fetchOnce(arn);
-    if (!fetch) {
+    const page = this.pageOnce(arn);
+    if (!page) {
       res.setHeader("Retry-After", "5");
       send(
         res,
@@ -301,10 +311,7 @@ export class ExecutionViewer {
       return;
     }
     try {
-      const detail = await fetch;
-      // Child executions this page links to become servable too.
-      for (const child of childExecutionArns(detail)) this.allow(child);
-      send(res, 200, renderExecutionPage(detail));
+      send(res, 200, await page);
     } catch (err) {
       send(
         res,
@@ -357,7 +364,7 @@ function sendHead(res: ServerResponse, status: number): void {
 function send(
   res: ServerResponse,
   status: number,
-  body: string,
+  body: string | Buffer,
   contentType = "text/html; charset=utf-8",
 ): void {
   res.statusCode = status;
