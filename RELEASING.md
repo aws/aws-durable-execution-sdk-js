@@ -119,6 +119,42 @@ If additional packages are added to the monorepo in the future, follow the same 
 
 > **Note:** Automated rollout of new versions into the SDK bundled with the Lambda managed runtime relies on the release tag matching the `sdk-<version>` format. For any SDK version we want in the runtime, ensure there is a release with a tag in the exact `sdk-<version>` format (if needed, create a new release for the same commit with a correctly formatted tag).
 
+### 3. Update the shared documentation
+
+The release engineer owns this step for every new version release. Complete it
+after the published packages are available on npm.
+
+The shared documentation lives in
+[`aws/aws-durable-execution-docs`](https://github.com/aws/aws-durable-execution-docs).
+Checking version strings alone is insufficient. Review the changes in every
+package released, including the testing, OTel, Telemetry Exporter, Telemetry
+MCP, and ESLint plugin packages when applicable, and update the documentation
+to match:
+
+- [ ] API references and guides that describe new or changed behavior
+- [ ] `examples/typescript/` snippets that use new or changed APIs
+- [ ] Dependency versions, compatibility guidance, and migration instructions
+
+Search the entire documentation repository so references are not missed:
+
+```bash
+rg -n 'durable-execution-sdk-js' docs examples/typescript
+```
+
+Run the documentation checks before opening the pull request:
+
+```bash
+mdformat --check docs/
+codespell docs/
+python3 scripts/check_example_refs.py
+zensical build --clean
+```
+
+Open or update the documentation pull request, link this GitHub release in its
+description, and follow through on review and merge. If the release needs no
+documentation changes, add a note to the GitHub release stating that the
+documentation review was completed and found no changes needed.
+
 ## How Publishing Works
 
 Creating a GitHub Release triggers the [`npm-publish.yml`](.github/workflows/npm-publish.yml) workflow automatically. The workflow:
@@ -224,6 +260,10 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
 - [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
+
+After publishing a release:
+
+- [ ] Shared documentation reviewed per [Update the shared documentation](#3-update-the-shared-documentation), and the docs pull request opened or "no documentation changes needed" recorded on the release
 
 ## SDK 3.x migration release order
 
