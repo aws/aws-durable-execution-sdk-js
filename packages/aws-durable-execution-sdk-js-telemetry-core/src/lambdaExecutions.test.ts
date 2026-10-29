@@ -384,6 +384,57 @@ describe("getExecution", () => {
     expect(detail.operations).toEqual([]);
   });
 
+  it("takes the end from the history when the summary was read before it", async () => {
+    // The execution ended between the two reads: the summary still says
+    // RUNNING, and the history already holds the end.
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "RUNNING",
+        StartTimestamp: t(0),
+      }),
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [
+          { EventType: "StepStarted", Id: "s", EventTimestamp: t(1) },
+          {
+            EventType: "ExecutionTimedOut",
+            Id: "x",
+            EventTimestamp: t(9),
+            ExecutionTimedOutDetails: {
+              Error: { Payload: { ErrorType: "Timeout" } },
+            },
+          },
+        ],
+      }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail).toMatchObject({
+      status: "TIMED_OUT",
+      endTime: t(9).toISOString(),
+      durationMs: 9000,
+    });
+    expect(JSON.parse(detail.error ?? "")).toEqual({ errorType: "Timeout" });
+    expect(detail.operations[0].status).toBe("INCOMPLETE");
+  });
+
+  it("keeps a terminal summary status over the history", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "STOPPED",
+        EndTimestamp: t(5),
+      }),
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [
+          { EventType: "ExecutionSucceeded", Id: "x", EventTimestamp: t(3) },
+        ],
+      }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail.status).toBe("STOPPED");
+    expect(detail.endTime).toBe(t(5).toISOString());
+  });
+
   it("rejects a malformed ARN before calling AWS", async () => {
     const { ctx, calls } = fakeContext({});
     await expect(getExecution(ctx, "nope")).rejects.toThrow(
@@ -672,6 +723,31 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
       { EventType: "ExecutionTimedOut", Id: "x", EventTimestamp: t(9) },
     ]);
     expect(op.status).toBe("INCOMPLETE");
+  });
+
+  it.each([
+    ["out of range", 1e20],
+    ["negative out of range", -1e20],
+    ["NaN", Number.NaN],
+    ["a string", "x"],
+    ["null", null],
+  ])("ignores a next-attempt delay that is %s", (_name, delay) => {
+    // A malformed delay must not fail the fold, and so the whole page.
+    const [op] = buildOperations([
+      started(0),
+      {
+        EventType: "StepSucceeded",
+        Id: "s",
+        EventTimestamp: t(1),
+        StepSucceededDetails: {
+          Result: { Payload: "1" },
+          // biome-ignore lint/suspicious/noExplicitAny: a value the SDK type forbids.
+          RetryDetails: { NextAttemptDelaySeconds: delay as any },
+        },
+      },
+    ]);
+    expect(op.status).toBe("SUCCEEDED");
+    expect(op.nextAttemptTime).toBeUndefined();
   });
 
   it("reports no attempt count for operations that ran once", () => {

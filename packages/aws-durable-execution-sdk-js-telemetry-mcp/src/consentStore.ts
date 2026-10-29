@@ -8,20 +8,26 @@
  * different secret, a different profile — produces a different key, so the
  * server asks again. Nothing from the configuration is stored in plain text.
  *
- * WHERE. One JSON file under the user's home directory, created with mode
- * 0600. Deleting it makes the server ask again everywhere. Like the
- * environment variable it stands in for, it is the user's own file: an agent
- * with shell access could write it too, which is no different from it editing
- * the server's config to set the variable.
+ * WHERE. One empty file per remembered key, named by the key, in a directory
+ * under the user's home directory. The directory has mode 0700 and each file
+ * mode 0600. Deleting the directory makes the server ask again everywhere.
+ * Like the environment variable it stands in for, it is the user's own
+ * directory: an agent with shell access could write it too, which is no
+ * different from it editing the server's config to set the variable.
+ *
+ * WHY ONE FILE PER KEY. Several sessions can save at once. With one shared
+ * file, each would read it, add its key, and write it back, so one write
+ * could drop another's key. That needs a lock, and a lock left by a crashed
+ * session needs a takeover that two sessions can race. Creating a file is
+ * atomic, and two saves never touch the same file. So no lock is needed, and
+ * no save can drop another's answer.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   chmod,
   lstat,
   mkdir,
-  open,
-  readFile,
-  rename,
+  readdir,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -30,14 +36,9 @@ import { dirname, join } from "node:path";
 import type { TelemetryConfig } from "@aws/durable-execution-sdk-js-telemetry-core";
 import { MCP_EXCLUDED_SETTING_KEYS } from "./envKeys";
 
-/** Default location of the remembered answers. */
-export function defaultConsentFile(): string {
-  return join(homedir(), ".durable-telemetry", "accepted-credentials.json");
-}
-
-interface ConsentFile {
-  version: 1;
-  accepted: { key: string; acceptedAt: string }[];
+/** Default location of the remembered answers: a directory. */
+export function defaultConsentDir(): string {
+  return join(homedir(), ".durable-telemetry", "accepted-credentials");
 }
 
 /** Most entries kept; the oldest are dropped first. */
@@ -61,110 +62,77 @@ export interface ConsentStore {
   add(key: string): Promise<void>;
 }
 
-/** A store backed by `file`. A missing or unreadable file means "not remembered". */
-export function fileConsentStore(file = defaultConsentFile()): ConsentStore {
-  const read = async (): Promise<ConsentFile> => {
-    try {
-      const parsed = JSON.parse(await readFile(file, "utf-8")) as ConsentFile;
-      if (parsed?.version === 1 && Array.isArray(parsed.accepted)) {
-        return parsed;
-      }
-    } catch {
-      // Missing or corrupt: ask again rather than fail the tool call.
-    }
-    return { version: 1, accepted: [] };
+/** A key is a SHA-256 in hex, so it is always a safe file name. */
+const KEY_PATTERN = /^[0-9a-f]{64}$/;
+
+/**
+ * A store backed by the directory `dir`. A missing directory or key file means
+ * "not remembered".
+ */
+export function fileConsentStore(dir = defaultConsentDir()): ConsentStore {
+  const pathFor = (key: string): string => {
+    if (!KEY_PATTERN.test(key)) throw new Error("Invalid consent key.");
+    return join(dir, key);
   };
   return {
     async has(key) {
-      return (await read()).accepted.some((e) => e.key === key);
+      // lstat, not stat: a symlink planted under a key's name does not count.
+      const info = await lstat(pathFor(key)).catch(() => undefined);
+      return info?.isFile() ?? false;
     },
     async add(key) {
-      const dir = dirname(file);
-      await mkdir(dir, { recursive: true, mode: 0o700 });
-      // Refuse a symlinked directory, and tighten one that already existed
-      // with looser permissions; mkdir changes neither.
-      const info = await lstat(dir);
-      if (!info.isDirectory()) {
-        throw new Error(`${dir} is not a directory; not saving the answer.`);
-      }
-      if ((info.mode & 0o077) !== 0) await chmod(dir, 0o700);
-      // Several sessions can save at once. Without a lock each reads the file,
-      // adds its key, and renames its copy over the others, so the last one
-      // wins and the rest lose their answers.
-      await withLock(`${file}.lock`, async () => {
-        const data = await read();
-        data.accepted = [
-          ...data.accepted.filter((e) => e.key !== key),
-          { key, acceptedAt: new Date().toISOString() },
-        ].slice(-MAX_ENTRIES);
-        // Write then rename, so a crash cannot leave a half-written file. The
-        // temp name is random and opened with "wx", so a file or symlink planted
-        // at a predictable path cannot redirect the write.
-        const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
-        try {
-          await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, {
-            mode: 0o600,
-            flag: "wx",
-          });
-          await rename(tmp, file);
-        } catch (err) {
-          await unlink(tmp).catch(() => {});
-          throw err;
-        }
+      const path = pathFor(key);
+      // Check each directory before creating the next, so nothing is created
+      // through a symlinked parent. Refuse a symlinked directory, and tighten
+      // one that already existed with looser permissions; mkdir changes
+      // neither.
+      await mkdir(dirname(dir), { recursive: true, mode: 0o700 });
+      await checkDirectory(dirname(dir));
+      await mkdir(dir, { mode: 0o700 }).catch((err) => {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
       });
+      await checkDirectory(dir);
+      try {
+        // "wx" creates the file or fails. It never writes through a symlink.
+        await writeFile(path, "", { mode: 0o600, flag: "wx" });
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+        const info = await lstat(path);
+        if (!info.isFile()) {
+          throw new Error(`${path} is not a regular file; remove it.`);
+        }
+        // Already remembered.
+        return;
+      }
+      await prune(dir);
     },
   };
 }
 
-/** How long to wait for another session's lock before giving up. */
-const LOCK_WAIT_MS = 2000;
-/** A lock older than this was left by a session that died; it is removed. */
-const STALE_LOCK_MS = 10_000;
+async function checkDirectory(d: string): Promise<void> {
+  const info = await lstat(d);
+  if (!info.isDirectory()) {
+    throw new Error(`${d} is not a directory; not saving the answer.`);
+  }
+  if ((info.mode & 0o077) !== 0) await chmod(d, 0o700);
+}
 
 /**
- * Runs `fn` while holding `lockPath`, a file created with "wx" so only one
- * session can hold it. Waits up to LOCK_WAIT_MS for another holder, and
- * removes a lock file older than STALE_LOCK_MS.
- *
- * Every pass checks the deadline, so the wait always ends. A lock path that is
- * not a regular file, such as a directory or a symlink, was not made by this
- * code. So it is reported at once instead of being removed or waited on.
+ * Removes the oldest key files beyond MAX_ENTRIES. Two sessions pruning at
+ * once can remove one file too many. That only makes the server ask again for
+ * one old configuration, so it is not worth a lock.
  */
-async function withLock(
-  lockPath: string,
-  fn: () => Promise<void>,
-): Promise<void> {
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      const handle = await open(lockPath, "wx", 0o600);
-      await handle.close();
-      break;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      // lstat, not stat: a symlink is judged as itself, not by its target.
-      const info = await lstat(lockPath).catch(() => undefined);
-      if (info && !info.isFile()) {
-        throw new Error(`${lockPath} is not a regular file; remove it`);
-      }
-      // An unlink that fails falls through to the deadline and the wait.
-      const stale = info && Date.now() - info.mtimeMs > STALE_LOCK_MS;
-      const removed =
-        stale &&
-        (await unlink(lockPath).then(
-          () => true,
-          () => false,
-        ));
-      if (removed) continue;
-      if (Date.now() > deadline) {
-        throw new Error(`timed out waiting for ${lockPath}`);
-      }
-      await new Promise((r) => setTimeout(r, 10 + Math.random() * 20));
-    }
+async function prune(dir: string): Promise<void> {
+  const names = (await readdir(dir)).filter((n) => KEY_PATTERN.test(n));
+  if (names.length <= MAX_ENTRIES) return;
+  const files: { path: string; mtimeMs: number }[] = [];
+  for (const n of names) {
+    const path = join(dir, n);
+    const info = await lstat(path).catch(() => undefined);
+    if (info?.isFile()) files.push({ path, mtimeMs: info.mtimeMs });
   }
-  try {
-    await fn();
-  } finally {
-    await unlink(lockPath).catch(() => {});
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  for (const f of files.slice(0, Math.max(0, files.length - MAX_ENTRIES))) {
+    await unlink(f.path).catch(() => {});
   }
 }
