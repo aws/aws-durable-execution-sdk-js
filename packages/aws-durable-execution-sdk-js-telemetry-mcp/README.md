@@ -150,13 +150,6 @@ tool error. To confirm permanently, set
 `DURABLE_TELEMETRY_ACCEPT_WRITE_ACCESS=true` in the server's `env` block. Only
 you can confirm: no tool confirms on the agent's behalf.
 
-Ticking **Don't ask again** together with the confirm box saves the answer, so
-later sessions with the same destination settings, region, and profile skip the
-prompt. Changing any of them asks again, and so does an S3 + Athena
-configuration warning. Saved answers live in
-`~/.durable-telemetry/accepted-credentials/`, one empty file per answer, named
-by a hash of those settings. Delete the directory to be asked again.
-
 ### Destinations and their required variables
 
 `DURABLE_TELEMETRY_DESTINATION_TYPE` selects the backend. Seven destination types
