@@ -253,6 +253,12 @@ How the page is served:
 
 - The server starts a small web server the first time a result needs a link, not
   at startup. It listens on `127.0.0.1` only.
+- Every link carries a session token: a random value the server makes at
+  startup and keeps only in memory. A page request without it is refused before
+  any AWS call. When your browser opens a link, the server stores the token in
+  a cookie that scripts cannot read, then moves to the same address without the
+  token, so it is not kept in your browser history. Links stop working when the
+  server restarts, because the token is new each time.
 - It shows only executions it linked in a tool result during this session, plus
   up to 1,000 child executions per page that those pages link to. It answers any
   other execution ARN with "Link not recognized". So a caller that reaches the
@@ -261,14 +267,12 @@ How the page is served:
   for it. `query` links every execution ARN its result rows hold, and the agent
   writes that SQL, so an agent can link an ARN by selecting it as a literal. An
   agent steered by injected text could therefore make one more execution
-  viewable to anything that reaches the port.
+  viewable to anyone who has a link.
 - It answers only requests addressed to that loopback address. It refuses
   requests that a browser marks as coming from another site, requests with
   another site's `Origin`, and anything other than a page and its stylesheet.
-  In current browsers (Chrome, Edge, Firefox, Safari 16.4 and later), another
-  web page cannot read it or make it call AWS. Older browsers that send none of
-  these headers can still make it fetch a linked execution, without reading the
-  result.
+  These checks are a second layer behind the token: another web page does not
+  have the token, so it cannot make the server call AWS in any browser.
 - A link clicked inside a web page on another site is refused, because the
   browser marks it as cross-site. Links opened from a terminal, an agent's chat,
   or the address bar work.
@@ -286,9 +290,11 @@ How the page is served:
   or desktop app for that.
 - Every local user and process that can reach this machine's loopback can reach
   the port. That includes other users logged in to a shared or remote
-  development host, and containers on the host network. Any of them that knows
-  the address of a linked execution can read that execution's payloads. On a
-  shared machine, turn the viewer off.
+  development host, and containers on the host network. Without the token they
+  can read nothing. The token is in every link the agent shows, so anyone who
+  can read your agent's chat, its transcripts, or your terminal can also read
+  the linked executions while the server runs. On a shared machine where
+  others can see those, turn the viewer off.
 
 The identity you use also needs `lambda:GetDurableExecution` and
 `lambda:GetDurableExecutionHistory` for the pages to load. Without them the page
@@ -303,7 +309,7 @@ If the fixed port is in use, for example by another session's viewer, the server
 picks a free port instead and logs that to stderr. Links from earlier sessions then point at
 whatever holds that port, which may not be this viewer. With either setting,
 links work only in the session that made them. A link from an earlier session
-opens "Link not recognized", or nothing; ask the agent again for a fresh one.
+opens "Link not valid", or nothing; ask the agent again for a fresh one.
 
 ### Result bounding
 

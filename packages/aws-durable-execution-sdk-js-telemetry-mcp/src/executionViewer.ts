@@ -11,6 +11,16 @@
  * EXPOSURE. The page shows execution payloads fetched with the user's AWS
  * credentials, so it must be reachable by the user's own browser and nothing
  * else:
+ *   - Every execution page needs this process's session token: 32 random
+ *     bytes, made at startup, held only in memory, and carried in the links
+ *     it hands out (`/s/<token>/execution?arn=…`). The first request with the
+ *     token gets an HttpOnly, SameSite=Strict cookie and, for a page load, a
+ *     redirect to the same URL without the token, so the token stays out of
+ *     browser history. Anything without the token or the cookie gets 403
+ *     before any AWS call. This is the same scheme Jupyter and the VS Code
+ *     server use for loopback servers opened from a terminal link; no managed
+ *     authentication service fits a server that runs on the developer's own
+ *     machine.
  *   - It listens on 127.0.0.1 only. There is no setting to widen the bind.
  *   - It serves only executions this process linked in a tool result, plus
  *     the child executions those pages link to. Any other ARN gets 404, so a
@@ -33,9 +43,8 @@
  *     GetDurableExecutionHistory. Stopping or starting
  *     executions stays in the VS Code and desktop apps.
  *   - It sends no CORS headers, so no other origin can read its responses.
- * Loopback still means every local user and process on this machine can reach
- * the port, and can read an execution it knows a linked ARN for; on a shared
- * machine, disable the viewer (see README).
+ * The checks below the token stay as a second layer: they limit what a leaked
+ * link can do, and they cost nothing.
  */
 import {
   createServer,
@@ -43,6 +52,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import {
   type ExecutionDetail,
@@ -109,6 +119,9 @@ export class ExecutionViewer {
   private starting: Promise<string | undefined> | undefined;
   private origin: string | undefined;
   private allowedHosts = new Set<string>();
+  /** This process's session token; see EXPOSURE above. */
+  private readonly token = randomBytes(32).toString("base64url");
+  private cookieName = "";
   /** ARNs this process linked, oldest first (a Set keeps insertion order). */
   private readonly linked = new Set<string>();
   /**
@@ -134,7 +147,7 @@ export class ExecutionViewer {
     const origin = await this.start();
     if (!origin) return undefined;
     this.allow(arn);
-    return `${origin}${executionPath(arn)}`;
+    return `${origin}/s/${this.token}${executionPath(arn)}`;
   }
 
   private allow(arn: string): void {
@@ -258,6 +271,9 @@ export class ExecutionViewer {
         const bound = (server.address() as AddressInfo).port;
         this.server = server;
         this.origin = `http://${VIEWER_HOST}:${bound}`;
+        // Cookies are per host, not per port, so each port's viewer needs its
+        // own cookie name or two sessions would overwrite each other's.
+        this.cookieName = `durable_viewer_${bound}`;
         this.allowedHosts = new Set([
           `${VIEWER_HOST}:${bound}`,
           `localhost:${bound}`,
@@ -312,12 +328,47 @@ export class ExecutionViewer {
 
     const url = new URL(req.url ?? "/", this.origin);
     if (url.pathname === "/viewer.css") {
+      // Static and the same for everyone, so it needs no token.
       send(res, 200, VIEWER_CSS, "text/css; charset=utf-8");
       return;
     }
-    if (url.pathname !== "/execution") {
+    // "/s/<token>/execution" carries the token; "/execution" relies on the
+    // cookie set by an earlier request that carried it.
+    let path = url.pathname;
+    let tokenInPath: string | undefined;
+    if (path.startsWith("/s/")) {
+      const end = path.indexOf("/", 3);
+      tokenInPath = end < 0 ? path.slice(3) : path.slice(3, end);
+      path = end < 0 ? "/" : path.slice(end);
+    }
+    if (path !== "/execution") {
       send(res, 404, renderErrorPage("Not found", "No such page."));
       return;
+    }
+    const pathOk = tokenInPath !== undefined && this.isToken(tokenInPath);
+    if (!pathOk && !this.isToken(this.cookieFrom(req))) {
+      send(
+        res,
+        403,
+        renderErrorPage(
+          "Link not valid",
+          "This link is from another session of the server, or was not given out by it. Ask the agent for the execution again to get a fresh link.",
+        ),
+      );
+      return;
+    }
+    if (pathOk) {
+      res.setHeader(
+        "Set-Cookie",
+        `${this.cookieName}=${this.token}; Path=/; HttpOnly; SameSite=Strict`,
+      );
+      // A browser page load: move to the URL without the token, so the token
+      // is not kept in history. Other clients are answered directly.
+      if (req.headers["sec-fetch-dest"] === "document") {
+        res.setHeader("Location", `/execution${url.search}`);
+        sendHead(res, 303);
+        return;
+      }
     }
 
     const arn = url.searchParams.get("arn") ?? "";
@@ -400,6 +451,25 @@ export class ExecutionViewer {
         renderErrorPage("Couldn't load execution", errorMessage(err)),
       );
     }
+  }
+
+  /** Whether `candidate` is this process's token, compared in constant time. */
+  private isToken(candidate: string | undefined): boolean {
+    if (candidate === undefined) return false;
+    const a = Buffer.from(candidate);
+    const b = Buffer.from(this.token);
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+
+  /** The value of this viewer's cookie in `req`, if it sent one. */
+  private cookieFrom(req: IncomingMessage): string | undefined {
+    for (const part of (req.headers.cookie ?? "").split(";")) {
+      const eq = part.indexOf("=");
+      if (eq > 0 && part.slice(0, eq).trim() === this.cookieName) {
+        return part.slice(eq + 1).trim();
+      }
+    }
+    return undefined;
   }
 
   private busy(res: ServerResponse): void {

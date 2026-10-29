@@ -100,12 +100,41 @@ interface Reply {
   body: string;
 }
 
+/**
+ * Each started viewer's token prefix ("/s/<token>"), by origin. Tests request
+ * "/execution?…" paths, and `get` adds the prefix so they reach the handler
+ * behind the token check; pass `noToken` to test that check itself. The prefix
+ * comes from a link the viewer hands out, the same way a user gets it.
+ */
+const tokenPrefix = new Map<string, string>();
+const originalStart = ExecutionViewer.prototype.start;
+ExecutionViewer.prototype.start = async function (this: ExecutionViewer) {
+  const origin = await originalStart.call(this);
+  if (origin && !tokenPrefix.has(origin)) {
+    // Recorded before linking: linkFor calls start() again.
+    tokenPrefix.set(origin, "");
+    const link = await this.linkFor(
+      "arn:aws:lambda:us-east-1:123456789012:function:t:1/durable-execution/token-probe/1",
+    );
+    const path = new URL(link ?? origin).pathname;
+    tokenPrefix.set(origin, path.slice(0, path.indexOf("/execution")));
+  }
+  return origin;
+};
+
 /** A raw request, so Host and Sec-Fetch-* can be set as a browser would. */
 function get(
   origin: string,
   path: string,
-  opts: { method?: string; headers?: Record<string, string> } = {},
+  opts: {
+    method?: string;
+    headers?: Record<string, string>;
+    noToken?: boolean;
+  } = {},
 ): Promise<Reply> {
+  if (path.startsWith("/execution") && !opts.noToken) {
+    path = `${tokenPrefix.get(origin) ?? ""}${path}`;
+  }
   const url = new URL(path, origin);
   return new Promise((resolve, reject) => {
     const req = request(
@@ -220,7 +249,7 @@ describe("ExecutionViewer server", () => {
     expect(link).toBeDefined();
     const url = new URL(link ?? "");
     expect(url.hostname).toBe(VIEWER_HOST);
-    expect(url.pathname).toBe("/execution");
+    expect(url.pathname).toMatch(/^\/s\/[A-Za-z0-9_-]{43}\/execution$/);
     expect(url.searchParams.get("arn")).toBe(ARN);
 
     const res = await get(url.origin, url.pathname + url.search, {
@@ -400,7 +429,7 @@ describe("viewer links in results", () => {
       "viewerLink",
     ]);
     expect(out.rows[0][3]).toMatch(
-      /^\[run-1\]\(http:\/\/127\.0\.0\.1:\d+\/execution\?arn=[^)]+\)$/,
+      /^\[run-1\]\(http:\/\/127\.0\.0\.1:\d+\/s\/[A-Za-z0-9_-]{43}\/execution\?arn=[^)]+\)$/,
     );
     expect(out.rows[1][3]).toMatch(/^\[show execution\]\(http:/);
     expect(out.rows[2][3]).toBe("");
@@ -593,12 +622,26 @@ describe("security fixes", () => {
     const origin = (await viewer.start()) ?? "";
     const page = `/execution?arn=${encodeURIComponent(ARN)}`;
     expect(
-      (
-        await get(origin, page, {
-          headers: { Origin: origin, "Sec-Fetch-Dest": "document" },
-        })
-      ).status,
+      (await get(origin, page, { headers: { Origin: origin } })).status,
     ).toBe(200);
+    // A page load with the token is moved to the URL without it, with the
+    // cookie set; the page then loads with the cookie alone.
+    const first = await get(origin, page, {
+      headers: { "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none" },
+    });
+    expect(first.status).toBe(303);
+    expect(first.headers.location).toBe(page);
+    const cookie = String(first.headers["set-cookie"]).split(";")[0];
+    const second = await get(origin, page, {
+      noToken: true,
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Site": "same-origin",
+      },
+    });
+    expect(second.status).toBe(200);
     expect(
       (
         await get(origin, "/viewer.css", {
@@ -800,7 +843,7 @@ describe("round-2 fixes", () => {
           );
         });
         sock.write(
-          `GET /execution?arn=${encodeURIComponent(a)} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n\r\n`,
+          `GET ${tokenPrefix.get(origin)}/execution?arn=${encodeURIComponent(a)} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n\r\n`,
         );
       });
       statuses.push(line);
@@ -883,5 +926,90 @@ describe("round-2 fixes", () => {
     const html = renderExecutionPage(detail({ operations: ops }));
     // 2 MB of payload characters, each at most 6 bytes once escaped.
     expect(html.length).toBeLessThan(MAX_PAGE_PAYLOAD_CHARS * 6 + 1_000_000);
+  });
+});
+
+describe("session token", () => {
+  let viewer: ExecutionViewer;
+  afterEach(async () => {
+    await viewer?.close();
+  });
+  const page = `/execution?arn=${encodeURIComponent(ARN)}`;
+
+  it("refuses a linked execution without the token, before calling AWS", async () => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    // A local process that knows the ARN and sends perfect headers.
+    const res = await get(origin, page, {
+      noToken: true,
+      headers: { "Sec-Fetch-Site": "none", "Sec-Fetch-Dest": "document" },
+    });
+    expect(res.status).toBe(403);
+    expect(res.body).toContain("Link not valid");
+    expect(made.regions).toEqual([]);
+  });
+
+  it("refuses a wrong, shortened, or empty token", async () => {
+    const made = makeViewer();
+    viewer = made.viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const prefix = tokenPrefix.get(origin) ?? "";
+    for (const path of [
+      `/s/${"A".repeat(43)}${page}`,
+      `${prefix.slice(0, -1)}${page}`,
+      `/s/${page}`,
+    ]) {
+      expect((await get(origin, path, { noToken: true })).status).toBe(403);
+    }
+    expect(made.regions).toEqual([]);
+  });
+
+  it("refuses a cookie from another viewer", async () => {
+    const a = makeViewer().viewer;
+    viewer = makeViewer().viewer;
+    await a.linkFor(ARN);
+    await viewer.linkFor(ARN);
+    const originA = (await a.start()) ?? "";
+    const originB = (await viewer.start()) ?? "";
+    const first = await get(originA, page, {
+      headers: { "Sec-Fetch-Dest": "document" },
+    });
+    const cookieA = String(first.headers["set-cookie"]).split(";")[0];
+    // Same name on B's port, A's value: B must not accept it.
+    const portB = new URL(originB).port;
+    const forged = cookieA.replace(
+      /^durable_viewer_\d+=/,
+      `durable_viewer_${portB}=`,
+    );
+    expect(
+      (await get(originB, page, { noToken: true, headers: { Cookie: forged } }))
+        .status,
+    ).toBe(403);
+    await a.close();
+  });
+
+  it("sets an HttpOnly, SameSite=Strict cookie named for its port", async () => {
+    viewer = makeViewer().viewer;
+    await viewer.linkFor(ARN);
+    const origin = (await viewer.start()) ?? "";
+    const res = await get(origin, page);
+    const set = String(res.headers["set-cookie"]);
+    expect(set).toMatch(
+      new RegExp(
+        `^durable_viewer_${new URL(origin).port}=[A-Za-z0-9_-]{43}; Path=/; HttpOnly; SameSite=Strict$`,
+      ),
+    );
+  });
+
+  it("is new for every viewer", async () => {
+    const a = makeViewer().viewer;
+    viewer = makeViewer().viewer;
+    const la = (await a.linkFor(ARN)) ?? "";
+    const lb = (await viewer.linkFor(ARN)) ?? "";
+    expect(new URL(la).pathname).not.toBe(new URL(lb).pathname);
+    await a.close();
   });
 });
