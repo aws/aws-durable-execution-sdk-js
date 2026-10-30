@@ -365,6 +365,18 @@ describe("getExecution", () => {
 
   // A partial history would show finished operations as open, so a failed
   // page returns none of the history.
+  it("reads history without payloads when asked", async () => {
+    const { ctx, calls } = fakeContext({
+      GetDurableExecutionCommand: () => summary,
+      GetDurableExecutionHistoryCommand: () => ({ Events: [] }),
+    });
+    await getExecution(ctx, ARN, { includeExecutionData: false });
+    const history = calls.filter(
+      (c) => c.command === "GetDurableExecutionHistoryCommand",
+    );
+    expect(history.map((c) => c.input.IncludeExecutionData)).toEqual([false]);
+  });
+
   it("reads a page with no Events member as empty", async () => {
     const { ctx } = fakeContext({
       GetDurableExecutionCommand: () => summary,
