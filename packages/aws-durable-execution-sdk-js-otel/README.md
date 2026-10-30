@@ -480,10 +480,13 @@ materialized by the SDK. With the durable sampler wrapper installed, explicit
 With the durable sampler wrapper installed, sampling is resolved once per
 invocation and the anchor reuses that decision without a second sampler query.
 Explicit upstream decisions or a deterministic trace-based policy (for example a
-ratio sampler) keep anchor and terminal `Workflow` decisions consistent across
-resumes. A non-deterministic custom sampler can select different invocations,
-leaving an anchor without a sampled terminal `Workflow`. Decisions are not
-persisted. These once-per-invocation guarantees do not apply to an opaque tracer:
+ratio sampler with unchanged configuration) keep anchor and terminal `Workflow`
+decisions consistent across retries and reinvocations. Without an authoritative
+upstream decision, non-deterministic local samplers are unsupported: they can
+select different invocations, leaving an anchor without a sampled terminal
+`Workflow`. Sampling decisions are not checkpointed;
+see [Sampling](#sampling) for the supported policies. These once-per-invocation
+guarantees do not apply to an opaque tracer:
 its provider can query its sampler independently for each span, including the
 existing terminal root; the early-anchor path is skipped to preserve that baseline.
 
@@ -540,6 +543,26 @@ Sampling follows this precedence, highest first:
    so a `ParentBasedSampler` applies its `root` sampler rather than inheriting an
    unrelated ambient span's decision.
 3. **Default to sampled** — used only when no sampler decision can be obtained.
+
+Both views support an authoritative upstream decision or a deterministic local
+policy. When the configured sampler decides, its result must depend only on the
+stable canonical execution trace ID and sampling configuration that remains
+unchanged across retries and reinvocations. Supported local policies include the
+constant `AlwaysOnSampler` and `AlwaysOffSampler` decisions and
+`TraceIdRatioBasedSampler` with a fixed ratio.
+
+Without an authoritative upstream decision, local sampler policies whose
+decisions vary with fresh randomness, time, load, or mutable state are
+unsupported. Caching a decision in memory or adding custom persistence does not
+make such a local policy supported. The plugin does not checkpoint sampling
+decisions. See the shared guide's
+[supported sampling modes](https://docs.aws.amazon.com/durable-execution/sdk-reference/observability/opentelemetry/#supported-sampling-modes)
+for the cross-language support boundary.
+
+For example, a valid `Sampled=1` keeps SDK spans sampled even when
+`OTEL_TRACES_SAMPLER=always_off` or `traceidratio` is configured. A valid
+`Sampled=0` drops SDK spans even with `always_on`; the configured sampler decides
+only when the propagated context has no usable sampling decision.
 
 The resolved execution decision is enforced for all SDK-created spans through a
 durable sampler wrapper around the provider sampler. This makes explicit backend
