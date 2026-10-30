@@ -324,7 +324,7 @@ export function createOtelPlugin({
             : Math.min(recordStart, local.startMs),
         endMs:
           local === undefined ? recordEnd : Math.max(recordEnd, local.endMs),
-        ok: r.Status === "SUCCEEDED",
+        status: operationStatus(r),
         statusMessage: r.Status,
         error: recordError(r),
         attributes: {
@@ -381,7 +381,7 @@ export function createOtelPlugin({
             name: "Invocation",
             startMs,
             endMs,
-            ok: status === "SUCCEEDED" || status === "PENDING",
+            status: invocationStatus(status),
             statusMessage: status,
             attributes: {
               "durable.execution.arn": arn,
@@ -423,6 +423,28 @@ export function createOtelPlugin({
       },
     };
   };
+}
+
+// The span status of an operation, as in @aws/durable-execution-sdk-js-otel:
+// 1. FAILED, TIMED_OUT and STOPPED are failures, and so is any record with an error.
+// 2. SUCCEEDED is OK.
+// 3. CANCELLED without an error is neither. The operation did not fail; the SDK
+//    abandoned it. So its status stays UNSET.
+const OPERATION_FAILED = new Set(["FAILED", "TIMED_OUT", "STOPPED"]);
+function operationStatus(r) {
+  if (OPERATION_FAILED.has(r.Status) || recordError(r)) return "error";
+  return r.Status === "SUCCEEDED" ? "ok" : "unset";
+}
+
+// The span status of an invocation, as in @aws/durable-execution-sdk-js-otel:
+// 1. FAILED ended the execution with an error. So it is ERROR.
+// 2. SUCCEEDED and PENDING are normal ends. PENDING is a suspension. So both are OK.
+// 3. RETRYING means Lambda invokes again. The retry can succeed, so the invocation is not
+//    known to have failed. Its status stays UNSET. durable.invocation.status says
+//    RETRYING.
+function invocationStatus(status) {
+  if (status === "FAILED") return "error";
+  return status === "RETRYING" ? "unset" : "ok";
 }
 
 // The header's Parent is a span id. The workflow span links to it. It does not use it as

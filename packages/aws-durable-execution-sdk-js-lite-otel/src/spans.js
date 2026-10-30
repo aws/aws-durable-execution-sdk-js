@@ -1,7 +1,8 @@
 import { VERSION } from "./version.js";
 
-// The OTLP enum values of span kind INTERNAL and of status codes OK and ERROR.
+// The OTLP enum values of span kind INTERNAL and of status codes UNSET, OK and ERROR.
 export const SPAN_KIND_INTERNAL = 0;
+export const STATUS_UNSET = 0;
 export const STATUS_OK = 1;
 export const STATUS_ERROR = 2;
 
@@ -46,7 +47,8 @@ const defined = (attributes) =>
     Object.entries(attributes).filter(([, v]) => v !== undefined),
   );
 
-// error is an ErrorObject { ErrorType, ErrorMessage } or undefined.
+// error is an ErrorObject { ErrorType, ErrorMessage } or undefined. status is "ok",
+// "error" or "unset". ok is the older form of status: true is "ok", false is "error".
 export function buildSpan({
   traceId,
   spanId,
@@ -55,6 +57,7 @@ export function buildSpan({
   startMs,
   endMs,
   ok,
+  status = ok ? "ok" : "error",
   statusMessage,
   error,
   attributes,
@@ -75,12 +78,15 @@ export function buildSpan({
     startTime: hrTime(startMs),
     endTime: hrTime(end),
     duration: hrTime(end - startMs),
-    status: ok
-      ? { code: STATUS_OK }
-      : {
-          code: STATUS_ERROR,
-          message: error?.ErrorMessage ?? statusMessage,
-        },
+    status:
+      status === "ok"
+        ? { code: STATUS_OK }
+        : status === "unset"
+          ? { code: STATUS_UNSET }
+          : {
+              code: STATUS_ERROR,
+              message: error?.ErrorMessage ?? statusMessage,
+            },
     attributes: defined(attributes),
     links,
     events: error

@@ -265,12 +265,18 @@ Without a request id, the invocation span id is random.
 
 ### Status
 
-- An operation span is `OK` for `SUCCEEDED`. Else it is `ERROR`. The message is the
-  record's `ErrorMessage`, else the status, for example `TIMED_OUT`.
+The plugin uses the status mapping of `@aws/durable-execution-sdk-js-otel`:
+
+- An operation span is `ERROR` for `FAILED`, `TIMED_OUT` and `STOPPED`, and for any
+  record with an error. The message is the record's `ErrorMessage`, else the status.
+  It is `OK` for `SUCCEEDED`. A `CANCELLED` operation without an error stays `UNSET`:
+  it did not fail, the SDK abandoned it.
 - A failed operation, a failed attempt and a failed workflow also have one `exception`
   event with `exception.type` and `exception.message`.
-- An invocation span is `ERROR` when the invocation status is `FAILED` or `RETRYING`.
-  Else it is `OK`.
+- An attempt span is `ERROR` when `fn` threw or rejected. Else it is `OK`.
+- An invocation span is `ERROR` for `FAILED` and `OK` for `SUCCEEDED` and `PENDING`. A
+  `RETRYING` invocation stays `UNSET`, because Lambda invokes again and the retry can
+  succeed. `durable.invocation.status` holds the status in every case.
 - The workflow span is `OK` for `SUCCEEDED` and `ERROR` for `FAILED`.
 
 ## Propagation through ctx.invoke
@@ -484,7 +490,12 @@ adds one request round trip to every step.
   `@opentelemetry/api`.
 - This plugin propagates to chained invokes with the lite SDK's `traceHeader` hook. It has
   no log correlation, no context extractors and no loading from a Lambda layer.
-- This plugin uses the same attribute names and the same status mapping.
+- This plugin uses the same attribute names and the same status mapping (see
+  [Status](#status)).
+- This plugin names the workflow span after the function, from the ARN. The full plugin
+  names it `Workflow`, unless you configure another name. So a query or dashboard that
+  selects spans named `Workflow` does not find this plugin's workflow span. Select by
+  `durable.execution.status`, which only the workflow span has.
 
 ## Contributing
 

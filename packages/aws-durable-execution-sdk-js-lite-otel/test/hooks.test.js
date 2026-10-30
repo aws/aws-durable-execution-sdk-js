@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createOtelPlugin } from "../src/index.js";
-import { STATUS_ERROR } from "../src/spans.js";
+import { STATUS_ERROR, STATUS_OK, STATUS_UNSET } from "../src/spans.js";
 import {
   ARN,
   fakeExporter,
@@ -91,16 +91,80 @@ test("a synchronous throw and a rejection propagate unchanged and fail the attem
   );
 });
 
-test("RETRYING and FAILED invocations have ERROR status", async () => {
-  for (const status of ["RETRYING", "FAILED"]) {
+test("a FAILED invocation has ERROR status, a RETRYING invocation stays UNSET", async () => {
+  const failed = fakeExporter();
+  await otel(failed)(info()).onInvocationEnd(end("FAILED"));
+  assert.deepEqual(one(failed.spans(), "Invocation").status, {
+    code: STATUS_ERROR,
+    message: "FAILED",
+  });
+  // A retried invocation is not known to have failed: the retry can succeed.
+  const retrying = fakeExporter();
+  await otel(retrying)(info()).onInvocationEnd(end("RETRYING"));
+  const inv = one(retrying.spans(), "Invocation");
+  assert.deepEqual(inv.status, { code: STATUS_UNSET });
+  assert.equal(inv.attributes["durable.invocation.status"], "RETRYING");
+});
+
+test("SUCCEEDED and PENDING invocations have OK status", async () => {
+  for (const status of ["SUCCEEDED", "PENDING"]) {
     const exporter = fakeExporter();
     await otel(exporter)(info()).onInvocationEnd(end(status));
-    const inv = one(exporter.spans(), "Invocation");
-    assert.deepEqual(inv.status, {
-      code: STATUS_ERROR,
-      message: status,
+    assert.deepEqual(one(exporter.spans(), "Invocation").status, {
+      code: STATUS_OK,
     });
   }
+});
+
+test("an operation is ERROR for FAILED, TIMED_OUT and STOPPED, OK for SUCCEEDED, UNSET for CANCELLED", async () => {
+  const records = [
+    ["failed", "FAILED", STATUS_ERROR],
+    ["timed-out", "TIMED_OUT", STATUS_ERROR],
+    ["stopped", "STOPPED", STATUS_ERROR],
+    ["succeeded", "SUCCEEDED", STATUS_OK],
+    ["cancelled", "CANCELLED", STATUS_UNSET],
+  ].map(([id, Status, code]) => ({
+    record: {
+      Id: id,
+      Name: id,
+      Type: "WAIT",
+      Status,
+      StartTimestamp: 1,
+      EndTimestamp: 2,
+    },
+    code,
+  }));
+  const exporter = fakeExporter();
+  await otel(exporter)(info()).onInvocationEnd(
+    end(
+      "PENDING",
+      records.map((r) => r.record),
+    ),
+  );
+  for (const { record, code } of records) {
+    assert.equal(one(exporter.spans(), record.Id).status.code, code, record.Id);
+  }
+});
+
+test("a CANCELLED operation with an error is ERROR", async () => {
+  const exporter = fakeExporter();
+  await otel(exporter)(info()).onInvocationEnd(
+    end("PENDING", [
+      {
+        Id: "c",
+        Name: "c",
+        Type: "CALLBACK",
+        Status: "CANCELLED",
+        StartTimestamp: 1,
+        EndTimestamp: 2,
+        CallbackDetails: { Error: { ErrorType: "E", ErrorMessage: "gone" } },
+      },
+    ]),
+  );
+  assert.deepEqual(one(exporter.spans(), "c").status, {
+    code: STATUS_ERROR,
+    message: "gone",
+  });
 });
 
 test("record fallbacks: fractional seconds, a missing end, no name, other error details", async () => {
