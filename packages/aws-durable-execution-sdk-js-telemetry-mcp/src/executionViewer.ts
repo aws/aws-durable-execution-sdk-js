@@ -46,6 +46,7 @@ import {
   resolveCredentials,
   type TelemetryConfig,
 } from "@aws/durable-execution-sdk-js-telemetry-core";
+import { VIEWER_DISABLED_ENV_VAR } from "./envKeys";
 import {
   renderErrorPage,
   renderExecutionPage,
@@ -54,6 +55,20 @@ import {
 
 /** The only address the viewer listens on. */
 export const VIEWER_HOST = "127.0.0.1";
+
+/**
+ * A viewer, or undefined when `DURABLE_TELEMETRY_VIEWER_DISABLED` is `true`
+ * in any case. The variable is the user's only way to keep the server from
+ * opening a port.
+ */
+export function viewerFromEnv(
+  env: NodeJS.ProcessEnv,
+  options: ExecutionViewerOptions,
+): ExecutionViewer | undefined {
+  return /^true$/i.test((env[VIEWER_DISABLED_ENV_VAR] ?? "").trim())
+    ? undefined
+    : new ExecutionViewer(options);
+}
 
 /** A link's path: `/e/` and a 16-byte ID in base64url, which is 22 characters. */
 const LINK_PATH = /^\/e\/([A-Za-z0-9_-]{22})$/;
@@ -69,7 +84,9 @@ export interface ExecutionViewerOptions {
 /**
  * Hands out viewer links, starting the server the first time one is needed.
  * A server that cannot start yields no links, rather than failing the tool
- * call that asked for one.
+ * call that asked for one. The next call that needs a link tries to start it
+ * again, so a passing failure (for example, out of file descriptors) does not
+ * turn links off for the rest of the session.
  */
 export class ExecutionViewer {
   private server: Server | undefined;
@@ -98,9 +115,13 @@ export class ExecutionViewer {
     return `${origin}/e/${id}`;
   }
 
-  /** Starts the listener once. Resolves to its origin, or undefined on failure. */
+  /**
+   * Starts the listener, once while it runs. Resolves to its origin, or to
+   * undefined when it fails, in which case the next call tries again.
+   */
   start(): Promise<string | undefined> {
     this.starting ??= this.listen().catch((err: unknown) => {
+      this.starting = undefined;
       this.log(
         `execution viewer could not start, so results carry no viewer links: ${errorMessage(err)}`,
       );
@@ -109,9 +130,15 @@ export class ExecutionViewer {
     return this.starting;
   }
 
+  /**
+   * Stops the listener. The server never calls this, because unref() lets the
+   * process exit without it. Tests call it. A later link starts a new
+   * listener, on a new port, that still knows the IDs given out so far.
+   */
   async close(): Promise<void> {
     const server = this.server;
     this.server = undefined;
+    this.starting = undefined;
     if (!server) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
@@ -169,8 +196,9 @@ export class ExecutionViewer {
       return;
     }
     if (req.method === "HEAD") {
-      // HEAD must not cost a Lambda call.
-      send(res, 200, "");
+      // HEAD must not cost a Lambda call. Its length is unknown without that
+      // call, so it sends no Content-Length rather than a wrong one.
+      send(res, 200, undefined);
       return;
     }
     const { config } = this.options;
@@ -211,15 +239,20 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
+/** Sends `body`, or only the headers when `body` is undefined. */
 function send(
   res: ServerResponse,
   status: number,
-  body: string,
+  body: string | undefined,
   contentType = "text/html; charset=utf-8",
 ): void {
   res.statusCode = status;
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
   res.setHeader("Content-Type", contentType);
+  if (body === undefined) {
+    res.end();
+    return;
+  }
   res.setHeader("Content-Length", Buffer.byteLength(body));
   // Node sends no body for a HEAD response.
   res.end(body);
@@ -277,8 +310,10 @@ export function executionNameColumnIndex(columns: string[]): number {
 export function markdownLink(name: string | undefined, url: string): string {
   // Control characters and line breaks would end the link text.
   let text = collapseControls(name ?? "").trim() || DEFAULT_LINK_TEXT;
-  if (text.length > MAX_LINK_TEXT) {
-    text = `${text.slice(0, MAX_LINK_TEXT - 1)}…`;
+  // Counted in code points, so the cut never splits a surrogate pair.
+  const chars = Array.from(text);
+  if (chars.length > MAX_LINK_TEXT) {
+    text = `${chars.slice(0, MAX_LINK_TEXT - 1).join("")}…`;
   }
   const escaped = text.replace(/[\\[\]<>`]/g, "\\$&");
   return `[${escaped}](${url})`;
@@ -310,23 +345,6 @@ function collapseControls(s: string): string {
     }
   }
   return out;
-}
-
-/**
- * The execution ARN in a record from `get_execution`: a field named
- * executionArn in any casing (or `pk`, the DynamoDB key) that holds an ARN.
- */
-export function executionArnFromRecord(
-  record: Record<string, string> | undefined,
-): string | undefined {
-  if (!record) return undefined;
-  for (const [key, value] of Object.entries(record)) {
-    const k = normalizedColumn(key);
-    if ((k === "executionarn" || k === "pk") && isDurableExecutionArn(value)) {
-      return value;
-    }
-  }
-  return undefined;
 }
 
 /** The execution name in a record from `get_execution`, under any column casing. */

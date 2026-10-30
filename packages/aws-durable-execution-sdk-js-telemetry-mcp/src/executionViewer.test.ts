@@ -25,11 +25,11 @@ import { renderExecutionPage, VIEWER_CSS } from "./executionPage";
 import {
   ExecutionViewer,
   executionArnColumnIndex,
-  executionArnFromRecord,
   executionNameColumnIndex,
   executionNameFromRecord,
   markdownLink,
   VIEWER_HOST,
+  viewerFromEnv,
   withViewerLinks,
 } from "./executionViewer";
 import { registerTools } from "./registerTools";
@@ -150,13 +150,54 @@ describe("viewer links", () => {
     expect(a).not.toContain("orders");
   });
 
-  it("gives no links when the server cannot start, and says why", async () => {
+  it("gives no links when the listener fails, says why, and tries again on the next link", async () => {
     const made = makeViewer();
     viewer = made.viewer;
-    (viewer as unknown as { listen: () => Promise<string> }).listen = () =>
-      Promise.reject(new Error("EACCES"));
-    expect(await viewer.linkFor(ARN)).toBeUndefined();
-    expect(made.logs.join("\n")).toMatch(/could not start.*EACCES/);
+    // The real module object, which executionViewer.ts calls through.
+    const http = jest.requireActual<typeof import("node:http")>("node:http");
+    const realCreateServer = http.createServer;
+    const spy = jest.spyOn(http, "createServer").mockImplementationOnce(((
+      ...args: Parameters<typeof realCreateServer>
+    ) => {
+      const s = realCreateServer(...args);
+      // A real listen failure arrives as an "error" event.
+      s.listen = (() => {
+        process.nextTick(() => s.emit("error", new Error("EMFILE")));
+        return s;
+      }) as typeof s.listen;
+      return s;
+    }) as typeof http.createServer);
+    try {
+      expect(await viewer.linkFor(ARN)).toBeUndefined();
+      expect(made.logs.join("\n")).toMatch(/could not start.*EMFILE/);
+      const link = (await viewer.linkFor(ARN)) ?? "";
+      expect(link).toMatch(LINK);
+      expect((await get(link)).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("starts again after close, under the IDs it already gave out", async () => {
+    viewer = makeViewer().viewer;
+    const first = (await viewer.linkFor(ARN)) ?? "";
+    await viewer.close();
+    const second = (await viewer.linkFor(ARN)) ?? "";
+    expect(new URL(second).pathname).toBe(new URL(first).pathname);
+    expect((await get(second)).status).toBe(200);
+  });
+
+  it("is turned off only by DURABLE_TELEMETRY_VIEWER_DISABLED=true, in any case", () => {
+    const made = (v: string | undefined) =>
+      viewerFromEnv(
+        { DURABLE_TELEMETRY_VIEWER_DISABLED: v },
+        { config: CONFIG },
+      );
+    expect(made("true")).toBeUndefined();
+    expect(made(" TRUE ")).toBeUndefined();
+    for (const v of [undefined, "1", "false"]) {
+      expect(made(v)).toBeInstanceOf(ExecutionViewer);
+    }
   });
 
   it("closes cleanly before it has started", async () => {
@@ -186,8 +227,8 @@ describe("viewer server", () => {
       (c) => c.command === "GetDurableExecutionHistoryCommand",
     );
     expect(history.map((c) => c.input.IncludeExecutionData)).toEqual([false]);
-    expect(res.headers["content-security-policy"]).toContain(
-      "default-src 'none'",
+    expect(res.headers["content-security-policy"]).toBe(
+      "default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
     expect(res.headers["referrer-policy"]).toBe("no-referrer");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
@@ -201,12 +242,14 @@ describe("viewer server", () => {
     expect((await get(`${link}?x=1`)).status).toBe(200);
   });
 
-  it("answers under localhost as well as 127.0.0.1", async () => {
+  it("answers under localhost as well as 127.0.0.1, in any case", async () => {
     viewer = makeViewer().viewer;
     const link = (await viewer.linkFor(ARN)) ?? "";
     const port = new URL(link).port;
-    const res = await get(link, { headers: { Host: `localhost:${port}` } });
-    expect(res.status).toBe(200);
+    for (const host of [`localhost:${port}`, `LOCALHOST:${port}`]) {
+      const res = await get(link, { headers: { Host: host } });
+      expect(res.status).toBe(200);
+    }
   });
 
   it("rejects a foreign Host header, before any Lambda call", async () => {
@@ -227,6 +270,7 @@ describe("viewer server", () => {
       `/e/${"A".repeat(22)}`,
       "/e/short",
       `${new URL(link).pathname}/extra`,
+      `/x${new URL(link).pathname}`,
       "/",
     ]) {
       expect((await get(`${origin}${path}`)).status).toBe(404);
@@ -258,6 +302,8 @@ describe("viewer server", () => {
     const res = await get(link, { method: "HEAD" });
     expect(res.status).toBe(200);
     expect(res.body).toBe("");
+    // Without the Lambda call the length is unknown, so none is sent.
+    expect(res.headers["content-length"]).toBeUndefined();
     expect(made.calls).toEqual([]);
   });
 
@@ -305,7 +351,8 @@ describe("viewer server", () => {
     const link = (await viewer.linkFor(ARN)) ?? "";
     const res = await get(link);
     expect(res.status).toBe(502);
-    expect(res.body).toContain("AccessDenied");
+    // The message only, not "Error: AccessDenied".
+    expect(res.body).toContain('<p class="error">AccessDenied</p>');
   });
 });
 
@@ -465,6 +512,40 @@ describe("execution page", () => {
     );
   });
 
+  it("shows an invoke target that has only a function or only an ARN", () => {
+    const html = renderExecutionPage(
+      detail({
+        operations: [
+          { id: "f", status: "RUNNING", invokedFunction: "child-fn" },
+          { id: "a", status: "RUNNING", invokedExecutionArn: OTHER_ARN },
+        ],
+      }),
+    );
+    expect(html).toContain('<div class="note">Invoked child-fn</div>');
+    expect(html).toContain(`<div class="note">Invoked ${OTHER_ARN}</div>`);
+  });
+
+  it("titles an execution with no name by its ARN's last part", () => {
+    const html = renderExecutionPage(detail({ name: "" }));
+    expect(html).toContain("<title>abc — durable execution</title>");
+  });
+
+  it("shows a dash for a missing kind, attempt, version and request ID", () => {
+    const html = renderExecutionPage(
+      detail({
+        operations: [{ id: "o", status: "RUNNING" }],
+        invocations: [{}],
+      }),
+    );
+    expect(html).toContain(
+      '<td class="d0">o</td>\n<td>—</td>\n<td><span class="status status-running">RUNNING</span></td>\n<td>—</td>\n<td>—</td>\n<td>—</td>',
+    );
+    expect(html).toContain(
+      '<div class="label">Version</div><div class="value">—</div>',
+    );
+    expect(html).toContain("<td><code>—</code></td>");
+  });
+
   it("indents deep nesting no further than the stylesheet defines", () => {
     let op = {
       id: "leaf",
@@ -489,6 +570,10 @@ describe("viewer links in results", () => {
       1,
     );
     expect(executionArnColumnIndex(["pk", "status"], [[ARN, "OK"]])).toBe(0);
+    // A named column without ARNs loses to a column that holds them.
+    expect(
+      executionArnColumnIndex(["executionArn", "other"], [["n/a", ARN]]),
+    ).toBe(1);
     expect(executionArnColumnIndex(["status"], [["OK"]])).toBe(-1);
   });
 
@@ -515,6 +600,9 @@ describe("viewer links in results", () => {
     const long = markdownLink("n".repeat(200), "http://x");
     expect(long.length).toBeLessThan(100);
     expect(long).toContain("…](http://x)");
+    // The cut counts code points, so it never splits an emoji's surrogate pair.
+    const emoji = markdownLink(`${"a".repeat(78)}😀😀😀`, "http://x");
+    expect(emoji).toBe(`[${"a".repeat(78)}😀…](http://x)`);
   });
 
   it("turns each run of control characters into one space", () => {
@@ -524,12 +612,7 @@ describe("viewer links in results", () => {
     expect(markdownLink("a  \u0007 b", "u")).toBe("[a b](u)");
   });
 
-  it("reads the ARN and name from a get_execution record under any casing", () => {
-    expect(executionArnFromRecord({ execution_arn: ARN })).toBe(ARN);
-    expect(executionArnFromRecord({ pk: ARN })).toBe(ARN);
-    expect(executionArnFromRecord({ executionArn: "nope" })).toBeUndefined();
-    expect(executionArnFromRecord({ other: ARN })).toBeUndefined();
-    expect(executionArnFromRecord(undefined)).toBeUndefined();
+  it("reads the name from a get_execution record under any casing", () => {
     expect(executionNameFromRecord({ execution_name: "run-7" })).toBe("run-7");
     expect(executionNameFromRecord({ executionName: "" })).toBeUndefined();
     expect(executionNameFromRecord(undefined)).toBeUndefined();

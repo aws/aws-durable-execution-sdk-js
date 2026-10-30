@@ -36,8 +36,10 @@ function formatTime(iso?: string): string {
 }
 
 function formatDuration(ms?: number): string {
-  if (ms === undefined || !Number.isFinite(ms)) return "—";
-  if (ms < 1000) return `${Math.max(0, Math.round(ms))} ms`;
+  // Core computes durations from two Lambda timestamps, so `ms` is a finite,
+  // non-negative number when it is set.
+  if (ms === undefined) return "—";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -78,6 +80,9 @@ function operationDetails(op: OperationNode): string {
   if (op.scheduledEndTime) {
     notes.push(`Wait ends ${formatTime(op.scheduledEndTime)}`);
   }
+  // Unverified: that Lambda keeps CallbackId and the invoke target when the
+  // history is read without execution data. No callback or chained-invoke
+  // execution has been read that way yet. A field Lambda drops is not shown.
   if (op.callbackId) notes.push(`Callback ${op.callbackId}`);
   if (op.invokedFunction || op.invokedExecutionArn) {
     notes.push(

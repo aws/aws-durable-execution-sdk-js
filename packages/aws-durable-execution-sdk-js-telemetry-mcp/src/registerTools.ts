@@ -29,7 +29,6 @@ import { askUserToAccept, createWriteAccessGate } from "./writeAccessGate";
 import {
   type ExecutionViewer,
   VIEWER_LINK_FIELD,
-  executionArnFromRecord,
   executionNameFromRecord,
   markdownLink,
   withViewerLinks,
@@ -417,13 +416,10 @@ export function registerTools(
           day,
           lookbackHours,
         });
-        // Link only an execution the destination actually holds. Linking the
-        // agent's argument would let anything that steers the agent make an
-        // arbitrary ARN servable by the viewer.
+        // Link only when the destination found the execution, so a mistyped
+        // ARN gets no link to a page that would only show a Lambda error.
         const url = found.found
-          ? await viewer?.linkFor(
-              executionArnFromRecord(found.record) ?? found.executionArn,
-            )
+          ? await viewer?.linkFor(found.executionArn)
           : undefined;
         return jsonResult(
           url

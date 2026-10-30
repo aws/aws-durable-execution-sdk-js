@@ -55,7 +55,7 @@ While the local viewer is on, results that hold an execution ARN carry a
 `get_execution` record. It is a ready-made Markdown link, titled with the
 execution name (or "show execution" when there is none), that opens the
 execution's status, operations and invocations in the user's browser. The viewer
-is off when `DURABLE_TELEMETRY_VIEWER_DISABLED` is set or its server failed to
+is off when `DURABLE_TELEMETRY_VIEWER_DISABLED` is set to true or its server failed to
 start; results then have no `viewerLink`.
 
 Whenever you show an execution that has a `viewerLink`, show it exactly as

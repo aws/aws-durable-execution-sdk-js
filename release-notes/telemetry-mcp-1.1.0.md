@@ -1,5 +1,30 @@
 # Telemetry MCP 1.1.0
 
+## Added
+
+- **Execution viewer links.** When a result holds execution ARNs, the server
+  adds a `viewerLink` for each one: a column on `query` and `list_executions`
+  rows, and a field on a found `get_execution` record. Each is a Markdown link,
+  titled with the execution name, to a page in your browser. The page reads the
+  execution from the Lambda API each time you open it. It shows the status, the
+  execution's input, result and error, the operation tree and the invocations.
+  It does not load each step's result or error.
+- **The server can now open a listening port.** It starts a web server the
+  first time a result needs a link. The server listens on `127.0.0.1` only, on
+  a port the operating system picks. Links carry a random ID, not the ARN, and
+  stop working when the server stops.
+- **New variable:** `DURABLE_TELEMETRY_VIEWER_DISABLED=true` turns the viewer
+  off. No port is opened, and results carry no `viewerLink`.
+- The page needs `lambda:GetDurableExecution` and
+  `lambda:GetDurableExecutionHistory`. Without them the page shows the AWS
+  error, and the tools still work.
+- **Output change for tools that read results programmatically.** `query` and
+  `list_executions` rows can have an extra last column, `viewerLink`.
+  `list_executions` rows also have a new `executionName` column (named for each
+  destination's casing), after the ARN column. A found `get_execution` result
+  can have a `viewerLink` field. Code that reads columns by position needs an
+  update.
+
 ## Changed
 
 - The server no longer checks whether its credentials can change data. No

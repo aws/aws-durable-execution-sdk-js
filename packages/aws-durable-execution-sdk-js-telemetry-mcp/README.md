@@ -229,7 +229,7 @@ When a result holds execution ARNs, the server adds a link for each one:
 - `get_execution` results gain a `viewerLink` field when the record is found.
 
 Each `viewerLink` is a Markdown link titled with the execution name, for example
-`[order-1042](http://127.0.0.1:52817/e/Qm9vdHN0cmFwSWRFeGFtcGxl)`. An execution
+`[order-1042](http://127.0.0.1:52817/e/wf_xMUmhDkbKbDRFo3g5Mw)`. An execution
 with no name is titled `show execution`.
 
 The link opens a page in your browser. The page reads the execution from the
@@ -251,9 +251,11 @@ How the page is served:
 - The server starts a small web server the first time a result needs a link. It
   listens on `127.0.0.1` only, on a port the operating system picks.
 - Each linked execution gets a random ID, and the link carries only that ID. The
-  server keeps the ID-to-ARN map in memory. A request for any other address gets
+  server keeps the ID-to-ARN map in memory. A request for any other path gets
   "Link not recognized" and no AWS call. Links stop working when the server
   stops.
+- If the web server cannot start, results carry no `viewerLink` and the tools
+  still answer. The next result that needs a link tries to start it again.
 - It answers only `GET` and `HEAD` requests addressed to `127.0.0.1:<port>` or
   `localhost:<port>`. Its pages run no script. It cannot start or stop
   executions.
