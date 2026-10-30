@@ -90,6 +90,8 @@ async function runHandler<
     executionArn: executionContext.durableExecutionArn,
     executionInput: customerHandlerEvent,
     operations: allOperations,
+    isFirstInvocation:
+      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
@@ -111,8 +113,6 @@ async function runHandler<
   }
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
-    isFirstInvocation:
-      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
     ...runtimeTraceInfo,
   };

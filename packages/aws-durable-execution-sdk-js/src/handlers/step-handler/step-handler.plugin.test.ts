@@ -7,7 +7,7 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
-import { OperationStatus } from "../../types/wire";
+import { OperationStatus, OperationAction } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 jest.mock("../../utils/logger/logger");
@@ -368,5 +368,204 @@ describe("Step Handler - plugin hooks", () => {
       2,
       expect.objectContaining({ isReplay: true }),
     );
+  });
+});
+
+describe("Step Handler - attempt-scoped timestamps on attempt-end", () => {
+  // A retry-pending operation has no EndTimestamp and its StartTimestamp
+  // belongs to the first attempt, so the attempt-end info cannot be backfilled
+  // from the checkpointed operation -- it stamps its own bounds. onOperationEnd
+  // describes the whole operation and keeps the checkpointed window.
+  const OP_START = new Date("2024-01-01T00:00:00.000Z");
+  const OP_END = new Date("2024-01-01T00:05:00.000Z");
+
+  let mockContext: ExecutionContext;
+  let mockCheckpoint: Checkpoint;
+  let mockParentContext: Context;
+  let plugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let operation: Record<string, unknown> | undefined;
+
+  // Mirrors the real lifecycle: the handler re-reads the operation after each
+  // checkpoint, so the mock advances the stored operation the way the service
+  // would -- crucially, a RETRY leaves it open with no EndTimestamp.
+  const build = (): ReturnType<typeof createStepHandler> => {
+    operation = undefined;
+    mockContext = {
+      getStepData: jest.fn(() => operation),
+      _stepData: {},
+      durableExecutionArn: "test-arn",
+      terminationManager: { terminate: jest.fn() },
+    } as any;
+    mockCheckpoint = {
+      checkpoint: jest.fn(async (_id: string, update: any) => {
+        const attempt = (operation?.StepDetails as any)?.Attempt ?? 0;
+        if (update.Action === OperationAction.START) {
+          operation = {
+            Id: "step-1",
+            Status: OperationStatus.STARTED,
+            StartTimestamp: OP_START,
+            StepDetails: { Attempt: attempt },
+          };
+        } else if (update.Action === OperationAction.RETRY) {
+          // Retry-pending: still open, so no EndTimestamp.
+          operation = {
+            Id: "step-1",
+            Status: OperationStatus.PENDING,
+            StartTimestamp: OP_START,
+            StepDetails: {
+              Attempt: attempt + 1,
+              NextAttemptTimestamp: OP_END,
+            },
+          };
+        } else if (update.Action === OperationAction.SUCCEED) {
+          operation = {
+            Id: "step-1",
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: OP_START,
+            EndTimestamp: OP_END,
+            StepDetails: { Attempt: attempt, Result: update.Payload },
+          };
+        } else if (update.Action === OperationAction.FAIL) {
+          operation = {
+            Id: "step-1",
+            Status: OperationStatus.FAILED,
+            StartTimestamp: OP_START,
+            EndTimestamp: OP_END,
+            StepDetails: { Attempt: attempt, Error: update.Error },
+          };
+        }
+      }),
+      markOperationState: jest.fn(),
+      markOperationAwaited: jest.fn(),
+      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    mockParentContext = {
+      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
+    } as any;
+    let n = 0;
+    return createStepHandler(
+      mockContext,
+      mockCheckpoint,
+      mockParentContext,
+      (): string => `step-${++n}`,
+      createDefaultLogger(),
+      undefined,
+      undefined,
+      plugin,
+    );
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    plugin = {
+      onOperationAttemptStart: jest.fn(),
+      onOperationAttemptEnd: jest.fn(),
+      onOperationEnd: jest.fn(),
+    };
+    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
+      JSON.stringify(value),
+    );
+    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
+      value ? JSON.parse(value) : undefined,
+    );
+  });
+
+  it("stamps both bounds on a RETRYABLE failed attempt, whose operation has no end time", async () => {
+    const stepHandler = build();
+
+    const before = Date.now();
+    let calls = 0;
+    const result = await stepHandler(
+      "flaky",
+      async () => {
+        calls++;
+        if (calls === 1) throw new Error("transient failure");
+        return "recovered";
+      },
+      {
+        retryStrategy: (_e, attempt) => ({
+          shouldRetry: attempt < 2,
+          delay: { seconds: 0 },
+        }),
+      },
+    );
+    const after = Date.now();
+
+    expect(result).toBe("recovered");
+
+    const failedEnd = (
+      plugin.onOperationAttemptEnd as jest.Mock
+    ).mock.calls.find(
+      ([info]) => info.outcome === AttemptEndInfoOutcome.FAILED,
+    )?.[0];
+
+    // The gap this fixes: the retry-pending operation has no end time, so
+    // without attempt-scoped stamping endTimestamp would be undefined.
+    expect(failedEnd).toBeDefined();
+    expect(failedEnd.attempt).toBe(1);
+    expect(failedEnd.startTimestamp).toBeInstanceOf(Date);
+    expect(failedEnd.endTimestamp).toBeInstanceOf(Date);
+    expect(failedEnd.startTimestamp.getTime()).toBeGreaterThanOrEqual(before);
+    expect(failedEnd.endTimestamp.getTime()).toBeLessThanOrEqual(after);
+    expect(failedEnd.endTimestamp.getTime()).toBeGreaterThanOrEqual(
+      failedEnd.startTimestamp.getTime(),
+    );
+    // Attempt-scoped, not the operation's checkpointed start.
+    expect(failedEnd.startTimestamp.getTime()).not.toBe(OP_START.getTime());
+
+    // Attempt 2 gets its own window, starting no earlier than attempt 1 ended.
+    const succeededEnd = (
+      plugin.onOperationAttemptEnd as jest.Mock
+    ).mock.calls.find(
+      ([info]) => info.outcome === AttemptEndInfoOutcome.SUCCEEDED,
+    )?.[0];
+    expect(succeededEnd.attempt).toBe(2);
+    expect(succeededEnd.startTimestamp.getTime()).toBeGreaterThanOrEqual(
+      failedEnd.endTimestamp.getTime(),
+    );
+    expect(succeededEnd.endTimestamp).toBeInstanceOf(Date);
+  });
+
+  it("stamps both bounds on a TERMINAL failed attempt and leaves onOperationEnd on the operation window", async () => {
+    const stepHandler = build();
+
+    await expect(
+      stepHandler(
+        "doomed",
+        async () => {
+          throw new Error("fatal");
+        },
+        { retryStrategy: () => ({ shouldRetry: false }) },
+      ),
+    ).rejects.toThrow();
+
+    const attemptEnd = (plugin.onOperationAttemptEnd as jest.Mock).mock
+      .calls[0][0];
+    expect(attemptEnd.outcome).toBe(AttemptEndInfoOutcome.FAILED);
+    expect(attemptEnd.startTimestamp).toBeInstanceOf(Date);
+    expect(attemptEnd.endTimestamp).toBeInstanceOf(Date);
+    expect(attemptEnd.endTimestamp.getTime()).not.toBe(OP_END.getTime());
+
+    // onOperationEnd describes the operation, so it keeps the checkpointed window.
+    const opEnd = (plugin.onOperationEnd as jest.Mock).mock.calls[0][0];
+    expect(opEnd.startTimestamp).toEqual(OP_START);
+    expect(opEnd.endTimestamp).toEqual(OP_END);
+  });
+
+  it("keeps onOperationEnd on the operation window on success too", async () => {
+    const stepHandler = build();
+
+    await stepHandler("happy", async () => "ok");
+
+    const attemptEnd = (plugin.onOperationAttemptEnd as jest.Mock).mock
+      .calls[0][0];
+    expect(attemptEnd.outcome).toBe(AttemptEndInfoOutcome.SUCCEEDED);
+    expect(attemptEnd.startTimestamp).toBeInstanceOf(Date);
+    expect(attemptEnd.endTimestamp).toBeInstanceOf(Date);
+    expect(attemptEnd.endTimestamp.getTime()).not.toBe(OP_END.getTime());
+
+    const opEnd = (plugin.onOperationEnd as jest.Mock).mock.calls[0][0];
+    expect(opEnd.startTimestamp).toEqual(OP_START);
+    expect(opEnd.endTimestamp).toEqual(OP_END);
   });
 });
