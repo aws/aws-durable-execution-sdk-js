@@ -70,7 +70,9 @@ it from AWS Secrets Manager once, outside the handler, and create the exporter w
   `resource` is set.
 - `sampleRate` (default 1): the fraction of executions to trace, from 0 to 1.
 - `exportTimeoutMs` (default 3000): each export waits at most this many milliseconds.
-  `onInvocationEnd` also waits at most this long for all exports.
+  `onInvocationEnd` also waits at most this long for all exports. It also never waits
+  past 500 ms before the Lambda timeout. See
+  [Sizing the Lambda timeout](#sizing-the-lambda-timeout).
 - `flushIntervalMs` (default 5000): finished operation and attempt spans are sent at most
   this many milliseconds after they end, during the invocation. `0` sends every span at
   the end of the invocation.
@@ -112,10 +114,38 @@ hook. The plugin sends earlier, and still follows the reason for that rule:
 1. `onInvocationEnd` awaits every export that started earlier. So no export runs when the
    handler returns.
 2. The final export starts after the earlier exports. So `onInvocationEnd` waits at most
-   `exportTimeoutMs` in total. When earlier exports still run at that deadline, the final
-   batch is not sent, and the plugin logs one line with `console.warn`.
+   `exportTimeoutMs` in total, and never past 500 ms before the Lambda timeout. When
+   earlier exports still run at that deadline, the final batch is not sent, and the plugin
+   logs one line with `console.warn`.
 3. The timer is unref'd, so it never keeps a process alive. `onInvocationEnd` clears it.
    A span that ends after `onInvocationEnd` started is dropped.
+
+### Sizing the Lambda timeout
+
+The handler returns its output only after `onInvocationEnd` settles. So the final export
+adds time to every invocation:
+
+1. A fast backend takes a few milliseconds. A slow or unreachable backend takes up to
+   `exportTimeoutMs`, 3 seconds by default.
+2. An invocation that reaches the Lambda timeout fails. Lambda ends it and drops its
+   output. The function's `Errors` metric counts it, and its log shows "Task timed out".
+   Lambda then invokes again. The replay returns the same output, so the workflow result
+   is unchanged. But the invocation error can trigger alarms, and the execution takes
+   longer and costs one more invocation.
+3. So the plugin bounds its wait by the time left. It reads
+   `lambdaContext.getRemainingTimeInMillis()` when the invocation ends. The final export
+   gets at most that time minus 500 ms. With less than 500 ms left, the plugin sends
+   nothing and logs one line. The spans of that batch are lost. The output is not.
+
+So telemetry never makes an invocation time out. A tight timeout can still lose spans.
+To keep traces complete:
+
+1. Set the Lambda timeout above the longest expected invocation plus `exportTimeoutMs`
+   plus 500 ms.
+2. If invocations run close to the timeout, lower `exportTimeoutMs`, for example to 1000.
+3. Keep each invocation well under the timeout. For example, split a long step into
+   shorter steps. A durable function resumes in a new invocation, so shorter invocations
+   cost nothing in correctness.
 
 ### Sampling
 
@@ -348,6 +378,9 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
 - A sandbox can crash or time out before `onInvocationEnd` runs. Then the spans of the
   last `flushIntervalMs` and the invocation span are lost.
 - A failed export is not retried. The plugin logs one line with `console.warn`.
+- An invocation that ends less than 500 ms before its Lambda timeout sends no final
+  export. Its last spans, its invocation span and, for the final invocation, its workflow
+  span are lost. See [Sizing the Lambda timeout](#sizing-the-lambda-timeout).
 - A FLAT map or parallel item has no record. So it has no span. Its operations are
   children of the map's span.
 - An abandoned operation, for example an item that still ran when a map completed early,
@@ -410,8 +443,10 @@ add to them or replace them for this package:
 4. No per-invocation state at module level. Shared state lives in the closure of
    `createOtelPlugin`. Per-invocation state lives in the closure of one factory call.
 5. A telemetry failure must never fail the workflow. So every export catches and logs its
-   failure, and `onInvocationEnd` waits at most `exportTimeoutMs` in total. This is the
-   one safeguard that the package adds. Other misuse is documented, not checked.
+   failure, and `onInvocationEnd` waits at most `exportTimeoutMs` in total. It also ends
+   at least 500 ms before the Lambda timeout, because an invocation that reaches the
+   timeout fails. This is the one safeguard that the package adds. Other misuse is
+   documented, not checked.
 6. A callback that arrives after `onInvocationEnd` started changes nothing and is never
    exported. Example: an attempt whose `fn` settles later. The lite SDK can deliver it,
    and it calls no `onOperationChange` after the outcome is decided (see

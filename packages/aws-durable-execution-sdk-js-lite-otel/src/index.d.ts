@@ -108,7 +108,8 @@ export interface OtelPluginConfig {
   sampleRate?: number;
   /**
    * Each export waits at most this many milliseconds. onInvocationEnd also waits at
-   * most this long for all exports. Default 3000.
+   * most this long for all exports, and never past 500 ms before the Lambda timeout
+   * (lambdaContext.getRemainingTimeInMillis). Default 3000.
    */
   exportTimeoutMs?: number;
   /**

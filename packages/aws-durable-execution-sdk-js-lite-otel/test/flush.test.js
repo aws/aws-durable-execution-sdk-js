@@ -228,3 +228,87 @@ test("the flush timer is unref'd and cleared at the end of the invocation", asyn
   assert.equal(byName(exporter.spans(), "s1 attempt 1").length, 1);
   assert.equal(byName(exporter.spans(), "s2 attempt 1").length, 0);
 });
+
+// A Lambda context whose deadline is ms from now.
+const deadlineIn = (ms) => {
+  const deadline = Date.now() + ms;
+  return { getRemainingTimeInMillis: () => deadline - Date.now() };
+};
+
+test("the final export ends 500 ms before the Lambda timeout", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  let calls = 0;
+  // The export never calls back, like an unreachable collector.
+  const exporter = {
+    export() {
+      calls++;
+    },
+  };
+  const plugin = otel(exporter, { flushIntervalMs: 0, exportTimeoutMs: 3000 })(
+    info({ lambdaContext: deadlineIn(700) }),
+  );
+  const started = Date.now();
+  await plugin.onInvocationEnd(end());
+  const waited = Date.now() - started;
+  // 700 ms left, minus the 500 ms margin: about 200 ms, not exportTimeoutMs.
+  assert.ok(waited >= 150 && waited < 350, `${waited} ms`);
+  assert.equal(calls, 1);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(
+    warn.mock.calls[0].arguments[0],
+    /timed out after (19\d|200) ms/,
+  );
+});
+
+test("an earlier export that never calls back delays the end at most until 500 ms before the Lambda timeout", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const plugin = otel(
+    { export() {} },
+    {
+      flushIntervalMs: 10,
+      exportTimeoutMs: 3000,
+    },
+  )(info({ lambdaContext: deadlineIn(800) }));
+  plugin.wrap(attemptInfo(1));
+  // The interval export starts and never calls back.
+  await sleep(20);
+  const started = Date.now();
+  await plugin.onInvocationEnd(end());
+  const waited = Date.now() - started;
+  // About 800 - 20 - 500 = 280 ms.
+  assert.ok(waited >= 200 && waited < 450, `${waited} ms`);
+});
+
+test("with less than 500 ms before the Lambda timeout, the final export is skipped", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const exporter = fakeExporter();
+  const plugin = otel(exporter, { flushIntervalMs: 0 })(
+    info({ lambdaContext: deadlineIn(400) }),
+  );
+  plugin.wrap(attemptInfo(1));
+  const started = Date.now();
+  await plugin.onInvocationEnd(end());
+  assert.ok(Date.now() - started < 50);
+  assert.equal(exporter.batches.length, 0);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(
+    warn.mock.calls[0].arguments[0],
+    /trace export skipped: the invocation ends less than 500 ms before its Lambda timeout/,
+  );
+});
+
+test("without getRemainingTimeInMillis, the final export gets exportTimeoutMs", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const plugin = otel(
+    { export() {} },
+    {
+      flushIntervalMs: 0,
+      exportTimeoutMs: 60,
+    },
+  )(info({ lambdaContext: {} }));
+  const started = Date.now();
+  await plugin.onInvocationEnd(end());
+  const waited = Date.now() - started;
+  assert.ok(waited >= 55 && waited < 150, `${waited} ms`);
+  assert.match(warn.mock.calls[0].arguments[0], /timed out after 60 ms/);
+});

@@ -22,6 +22,11 @@ import {
 // The operation types whose records the service ends. The SDK ends STEP and CONTEXT.
 const SERVICE_ENDED = new Set(["WAIT", "CALLBACK", "CHAINED_INVOKE"]);
 
+// The time that the handler keeps after the final export, to return its output to Lambda.
+// Lambda ends an invocation at its deadline. Then the output is lost, and Lambda invokes
+// again. So the final export settles at least this long before the deadline.
+const DEADLINE_MARGIN_MS = 500;
+
 // The exporter, the resource and the context runner are shared by every invocation. They
 // live in this closure. The state of one invocation lives in the closure of one factory call. Lambda
 // Managed Instances can run several invocations in one process at the same time. So no
@@ -200,24 +205,49 @@ export function createOtelPlugin({
       return out;
     };
 
+    // The time that the final export may take:
+    // 1. A telemetry failure must not fail the invocation. An invocation that reaches
+    //    Lambda's deadline fails: Lambda ends it, drops its output and invokes again.
+    // 2. lambdaContext.getRemainingTimeInMillis() is the time left until that deadline.
+    // 3. The handler still has to return after the export. DEADLINE_MARGIN_MS keeps that
+    //    time.
+    // 4. So the export gets exportTimeoutMs, but at most the remaining time minus the
+    //    margin. Without getRemainingTimeInMillis, for example outside Lambda, it gets
+    //    exportTimeoutMs.
+    const exportBudget = () => {
+      const remaining = lambdaContext?.getRemainingTimeInMillis?.();
+      if (typeof remaining !== "number") return exportTimeoutMs;
+      return Math.min(exportTimeoutMs, remaining - DEADLINE_MARGIN_MS);
+    };
+
     // The handler returns only after this function settles. Without an earlier export
     // that still runs, the final export starts at once and bounds itself. Else the final
     // export starts only after the earlier exports. So the total wait is bounded too:
-    // 1. The deadline is exportTimeoutMs after the end of the invocation.
-    // 2. The final export gets the time left until the deadline. So once it starts, it
+    // 1. The budget is exportBudget() when the invocation ends. Without any budget, the
+    //    final export is not sent. Its spans are lost. One line is logged.
+    // 2. The deadline is the budget after the end of the invocation.
+    // 3. The final export gets the time left until the deadline. So once it starts, it
     //    settles by the deadline, and its own timeout logs a failure.
-    // 3. If earlier exports still run at the deadline, the final export never starts.
+    // 4. If earlier exports still run at the deadline, the final export never starts.
     //    Its spans are lost. One line is logged.
     const finalExport = async (spans) => {
-      if (pending === 0) return exportSpans(exporter, spans, exportTimeoutMs);
-      const deadline = Date.now() + exportTimeoutMs;
+      const budgetMs = exportBudget();
+      if (budgetMs <= 0) {
+        // biome-ignore lint/suspicious/noConsole: deliberate -- a lost export must be visible, and Lambda sends console output to CloudWatch.
+        console.warn(
+          `durable-execution-sdk-js-lite-otel: trace export skipped: the invocation ends less than ${DEADLINE_MARGIN_MS} ms before its Lambda timeout`,
+        );
+        return;
+      }
+      if (pending === 0) return exportSpans(exporter, spans, budgetMs);
+      const deadline = Date.now() + budgetMs;
       let late;
       let lateTimer;
       const lateTimeout = new Promise((resolve) => {
         lateTimer = setTimeout(() => {
           late = true;
           resolve();
-        }, exportTimeoutMs);
+        }, budgetMs);
       });
       const done = exports.then(() => {
         if (late) return;
@@ -228,7 +258,7 @@ export function createOtelPlugin({
       if (late) {
         // biome-ignore lint/suspicious/noConsole: deliberate -- a lost export must be visible, and Lambda sends console output to CloudWatch.
         console.warn(
-          `durable-execution-sdk-js-lite-otel: trace export failed: timed out after ${exportTimeoutMs} ms`,
+          `durable-execution-sdk-js-lite-otel: trace export failed: timed out after ${budgetMs} ms`,
         );
       }
     };
