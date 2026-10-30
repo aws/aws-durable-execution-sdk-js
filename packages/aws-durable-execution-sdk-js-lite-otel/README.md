@@ -235,7 +235,16 @@ Without a request id, the invocation span id is random.
    STEP or CONTEXT record in `updatedOperationIds` is still skipped. If an invocation
    crashes, its spans that finished in the last interval are lost.
 4. The span's start and end are the record's `StartTimestamp` and `EndTimestamp`. Without
-   `EndTimestamp`, the span ends at the end of the invocation.
+   `EndTimestamp`, the span ends at the end of the invocation. A step's or a child
+   context's span also covers the attempts and the context runs of this invocation:
+   1. A step's START and a child context's START are not awaited. They can reach the
+      service with a later update, for example with SUCCEED. Then `StartTimestamp` is
+      after `fn` ran.
+   2. The record's timestamps come from the service's clock. Attempt spans come from the
+      Lambda clock.
+   3. So the span starts at the earlier of `StartTimestamp` and the first local start of
+      an attempt or a context run in this invocation. It ends at the later of
+      `EndTimestamp` and the last local end.
 5. An attempt span is built when the attempt's `fn` settles. Its times are measured in the
    Lambda function.
 6. The invocation span starts when the factory runs. It ends when `onInvocationEnd` runs.
@@ -378,6 +387,10 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
 - A sandbox can crash or time out before `onInvocationEnd` runs. Then the spans of the
   last `flushIntervalMs` and the invocation span are lost.
 - A failed export is not retried. The plugin logs one line with `console.warn`.
+- A step whose attempt ran in an earlier invocation, for example before a retry delay,
+  has no local start in the invocation that ends it. Its span starts at the record's
+  `StartTimestamp`. When START travelled with that attempt's RETRY, `StartTimestamp` is
+  after the attempt ran. So the span can start after its first attempt span.
 - An invocation that ends less than 500 ms before its Lambda timeout sends no final
   export. Its last spans, its invocation span and, for the final invocation, its workflow
   span are lost. See [Sizing the Lambda timeout](#sizing-the-lambda-timeout).

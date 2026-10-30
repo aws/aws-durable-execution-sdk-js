@@ -148,6 +148,28 @@ export function createOtelPlugin({
     const parentOf = (parentId) =>
       parentId === undefined ? workflowId : operationSpanId(arn, parentId);
 
+    // The local start and end of the attempts and child-context runs of this invocation,
+    // by record Id. An operation span uses them with its record's timestamps:
+    // 1. A step's START and a child context's START are not awaited. They can reach the
+    //    service with a later update of the same request, for example with SUCCEED. So
+    //    the record's StartTimestamp can be after fn ran, and after its attempt span ended.
+    // 2. The record's timestamps come from the service's clock. The attempt spans come
+    //    from the Lambda clock.
+    // 3. So an operation span starts at the earlier of its StartTimestamp and the first
+    //    local start, and ends at the later of its EndTimestamp and the last local end.
+    //    Then it covers every attempt and child that ran in this invocation.
+    // An attempt that ran in an earlier invocation is not in this map. Its operation span
+    // starts at the record's StartTimestamp (README "Limitations").
+    const localTimes = new Map();
+    const noteLocal = (id, startMs, endMs) => {
+      const t = localTimes.get(id);
+      if (t === undefined) localTimes.set(id, { startMs, endMs });
+      else {
+        t.startMs = Math.min(t.startMs, startMs);
+        t.endMs = Math.max(t.endMs, endMs);
+      }
+    };
+
     // The span is the active span while fn runs. So spans that user code creates become
     // its children. Without otelApi and without a registered context manager of
     // @opentelemetry/api 1.x, fn only runs.
@@ -158,7 +180,9 @@ export function createOtelPlugin({
       const attemptStart = Date.now();
       const spanId = attemptSpanId(arn, id, n);
       // ok is false when fn threw or its promise rejected. thrown is then the reason.
-      const finish = (ok, thrown) =>
+      const finish = (ok, thrown) => {
+        const endMs = Date.now();
+        noteLocal(id, attemptStart, endMs);
         add(
           buildSpan({
             traceId,
@@ -166,7 +190,7 @@ export function createOtelPlugin({
             parentSpanId: operationSpanId(arn, id),
             name: `${name ?? type} attempt ${n}`,
             startMs: attemptStart,
-            endMs: Date.now(),
+            endMs,
             ok,
             error: ok
               ? undefined
@@ -185,6 +209,7 @@ export function createOtelPlugin({
             resource: res,
           }),
         );
+      };
       let out;
       try {
         out = runIn(spanId, fn);
@@ -202,6 +227,24 @@ export function createOtelPlugin({
       } else {
         finish(true);
       }
+      return out;
+    };
+
+    // A child context's fn runs as the context's span. Its local start and end go into
+    // localTimes, like an attempt's. The SDK awaits the returned value, so the original
+    // promise is returned. The derived promise always fulfills.
+    const context = ({ id, fn }) => {
+      const contextStart = Date.now();
+      const done = () => noteLocal(id, contextStart, Date.now());
+      let out;
+      try {
+        out = runIn(operationSpanId(arn, id), fn);
+      } catch (error) {
+        done();
+        throw error;
+      }
+      if (typeof out?.then === "function") out.then(done, done);
+      else done();
       return out;
     };
 
@@ -263,15 +306,24 @@ export function createOtelPlugin({
       }
     };
 
-    const operationSpan = (r) =>
-      buildSpan({
+    const operationSpan = (r) => {
+      const recordStart = recordMs(
+        r.StartTimestamp ?? r.EndTimestamp ?? Date.now(),
+      );
+      const recordEnd =
+        r.EndTimestamp === undefined ? Date.now() : recordMs(r.EndTimestamp);
+      const local = localTimes.get(r.Id);
+      return buildSpan({
         traceId,
         spanId: operationSpanId(arn, r.Id),
         parentSpanId: parentOf(r.ParentId),
         name: r.Name ?? r.Type,
-        startMs: recordMs(r.StartTimestamp ?? r.EndTimestamp ?? Date.now()),
+        startMs:
+          local === undefined
+            ? recordStart
+            : Math.min(recordStart, local.startMs),
         endMs:
-          r.EndTimestamp === undefined ? Date.now() : recordMs(r.EndTimestamp),
+          local === undefined ? recordEnd : Math.max(recordEnd, local.endMs),
         ok: r.Status === "SUCCEEDED",
         statusMessage: r.Status,
         error: recordError(r),
@@ -287,6 +339,7 @@ export function createOtelPlugin({
         },
         resource: res,
       });
+    };
 
     // Builds the span of every record that became terminal in this checkpoint response.
     // With flushIntervalMs 0, the plugin has no onOperationChange. So every operation
@@ -309,8 +362,7 @@ export function createOtelPlugin({
 
       wrap(w) {
         if (w.kind === "attempt") return attempt(w);
-        if (w.kind === "context")
-          return runIn(operationSpanId(arn, w.id), w.fn);
+        if (w.kind === "context") return context(w);
         return runIn(invocationId, w.fn);
       },
 

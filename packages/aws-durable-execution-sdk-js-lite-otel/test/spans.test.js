@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { SPAN_KIND_INTERNAL, STATUS_ERROR, STATUS_OK } from "../src/spans.js";
 import {
   byName,
@@ -283,4 +284,115 @@ test("after a timed-out invocation, steps in updatedOperationIds are not emitted
   });
   const names = exporter.spans().map((s) => s.name);
   assert.deepEqual(names.sort(), ["Invocation", "w"]);
+});
+
+// Epoch milliseconds of an HrTime.
+const msOf = ([s, ns]) => s * 1000 + ns / 1e6;
+
+// A terminal record whose times are startMs and endMs, in the service's epoch seconds.
+const record = (id, startMs, endMs, fields = {}) => ({
+  Id: id,
+  Name: id,
+  Type: "STEP",
+  Status: "SUCCEEDED",
+  StartTimestamp: startMs / 1000,
+  EndTimestamp: endMs / 1000,
+  ...fields,
+});
+
+const runAttempt = async (plugin, id, ms) => {
+  const startMs = Date.now();
+  await plugin.wrap({
+    kind: "attempt",
+    id,
+    name: id,
+    type: "STEP",
+    subType: "Step",
+    attempt: 1,
+    fn: () => sleep(ms),
+  });
+  return { startMs, endMs: Date.now() };
+};
+
+const finish = (plugin) =>
+  plugin.onInvocationEnd({
+    status: "PENDING",
+    result: undefined,
+    error: undefined,
+    operations: [],
+  });
+
+test("a step span starts at its attempt when START reached the service after fn ran", async () => {
+  const exporter = fakeExporter();
+  const plugin = otel(exporter, { flushIntervalMs: 1 })(info());
+  const run = await runAttempt(plugin, "s", 40);
+  // START travelled with SUCCEED: the record starts 30 ms after the attempt ended.
+  plugin.onOperationChange({
+    updated: [record("s", run.endMs + 30, run.endMs + 35)],
+  });
+  await finish(plugin);
+  const step = one(exporter.spans(), "s");
+  const attempt = one(exporter.spans(), "s attempt 1");
+  assert.equal(msOf(step.startTime), msOf(attempt.startTime));
+  assert.ok(msOf(step.endTime) >= msOf(attempt.endTime));
+  assert.equal(msOf(step.endTime), run.endMs + 35);
+});
+
+test("a step span ends at its attempt when the service's clock is behind", async () => {
+  const exporter = fakeExporter();
+  const plugin = otel(exporter, { flushIntervalMs: 1 })(info());
+  const run = await runAttempt(plugin, "s", 40);
+  // The service's clock is 100 ms behind the Lambda clock.
+  plugin.onOperationChange({
+    updated: [record("s", run.startMs - 100, run.endMs - 100)],
+  });
+  await finish(plugin);
+  const step = one(exporter.spans(), "s");
+  const attempt = one(exporter.spans(), "s attempt 1");
+  assert.equal(msOf(step.startTime), run.startMs - 100);
+  assert.equal(msOf(step.endTime), msOf(attempt.endTime));
+});
+
+test("a child context span covers the context's run and its child attempts", async () => {
+  const exporter = fakeExporter();
+  const plugin = otel(exporter, { flushIntervalMs: 1 })(info());
+  const contextStart = Date.now();
+  let child;
+  await plugin.wrap({
+    kind: "context",
+    id: "c",
+    name: "c",
+    type: "CONTEXT",
+    subType: "RunInChildContext",
+    fn: async () => {
+      await sleep(10);
+      child = await runAttempt(plugin, "inner", 30);
+      await sleep(10);
+    },
+  });
+  const contextEnd = Date.now();
+  plugin.onOperationChange({
+    updated: [
+      record("inner", child.endMs + 5, child.endMs + 6, { ParentId: "c" }),
+      record("c", contextEnd + 5, contextEnd + 6, { Type: "CONTEXT" }),
+    ],
+  });
+  await finish(plugin);
+  const ctxSpan = one(exporter.spans(), "c");
+  const inner = one(exporter.spans(), "inner");
+  assert.ok(msOf(ctxSpan.startTime) <= contextStart + 1);
+  assert.ok(msOf(ctxSpan.startTime) <= msOf(inner.startTime));
+  assert.ok(msOf(ctxSpan.endTime) >= msOf(inner.endTime));
+  assert.equal(msOf(inner.startTime), child.startMs);
+});
+
+test("an operation without a local attempt in this invocation keeps its record times", async () => {
+  const exporter = fakeExporter();
+  const plugin = otel(exporter, { flushIntervalMs: 1 })(info());
+  const now = Date.now();
+  plugin.onOperationChange({ updated: [record("earlier", now - 500, now)] });
+  await finish(plugin);
+  const step = one(exporter.spans(), "earlier");
+  assert.equal(msOf(step.startTime), now - 500);
+  assert.equal(msOf(step.endTime), now);
 });
