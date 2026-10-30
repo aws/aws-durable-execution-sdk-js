@@ -81,6 +81,12 @@ export interface ExecutionViewerOptions {
   log?: (message: string) => void;
 }
 
+/** A running listener. */
+interface Started {
+  origin: string;
+  server: Server;
+}
+
 /**
  * Hands out viewer links, starting the server the first time one is needed.
  * A server that cannot start yields no links, rather than failing the tool
@@ -89,9 +95,8 @@ export interface ExecutionViewerOptions {
  * turn links off for the rest of the session.
  */
 export class ExecutionViewer {
-  private server: Server | undefined;
-  private starting: Promise<string | undefined> | undefined;
-  private hosts = new Set<string>();
+  /** The current start attempt. Undefined before the first link, and after a failure or close(). */
+  private starting: Promise<Started | undefined> | undefined;
   private readonly arnById = new Map<string, string>();
   private readonly idByArn = new Map<string, string>();
 
@@ -104,7 +109,7 @@ export class ExecutionViewer {
    */
   async linkFor(arn: unknown): Promise<string | undefined> {
     if (!isDurableExecutionArn(arn)) return undefined;
-    const origin = await this.start();
+    const origin = (await this.start())?.origin;
     if (!origin) return undefined;
     let id = this.idByArn.get(arn);
     if (!id) {
@@ -116,37 +121,48 @@ export class ExecutionViewer {
   }
 
   /**
-   * Starts the listener, once while it runs. Resolves to its origin, or to
-   * undefined when it fails, in which case the next call tries again.
+   * Starts the listener, once while it runs. Resolves to it, or to undefined
+   * when it fails, in which case the next call tries again.
    */
-  start(): Promise<string | undefined> {
-    this.starting ??= this.listen().catch((err: unknown) => {
-      this.starting = undefined;
-      this.log(
-        `execution viewer could not start, so results carry no viewer links: ${errorMessage(err)}`,
-      );
-      return undefined;
-    });
-    return this.starting;
+  private start(): Promise<Started | undefined> {
+    if (this.starting) return this.starting;
+    const attempt: Promise<Started | undefined> = this.listen().catch(
+      (err: unknown) => {
+        // close() and a newer attempt may have replaced this one. Clearing
+        // the newer one would let a third call open a second listener.
+        if (this.starting === attempt) this.starting = undefined;
+        this.log(
+          `execution viewer could not start, so results carry no viewer links: ${errorMessage(err)}`,
+        );
+        return undefined;
+      },
+    );
+    this.starting = attempt;
+    return attempt;
   }
 
   /**
    * Stops the listener. The server never calls this, because unref() lets the
-   * process exit without it. Tests call it. A later link starts a new
-   * listener, on a new port, that still knows the IDs given out so far.
+   * process exit without it. Tests call it. It waits for a start in progress,
+   * so that listener is stopped too. A later link starts a new listener, on a
+   * new port, that still knows the IDs given out so far.
    */
   async close(): Promise<void> {
-    const server = this.server;
-    this.server = undefined;
+    const attempt = this.starting;
     this.starting = undefined;
-    if (!server) return;
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    const started = await attempt;
+    if (!started) return;
+    await new Promise<void>((resolve) => started.server.close(() => resolve()));
   }
 
-  private listen(): Promise<string> {
+  private listen(): Promise<Started> {
     return new Promise((resolve, reject) => {
+      // Each listener answers only to its own address.
+      const hosts = new Set<string>();
       // handle() catches the one call that can fail, the Lambda read.
-      const server = createServer((req, res) => void this.handle(req, res));
+      const server = createServer(
+        (req, res) => void this.handle(req, res, hosts),
+      );
       server.once("error", reject);
       server.listen(0, VIEWER_HOST, () => {
         server.off("error", reject);
@@ -154,17 +170,21 @@ export class ExecutionViewer {
         // not keep it alive.
         server.unref();
         const { port } = server.address() as AddressInfo;
-        this.server = server;
-        this.hosts = new Set([`${VIEWER_HOST}:${port}`, `localhost:${port}`]);
+        hosts.add(`${VIEWER_HOST}:${port}`);
+        hosts.add(`localhost:${port}`);
         const origin = `http://${VIEWER_HOST}:${port}`;
         this.log(`execution viewer listening on ${origin}`);
-        resolve(origin);
+        resolve({ origin, server });
       });
     });
   }
 
-  private async handle(req: IncomingMessage, res: ServerResponse) {
-    if (!this.hosts.has((req.headers.host ?? "").toLowerCase())) {
+  private async handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+    hosts: ReadonlySet<string>,
+  ) {
+    if (!hosts.has((req.headers.host ?? "").toLowerCase())) {
       send(
         res,
         421,

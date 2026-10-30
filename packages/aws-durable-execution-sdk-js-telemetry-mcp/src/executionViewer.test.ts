@@ -187,17 +187,79 @@ describe("viewer links", () => {
     expect((await get(second)).status).toBe(200);
   });
 
-  it("is turned off only by DURABLE_TELEMETRY_VIEWER_DISABLED=true, in any case", () => {
+  /** Records every server the viewer creates. `failFirst` makes the first listen fail after `ms`. */
+  function watchServers(failFirst?: { ms: number }) {
+    const http = jest.requireActual<typeof import("node:http")>("node:http");
+    const realCreateServer = http.createServer;
+    const servers: import("node:http").Server[] = [];
+    const spy = jest.spyOn(http, "createServer").mockImplementation(((
+      ...args: Parameters<typeof realCreateServer>
+    ) => {
+      const s = realCreateServer(...args);
+      if (failFirst && servers.length === 0) {
+        s.listen = (() => {
+          setTimeout(() => s.emit("error", new Error("EMFILE")), failFirst.ms);
+          return s;
+        }) as typeof s.listen;
+      }
+      servers.push(s);
+      return s;
+    }) as typeof http.createServer);
+    return { servers, restore: () => spy.mockRestore() };
+  }
+
+  it("stops a listener that was still starting when close() ran", async () => {
+    viewer = makeViewer().viewer;
+    const watch = watchServers();
+    try {
+      const pending = viewer.linkFor(ARN);
+      await viewer.close();
+      await pending;
+      expect(watch.servers).toHaveLength(1);
+      expect(watch.servers[0].listening).toBe(false);
+      // The next link opens one new listener, and it answers.
+      const link = (await viewer.linkFor(ARN)) ?? "";
+      expect((await get(link)).status).toBe(200);
+      expect(watch.servers).toHaveLength(2);
+    } finally {
+      watch.restore();
+    }
+  });
+
+  it("does not let an old failed start clear a newer one", async () => {
+    viewer = makeViewer().viewer;
+    const watch = watchServers({ ms: 100 });
+    try {
+      const failing = viewer.linkFor(ARN);
+      const closing = viewer.close();
+      const second = (await viewer.linkFor(ARN)) ?? "";
+      expect(second).toMatch(LINK);
+      expect(await failing).toBeUndefined();
+      await closing;
+      // The failure came after the second start. A third link reuses it.
+      expect(await viewer.linkFor(ARN)).toBe(second);
+      expect(watch.servers).toHaveLength(2);
+    } finally {
+      watch.restore();
+    }
+  });
+
+  it("is turned off only by DURABLE_TELEMETRY_VIEWER_DISABLED=true, in any case", async () => {
+    const logs: string[] = [];
     const made = (v: string | undefined) =>
       viewerFromEnv(
         { DURABLE_TELEMETRY_VIEWER_DISABLED: v },
-        { config: CONFIG },
+        { config: CONFIG, log: (m) => logs.push(m) },
       );
     expect(made("true")).toBeUndefined();
     expect(made(" TRUE ")).toBeUndefined();
-    for (const v of [undefined, "1", "false"]) {
+    for (const v of [undefined, "1", "false", "nottrue", "true1"]) {
       expect(made(v)).toBeInstanceOf(ExecutionViewer);
     }
+    // The options reach the viewer, including the log.
+    viewer = made(undefined) as ExecutionViewer;
+    await viewer.linkFor(ARN);
+    expect(logs.join("\n")).toMatch(/execution viewer listening on http:/);
   });
 
   it("closes cleanly before it has started", async () => {
@@ -304,6 +366,12 @@ describe("viewer server", () => {
     expect(res.body).toBe("");
     // Without the Lambda call the length is unknown, so none is sent.
     expect(res.headers["content-length"]).toBeUndefined();
+    // Every other header is the same as on GET.
+    expect(res.headers["content-type"]).toBe("text/html; charset=utf-8");
+    expect(res.headers["content-security-policy"]).toMatch(/^default-src/);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    expect(res.headers["cache-control"]).toBe("no-store");
     expect(made.calls).toEqual([]);
   });
 
@@ -600,6 +668,10 @@ describe("viewer links in results", () => {
     const long = markdownLink("n".repeat(200), "http://x");
     expect(long.length).toBeLessThan(100);
     expect(long).toContain("…](http://x)");
+    // A name of exactly 80 characters fits.
+    expect(markdownLink("n".repeat(80), "http://x")).toBe(
+      `[${"n".repeat(80)}](http://x)`,
+    );
     // The cut counts code points, so it never splits an emoji's surrogate pair.
     const emoji = markdownLink(`${"a".repeat(78)}😀😀😀`, "http://x");
     expect(emoji).toBe(`[${"a".repeat(78)}😀…](http://x)`);

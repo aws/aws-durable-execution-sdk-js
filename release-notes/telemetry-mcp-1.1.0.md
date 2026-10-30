@@ -20,10 +20,12 @@
   error, and the tools still work.
 - **Output change for tools that read results programmatically.** `query` and
   `list_executions` rows can have an extra last column, `viewerLink`.
-  `list_executions` rows also have a new `executionName` column (named for each
-  destination's casing), after the ARN column. A found `get_execution` result
-  can have a `viewerLink` field. Code that reads columns by position needs an
-  update.
+  `list_executions` rows also have a new `executionName` column, named for
+  each destination's casing. Its position depends on the destination. On
+  DynamoDB it comes after `functionName`. On the CloudWatch Logs destinations
+  it can come later, or be absent when no row has a name. A found
+  `get_execution` result can have a `viewerLink` field. Read columns by name,
+  not by position.
 
 ## Changed
 
