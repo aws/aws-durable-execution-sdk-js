@@ -1,11 +1,12 @@
+import { isDisabled, resourceAttributes, sampler } from "./env.js";
 import { exportSpans } from "./export.js";
 import {
   attemptSpanId,
   invocationSpanId,
   invokeTraceHeader,
-  isSampled,
   operationSpanId,
   parseTraceHeader,
+  sampleDecision,
   traceId as traceIdOf,
   workflowSpanId,
 } from "./ids.js";
@@ -35,23 +36,43 @@ export function createOtelPlugin({
   exporter,
   resource,
   serviceName,
-  sampleRate = 1,
+  sampleRate,
+  parentBased,
   exportTimeoutMs = 3000,
   flushIntervalMs = 5000,
   otelApi,
 }) {
+  const env = process.env;
+  // OTEL_SDK_DISABLED=true turns tracing off. Then no execution gets a plugin, so the
+  // SDK calls no hook.
+  if (isDisabled(env)) return () => undefined;
+  const fromEnv = sampler(env);
+  const sampling = {
+    parentBased: parentBased ?? fromEnv?.parentBased ?? false,
+    ratio: sampleRate ?? fromEnv?.ratio ?? 1,
+  };
   const runWithSpanContext = contextRunner(otelApi);
+  // service.name: serviceName, else OTEL_SERVICE_NAME, else service.name of
+  // OTEL_RESOURCE_ATTRIBUTES, else the function name. The other attributes of
+  // OTEL_RESOURCE_ATTRIBUTES replace the defaults of the same name. A given resource is
+  // used as is, so the environment does not change it.
   const res =
     resource ??
-    plainResource({
-      "service.name":
-        serviceName ??
-        process.env.AWS_LAMBDA_FUNCTION_NAME ??
-        "durable-function",
-      "cloud.provider": "aws",
-      "cloud.region": process.env.AWS_REGION,
-      "faas.name": process.env.AWS_LAMBDA_FUNCTION_NAME,
-    });
+    (() => {
+      const { "service.name": attrsName, ...attrs } = resourceAttributes(env);
+      return plainResource({
+        "service.name":
+          serviceName ??
+          (env.OTEL_SERVICE_NAME?.trim() || undefined) ??
+          attrsName ??
+          env.AWS_LAMBDA_FUNCTION_NAME ??
+          "durable-function",
+        "cloud.provider": "aws",
+        "cloud.region": env.AWS_REGION,
+        "faas.name": env.AWS_LAMBDA_FUNCTION_NAME,
+        ...attrs,
+      });
+    })();
 
   return (info) => {
     const { arn, requestId, lambdaContext } = info;
@@ -69,7 +90,7 @@ export function createOtelPlugin({
     );
     const traceId = header?.traceId ?? traceIdOf(arn);
     // Not sampled: no plugin, so the SDK calls no hook in this invocation.
-    if (!isSampled(traceId, sampleRate)) return undefined;
+    if (!sampleDecision(traceId, header, sampling)) return undefined;
 
     const startMs = Date.now();
     const workflowId = workflowSpanId(arn);

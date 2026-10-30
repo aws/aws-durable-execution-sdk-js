@@ -29,6 +29,18 @@ objects with the fields of `ReadableSpan` from `@opentelemetry/sdk-trace-base` 2
 passes them to `exporter.export`, during the invocation and at its end (see
 [When spans are sent](#when-spans-are-sent)).
 
+So the plugin's spans bypass every span processor and every TracerProvider setting:
+
+1. A span processor that you register, for example one that adds or redacts attributes,
+   never sees the durable spans. Spans that your own code creates still pass through it.
+2. The span limits of a TracerProvider, for example `spanLimits.attributeCountLimit`, do
+   not apply.
+3. The sampler of a TracerProvider does not decide for the durable spans. The plugin
+   decides itself (see [Sampling](#sampling)).
+4. To change the durable spans before they leave the process, wrap the exporter. For
+   example, pass an object whose `export(spans, resultCallback)` edits `spans` and then
+   calls the real exporter.
+
 ## Requirements
 
 - Node.js 22.12 or later. The package has no dependencies.
@@ -56,6 +68,94 @@ export const handler = withDurableExecution(workflow, {
 Never write a token into the code. Read it from an environment variable, as above. Or read
 it from AWS Secrets Manager once, outside the handler, and create the exporter with it.
 
+`OTLPTraceExporter` also reads the standard `OTEL_EXPORTER_OTLP_*` variables, for example
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The plugin itself
+reads the variables in [Environment variables](#environment-variables).
+
+By default, the plugin traces every execution. Every traced execution exports one span per
+operation, one per step attempt, one per invocation and one for the workflow. A backend
+that bills per span or per byte bills all of them. To trace fewer executions, set
+`sampleRate` or `OTEL_TRACES_SAMPLER` (see [Sampling](#sampling)).
+
+### Sending to CloudWatch and X-Ray
+
+The plugin has no built-in exporter. A small exporter in your code sends the spans to the
+X-Ray OTLP endpoint, `https://xray.<region>.amazonaws.com/v1/traces`. The endpoint needs
+two things:
+
+1. Transaction Search, enabled once per account and region. Without it, the endpoint
+   returns HTTP 400: "The OTLP API is supported with CloudWatch Logs as a Trace Segment
+   Destination". To enable it, follow
+   [Enable transaction search](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Enable-TransactionSearch.html).
+   `aws xray get-trace-segment-destination` then returns `CloudWatchLogs` and `ACTIVE`.
+   Transaction Search changes the destination of all X-Ray spans of the account and region,
+   and CloudWatch Logs pricing applies to them.
+2. Requests signed with SigV4 for the service `xray`. The function's role needs
+   `xray:PutTraceSegments`. The managed policies `AWSXRayDaemonWriteAccess` and
+   `AWSXrayWriteOnlyAccess` grant it.
+
+This exporter uses the AWS SDK's signer and the OTLP serializer of OpenTelemetry:
+
+```js
+// npm install @aws-crypto/sha256-js @aws-sdk/credential-provider-env
+//   @opentelemetry/otlp-transformer @smithy/signature-v4
+import { Sha256 } from "@aws-crypto/sha256-js";
+import { fromEnv } from "@aws-sdk/credential-provider-env";
+import { ProtobufTraceSerializer } from "@opentelemetry/otlp-transformer";
+import { SignatureV4 } from "@smithy/signature-v4";
+
+// Sends spans to the X-Ray OTLP endpoint, signed with the function's role.
+export function xrayExporter({ region = process.env.AWS_REGION, timeoutMs = 3000 } = {}) {
+  const url = new URL(`https://xray.${region}.amazonaws.com/v1/traces`);
+  const signer = new SignatureV4({ service: "xray", region, credentials: fromEnv(), sha256: Sha256 });
+  return {
+    export(spans, resultCallback) {
+      const body = ProtobufTraceSerializer.serializeRequest(spans);
+      signer
+        .sign({
+          method: "POST",
+          protocol: "https:",
+          hostname: url.hostname,
+          path: url.pathname,
+          headers: { host: url.hostname, "content-type": "application/x-protobuf" },
+          body,
+        })
+        .then((signed) =>
+          fetch(url, { method: "POST", headers: signed.headers, body, signal: AbortSignal.timeout(timeoutMs) }),
+        )
+        .then(
+          (res) =>
+            resultCallback(
+              res.ok ? { code: 0 } : { code: 1, error: new Error(`X-Ray returned HTTP ${res.status}`) },
+            ),
+          (error) => resultCallback({ code: 1, error }),
+        );
+    },
+  };
+}
+```
+
+```js
+createOtelPlugin({ exporter: xrayExporter() });
+```
+
+1. `fromEnv()` reads the credentials that Lambda puts in the function's environment.
+2. A failed request calls `resultCallback` with code 1. The plugin then logs one line,
+   and the workflow is unchanged.
+3. The spans are stored in the log group `aws/spans`. Transaction Search finds them by
+   trace id, by attribute and by service.
+4. The trace id is the X-Ray Root of the invocation (see [Trace id](#trace-id)). So with
+   Active tracing, the durable spans and the Lambda segments of each invocation are in one
+   trace.
+5. The X-Ray trace summaries and the trace map show only indexed spans. The share of
+   indexed spans is the indexing rule of Transaction Search. By default it is 1%.
+
+Measured on Lambda in us-west-2 with Active tracing: a workflow with a step, a wait and a
+second step ran in two invocations. All 8 durable spans and the user span inside the
+first step reached `aws/spans`, in the same trace as the Lambda spans of both invocations. A retried step
+gave its two attempt spans, the first one `ERROR`. `StartTraceRetrieval` and
+`ListRetrievedTraces` with `--trace-format OTEL` returned the whole trace.
+
 ## Configuration
 
 `createOtelPlugin(config)` returns a plugin factory. `config` has these keys:
@@ -65,10 +165,15 @@ it from AWS Secrets Manager once, outside the handler, and create the exporter w
   previous export settled. It calls `forceFlush()` after a successful export, if the
   exporter has it. It never calls `shutdown()`.
 - `resource` (optional): the OpenTelemetry Resource of every span, for example from
-  `resourceFromAttributes` of `@opentelemetry/resources` 2.x.
+  `resourceFromAttributes` of `@opentelemetry/resources` 2.x. The plugin uses it as is.
+  The environment variables do not change it.
 - `serviceName` (optional): `service.name` of the default resource. Ignored when
   `resource` is set.
-- `sampleRate` (default 1): the fraction of executions to trace, from 0 to 1.
+- `sampleRate` (optional): the fraction of executions to trace, from 0 to 1. Default:
+  the ratio of `OTEL_TRACES_SAMPLER`, else 1.
+- `parentBased` (optional): `true` lets the `Sampled` field of the Lambda trace header
+  decide. Default: `true` for a `parentbased_*` value of `OTEL_TRACES_SAMPLER`, else
+  `false`. See [Sampling](#sampling).
 - `exportTimeoutMs` (default 3000): each export waits at most this many milliseconds.
   `onInvocationEnd` also waits at most this long for all exports. It also never waits
   past 500 ms before the Lambda timeout. See
@@ -84,14 +189,49 @@ it from AWS Secrets Manager once, outside the handler, and create the exporter w
 
 The default resource has these attributes. An attribute without a value is omitted.
 
-- `service.name`: `serviceName`, else `AWS_LAMBDA_FUNCTION_NAME`, else `durable-function`.
+- `service.name`: `serviceName`, else `OTEL_SERVICE_NAME`, else `service.name` of
+  `OTEL_RESOURCE_ATTRIBUTES`, else `AWS_LAMBDA_FUNCTION_NAME`, else `durable-function`.
 - `cloud.provider`: `aws`.
 - `cloud.region`: `AWS_REGION`.
 - `faas.name`: `AWS_LAMBDA_FUNCTION_NAME`.
+- every attribute of `OTEL_RESOURCE_ATTRIBUTES`. It replaces a default of the same name.
 
 The OTLP serializer of `@opentelemetry/otlp-transformer` reads only `attributes` and
 `schemaUrl` from a resource. The default resource also has the other members of the
-Resource interface. To add attributes, pass your own Resource.
+Resource interface. To add attributes, set `OTEL_RESOURCE_ATTRIBUTES` or pass your own
+Resource.
+
+### Environment variables
+
+The plugin reads these standard OpenTelemetry variables once, when `createOtelPlugin`
+runs. A key in `config` wins over a variable. A variable wins over the default.
+
+| Variable | Effect |
+|---|---|
+| `OTEL_SDK_DISABLED` | `true`, in any case, turns tracing off: the factory returns no plugin, so the SDK calls no hook. Every other value changes nothing. |
+| `OTEL_SERVICE_NAME` | `service.name` of the default resource. |
+| `OTEL_RESOURCE_ATTRIBUTES` | Attributes of the default resource, as `key1=value1,key2=value2` with percent-encoding, for example `team=a%2Cb` for the value `a,b`. |
+| `OTEL_TRACES_SAMPLER` | `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off` or `parentbased_traceidratio`, in any case. See [Sampling](#sampling). |
+| `OTEL_TRACES_SAMPLER_ARG` | The ratio of the two `*traceidratio` samplers, from 0 to 1. Default 1. |
+
+An invalid value is ignored, and the plugin logs one line with `console.warn`:
+
+1. An `OTEL_RESOURCE_ATTRIBUTES` with one invalid pair is ignored as a whole, as the
+   OpenTelemetry specification requires. Examples: `a=1,b` and `a=%zz`.
+2. Another sampler, for example `xray` or `jaeger_remote`, is ignored. The default
+   applies.
+3. An `OTEL_TRACES_SAMPLER_ARG` that is not a number from 0 to 1 is replaced by 1.
+
+The plugin does not read these variables:
+
+- `OTEL_EXPORTER_OTLP_*`: the exporter reads them. `OTLPTraceExporter` does.
+- `OTEL_TRACES_EXPORTER`: you pass the exporter as `exporter`.
+- `OTEL_BSP_*`: the plugin has no BatchSpanProcessor. `flushIntervalMs` and
+  `exportTimeoutMs` set its schedule. Their meaning differs from the BSP variables. For
+  example, `flushIntervalMs` 0 sends only at the end of the invocation.
+- `OTEL_PROPAGATORS`: the plugin uses only the Lambda trace header.
+- `OTEL_SPAN_*_LIMIT` and `OTEL_ATTRIBUTE_*_LIMIT`: the plugin's spans have a fixed set of
+  attributes, events and links.
 
 ### When spans are sent
 
@@ -149,24 +289,65 @@ To keep traces complete:
 
 ### Sampling
 
-The plugin decides from the trace id (see [Trace id](#trace-id)). The trace id is the
-same in every invocation of one execution. So every invocation makes the same decision,
-and a trace is complete or absent. An execution that `ctx.invoke` started has the
-caller's trace id. So with the same `sampleRate`, it makes the caller's decision.
+The plugin decides once per invocation. For an execution that is not traced, the factory
+returns `undefined`. So the SDK calls no plugin hook. Two inputs can decide: a ratio, and
+the `Sampled` field of the Lambda trace header.
+
+| `OTEL_TRACES_SAMPLER` | Ratio | Uses `Sampled` |
+|---|---|---|
+| unset (default) | 1 | no |
+| `always_on` | 1 | no |
+| `always_off` | 0 | no |
+| `traceidratio` | `OTEL_TRACES_SAMPLER_ARG` | no |
+| `parentbased_always_on` | 1 | yes |
+| `parentbased_always_off` | 0 | yes |
+| `parentbased_traceidratio` | `OTEL_TRACES_SAMPLER_ARG` | yes |
+
+`sampleRate` replaces the ratio. `parentBased` replaces the last column. Each key replaces
+only its own part. For example, `parentbased_traceidratio` with `sampleRate: 1` uses
+`Sampled`, and traces every execution without a `Sampled` decision.
+
+The default traces every execution. The default of the OpenTelemetry specification is
+`parentbased_always_on`. The plugin's default differs, because in PassThrough tracing the
+parent-based default would trace almost no execution (see below).
+
+#### The ratio
+
+The ratio decides from the trace id (see [Trace id](#trace-id)). The trace id is the same
+in every invocation of one execution. So every invocation makes the same decision, and a
+trace is complete or absent. An execution that `ctx.invoke` started has the caller's trace
+id. So with the same ratio, it makes the caller's decision.
 
 1. The plugin reads the last 8 hex digits of the trace id as a number.
 2. It divides the number by 2^32.
-3. The execution is traced if the result is below `sampleRate`.
-4. For an execution that is not traced, the factory returns `undefined`. So the SDK calls
-   no plugin hook.
+3. The execution is traced if the result is below the ratio.
 
-The plugin ignores the `Sampled` field of the trace header:
+#### The Sampled field
 
-1. In PassThrough tracing without an upstream decision, Lambda sets `Sampled=0`.
-2. That is the common case for a durable function. For example, `aws lambda invoke`
-   sends no trace header.
-3. So a plugin that obeyed `Sampled` would trace almost no execution.
-4. So only `sampleRate` decides.
+With `parentBased`, `Sampled=1` traces the invocation and `Sampled=0` does not. Without a
+`Sampled` decision, for example with `Sampled=?` or without a header, the ratio decides.
+
+Lambda gives every invocation of one execution the same `Sampled` value. So the decision
+is the same in every invocation, as with the ratio. Measured on Lambda in us-west-2, with
+executions that ran in two invocations each:
+
+1. PassThrough tracing, 27 executions started with `aws lambda invoke`: every invocation
+   had `Sampled=0`. With `parentbased_always_on`, the plugin traced none of 6 such
+   executions. Without `OTEL_TRACES_SAMPLER`, it traced all of 6.
+2. Active tracing, 27 executions: each execution had one `Sampled` value in both
+   invocations. Lambda's X-Ray sampling set it: 26 executions had `Sampled=1`, one had
+   `Sampled=0`. With `parentbased_always_on`, the plugin traced all 12 executions of one
+   run, which all had `Sampled=1`.
+
+So use a `parentbased_*` sampler when Lambda's X-Ray sampling, or a traced upstream caller,
+should decide. Example: Active tracing, with the durable spans sent to X-Ray (see
+[Sending to CloudWatch and X-Ray](#sending-to-cloudwatch-and-x-ray)). Then the durable spans
+exist exactly for the traces that have Lambda segments. In PassThrough tracing without a
+traced upstream caller, do not use a `parentbased_*` sampler.
+
+An execution that `ctx.invoke` started receives `Sampled=1` from a traced caller (see
+[Propagation through ctx.invoke](#propagation-through-ctxinvoke)). So with `parentBased`,
+it is traced whenever its caller is.
 
 ## Span model
 
@@ -410,10 +591,12 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
 - The real service can list a wait, a callback or an invoke in `updatedOperationIds` after
   an earlier invocation already emitted it. That happens after an invocation timeout. The
   span is then sent twice with the same span id.
-- The plugin does not export to X-Ray. It only uses the X-Ray Root as its trace id. The
-  Lambda X-Ray segments appear in the trace only if the function sends X-Ray data, for
-  example with Active tracing and an OpenTelemetry X-Ray integration. The durable spans
-  have no parent link to those segments.
+- The plugin has no built-in X-Ray exporter. Use the exporter in
+  [Sending to CloudWatch and X-Ray](#sending-to-cloudwatch-and-x-ray). The durable spans
+  share the trace id of the Lambda X-Ray segments, but have no parent link to them. The
+  workflow span is a root span next to the Lambda segments.
+- The durable spans bypass span processors and TracerProvider settings (see
+  [What it does](#what-it-does)).
 - In Active tracing, the invoked execution's workflow span links to a span that Lambda
   generated, not to the caller's CHAINED_INVOKE span. Lambda replaces `Parent` in every
   invocation. Both executions still share one trace id.
@@ -483,8 +666,8 @@ adds one request round trip to every step.
   a Tracer, a TracerProvider and a deterministic IdGenerator.
 - This plugin takes the trace id from the trace header's Root, else from the ARN. It
   never uses the header's `Parent` as a parent. It links the workflow span to it. It
-  ignores `Sampled`. The full plugin can also join a W3C parent and reads the
-  `Sampled` flag.
+  reads `Sampled` only with a parent-based sampler, and its default ignores `Sampled`.
+  The full plugin can also join a W3C parent.
 - This plugin does not use `AsyncLocalStorage`. The full plugin does.
 - This plugin has no dependencies. The full plugin has peer dependencies, among them
   `@opentelemetry/api`.
@@ -537,6 +720,7 @@ add to them or replace them for this package:
 
 ```
 src/index.js     createOtelPlugin: the factory and the hooks
+src/env.js       the OTEL_* environment variables
 src/ids.js       deterministic ids and the sampling decision
 src/spans.js     span objects, time conversion, the default resource
 src/export.js    the export with a timeout

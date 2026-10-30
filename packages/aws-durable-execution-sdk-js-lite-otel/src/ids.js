@@ -15,13 +15,20 @@ export const traceId = (arn) => hash(arn, 32);
 // The 32 hex digits of Root are the OpenTelemetry trace id. Parent is a span id.
 const ROOT = /(?:^|;)\s*Root=1-([0-9a-f]{8})-([0-9a-f]{24})\s*(?:;|$)/;
 const PARENT = /(?:^|;)\s*Parent=([0-9a-f]{16})\s*(?:;|$)/;
+const SAMPLED = /(?:^|;)\s*Sampled=([01])\s*(?:;|$)/;
 
-// Returns { traceId, parent } of a header with a valid Root, else undefined. parent is
-// undefined when the header has no valid Parent. Sampled is not read (README "Sampling").
+// Returns { traceId, parent, sampled } of a header with a valid Root, else undefined.
+// parent is undefined when the header has no valid Parent. sampled is true for
+// Sampled=1, false for Sampled=0, and undefined otherwise, for example for Sampled=?.
 export function parseTraceHeader(header) {
   const root = typeof header === "string" ? ROOT.exec(header) : null;
   if (!root) return undefined;
-  return { traceId: root[1] + root[2], parent: PARENT.exec(header)?.[1] };
+  const sampled = SAMPLED.exec(header)?.[1];
+  return {
+    traceId: root[1] + root[2],
+    parent: PARENT.exec(header)?.[1],
+    sampled: sampled === undefined ? undefined : sampled === "1",
+  };
 }
 
 // The header that an invoked execution receives. Its Root is this trace. Its Parent is
@@ -51,3 +58,14 @@ export const invocationSpanId = (arn, requestId) =>
 // every trace.
 export const isSampled = (id, sampleRate) =>
   Number.parseInt(id.slice(-8), 16) / 2 ** 32 < sampleRate;
+
+// The sampling decision of one invocation. header is the result of parseTraceHeader.
+// 1. Without parentBased, only the ratio decides.
+// 2. With parentBased, a header with Sampled=1 or Sampled=0 decides. Lambda gives every
+//    invocation of one execution the same Sampled value, so every invocation makes the
+//    same decision (README "Sampling").
+// 3. With parentBased and no Sampled decision in the header, the ratio decides.
+export function sampleDecision(traceId, header, { parentBased, ratio }) {
+  if (parentBased && header?.sampled !== undefined) return header.sampled;
+  return isSampled(traceId, ratio);
+}

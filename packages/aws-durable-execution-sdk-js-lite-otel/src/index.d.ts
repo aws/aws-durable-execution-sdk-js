@@ -100,12 +100,28 @@ export interface OtelSpanExporter {
 export interface OtelPluginConfig {
   /** Receives the spans of each sampled invocation. */
   exporter: OtelSpanExporter;
-  /** The resource of every span. The default has service.name and the cloud attributes. */
+  /**
+   * The resource of every span. The default has service.name, the cloud attributes and
+   * the attributes of OTEL_RESOURCE_ATTRIBUTES. A given resource is used as is.
+   */
   resource?: OtelResource;
-  /** service.name of the default resource. Ignored when resource is set. */
+  /**
+   * service.name of the default resource. Default: OTEL_SERVICE_NAME, else service.name
+   * of OTEL_RESOURCE_ATTRIBUTES, else AWS_LAMBDA_FUNCTION_NAME. Ignored when resource is
+   * set.
+   */
   serviceName?: string;
-  /** The fraction of executions to trace, from 0 to 1. Default 1. */
+  /**
+   * The fraction of executions to trace, from 0 to 1. Default: the ratio of
+   * OTEL_TRACES_SAMPLER, else 1.
+   */
   sampleRate?: number;
+  /**
+   * true: the Sampled field of the Lambda trace header decides, and sampleRate decides only
+   * without it. false: only sampleRate decides. Default: true for a parentbased_* value of
+   * OTEL_TRACES_SAMPLER, else false.
+   */
+  parentBased?: boolean;
   /**
    * Each export waits at most this many milliseconds. onInvocationEnd also waits at
    * most this long for all exports, and never past 500 ms before the Lambda timeout
@@ -138,7 +154,10 @@ export interface OtelApi {
   };
 }
 
-/** Returns a plugin factory for withDurableExecution's config.plugins. */
+/**
+ * Returns a plugin factory for withDurableExecution's config.plugins. With
+ * OTEL_SDK_DISABLED=true, the factory returns no plugin, so nothing is traced.
+ */
 export function createOtelPlugin(
   config: OtelPluginConfig,
 ): DurablePluginFactory;
