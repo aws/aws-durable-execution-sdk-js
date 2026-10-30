@@ -125,6 +125,64 @@ export type QueryMode = "query" | "ask" | "agent";
 const REQUIRED_AI_DISCLOSURE_VERSION = "2";
 
 /**
+ * The config as the Settings form shows it, one value per settings key.
+ *
+ * sendConfig fills the form with this, and onSaveSettings uses it to tell
+ * which fields the user actually changed. Both must use the same encoding, or
+ * Save would treat every field as edited.
+ */
+function settingsForForm(
+  cfg: TelemetryConfig,
+): Record<string, string | boolean> {
+  return {
+    region: cfg.region,
+    destinationType: cfg.destinationType,
+    logGroupName: cfg.logGroupNames.join(", "),
+    dynamodbTableName: cfg.dynamodbTableName,
+    auroraResourceArn: cfg.auroraResourceArn,
+    auroraSecretArn: cfg.auroraSecretArn,
+    auroraDatabase: cfg.auroraDatabase,
+    auroraTable: cfg.auroraTable,
+    redshiftWorkgroupName: cfg.redshiftWorkgroupName,
+    redshiftClusterIdentifier: cfg.redshiftClusterIdentifier,
+    redshiftDbUser: cfg.redshiftDbUser,
+    redshiftSecretArn: cfg.redshiftSecretArn,
+    redshiftDatabase: cfg.redshiftDatabase,
+    redshiftTable: cfg.redshiftTable,
+    redshiftSchema: cfg.redshiftSchema,
+    opensearchEndpoint: cfg.opensearchEndpoint,
+    opensearchIndex: cfg.opensearchIndex,
+    sqsQueueUrl: cfg.sqsQueueUrl,
+    sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
+    athenaDatabase: cfg.athenaDatabase,
+    athenaTable: cfg.athenaTable,
+    athenaWorkgroup: cfg.athenaWorkgroup,
+    athenaOutputLocation: cfg.athenaOutputLocation,
+    athenaS3Location: cfg.athenaS3Location,
+    llmProvider: cfg.llmProvider,
+    awsProfile: cfg.awsProfile ?? "",
+    bedrockModelId: cfg.bedrockModelId,
+    localModel: cfg.localModel,
+    localServerUrl: cfg.localServerUrl,
+    localServerModel: cfg.localServerModel,
+    agenticMaxIterations: String(cfg.agenticMaxIterations),
+    queryMode: cfg.queryMode,
+    aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
+  };
+}
+
+/**
+ * Settings that the Save action never writes.
+ *
+ * AI consent is recorded only when the user accepts the in-app notice
+ * (onSetConsent). The form carries the value so the webview can gate AI
+ * actions, but saving the form must not be a second way to record consent.
+ */
+const NOT_SAVED_FROM_FORM: ReadonlySet<string> = new Set([
+  "aiDisclosureAcceptedVersion",
+]);
+
+/**
  * Normalized results payload: the body of a "results" message minus its
  * `type`. Produced by ExplorerPanel.executeQuery and shared by both basic and
  * advanced (agentic) generation paths.
@@ -238,6 +296,16 @@ export class ExplorerSession {
     return await this.handleMessage(msg);
   }
 
+  /**
+   * Re-send the current config to the renderer. Call when the host's settings
+   * change outside the session (VS Code fires this when the user edits
+   * settings.json or grants workspace trust), so the Settings form shows the
+   * values queries will actually use.
+   */
+  refreshConfig(): void {
+    this.sendConfig();
+  }
+
   /** Stop any in-flight SQS tail. Call when the host window goes away. */
   disposeSession(): void {
     this.listenController?.abort();
@@ -322,41 +390,7 @@ export class ExplorerSession {
     setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     this.host.post({
       type: "config",
-      settings: {
-        region: cfg.region,
-        destinationType: cfg.destinationType,
-        logGroupName: cfg.logGroupNames.join(", "),
-        dynamodbTableName: cfg.dynamodbTableName,
-        auroraResourceArn: cfg.auroraResourceArn,
-        auroraSecretArn: cfg.auroraSecretArn,
-        auroraDatabase: cfg.auroraDatabase,
-        auroraTable: cfg.auroraTable,
-        redshiftWorkgroupName: cfg.redshiftWorkgroupName,
-        redshiftClusterIdentifier: cfg.redshiftClusterIdentifier,
-        redshiftDbUser: cfg.redshiftDbUser,
-        redshiftSecretArn: cfg.redshiftSecretArn,
-        redshiftDatabase: cfg.redshiftDatabase,
-        redshiftTable: cfg.redshiftTable,
-        redshiftSchema: cfg.redshiftSchema,
-        opensearchEndpoint: cfg.opensearchEndpoint,
-        opensearchIndex: cfg.opensearchIndex,
-        sqsQueueUrl: cfg.sqsQueueUrl,
-        sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
-        athenaDatabase: cfg.athenaDatabase,
-        athenaTable: cfg.athenaTable,
-        athenaWorkgroup: cfg.athenaWorkgroup,
-        athenaOutputLocation: cfg.athenaOutputLocation,
-        athenaS3Location: cfg.athenaS3Location,
-        llmProvider: cfg.llmProvider,
-        awsProfile: cfg.awsProfile ?? "",
-        bedrockModelId: cfg.bedrockModelId,
-        localModel: cfg.localModel,
-        localServerUrl: cfg.localServerUrl,
-        localServerModel: cfg.localServerModel,
-        agenticMaxIterations: String(cfg.agenticMaxIterations),
-        queryMode: cfg.queryMode,
-        aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
-      },
+      settings: settingsForForm(cfg),
       modelDownloaded: isModelDownloaded(),
       // What this host can actually do, so the UI never offers a provider it
       // cannot reach. Detected, not declared — see hostCapabilities.ts.
@@ -412,6 +446,19 @@ export class ExplorerSession {
   private async onSaveSettings(
     settings: Record<string, string>,
   ): Promise<void> {
+    // Write only the fields the user changed. The form is filled with the
+    // effective config, which in VS Code includes values from a trusted
+    // folder's .vscode/settings.json. Writing every field would copy those
+    // folder values into the user's settings, where they would then apply in
+    // every folder, untrusted ones included. Both sides are normalized the same
+    // way so whitespace or list formatting does not count as an edit.
+    const current = settingsForForm(this.readConfig());
+    const submitted = settingsForForm(
+      withEffectiveProvider(
+        configFromWireSettings(settings),
+        detectCapabilities(),
+      ),
+    );
     const coercedEntries: Record<string, SettingValue> = {};
     for (const [key, value] of Object.entries(settings)) {
       // Allowlist rather than trust: the renderer's payload decides which keys
@@ -419,6 +466,8 @@ export class ExplorerSession {
       // reaching a host's settings store. Also keeps `__proto__` and friends
       // out of the desktop host's plain-object merge.
       if (!isSettingKey(key)) continue;
+      if (NOT_SAVED_FROM_FORM.has(key)) continue;
+      if (submitted[key] === current[key]) continue;
       // The webview sends every value as a string, so non-string keys are
       // coerced to their schema type before writing. Which keys those are
       // comes from settingsKeys.ts (asserted against the extension manifest)
@@ -439,6 +488,20 @@ export class ExplorerSession {
     }
     await this.host.writeSettings(coercedEntries);
     this.sendConfig();
+
+    // A host can layer other settings over the user's (VS Code: a trusted
+    // folder's .vscode/settings.json). The write then succeeds but has no
+    // effect here, so say so instead of letting the form snap back silently.
+    const effective = settingsForForm(this.readConfig());
+    const overridden = Object.keys(coercedEntries).filter(
+      (key) => effective[key] !== submitted[key],
+    );
+    if (overridden.length > 0) {
+      this.host.post({
+        type: "error",
+        message: `Saved to your user settings, but this workspace overrides ${overridden.join(", ")}. Change or remove ${overridden.length === 1 ? "it" : "them"} in the workspace settings to use your value here.`,
+      });
+    }
 
     const cfg = this.readConfig();
     if (

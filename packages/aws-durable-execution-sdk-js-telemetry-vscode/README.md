@@ -330,16 +330,26 @@ All settings are under the `durableExecutionTelemetry.*` namespace.
 
 ### Workspace settings and Restricted Mode
 
-The extension writes settings to your user settings. You can also set them per
-folder in `.vscode/settings.json`, but VS Code applies those values only after
-you trust the folder. In an untrusted folder (Restricted Mode) the extension
-ignores every `durableExecutionTelemetry.*` value from the workspace and uses
-your user settings instead. This stops a cloned repository from changing your
-destination, AWS profile, or LLM endpoint, or from turning on
-`sqsDeleteAfterRead`.
+The extension saves settings to your user settings. You can also set them per
+folder in `.vscode/settings.json`. VS Code applies those folder values only
+after you trust the folder:
 
-`aiDisclosureAcceptedVersion` is a user-only setting. VS Code never reads it
-from a workspace, trusted or not, so only you can accept the AI notice.
+- **Untrusted folder (Restricted Mode).** The extension ignores every
+  `durableExecutionTelemetry.*` value from the folder and uses your user
+  settings, or the defaults. A repository you open but don't trust cannot
+  change your destination, AWS profile, or LLM endpoint, or turn on
+  `sqsDeleteAfterRead`.
+- **Trusted folder.** The folder's values apply and take precedence over your
+  user settings. Review a repository's `.vscode/settings.json` before you trust
+  it.
+
+Saving the Settings panel writes only the fields you changed, so a trusted
+folder's values are not copied into your user settings. If the folder sets a
+field you change, your value is saved but the folder's value still applies in
+that folder, and the panel tells you which fields are affected.
+
+`aiDisclosureAcceptedVersion` is read only from your user settings, never from
+a folder, trusted or not, so only you can accept the AI notice.
 
 ## AI Features & Data Handling
 
