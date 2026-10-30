@@ -2,7 +2,7 @@
   "name": "aws-durable-execution-sdk-js-telemetry-vscode",
   "displayName": "Durable Execution Telemetry VSCode",
   "description": "Query AWS Durable Execution Durable Execution Telemetry data from CloudWatch Logs using plain English.",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "license": "Apache-2.0",
   "publisher": "aws",
   "private": true,
