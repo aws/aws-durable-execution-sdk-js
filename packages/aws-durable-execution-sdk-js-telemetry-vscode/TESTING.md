@@ -5,7 +5,7 @@ Durable Execution Telemetry data in CloudWatch Logs.
 
 ## Prerequisites
 
-- VS Code ≥ 1.90
+- VS Code ≥ 1.140
 - Node.js ≥ 22.12
 - AWS credentials with access to:
   - `logs:StartQuery`, `logs:GetQueryResults` on the target log group
