@@ -387,10 +387,9 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
 - A sandbox can crash or time out before `onInvocationEnd` runs. Then the spans of the
   last `flushIntervalMs` and the invocation span are lost.
 - A failed export is not retried. The plugin logs one line with `console.warn`.
-- A step whose attempt ran in an earlier invocation, for example before a retry delay,
-  has no local start in the invocation that ends it. Its span starts at the record's
-  `StartTimestamp`. When START travelled with that attempt's RETRY, `StartTimestamp` is
-  after the attempt ran. So the span can start after its first attempt span.
+- The span of a step whose first attempt ran in an earlier invocation can start after
+  that attempt's span. See
+  [Known gap: operation start across invocations](#known-gap-operation-start-across-invocations).
 - An invocation that ends less than 500 ms before its Lambda timeout sends no final
   export. Its last spans, its invocation span and, for the final invocation, its workflow
   span are lost. See [Sizing the Lambda timeout](#sizing-the-lambda-timeout).
@@ -422,6 +421,54 @@ a runtime without `AsyncLocalStorage`, for example LLRT, still gets every durabl
   this.
 - The plugin does not check `otelApi`. If the object lacks one of the three functions,
   the plugin throws a `TypeError` when it runs user code.
+
+## Known gap: operation start across invocations
+
+An operation span can start after its first attempt span. This happens for a step whose
+first attempt ran in an earlier invocation, for example before a retry delay.
+
+### Cause
+
+1. The checkpoint API has no client timestamp. `OperationUpdate` carries no time.
+2. So the service sets a record's `StartTimestamp` and `EndTimestamp` itself. It uses the
+   time when it records the checkpoint request.
+3. The SDK does not await START of an at-least-once step or of a child context. So START
+   often travels in the same request as the attempt's SUCCEED or RETRY. The service then
+   gives START that request's time, which is after the attempt ran.
+4. Within one invocation, the plugin corrects this. It knows the local start and end of
+   each attempt, and it extends the operation span to cover them (see
+   [Which invocation emits what](#which-invocation-emits-what)).
+5. The plugin keeps no state between invocations. So for a step that ends in a later
+   invocation, it has no local start of the earlier attempts. That operation span starts
+   at the record's `StartTimestamp`.
+
+Example, measured on Lambda: attempt 1 ran at 40.084 s and failed in 1 ms. START and RETRY
+travelled in one request, and the service recorded both at 40.495 s. Attempt 2 ran in the
+next invocation. The step's span starts at 40.495 s, 411 ms after attempt 1.
+
+### Impact
+
+Nothing in OpenTelemetry fails. OpenTelemetry does not require a child to lie within its
+parent's time. Exporters, collectors and backends accept the spans, and parent links use
+span ids, not times. The impact is on the accuracy of the data:
+
+- The operation span's duration is too short by up to the gap. Latency charts, span
+  metrics and alerts that use it inherit the error.
+- Backends that compute a span's self time or a critical path from its children can show
+  wrong or negative values for that span.
+- The trace view shows the attempt before its operation.
+- Some backends adjust a child that starts before its parent, assuming clock skew between
+  hosts. Such an adjustment can move the attempt span away from its real time.
+
+The attempt spans themselves are accurate. They are measured in the Lambda function. For
+the real duration of each attempt, use the attempt spans.
+
+### What would close the gap
+
+The checkpoint API would accept a client timestamp on each update, and return it on the
+record, for example the local start and end of each attempt. The plugin would then read
+it from the record. The SDK alone cannot close the gap without awaiting every START, which
+adds one request round trip to every step.
 
 ## Differences from @aws/durable-execution-sdk-js-otel
 
