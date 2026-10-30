@@ -3,8 +3,8 @@ import {
   buildInvocations,
   buildOperations,
   getExecution,
+  formatError,
   isDurableExecutionArn,
-  MAX_HISTORY_EVENTS,
   regionFromExecutionArn,
   type LambdaContext,
 } from "./lambdaExecutions";
@@ -41,6 +41,12 @@ describe("isDurableExecutionArn / regionFromExecutionArn", () => {
       "arn:aws-cn:lambda:cn-north-1:123456789012:function:f:1/durable-execution/e/i";
     expect(isDurableExecutionArn(cn)).toBe(true);
     expect(regionFromExecutionArn(cn)).toBe("cn-north-1");
+    // Without a qualifier.
+    expect(
+      isDurableExecutionArn(
+        "arn:aws:lambda:us-east-1:123456789012:function:f/durable-execution/e/i",
+      ),
+    ).toBe(true);
   });
 
   it.each([
@@ -52,6 +58,14 @@ describe("isDurableExecutionArn / regionFromExecutionArn", () => {
     "arn:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/",
     "arn:aws:lambda:us-east-1:12345:function:f:1/durable-execution/e/i",
     "arn:aws:lambda:not a region:123456789012:function:f:1/durable-execution/e/i",
+    "arn:aws:lambda::123456789012:function:f:1/durable-execution/e/i",
+    `arn:aws:lambda:${"a".repeat(33)}:123456789012:function:f:1/durable-execution/e/i`,
+    "arn:awsfoo:lambda:us-east-1:123456789012:function:f:1/durable-execution/e/i",
+    "arx:aws:lambda:us-east-1:123456789012:function:f:1/durable-execution/e/i",
+    "arn:aws:lambda:us-east-1:123456789012:layer:f:1/durable-execution/e/i",
+    "arn:aws:lambda:us-east-1:123456789012:function::1/durable-execution/e/i",
+    "arn:aws:lambda:us-east-1:123456789012:function/durable-execution/e/i",
+    "arn:aws:lambda:us-east-1:123456789012:function:f:1:x/durable-execution/e/i",
   ])("rejects %j", (value) => {
     expect(isDurableExecutionArn(value)).toBe(false);
     expect(regionFromExecutionArn(value)).toBeUndefined();
@@ -144,13 +158,17 @@ describe("buildOperations", () => {
         Id: "s",
         EventTimestamp: t(1),
         StepFailedDetails: {
-          Error: { Payload: { ErrorMessage: "first try" } },
-          RetryDetails: { CurrentAttempt: 1 },
+          Error: { Payload: { ErrorMessage: "first try" }, Truncated: true },
+          RetryDetails: { NextAttemptDelaySeconds: 1 },
         },
       },
       { EventType: "StepStarted", Id: "s", EventTimestamp: t(2) },
     ];
     const [op] = buildOperations(events);
+    // The retry is running, so it is no longer waiting for an attempt, and
+    // the earlier attempt's truncated error no longer applies.
+    expect(op.nextAttemptTime).toBeUndefined();
+    expect(op.payloadTruncated).toBeUndefined();
     expect(op).toMatchObject({
       status: "RUNNING",
       startTime: t(0).toISOString(),
@@ -287,67 +305,58 @@ describe("getExecution", () => {
     });
     expect(detail.history).toHaveLength(2);
     expect(detail.operations[0]).toMatchObject({ id: "s", status: "FAILED" });
-    expect(detail.historyTruncated).toBeUndefined();
     expect(detail.historyError).toBeUndefined();
   });
 
-  it("stops paging at the event cap and says so", async () => {
+  it("reads every history page, in pages of 1000", async () => {
     const { ctx, calls } = fakeContext({
       GetDurableExecutionCommand: () => summary,
-      GetDurableExecutionHistoryCommand: (input) => ({
-        Events: Array.from({ length: input.MaxItems }, (_, i) => ({
-          EventType: "StepStarted",
-          Id: `s${i}`,
-        })),
-        NextMarker: "more",
-      }),
+      GetDurableExecutionHistoryCommand: (input) => {
+        const page = Number(input.Marker ?? 0);
+        return {
+          Events: Array.from({ length: 1000 }, (_, i) => ({
+            EventType: "StepStarted",
+            Id: `s${page * 1000 + i}`,
+          })),
+          // An empty marker on the last page ends the read, like none.
+          NextMarker: page < 11 ? String(page + 1) : "",
+        };
+      },
     });
     const detail = await getExecution(ctx, ARN);
-    expect(detail.history).toHaveLength(MAX_HISTORY_EVENTS);
-    expect(detail.historyTruncated).toBe(true);
-    expect(
-      calls.filter((c) => c.command === "GetDurableExecutionHistoryCommand"),
-    ).toHaveLength(MAX_HISTORY_EVENTS / 1000);
-  });
-
-  // The summary says the execution ended, but paging stopped before the
-  // steps' end events. The steps did end, so they must not show INCOMPLETE,
-  // which means "still open when the execution ended".
-  it("does not mark operations INCOMPLETE when the history was cut at the event cap", async () => {
-    const { ctx } = fakeContext({
-      GetDurableExecutionCommand: () => ({ ...summary, Status: "SUCCEEDED" }),
-      GetDurableExecutionHistoryCommand: (input) => ({
-        Events: Array.from({ length: input.MaxItems }, (_, i) => ({
-          EventType: "StepStarted",
-          Id: `s${i}`,
-        })),
-        NextMarker: "more",
-      }),
-    });
-    const detail = await getExecution(ctx, ARN);
-    expect(detail.historyTruncated).toBe(true);
-    expect(new Set(detail.operations.map((o) => o.status))).toEqual(
-      new Set(["RUNNING"]),
+    const historyCalls = calls.filter(
+      (c) => c.command === "GetDurableExecutionHistoryCommand",
     );
+    expect(historyCalls).toHaveLength(12);
+    expect(historyCalls.every((c) => c.input.MaxItems === 1000)).toBe(true);
+    expect(detail.history).toHaveLength(12_000);
   });
 
-  it("does not mark operations INCOMPLETE when a history page failed", async () => {
+  // A partial history would show finished operations as open, so a failed
+  // page returns none of the history.
+  it("returns no history when a later page fails", async () => {
     const { ctx } = fakeContext({
       GetDurableExecutionCommand: () => ({ ...summary, Status: "SUCCEEDED" }),
       GetDurableExecutionHistoryCommand: (input) => {
         if (input.Marker) throw new Error("Throttled");
         return {
-          Events: [{ EventType: "StepStarted", Id: "s", EventTimestamp: t(1) }],
+          Events: [
+            { EventType: "StepStarted", Id: "s", EventTimestamp: t(1) },
+            { EventType: "InvocationCompleted", EventTimestamp: t(2) },
+          ],
           NextMarker: "p2",
         };
       },
     });
     const detail = await getExecution(ctx, ARN);
+    expect(detail.status).toBe("SUCCEEDED");
     expect(detail.historyError).toBe("Throttled");
-    expect(detail.operations[0].status).toBe("RUNNING");
+    expect(detail.history).toEqual([]);
+    expect(detail.operations).toEqual([]);
+    expect(detail.invocations).toEqual([]);
   });
 
-  it("marks operations INCOMPLETE when the whole history of an ended execution was read", async () => {
+  it("marks operations INCOMPLETE when an ended execution left them open", async () => {
     const { ctx } = fakeContext({
       GetDurableExecutionCommand: () => ({ ...summary, Status: "SUCCEEDED" }),
       GetDurableExecutionHistoryCommand: () => ({
@@ -356,6 +365,47 @@ describe("getExecution", () => {
     });
     const detail = await getExecution(ctx, ARN);
     expect(detail.operations[0].status).toBe("INCOMPLETE");
+  });
+
+  it("takes the result from the history's end when the summary still runs", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "RUNNING",
+        StartTimestamp: t(0),
+      }),
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [
+          {
+            EventType: "ExecutionSucceeded",
+            Id: "x",
+            EventTimestamp: t(4),
+            ExecutionSucceededDetails: { Result: { Payload: '"done"' } },
+          },
+        ],
+      }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail).toMatchObject({ status: "SUCCEEDED", result: '"done"' });
+  });
+
+  it("does not take an operation's end as the execution's end", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "RUNNING",
+        StartTimestamp: t(0),
+      }),
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [
+          { EventType: "StepStarted", Id: "s", EventTimestamp: t(1) },
+          { EventType: "StepSucceeded", Id: "s", EventTimestamp: t(2) },
+        ],
+      }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail.status).toBe("RUNNING");
+    expect(detail.endTime).toBeUndefined();
   });
 
   it("reports a history failure without failing the call", async () => {
@@ -428,6 +478,55 @@ describe("getExecution", () => {
       /Not a durable execution ARN/,
     );
     expect(calls).toEqual([]);
+  });
+});
+
+describe("getExecution with a real LambdaClient", () => {
+  // No clientFor, so getExecution builds its own client. A local server
+  // stands in for Lambda and records each request.
+  it("signs for the ARN's region and reads summary and history", async () => {
+    const { createServer } = await import("node:http");
+    const requests: { path: string; auth: string }[] = [];
+    const server = createServer((req, res) => {
+      requests.push({
+        path: req.url ?? "",
+        auth: String(req.headers.authorization ?? ""),
+      });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        req.url?.includes("/history")
+          ? JSON.stringify({
+              Events: [
+                { EventType: "StepStarted", Id: "s", EventTimestamp: 1 },
+              ],
+            })
+          : JSON.stringify({ DurableExecutionArn: ARN, Status: "RUNNING" }),
+      );
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    const prev = process.env.AWS_ENDPOINT_URL_LAMBDA;
+    process.env.AWS_ENDPOINT_URL_LAMBDA = `http://127.0.0.1:${port}`;
+    try {
+      const detail = await getExecution(
+        {
+          region: "us-east-1",
+          credentials: async () => ({ accessKeyId: "a", secretAccessKey: "b" }),
+        },
+        ARN,
+      );
+      expect(detail.status).toBe("RUNNING");
+      expect(detail.operations.map((o) => o.id)).toEqual(["s"]);
+      expect(requests).toHaveLength(2);
+      // The ARN names us-west-2; the context's default region is not used.
+      expect(requests.every((r) => r.auth.includes("/us-west-2/lambda/"))).toBe(
+        true,
+      );
+    } finally {
+      if (prev === undefined) delete process.env.AWS_ENDPOINT_URL_LAMBDA;
+      else process.env.AWS_ENDPOINT_URL_LAMBDA = prev;
+      server.close();
+    }
   });
 });
 
@@ -602,11 +701,44 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
     expect(ops.map((o) => o.attempt)).toEqual([undefined, undefined]);
   });
 
-  it("reports no duration for an operation with no Started event", () => {
+  it.each([
+    ["ChainedInvoke", "ChainedInvokeStopped", "STOPPED"],
+    ["Wait", "WaitCancelled", "CANCELLED"],
+  ])("reads %s end %s as %s", (kind, endType, status) => {
     const [op] = buildOperations([
-      { EventType: "WaitSucceeded", Id: "w", EventTimestamp: t(5) },
+      { EventType: `${kind}Started`, Id: "o", EventTimestamp: t(0) },
+      { EventType: endType, Id: "o", EventTimestamp: t(1) },
     ]);
-    expect(op.status).toBe("SUCCEEDED");
-    expect(op.durationMs).toBeUndefined();
+    expect(op).toMatchObject({ kind, status });
+  });
+
+  it("ignores an event type it does not know", () => {
+    const [op] = buildOperations([
+      started(0),
+      { EventType: "StepPaused" as never, Id: "s", EventTimestamp: t(1) },
+    ]);
+    expect(op.status).toBe("RUNNING");
+    expect(op.endTime).toBeUndefined();
+  });
+
+  it("schedules no next attempt for an event without a timestamp", () => {
+    const [op] = buildOperations([
+      started(0),
+      {
+        EventType: "StepFailed",
+        Id: "s",
+        StepFailedDetails: { RetryDetails: { NextAttemptDelaySeconds: 5 } },
+      },
+    ]);
+    expect(op.status).toBe("FAILED");
+    expect(op.nextAttemptTime).toBeUndefined();
+  });
+});
+
+describe("formatError", () => {
+  it("keeps the error data", () => {
+    expect(
+      JSON.parse(formatError({ ErrorType: "E", ErrorData: '{"code":7}' })),
+    ).toEqual({ errorType: "E", errorData: '{"code":7}' });
   });
 });

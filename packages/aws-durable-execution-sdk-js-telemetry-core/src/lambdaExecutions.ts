@@ -114,11 +114,10 @@ export interface ExecutionDetail {
   operations: OperationNode[];
   invocations: InvocationRow[];
   /**
-   * True when history paging stopped at {@link MAX_HISTORY_EVENTS} with more
-   * history left to read.
+   * Set when a history call failed. The summary is still valid. `history`,
+   * `operations` and `invocations` are then empty, because a partial history
+   * would show finished operations as open.
    */
-  historyTruncated?: boolean;
-  /** Set when the history call failed; the execution summary is still valid. */
   historyError?: string;
 }
 
@@ -130,13 +129,7 @@ export const TERMINAL_EXECUTION_STATUSES: readonly string[] = [
   "STOPPED",
 ];
 
-/**
- * Upper bound on history events loaded for one execution. History pages are
- * fetched until exhausted or this many events are held, so a long-running
- * execution cannot grow host memory or the renderer payload without bound.
- */
-export const MAX_HISTORY_EVENTS = 10_000;
-
+/** The largest page that GetDurableExecutionHistory returns. */
 const HISTORY_PAGE_SIZE = 1000;
 const MAX_EXECUTION_ARN_LENGTH = 2048;
 const EXECUTION_MARKER = "/durable-execution/";
@@ -176,7 +169,7 @@ function parseExecutionArn(value: unknown): { region: string } | undefined {
   const [arn, partition, service, region, account, resource, name] = parts;
   if (
     arn !== "arn" ||
-    !partition.startsWith("aws") ||
+    !(partition === "aws" || partition.startsWith("aws-")) ||
     service !== "lambda" ||
     !isRegionLike(region) ||
     !isDigits(account, 12) ||
@@ -213,8 +206,11 @@ function durationBetween(start?: Date, end?: Date): number | undefined {
 
 /**
  * Fetches one durable execution: its summary from GetDurableExecution, plus its
- * history (paged, up to {@link MAX_HISTORY_EVENTS} events) folded into an
- * operation tree. The client targets the region named in the
+ * whole history, folded into an operation tree.
+ *
+ * The whole history is read, because a partial one shows finished operations
+ * as open. Lambda bounds its size: at most 30,000 operations and 100 MB of
+ * persisted payload per execution. The client targets the region named in the
  * ARN, so a link from a telemetry record in another region still resolves.
  *
  * A history failure does not fail the call: the summary is still useful, and
@@ -232,8 +228,7 @@ export async function getExecution(
     new GetDurableExecutionCommand({ DurableExecutionArn: arn }),
   );
 
-  const raw: HistoryApiEvent[] = [];
-  let historyTruncated = false;
+  let raw: HistoryApiEvent[] = [];
   let historyError: string | undefined;
   try {
     let marker: string | undefined;
@@ -242,22 +237,16 @@ export async function getExecution(
         new GetDurableExecutionHistoryCommand({
           DurableExecutionArn: arn,
           IncludeExecutionData: true,
-          MaxItems: Math.min(
-            HISTORY_PAGE_SIZE,
-            MAX_HISTORY_EVENTS - raw.length,
-          ),
+          MaxItems: HISTORY_PAGE_SIZE,
           Marker: marker,
         }),
       );
       raw.push(...(page.Events ?? []));
-      marker = page.NextMarker || undefined;
-      if (marker && raw.length >= MAX_HISTORY_EVENTS) {
-        historyTruncated = true;
-        break;
-      }
+      marker = page.NextMarker;
     } while (marker);
   } catch (err) {
     historyError = err instanceof Error ? err.message : String(err);
+    raw = [];
   }
 
   // The summary is read before the history. So the execution can end in
@@ -269,7 +258,7 @@ export async function getExecution(
     : executionEndOf(raw);
   const endTimestamp: Date | undefined = end?.at ?? e.EndTimestamp;
   return {
-    arn: e.DurableExecutionArn ?? arn,
+    arn,
     name: e.DurableExecutionName ?? undefined,
     functionArn: e.FunctionArn ?? undefined,
     status: end?.status ?? summaryStatus,
@@ -282,15 +271,9 @@ export async function getExecution(
     error: e.Error ? formatError(e.Error) : end?.error,
     history: raw.map(toHistoryEvent),
     operations: buildOperations(raw, {
-      // An operation whose end event was not read would look open. So it is
-      // marked INCOMPLETE only when the whole history was read.
-      executionEnded:
-        !historyTruncated &&
-        !historyError &&
-        TERMINAL_EXECUTION_STATUSES.includes(summaryStatus),
+      executionEnded: TERMINAL_EXECUTION_STATUSES.includes(summaryStatus),
     }),
     invocations: buildInvocations(raw),
-    ...(historyTruncated ? { historyTruncated } : {}),
     ...(historyError ? { historyError } : {}),
   };
 }
@@ -325,11 +308,20 @@ function executionEndOf(
 /**
  * When the next attempt is due, from an event's time and its
  * `NextAttemptDelaySeconds`. Undefined when the delay is not a finite number
- * or the time it gives is not a valid date. Lambda writes the history, but a
+ * or the time it gives is not a valid date, including when `ts` is missing. Lambda writes the history, but a
  * malformed value must not fail the whole page.
  */
-function nextAttemptAt(ts: string, delay: unknown): string | undefined {
-  if (typeof delay !== "number" || !Number.isFinite(delay)) return undefined;
+function nextAttemptAt(
+  ts: string | undefined,
+  delay: unknown,
+): string | undefined {
+  if (
+    ts === undefined ||
+    typeof delay !== "number" ||
+    !Number.isFinite(delay)
+  ) {
+    return undefined;
+  }
   const at = new Date(new Date(ts).getTime() + delay * 1000);
   return Number.isFinite(at.getTime()) ? at.toISOString() : undefined;
 }
@@ -393,8 +385,9 @@ interface DetailFields {
 function detailsOf(ev: HistoryApiEvent): DetailFields | undefined {
   const type = ev.EventType;
   if (!type) return undefined;
-  const v = (ev as Record<string, unknown>)[`${type}Details`];
-  return v && typeof v === "object" ? (v as DetailFields) : undefined;
+  return (ev as Record<string, unknown>)[`${type}Details`] as
+    | DetailFields
+    | undefined;
 }
 
 /**
@@ -426,7 +419,9 @@ export function buildOperations(
     if (type.startsWith("Execution") && terminalStatus(type)) {
       executionEnded = true;
     }
-    if (!id || type.startsWith("Execution") || type.startsWith("Invocation")) {
+    // Execution events carry an Id that is not an operation. Invocation
+    // events carry none.
+    if (!id || type.startsWith("Execution")) {
       continue;
     }
     let node = byId.get(id);
@@ -436,7 +431,7 @@ export function buildOperations(
     }
     if (ev.Name) node.name = ev.Name;
     if (ev.ParentId) node.parentId = ev.ParentId;
-    if (!node.kind) node.kind = kindOf(type, ev.SubType);
+    node.kind = kindOf(type, ev.SubType);
     const ts = ev.EventTimestamp?.toISOString();
     const details = detailsOf(ev);
 
@@ -447,7 +442,6 @@ export function buildOperations(
       // covers every attempt.
       starts.set(id, (starts.get(id) ?? 0) + 1);
       node.status = "RUNNING";
-      node.endTime = undefined;
       node.nextAttemptTime = undefined;
       node.error = undefined;
       node.payloadTruncated = undefined;
@@ -470,23 +464,21 @@ export function buildOperations(
     const error = details?.Error;
     if (error?.Payload) node.error = formatError(error.Payload);
     if (result?.Truncated || error?.Truncated) node.payloadTruncated = true;
-    if (!node.startTime) node.startTime = ts;
-    const next = ts
-      ? nextAttemptAt(ts, details?.RetryDetails?.NextAttemptDelaySeconds)
-      : undefined;
+    const next = nextAttemptAt(
+      ts,
+      details?.RetryDetails?.NextAttemptDelaySeconds,
+    );
     if (next) {
       // A next attempt is scheduled, so the operation is waiting, not done.
       // A step records this on a failure with a retry left. A
       // waitForCondition records it on a check that succeeded but whose
       // condition is not met yet.
       node.status = "PENDING";
-      node.endTime = undefined;
       node.nextAttemptTime = next;
       continue;
     }
     node.status = status;
     node.endTime = ts;
-    node.nextAttemptTime = undefined;
   }
 
   for (const [id, node] of byId) {
@@ -505,9 +497,7 @@ export function buildOperations(
 
   const roots: OperationNode[] = [];
   for (const node of byId.values()) {
-    // Without a Started event the start time is the end event's own time, so
-    // there is no real duration to report.
-    if (starts.has(node.id) && node.startTime && node.endTime) {
+    if (node.startTime && node.endTime) {
       node.durationMs =
         new Date(node.endTime).getTime() - new Date(node.startTime).getTime();
     }
