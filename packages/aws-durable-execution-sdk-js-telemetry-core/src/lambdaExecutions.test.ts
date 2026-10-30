@@ -66,6 +66,10 @@ describe("isDurableExecutionArn / regionFromExecutionArn", () => {
     "arn:aws:lambda:us-east-1:123456789012:function::1/durable-execution/e/i",
     "arn:aws:lambda:us-east-1:123456789012:function/durable-execution/e/i",
     "arn:aws:lambda:us-east-1:123456789012:function:f:1:x/durable-execution/e/i",
+    // A function ARN, with no execution part.
+    "arn:aws:lambda:us-east-1:123456789012:function:my-fn",
+    // A 12-character account that is not all digits.
+    "arn:aws:lambda:us-east-1:12345678901x:function:f/durable-execution/e/i",
   ])("rejects %j", (value) => {
     expect(isDurableExecutionArn(value)).toBe(false);
     expect(regionFromExecutionArn(value)).toBeUndefined();
@@ -287,6 +291,11 @@ describe("getExecution", () => {
     });
     const detail = await getExecution(ctx, ARN);
     expect(calls.every((c) => c.region === "us-west-2")).toBe(true);
+    expect(
+      calls
+        .filter((c) => c.command === "GetDurableExecutionHistoryCommand")
+        .every((c) => c.input.IncludeExecutionData === true),
+    ).toBe(true);
     expect(calls.map((c) => c.input.Marker)).toEqual([
       undefined,
       undefined,
@@ -334,6 +343,48 @@ describe("getExecution", () => {
 
   // A partial history would show finished operations as open, so a failed
   // page returns none of the history.
+  it("reads a page with no Events member as empty", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => summary,
+      GetDurableExecutionHistoryCommand: (input) =>
+        input.Marker
+          ? {}
+          : {
+              Events: [
+                { EventType: "StepStarted", Id: "s", EventTimestamp: t(1) },
+              ],
+              NextMarker: "p2",
+            },
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail.historyError).toBeUndefined();
+    expect(detail.operations.map((o) => o.id)).toEqual(["s"]);
+  });
+
+  it("stops when the service repeats a marker", async () => {
+    const { ctx, calls } = fakeContext({
+      GetDurableExecutionCommand: () => summary,
+      GetDurableExecutionHistoryCommand: () => ({
+        Events: [{ EventType: "StepStarted", Id: "s", EventTimestamp: t(1) }],
+        NextMarker: "same",
+      }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(
+      calls.filter((c) => c.command === "GetDurableExecutionHistoryCommand"),
+    ).toHaveLength(2);
+    expect(detail.historyError).toMatch(/same marker/);
+    expect(detail.operations).toEqual([]);
+  });
+
+  it("reports an empty status when the summary has none", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({ DurableExecutionArn: ARN }),
+      GetDurableExecutionHistoryCommand: () => ({ Events: [] }),
+    });
+    expect((await getExecution(ctx, ARN)).status).toBe("");
+  });
+
   it("returns no history when a later page fails", async () => {
     const { ctx } = fakeContext({
       GetDurableExecutionCommand: () => ({ ...summary, Status: "SUCCEEDED" }),
@@ -505,7 +556,24 @@ describe("getExecution with a real LambdaClient", () => {
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as { port: number }).port;
-    const prev = process.env.AWS_ENDPOINT_URL_LAMBDA;
+    // The SDK ignores AWS_ENDPOINT_URL_LAMBDA when
+    // AWS_IGNORE_CONFIGURED_ENDPOINT_URLS is set, or when the active profile
+    // sets ignore_configured_endpoint_urls. So the test clears the first and
+    // points the config files at a path that does not exist. Otherwise it
+    // could send a request to the real Lambda endpoint.
+    const keys = [
+      "AWS_ENDPOINT_URL_LAMBDA",
+      "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS",
+      "AWS_CONFIG_FILE",
+      "AWS_SHARED_CREDENTIALS_FILE",
+      "AWS_PROFILE",
+    ] as const;
+    const saved = keys.map((k) => [k, process.env[k]] as const);
+    const missing = `/nonexistent-${process.pid}`;
+    delete process.env.AWS_IGNORE_CONFIGURED_ENDPOINT_URLS;
+    delete process.env.AWS_PROFILE;
+    process.env.AWS_CONFIG_FILE = missing;
+    process.env.AWS_SHARED_CREDENTIALS_FILE = missing;
     process.env.AWS_ENDPOINT_URL_LAMBDA = `http://127.0.0.1:${port}`;
     try {
       const detail = await getExecution(
@@ -523,8 +591,10 @@ describe("getExecution with a real LambdaClient", () => {
         true,
       );
     } finally {
-      if (prev === undefined) delete process.env.AWS_ENDPOINT_URL_LAMBDA;
-      else process.env.AWS_ENDPOINT_URL_LAMBDA = prev;
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
       server.close();
     }
   });
@@ -714,11 +784,43 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
 
   it("ignores an event type it does not know", () => {
     const [op] = buildOperations([
-      started(0),
-      { EventType: "StepPaused" as never, Id: "s", EventTimestamp: t(1) },
+      {
+        EventType: "StepStarted",
+        Id: "s",
+        Name: "check",
+        SubType: "WaitForCondition",
+        EventTimestamp: t(0),
+      },
+      {
+        EventType: "StepPaused" as never,
+        Id: "s",
+        Name: "other",
+        ParentId: "p",
+        EventTimestamp: t(1),
+      },
+      { EventType: "StepPaused" as never, Id: "new", EventTimestamp: t(2) },
     ]);
-    expect(op.status).toBe("RUNNING");
+    expect(op).toMatchObject({
+      id: "s",
+      status: "RUNNING",
+      kind: "WaitForCondition",
+      name: "check",
+    });
+    expect(op.parentId).toBeUndefined();
     expect(op.endTime).toBeUndefined();
+  });
+
+  it("marks a truncated result", () => {
+    const [op] = buildOperations([
+      started(0),
+      {
+        EventType: "StepSucceeded",
+        Id: "s",
+        EventTimestamp: t(1),
+        StepSucceededDetails: { Result: { Payload: "x", Truncated: true } },
+      },
+    ]);
+    expect(op.payloadTruncated).toBe(true);
   });
 
   it("schedules no next attempt for an event without a timestamp", () => {

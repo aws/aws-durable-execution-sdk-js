@@ -8,6 +8,15 @@
  * It works for any durable function, whether or not it runs the telemetry
  * plugin, and it is what the execution viewer is built on. It only reads.
  *
+ * WHO CALLS IT. A tool that runs on the user's own machine: the VS Code
+ * extension, the desktop app or the MCP server. The tool calls Lambda with
+ * the user's own credentials, for an ARN that the user or the user's agent
+ * supplied. This module accepts no request from another user, machine or
+ * app. The user can already call the same APIs directly with the same
+ * credentials. So the checks here are not a security boundary. They catch
+ * mistakes, such as a value that is not an execution ARN, and a response
+ * that would make the history read run without end.
+ *
  * Host-free like the rest of core: no `vscode`, `electron`, or MCP import.
  */
 import {
@@ -22,7 +31,7 @@ import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 /** The subset of LambdaClient this module calls; tests pass a fake. */
 export interface LambdaSender {
   // biome-ignore lint/suspicious/noExplicitAny: commands are heterogeneous; each call site narrows the output.
-  send(command: any, options?: { abortSignal?: AbortSignal }): Promise<any>;
+  send(command: any): Promise<any>;
 }
 
 export interface LambdaContext {
@@ -155,8 +164,13 @@ function isDigits(s: string, length: number): boolean {
  * Parses an execution ARN of the form
  * `arn:<partition>:lambda:<region>:<account>:function:<name>[:<qualifier>]/durable-execution/<name>/<id>`
  * (partition `aws`, `aws-cn`, `aws-us-gov`, …). Returns its region, or
- * undefined when `value` is not one. Plain string checks rather than a regex,
- * so there is no backtracking to reason about on hostile input.
+ * undefined when `value` is not one.
+ *
+ * The check catches a value that is not an execution ARN before it reaches
+ * Lambda, for example a function ARN or a mistyped account. It is not a
+ * security check: the caller is the user's own tool (see the file header).
+ * The part after `/durable-execution/` is not checked. A consumer that puts
+ * an ARN into Markdown or HTML escapes it itself.
  */
 function parseExecutionArn(value: unknown): { region: string } | undefined {
   if (typeof value !== "string" || value.length > MAX_EXECUTION_ARN_LENGTH) {
@@ -214,7 +228,8 @@ function durationBetween(start?: Date, end?: Date): number | undefined {
  * ARN, so a link from a telemetry record in another region still resolves.
  *
  * A history failure does not fail the call: the summary is still useful, and
- * the failure is reported as `historyError` rather than hidden.
+ * the failure is reported as `historyError` rather than hidden. A summary
+ * failure fails the call, because there is nothing to show without it.
  */
 export async function getExecution(
   ctx: LambdaContext,
@@ -242,6 +257,12 @@ export async function getExecution(
         }),
       );
       raw.push(...(page.Events ?? []));
+      // A marker that repeats would read the same page without end. Lambda
+      // is not expected to send one, so this stops the read rather than
+      // trusting it.
+      if (page.NextMarker && page.NextMarker === marker) {
+        throw new Error("History paging returned the same marker twice.");
+      }
       marker = page.NextMarker;
     } while (marker);
   } catch (err) {
@@ -307,22 +328,18 @@ function executionEndOf(
 
 /**
  * When the next attempt is due, from an event's time and its
- * `NextAttemptDelaySeconds`. Undefined when the delay is not a finite number
- * or the time it gives is not a valid date, including when `ts` is missing. Lambda writes the history, but a
- * malformed value must not fail the whole page.
+ * `NextAttemptDelaySeconds`. Undefined when the delay is not a number, or the
+ * time it gives is not a valid date. That covers a missing time, NaN, an
+ * infinite delay and one out of range. Lambda writes the history, but a
+ * malformed value must not fail the whole read.
  */
 function nextAttemptAt(
   ts: string | undefined,
   delay: unknown,
 ): string | undefined {
-  if (
-    ts === undefined ||
-    typeof delay !== "number" ||
-    !Number.isFinite(delay)
-  ) {
-    return undefined;
-  }
-  const at = new Date(new Date(ts).getTime() + delay * 1000);
+  // typeof is needed: null * 1000 is 0, which would give a valid date.
+  if (typeof delay !== "number") return undefined;
+  const at = new Date(new Date(ts ?? Number.NaN).getTime() + delay * 1000);
   return Number.isFinite(at.getTime()) ? at.toISOString() : undefined;
 }
 
@@ -383,9 +400,7 @@ interface DetailFields {
 
 /** The `<EventType>Details` object an event carries, if any. */
 function detailsOf(ev: HistoryApiEvent): DetailFields | undefined {
-  const type = ev.EventType;
-  if (!type) return undefined;
-  return (ev as Record<string, unknown>)[`${type}Details`] as
+  return (ev as Record<string, unknown>)[`${ev.EventType}Details`] as
     | DetailFields
     | undefined;
 }
@@ -424,6 +439,10 @@ export function buildOperations(
     if (!id || type.startsWith("Execution")) {
       continue;
     }
+    const isStart = type.endsWith("Started");
+    const status = terminalStatus(type);
+    // An event type this fold does not know changes nothing.
+    if (!isStart && !status) continue;
     let node = byId.get(id);
     if (!node) {
       node = { id, status: "RUNNING" };
@@ -435,7 +454,7 @@ export function buildOperations(
     const ts = ev.EventTimestamp?.toISOString();
     const details = detailsOf(ev);
 
-    if (type.endsWith("Started")) {
+    if (isStart) {
       // Each Started event is one attempt. A Started after a failure is a
       // retry: the operation is live again, and the earlier attempt's error
       // no longer describes it. The first start time is kept so the duration
@@ -457,8 +476,6 @@ export function buildOperations(
       continue;
     }
 
-    const status = terminalStatus(type);
-    if (!status) continue;
     const result = details?.Result;
     if (result?.Payload !== undefined) node.result = result.Payload;
     const error = details?.Error;
@@ -477,7 +494,7 @@ export function buildOperations(
       node.nextAttemptTime = next;
       continue;
     }
-    node.status = status;
+    node.status = status as string;
     node.endTime = ts;
   }
 
