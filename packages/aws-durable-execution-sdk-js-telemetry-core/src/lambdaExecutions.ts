@@ -246,6 +246,16 @@ function durationBetween(start?: Date, end?: Date): number | undefined {
 export async function getExecution(
   ctx: LambdaContext,
   arn: string,
+  opts: {
+    /**
+     * Whether history events carry their payloads: step results, errors and
+     * callback payloads. Default true. With false, operations have no
+     * `result` or `error`, and the history read stays small whatever the
+     * payloads hold. The execution's own input, result and error come from
+     * the summary either way.
+     */
+    includeExecutionData?: boolean;
+  } = {},
 ): Promise<ExecutionDetail> {
   if (!isDurableExecutionArn(arn)) {
     throw new Error(`Not a durable execution ARN: ${arn}`);
@@ -263,7 +273,7 @@ export async function getExecution(
       const page = await lambda.send(
         new GetDurableExecutionHistoryCommand({
           DurableExecutionArn: arn,
-          IncludeExecutionData: true,
+          IncludeExecutionData: opts.includeExecutionData ?? true,
           MaxItems: HISTORY_PAGE_SIZE,
           Marker: marker,
         }),
