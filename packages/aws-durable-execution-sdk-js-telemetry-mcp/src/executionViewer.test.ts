@@ -375,7 +375,7 @@ describe("execution page", () => {
         invocations: [{ requestId: "<r>" }],
       }),
     );
-    expect(html).not.toMatch(/<(script|img|i|k|s|cb|r)>/);
+    expect(html).not.toMatch(/<(script|img|i|k|s|cb|r)>/i);
     expect(html).toContain("&lt;i&gt;step&lt;/i&gt;");
     expect(html).toContain("a&amp;b &quot;c&quot; &#39;d&#39;");
     expect(html).toContain("status-unknown");
