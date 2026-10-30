@@ -48,6 +48,22 @@ authoritatively. Writing a query without it is guessing.
 - `query` — Escape hatch for questions the structured tools cannot express. Only
   after `describe_schema`, so field names and syntax match the destination.
 
+## Linking executions for the user
+
+While the local viewer is on, results that hold an execution ARN carry a
+`viewerLink`: a column on `query` and `list_executions` rows, a field on a found
+`get_execution` record. It is a ready-made Markdown link, titled with the
+execution name (or "show execution" when there is none), that opens the
+execution's status, operations and invocations in the user's browser. The viewer
+is off when `DURABLE_TELEMETRY_VIEWER_DISABLED` is set or its server failed to
+start; results then have no `viewerLink`.
+
+Whenever you show an execution that has a `viewerLink`, show it exactly as
+given. Do this by default; the user does not have to ask for links. Do not
+print the raw URL, and do not rebuild the link yourself. Rows without an
+execution ARN have an empty `viewerLink`; leave those unlinked. The links work
+only while this server runs, so do not store them.
+
 ## Guarantees and limits you can rely on
 
 - **Read-only.** For the SQL destinations, any statement that is not a

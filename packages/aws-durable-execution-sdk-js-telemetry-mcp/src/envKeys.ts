@@ -69,9 +69,16 @@ export const CONFIRMED_READONLY_ENV_VAR =
   "DURABLE_TELEMETRY_CONFIRMED_READONLY";
 
 /**
+ * Set to `true` to turn off the local execution viewer (executionViewer.ts):
+ * no port is opened and results carry no `viewerLink`.
+ */
+export const VIEWER_DISABLED_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_DISABLED";
+
+/**
  * `DURABLE_TELEMETRY_*` variables this host reads that are not derived from
  * {@link SETTING_KEYS}.
  */
 export const MCP_HOST_ONLY_ENV_VARS: readonly string[] = [
   CONFIRMED_READONLY_ENV_VAR,
+  VIEWER_DISABLED_ENV_VAR,
 ];
