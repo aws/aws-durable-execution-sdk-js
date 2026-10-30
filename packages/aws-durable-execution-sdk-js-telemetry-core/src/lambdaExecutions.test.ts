@@ -1,4 +1,9 @@
-import type { Event as HistoryApiEvent } from "@aws-sdk/client-lambda";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type {
+  EventType,
+  Event as HistoryApiEvent,
+} from "@aws-sdk/client-lambda";
 import {
   buildInvocations,
   buildOperations,
@@ -125,6 +130,7 @@ describe("buildOperations", () => {
             Payload: { ErrorType: "Boom", ErrorMessage: "bad", StackTrace: [] },
             Truncated: true,
           },
+          RetryDetails: undefined,
         },
       },
       { EventType: "InvocationCompleted", EventTimestamp: t(6) },
@@ -600,6 +606,111 @@ describe("getExecution with a real LambdaClient", () => {
   });
 });
 
+describe("a history recorded from Lambda", () => {
+  // testdata/lambda-history-retries.json is the history of one execution on
+  // Lambda (us-east-1, nodejs22.x, SDK 3.0.0), read with
+  // GetDurableExecutionHistory. The account id is replaced. The handler runs a
+  // step that fails once and then succeeds, a step that fails both of its
+  // attempts, a waitForCondition that checks three times, a map of two items,
+  // a wait, and a chained invoke. Unlike the example histories, which the
+  // testing library writes, this one comes from the service.
+  const events: HistoryApiEvent[] = JSON.parse(
+    readFileSync(
+      join(__dirname, "testdata/lambda-history-retries.json"),
+      "utf8",
+    ),
+    (key, value) =>
+      key.endsWith("Timestamp") && typeof value === "string"
+        ? new Date(value)
+        : value,
+  ).Events;
+
+  it("folds into the operations the handler ran", async () => {
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "SUCCEEDED",
+      }),
+      GetDurableExecutionHistoryCommand: () => ({ Events: events }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    const ops = detail.operations.map((o) => ({
+      kind: o.kind,
+      name: o.name,
+      status: o.status,
+      attempt: o.attempt,
+      failed: o.error !== undefined,
+      children: o.children?.length,
+    }));
+    expect(ops).toEqual([
+      {
+        kind: "Step",
+        name: "flaky",
+        status: "SUCCEEDED",
+        attempt: 2,
+        failed: false,
+        children: undefined,
+      },
+      {
+        kind: "Step",
+        name: "always-fails",
+        status: "FAILED",
+        attempt: 2,
+        failed: true,
+        children: undefined,
+      },
+      {
+        kind: "WaitForCondition",
+        name: undefined,
+        status: "SUCCEEDED",
+        attempt: 3,
+        failed: false,
+        children: undefined,
+      },
+      {
+        kind: "Map",
+        name: "double",
+        status: "SUCCEEDED",
+        attempt: undefined,
+        failed: false,
+        children: 2,
+      },
+      {
+        kind: "Wait",
+        name: undefined,
+        status: "SUCCEEDED",
+        attempt: undefined,
+        failed: false,
+        children: undefined,
+      },
+      {
+        kind: "ChainedInvoke",
+        name: undefined,
+        status: "SUCCEEDED",
+        attempt: undefined,
+        failed: false,
+        children: undefined,
+      },
+    ]);
+    expect(detail.invocations).toHaveLength(7);
+    const invoke = detail.operations[5];
+    expect(invoke.invokedFunction).toMatch(/:function:pr1122-verify-fn:1$/);
+    expect(invoke.invokedExecutionArn).toMatch(/\/durable-execution\//);
+  });
+
+  it("shows each retry while it waits", () => {
+    // The history up to the first failure of "flaky", which has a retry left.
+    const [flaky] = buildOperations(events.slice(0, 3));
+    expect(flaky.status).toBe("PENDING");
+    expect(flaky.nextAttemptTime).toBeDefined();
+    // The history up to the first unmet check of the waitForCondition.
+    const check = buildOperations(events.slice(0, 13)).find(
+      (o) => o.kind === "WaitForCondition",
+    );
+    expect(check?.status).toBe("PENDING");
+  });
+});
+
 describe("buildOperations: retries and finished executions (#1118)", () => {
   const failed = (s: number, delay?: number, attempt = 1): HistoryApiEvent => ({
     EventType: "StepFailed",
@@ -776,8 +887,12 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
     ["Wait", "WaitCancelled", "CANCELLED"],
   ])("reads %s end %s as %s", (kind, endType, status) => {
     const [op] = buildOperations([
-      { EventType: `${kind}Started`, Id: "o", EventTimestamp: t(0) },
-      { EventType: endType, Id: "o", EventTimestamp: t(1) },
+      {
+        EventType: `${kind}Started` as EventType,
+        Id: "o",
+        EventTimestamp: t(0),
+      },
+      { EventType: endType as EventType, Id: "o", EventTimestamp: t(1) },
     ]);
     expect(op).toMatchObject({ kind, status });
   });
@@ -817,7 +932,10 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
         EventType: "StepSucceeded",
         Id: "s",
         EventTimestamp: t(1),
-        StepSucceededDetails: { Result: { Payload: "x", Truncated: true } },
+        StepSucceededDetails: {
+          Result: { Payload: "x", Truncated: true },
+          RetryDetails: undefined,
+        },
       },
     ]);
     expect(op.payloadTruncated).toBe(true);
@@ -829,7 +947,10 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
       {
         EventType: "StepFailed",
         Id: "s",
-        StepFailedDetails: { RetryDetails: { NextAttemptDelaySeconds: 5 } },
+        StepFailedDetails: {
+          Error: undefined,
+          RetryDetails: { NextAttemptDelaySeconds: 5 },
+        },
       },
     ]);
     expect(op.status).toBe("FAILED");
