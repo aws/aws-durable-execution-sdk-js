@@ -12,6 +12,7 @@ export * from "./dynamodb";
 export * from "./explorerSession";
 export * from "./hostCapabilities";
 export * from "./hostPort";
+export * from "./lambdaExecutions";
 export * from "./llm";
 export * from "./localServerParse";
 export * from "./logsInsights";

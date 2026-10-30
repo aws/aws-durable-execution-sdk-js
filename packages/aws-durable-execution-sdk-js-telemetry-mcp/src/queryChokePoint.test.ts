@@ -300,6 +300,10 @@ describe("query choke point", () => {
       "getWorkGroupOutput",
       "listenToQueue",
       "verifyResult",
+      // The Lambda read of one execution (lambdaExecutions.ts). It takes an
+      // execution ARN, never a query, so there is nothing for `assertReadOnly`
+      // to inspect.
+      "getExecution",
     ]);
     const unclassified = derived.filter((n) => !known.has(n));
     expect(unclassified).toEqual([]);
