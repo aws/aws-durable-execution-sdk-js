@@ -328,6 +328,29 @@ All settings are under the `durableExecutionTelemetry.*` namespace.
 
 \* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
+### Workspace settings and Restricted Mode
+
+The extension saves settings to your user settings. You can also set them per
+folder in `.vscode/settings.json`. VS Code applies those folder values only
+after you trust the folder:
+
+- **Untrusted folder (Restricted Mode).** The extension ignores every
+  `durableExecutionTelemetry.*` value from the folder and uses your user
+  settings, or the defaults. A repository you open but don't trust cannot
+  change your destination, AWS profile, or LLM endpoint, or turn on
+  `sqsDeleteAfterRead`.
+- **Trusted folder.** The folder's values apply and take precedence over your
+  user settings. Review a repository's `.vscode/settings.json` before you trust
+  it.
+
+Saving the Settings panel writes only the fields you changed, so a trusted
+folder's values are not copied into your user settings. If the folder sets a
+field you change, your value is saved but the folder's value still applies in
+that folder, and the panel tells you which fields are affected.
+
+`aiDisclosureAcceptedVersion` is read only from your user settings, never from
+a folder, trusted or not, so only you can accept the AI notice.
+
 ## AI Features & Data Handling
 
 Durable Execution Telemetry uses generative AI (a large language model) for some features.
