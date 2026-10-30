@@ -16,6 +16,8 @@ import {
 import { MAX_ROWS } from "./readOnlyQuery";
 import {
   buildDescribeSchemaResult,
+  buildListExecutionsLogsQuery,
+  buildListExecutionsSql,
   runGetExecution,
   runListExecutions,
   DEFAULT_RECORD_LOOKBACK_HOURS,
@@ -438,5 +440,34 @@ describe("redshift targets are schema-qualified", () => {
     expect(runRedshiftMock.mock.calls[0][0].sql).toContain(
       "public.durable_execution_telemetry",
     );
+  });
+});
+
+describe("list_executions returns each execution's name", () => {
+  // The name titles each row's viewer link.
+  it.each([
+    ["s3", "executionarn, executionname, status"],
+    ["dynamodb", "pk, executionName, status"],
+    ["aurora", "execution_arn, execution_name, status"],
+    ["redshift", "execution_arn, execution_name, status"],
+    ["opensearch", "executionArn, executionName, status"],
+  ])("%s selects the name column", (destination, select) => {
+    expect(buildListExecutionsSql(cfgFor(destination), {})).toContain(
+      `SELECT ${select}`,
+    );
+  });
+
+  it("cloudwatch-logs-exporter returns the top-level name field", () => {
+    expect(
+      buildListExecutionsLogsQuery(cfgFor("cloudwatch-logs-exporter"), {}),
+    ).toContain("| fields executionArn, executionName, status");
+  });
+
+  it("lambda-log-exporter parses the name and returns it", () => {
+    const q = buildListExecutionsLogsQuery(cfgFor("lambda-log-exporter"), {});
+    expect(q).toContain(
+      'parse message "\\"executionName\\":\\"*\\"" as executionName',
+    );
+    expect(q).toContain("| fields @timestamp, executionArn, executionName,");
   });
 });

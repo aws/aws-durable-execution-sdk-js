@@ -219,6 +219,56 @@ The server registers five tools. Call them roughly in this order.
   (`cloudwatch-logs-exporter`, `lambda-log-exporter`) pass a CloudWatch Logs
   Insights pipe query, not SQL, and use `lookbackHours` to set the time window.
 
+### Execution viewer links
+
+When a result holds execution ARNs, the server adds a link for each one:
+
+- `query` and `list_executions` rows gain a `viewerLink` column. Rows with no
+  execution ARN get an empty string. `list_executions` also returns each
+  execution's name.
+- `get_execution` results gain a `viewerLink` field when the record is found.
+
+Each `viewerLink` is a Markdown link titled with the execution name, for example
+`[order-1042](http://127.0.0.1:52817/e/wf_xMUmhDkbKbDRFo3g5Mw)`. An execution
+with no name is titled `show execution`.
+
+The link opens a page in your browser. The page reads the execution from the
+Lambda API (`GetDurableExecution` and `GetDurableExecutionHistory`) each time you
+open it, not from the telemetry destination. It shows:
+
+- the execution's status, times, input, result and error;
+- its operations, nested the way the workflow ran them, with each operation's
+  status, attempt count, start time and duration, the time of a pending retry,
+  a wait's end time, a callback ID, and a chained invoke's target;
+- the Lambda invocations that ran it.
+
+The page does not load each step's result or error, so it stays small for large
+executions. It does not reload itself; its **Refresh** link loads the latest
+state.
+
+How the page is served:
+
+- The server starts a small web server the first time a result needs a link. It
+  listens on `127.0.0.1` only, on a port the operating system picks.
+- Each linked execution gets a random ID, and the link carries only that ID. The
+  server keeps the ID-to-ARN map in memory. A request for any other path gets
+  "Link not recognized" and no AWS call. Links stop working when the server
+  stops.
+- If the web server cannot start, results carry no `viewerLink` and the tools
+  still answer. The next result that needs a link tries to start it again.
+- It answers only `GET` and `HEAD` requests addressed to `127.0.0.1:<port>` or
+  `localhost:<port>`. Its pages run no script. It cannot start or stop
+  executions.
+
+The page runs in your own server, with your own credentials. Anyone who has a
+link can read that execution while the server runs, so treat a link like the
+data it shows. The identity you use needs `lambda:GetDurableExecution` and
+`lambda:GetDurableExecutionHistory` for the page to load; without them the page
+shows the AWS error, and the tools still work.
+
+Set `DURABLE_TELEMETRY_VIEWER_DISABLED=true` to turn the viewer off. No port is
+opened, and results carry no `viewerLink`.
+
 ### Result bounding
 
 - **Row cap.** Every result from every destination is capped at **1000 rows**
@@ -316,9 +366,13 @@ Read this before pointing the server at production data.
   configuration sends it (its model provider, its logs, its storage). This server
   chooses none of that and cannot see past its own stdout.
 - **This server makes no model calls of its own.** It selects no model provider
-  and contacts none. It is stdio in, JSON out, running on your machine; the only
-  outbound calls it makes are the read-only AWS API calls needed to run your
-  query.
+  and contacts none. It is stdio in, JSON out, running on your machine, plus the
+  loopback-only execution viewer; the only outbound calls it makes are the
+  read-only AWS API calls needed to run your query or show an execution.
+- **The execution viewer shows payloads in your browser.** A `viewerLink` page
+  shows the execution's `input`, `result` and error verbatim, as the Lambda API
+  returns them. See [Execution viewer links](#execution-viewer-links), including
+  how to turn it off.
 - **The server refuses queries that are not read-only, but your credentials are
   the boundary.** On the SQL destinations the server refuses any query that does
   not start with `SELECT`/`WITH`, contains a write keyword, contains a second

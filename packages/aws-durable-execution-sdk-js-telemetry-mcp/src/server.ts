@@ -17,6 +17,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readConfigFromEnv } from "./config";
+import { viewerFromEnv } from "./executionViewer";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
@@ -50,7 +51,9 @@ async function main(): Promise<void> {
     version: DURABLE_TELEMETRY_MCP_VERSION,
   });
 
-  registerTools(server, config, writeAccessAcceptedByEnv(process.env));
+  // Created now; it opens its port only when a result first needs a link.
+  const viewer = viewerFromEnv(process.env, { config, log: logStderr });
+  registerTools(server, config, writeAccessAcceptedByEnv(process.env), viewer);
   registerPrompts(server);
 
   const transport = new StdioServerTransport();
