@@ -84,10 +84,12 @@ export interface OperationNode {
   nextAttemptTime?: string;
   /** Serialized result payload, as checkpointed. */
   result?: string;
-  /** True when the service truncated the result or error payload. */
-  payloadTruncated?: boolean;
+  /** True when Lambda shortened `result`. */
+  resultTruncated?: boolean;
   /** Pretty-printed error object. */
   error?: string;
+  /** True when Lambda shortened `error`. */
+  errorTruncated?: boolean;
   /** Wait operations: when the wait is scheduled to end. */
   scheduledEndTime?: string;
   /** Callback operations: the callback id a caller completes. */
@@ -105,6 +107,8 @@ export interface InvocationRow {
   endTime?: string;
   durationMs?: number;
   error?: string;
+  /** True when Lambda shortened `error`. */
+  errorTruncated?: boolean;
 }
 
 export interface ExecutionDetail {
@@ -118,7 +122,15 @@ export interface ExecutionDetail {
   version?: string;
   input?: string;
   result?: string;
+  /**
+   * True when Lambda shortened `result`. Set only when the result comes from
+   * the history's end event: the GetDurableExecution summary has no
+   * truncation flag.
+   */
+  resultTruncated?: boolean;
   error?: string;
+  /** Like {@link resultTruncated}, for `error`. */
+  errorTruncated?: boolean;
   history: HistoryEvent[];
   operations: OperationNode[];
   invocations: InvocationRow[];
@@ -288,8 +300,13 @@ export async function getExecution(
     durationMs: durationBetween(e.StartTimestamp, endTimestamp),
     version: e.Version ?? undefined,
     input: e.InputPayload ?? undefined,
+    // `end` is read only while the summary has not ended, and such a summary
+    // has no result or error. So the flags below always describe the
+    // history's payloads.
     result: e.Result ?? end?.result,
+    resultTruncated: end?.resultTruncated,
     error: e.Error ? formatError(e.Error) : end?.error,
+    errorTruncated: end?.errorTruncated,
     history: raw.map(toHistoryEvent),
     operations: buildOperations(raw, {
       executionEnded: TERMINAL_EXECUTION_STATUSES.includes(summaryStatus),
@@ -303,9 +320,16 @@ export async function getExecution(
  * The execution's end as the history records it: the last terminal
  * `Execution*` event, with its status, time, result, and error.
  */
-function executionEndOf(
-  events: HistoryApiEvent[],
-): { status: string; at?: Date; result?: string; error?: string } | undefined {
+function executionEndOf(events: HistoryApiEvent[]):
+  | {
+      status: string;
+      at?: Date;
+      result?: string;
+      resultTruncated?: boolean;
+      error?: string;
+      errorTruncated?: boolean;
+    }
+  | undefined {
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i];
     const type = ev.EventType ?? "";
@@ -318,9 +342,11 @@ function executionEndOf(
       status,
       at: ev.EventTimestamp,
       result: details?.Result?.Payload,
+      resultTruncated: details?.Result?.Truncated,
       error: details?.Error?.Payload
         ? formatError(details.Error.Payload)
         : undefined,
+      errorTruncated: details?.Error?.Truncated,
     };
   }
   return undefined;
@@ -457,13 +483,14 @@ export function buildOperations(
     if (isStart) {
       // Each Started event is one attempt. A Started after a failure is a
       // retry: the operation is live again, and the earlier attempt's error
-      // no longer describes it. The first start time is kept so the duration
-      // covers every attempt.
+      // no longer describes it. The result is kept, with its truncation flag:
+      // a waitForCondition check's result is the state the next check reads.
+      // The first start time is kept so the duration covers every attempt.
       starts.set(id, (starts.get(id) ?? 0) + 1);
       node.status = "RUNNING";
       node.nextAttemptTime = undefined;
       node.error = undefined;
-      node.payloadTruncated = undefined;
+      node.errorTruncated = undefined;
       if (!node.startTime) node.startTime = ts;
       if (details?.ScheduledEndTimestamp) {
         node.scheduledEndTime = details.ScheduledEndTimestamp.toISOString();
@@ -476,11 +503,18 @@ export function buildOperations(
       continue;
     }
 
+    // Each payload carries its own truncation flag. A new payload replaces
+    // the old one together with its flag.
     const result = details?.Result;
-    if (result?.Payload !== undefined) node.result = result.Payload;
+    if (result?.Payload !== undefined) {
+      node.result = result.Payload;
+      node.resultTruncated = result.Truncated;
+    }
     const error = details?.Error;
-    if (error?.Payload) node.error = formatError(error.Payload);
-    if (result?.Truncated || error?.Truncated) node.payloadTruncated = true;
+    if (error?.Payload) {
+      node.error = formatError(error.Payload);
+      node.errorTruncated = error.Truncated;
+    }
     const next = nextAttemptAt(
       ts,
       details?.RetryDetails?.NextAttemptDelaySeconds,
@@ -546,6 +580,7 @@ export function buildInvocations(events: HistoryApiEvent[]): InvocationRow[] {
       endTime: d?.EndTimestamp?.toISOString(),
       durationMs: durationBetween(d?.StartTimestamp, d?.EndTimestamp),
       error: d?.Error?.Payload ? formatError(d.Error.Payload) : undefined,
+      errorTruncated: d?.Error?.Truncated,
     });
   }
   return out;

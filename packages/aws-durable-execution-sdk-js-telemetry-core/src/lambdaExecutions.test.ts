@@ -150,7 +150,8 @@ describe("buildOperations", () => {
       durationMs: 2000,
     });
     const failed = map.children?.[1];
-    expect(failed).toMatchObject({ status: "FAILED", payloadTruncated: true });
+    expect(failed).toMatchObject({ status: "FAILED", errorTruncated: true });
+    expect(failed?.resultTruncated).toBeUndefined();
     // One Started event is one attempt, so no attempt count is shown.
     expect(failed?.attempt).toBeUndefined();
     // An empty stack trace is omitted rather than printed as [].
@@ -178,7 +179,7 @@ describe("buildOperations", () => {
     // The retry is running, so it is no longer waiting for an attempt, and
     // the earlier attempt's truncated error no longer applies.
     expect(op.nextAttemptTime).toBeUndefined();
-    expect(op.payloadTruncated).toBeUndefined();
+    expect(op.errorTruncated).toBeUndefined();
     expect(op).toMatchObject({
       status: "RUNNING",
       startTime: t(0).toISOString(),
@@ -264,6 +265,21 @@ describe("buildInvocations", () => {
         error: JSON.stringify({ errorMessage: "timeout" }, null, 2),
       },
     ]);
+  });
+
+  it("marks an invocation error that Lambda shortened", () => {
+    const [row] = buildInvocations([
+      {
+        EventType: "InvocationCompleted",
+        InvocationCompletedDetails: {
+          RequestId: "r1",
+          StartTimestamp: t(0),
+          EndTimestamp: t(1),
+          Error: { Payload: { ErrorMessage: "cut" }, Truncated: true },
+        },
+      },
+    ]);
+    expect(row.errorTruncated).toBe(true);
   });
 });
 
@@ -444,6 +460,57 @@ describe("getExecution", () => {
     });
     const detail = await getExecution(ctx, ARN);
     expect(detail).toMatchObject({ status: "SUCCEEDED", result: '"done"' });
+  });
+
+  it.each([
+    [
+      "result",
+      {
+        EventType: "ExecutionSucceeded",
+        ExecutionSucceededDetails: {
+          Result: { Payload: '"cut"', Truncated: true },
+        },
+      },
+    ],
+    [
+      "error",
+      {
+        EventType: "ExecutionFailed",
+        ExecutionFailedDetails: {
+          Error: { Payload: { ErrorMessage: "cut" }, Truncated: true },
+        },
+      },
+    ],
+  ])(
+    "marks a shortened %s taken from the history's end",
+    async (field, end) => {
+      const { ctx } = fakeContext({
+        GetDurableExecutionCommand: () => ({
+          DurableExecutionArn: ARN,
+          Status: "RUNNING",
+        }),
+        GetDurableExecutionHistoryCommand: () => ({
+          Events: [{ Id: "x", EventTimestamp: t(4), ...end }],
+        }),
+      });
+      const detail = await getExecution(ctx, ARN);
+      expect(detail[`${field}Truncated` as "resultTruncated"]).toBe(true);
+    },
+  );
+
+  it("sets no truncation flag on a result from the summary", async () => {
+    // The summary is terminal, so its result is used, and it has no flag.
+    const { ctx } = fakeContext({
+      GetDurableExecutionCommand: () => ({
+        DurableExecutionArn: ARN,
+        Status: "SUCCEEDED",
+        Result: '"full"',
+      }),
+      GetDurableExecutionHistoryCommand: () => ({ Events: [] }),
+    });
+    const detail = await getExecution(ctx, ARN);
+    expect(detail.result).toBe('"full"');
+    expect(detail.resultTruncated).toBeUndefined();
   });
 
   it("does not take an operation's end as the execution's end", async () => {
@@ -938,7 +1005,99 @@ describe("buildOperations: retries and finished executions (#1118)", () => {
         },
       },
     ]);
-    expect(op.payloadTruncated).toBe(true);
+    expect(op.resultTruncated).toBe(true);
+    expect(op.errorTruncated).toBeUndefined();
+  });
+
+  // A waitForCondition check's result is the state the next check reads, so
+  // the fold keeps it across the next Started event. Its truncation flag
+  // must stay with it.
+  const truncatedCheck = (s: number): HistoryApiEvent => ({
+    EventType: "StepSucceeded",
+    Id: "s",
+    SubType: "WaitForCondition",
+    EventTimestamp: t(s),
+    StepSucceededDetails: {
+      Result: { Payload: "short", Truncated: true },
+      RetryDetails: { NextAttemptDelaySeconds: 5 },
+    },
+  });
+
+  it("keeps a check's truncated result while the next check runs", () => {
+    const [op] = buildOperations([started(0), truncatedCheck(1), started(6)]);
+    expect(op).toMatchObject({
+      status: "RUNNING",
+      result: "short",
+      resultTruncated: true,
+    });
+  });
+
+  it("keeps a check's truncated result when the next check fails", () => {
+    const [op] = buildOperations([
+      started(0),
+      truncatedCheck(1),
+      started(6),
+      failed(7, undefined, 2),
+    ]);
+    expect(op).toMatchObject({
+      status: "FAILED",
+      result: "short",
+      resultTruncated: true,
+    });
+    expect(op.errorTruncated).toBeUndefined();
+  });
+
+  it("keeps a check's truncated result when the execution ends", () => {
+    const [op] = buildOperations([started(0), truncatedCheck(1), started(6)], {
+      executionEnded: true,
+    });
+    expect(op).toMatchObject({ status: "INCOMPLETE", resultTruncated: true });
+  });
+
+  it("clears the result's flag when a later result is complete", () => {
+    const [op] = buildOperations([
+      started(0),
+      truncatedCheck(1),
+      started(6),
+      {
+        EventType: "StepSucceeded",
+        Id: "s",
+        SubType: "WaitForCondition",
+        EventTimestamp: t(7),
+        StepSucceededDetails: {
+          Result: { Payload: "full" },
+          RetryDetails: undefined,
+        },
+      },
+    ]);
+    expect(op).toMatchObject({ status: "SUCCEEDED", result: "full" });
+    expect(op.resultTruncated).toBeUndefined();
+  });
+
+  it("clears the error's flag when a later error is complete", () => {
+    const [op] = buildOperations([
+      started(0),
+      {
+        EventType: "StepFailed",
+        Id: "s",
+        EventTimestamp: t(1),
+        StepFailedDetails: {
+          Error: { Payload: { ErrorMessage: "cut" }, Truncated: true },
+          RetryDetails: { NextAttemptDelaySeconds: 1 },
+        },
+      },
+      {
+        EventType: "StepFailed",
+        Id: "s",
+        EventTimestamp: t(2),
+        StepFailedDetails: {
+          Error: { Payload: { ErrorMessage: "whole" } },
+          RetryDetails: undefined,
+        },
+      },
+    ]);
+    expect(op.status).toBe("FAILED");
+    expect(op.errorTruncated).toBeUndefined();
   });
 
   it("schedules no next attempt for an event without a timestamp", () => {
