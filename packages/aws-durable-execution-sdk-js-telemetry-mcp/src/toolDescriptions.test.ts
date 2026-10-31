@@ -8,9 +8,41 @@
  * `TOOL_DESCRIPTIONS` is the single source of truth the server registers from,
  * so asserting over it covers exactly the descriptions that ship.
  */
-import { TOOL_DESCRIPTIONS } from "./tools";
+import { SERVER_INSTRUCTIONS, TOOL_DESCRIPTIONS } from "./tools";
 
 const DESCRIPTION_CAP = 10_000;
+
+describe("server instructions", () => {
+  it("name only real tools, and stay short", () => {
+    // Clients put the instructions in the agent's prompt on every turn.
+    expect(SERVER_INSTRUCTIONS.length).toBeLessThan(1_000);
+    const tools = new Set(TOOL_DESCRIPTIONS.map((t) => t.name));
+    const named = (SERVER_INSTRUCTIONS.match(/`[a-z_]+`/g) ?? [])
+      .map((t) => t.slice(1, -1))
+      .filter((t) => t.includes("_") || t === "query");
+    expect(named).toEqual(
+      expect.arrayContaining(["list_executions", "get_execution", "query"]),
+    );
+    // The same order as the README, SKILL.md and the prompts: verify first.
+    expect(SERVER_INSTRUCTIONS.indexOf("`test_destination`")).toBeGreaterThan(
+      -1,
+    );
+    expect(SERVER_INSTRUCTIONS.indexOf("`test_destination`")).toBeLessThan(
+      SERVER_INSTRUCTIONS.indexOf("`list_executions`"),
+    );
+    for (const name of named) expect(tools.has(name)).toBe(true);
+    expect(SERVER_INSTRUCTIONS).toContain("viewerLink");
+  });
+
+  it("claim durable executions only, not every request about executions", () => {
+    // An agent may also have a Step Functions or CI server. A bare
+    // "executions" request is for the agent and the user to route.
+    expect(SERVER_INSTRUCTIONS).toContain(
+      "durable executions or durable function runs",
+    );
+    expect(SERVER_INSTRUCTIONS).not.toMatch(/workflow executions|unqualified/i);
+  });
+});
 
 describe("tool descriptions", () => {
   it("registers exactly the five expected tools", () => {
