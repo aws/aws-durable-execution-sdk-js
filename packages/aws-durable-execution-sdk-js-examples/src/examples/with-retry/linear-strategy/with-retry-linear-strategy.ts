@@ -48,7 +48,7 @@ interface RetryResult {
  *
  * Note that the attempt count is *returned from inside* the retried function
  * rather than assigned to a variable in the enclosing scope. Closure mutations
- * do not survive a replay (AGENTS.md, "Closure Mutations Are Lost on Replay"):
+ * do not survive a replay (docs/CUSTOMER_AGENT_GUIDE.md, "Closure Mutations Are Lost on Replay"):
  * the retry runs in a child context, so on resume the value is restored from its
  * checkpoint without the body re-running, and an outer variable would read back
  * as its initial value.
