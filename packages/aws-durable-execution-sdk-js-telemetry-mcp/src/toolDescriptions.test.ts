@@ -23,6 +23,13 @@ describe("server instructions", () => {
     expect(named).toEqual(
       expect.arrayContaining(["list_executions", "get_execution", "query"]),
     );
+    // The same order as the README, SKILL.md and the prompts: verify first.
+    expect(SERVER_INSTRUCTIONS.indexOf("`test_destination`")).toBeGreaterThan(
+      -1,
+    );
+    expect(SERVER_INSTRUCTIONS.indexOf("`test_destination`")).toBeLessThan(
+      SERVER_INSTRUCTIONS.indexOf("`list_executions`"),
+    );
     for (const name of named) expect(tools.has(name)).toBe(true);
     expect(SERVER_INSTRUCTIONS).toContain("viewerLink");
   });

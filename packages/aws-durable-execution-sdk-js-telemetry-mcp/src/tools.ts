@@ -130,7 +130,9 @@ export const SERVER_INSTRUCTIONS =
   "Read-only access to the execution records that AWS Lambda durable " +
   "functions emit through the Durable Execution Telemetry exporter. Use this " +
   "server when the user asks about durable executions or durable function " +
-  "runs: recent runs, failures, timing, or step-level errors. Start with " +
+  "runs: recent runs, failures, timing, or step-level errors. Run " +
+  "`test_destination` first: it checks the configuration, and on S3 + Athena " +
+  "it reports when query results would land inside the table's data. Then use " +
   "`list_executions` or `get_execution`, and call `describe_schema` before " +
   "writing a `query`. While the local viewer is on, results that hold an " +
   "execution ARN carry a `viewerLink`, a Markdown link titled with the " +
