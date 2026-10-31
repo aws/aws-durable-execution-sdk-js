@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SERVER_INSTRUCTIONS } from "./tools";
 
 const SERVER_PATH = path.resolve(__dirname, "..", "dist", "server.js");
 const SERVER_BUILT = existsSync(SERVER_PATH);
@@ -69,6 +70,14 @@ describeIfBuilt("durable-telemetry MCP server (spawned binary)", () => {
     () => {
       const info = client.getServerVersion();
       expect(info?.name).toBe("durable-telemetry");
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "sends its instructions in the handshake",
+    () => {
+      expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
     },
     TIMEOUT_MS,
   );

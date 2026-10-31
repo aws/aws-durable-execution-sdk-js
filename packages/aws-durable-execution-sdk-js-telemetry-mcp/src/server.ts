@@ -20,6 +20,7 @@ import { readConfigFromEnv } from "./config";
 import { viewerFromEnv } from "./executionViewer";
 import { registerPrompts } from "./prompts";
 import { registerTools } from "./registerTools";
+import { SERVER_INSTRUCTIONS } from "./tools";
 import { writeAccessAcceptedByEnv } from "./writeAccessGate";
 
 /**
@@ -46,10 +47,13 @@ async function main(): Promise<void> {
     logStderr(`[durable-telemetry] warning: ${warning}`);
   }
 
-  const server = new McpServer({
-    name: "durable-telemetry",
-    version: DURABLE_TELEMETRY_MCP_VERSION,
-  });
+  const server = new McpServer(
+    {
+      name: "durable-telemetry",
+      version: DURABLE_TELEMETRY_MCP_VERSION,
+    },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   // Created now; it opens its port only when a result first needs a link.
   const viewer = viewerFromEnv(process.env, { config, log: logStderr });
