@@ -25,16 +25,18 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # The examples package takes about as long as every other package together
-  # (~155s), so it gets its own runner. Running it beside the others on one
-  # 4-CPU runner was tried: the two Jest runs starved each other and tests hit
-  # their 5s timeouts.
+  # Packages are split across runners by measured time (~70s per shard).
+  # Running two Jest runs on one 4-CPU runner was tried: they starved each
+  # other and tests hit their 5s timeouts.
+  #   examples: the examples package
+  #   core:     sdk ~7s, testing ~30s, extras ~28s, microvm-worker ~7s
+  #   rest:     everything else, otel ~53s the largest
   shard:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        shard: [examples, rest]
+        shard: [examples, core, rest]
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -52,19 +54,31 @@ jobs:
         uses: ./.github/actions/npm-ci
       - name: Run tests
         # The root `test` script stays the one list of packages; this only
-        # splits it, and fails if the examples entry is not in it.
+        # splits it. `rest` takes whatever the named shards do not, so a new
+        # package is always tested. A named package missing from the script
+        # fails the step.
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           cmds=$(node -e '
-            const examples = "npm run test -w packages/aws-durable-execution-sdk-js-examples";
+            const cmd = (pkg) => `npm run test -w packages/${pkg}`;
+            const named = {
+              examples: ["aws-durable-execution-sdk-js-examples"],
+              core: [
+                "aws-durable-execution-sdk-js",
+                "aws-durable-execution-sdk-js-testing",
+                "aws-durable-execution-sdk-js-extras",
+                "aws-durable-execution-sdk-js-microvm-worker",
+              ],
+            };
             const all = require("./package.json").scripts.test.split(" && ");
-            if (!all.includes(examples)) {
-              throw new Error("examples tests not found in the root test script");
+            const taken = Object.values(named).flat().map(cmd);
+            for (const c of taken) {
+              if (!all.includes(c)) throw new Error(`not in the root test script: ${c}`);
             }
-            const shard = process.env.SHARD === "examples"
-              ? [examples]
-              : all.filter((c) => c !== examples);
+            const shard = named[process.env.SHARD]?.map(cmd)
+              ?? all.filter((c) => !taken.includes(c));
+            if (shard.length === 0) throw new Error(`empty shard: ${process.env.SHARD}`);
             console.log(shard.join(" && "));
           ')
           bash -e -c "$cmds"
