@@ -118,6 +118,28 @@ export const LIST_EXECUTIONS_DESCRIPTION =
   "as-is without being asked, and do not print the raw URL.";
 
 /**
+ * The server's MCP instructions. Some clients load tool schemas only when a
+ * tool looks relevant, and show the agent these instructions instead. So the
+ * instructions name the tools and the viewer links.
+ *
+ * They claim durable executions and durable function runs only. A bare
+ * "list the last 10 executions" could mean Step Functions or CI runs, so the
+ * agent and the user decide which server answers it.
+ */
+export const SERVER_INSTRUCTIONS =
+  "Read-only access to the execution records that AWS Lambda durable " +
+  "functions emit through the Durable Execution Telemetry exporter. Use this " +
+  "server when the user asks about durable executions or durable function " +
+  "runs: recent runs, failures, timing, or step-level errors. Run " +
+  "`test_destination` first: it checks the configuration, and on S3 + Athena " +
+  "it reports when query results would land inside the table's data. Then use " +
+  "`list_executions` or `get_execution`, and call `describe_schema` before " +
+  "writing a `query`. While the local viewer is on, results that hold an " +
+  "execution ARN carry a `viewerLink`, a Markdown link titled with the " +
+  "execution name. When you show such an execution, show its viewerLink as " +
+  "given, and do not print the raw URL.";
+
+/**
  * Every tool this server registers, paired with its description. The single
  * source of truth for `toolDescriptions.test.ts`, which asserts each is
  * non-empty and under the 10,000-char cap — the guard that keeps the large

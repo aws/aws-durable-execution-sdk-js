@@ -26,6 +26,13 @@
   it can come later, or be absent when no row has a name. A found
   `get_execution` result can have a `viewerLink` field. Read columns by name,
   not by position.
+- **Server instructions.** The server now sends MCP instructions in the
+  handshake. They tell the agent to use this server for durable executions and
+  durable function runs, which tools to start with, and to show each
+  `viewerLink` as given. Some clients load tool schemas only when a tool looks
+  relevant, so without instructions the agent may not pick this server. A bare
+  request about "executions" is left to the agent and the user, because it
+  could mean Step Functions or CI runs.
 
 ## Changed
 
