@@ -878,8 +878,10 @@ export function buildListExecutionsLogsQuery(
   if (postFilters.length > 0) {
     stages.push(`filter ${postFilters.join(" and ")}`);
   }
+  // `display`, not `fields`: Logs Insights rejects `fields <name>` after
+  // `parse ... as <name>` with "Ephemeral field is already defined" (#1143).
   stages.push(
-    "fields @timestamp, executionArn, executionName, status, functionName, startTime",
+    "display @timestamp, executionArn, executionName, status, functionName, startTime",
   );
   stages.push("sort @timestamp desc");
   stages.push(`limit ${limit}`);
