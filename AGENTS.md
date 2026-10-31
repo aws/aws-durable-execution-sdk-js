@@ -71,3 +71,45 @@ More detail: [CONCEPTS.md](./packages/aws-durable-execution-sdk-js/src/documents
 1. The title is a conventional commit, such as `fix(sdk): ...`. The allowed types and scopes
    are in [.github/workflows/lintcommit.js](./.github/workflows/lintcommit.js).
 2. Never use `--no-verify`. CI runs the same checks.
+
+## Reviewing a pull request
+
+These rules apply to every reviewer, a person or an agent. The CI review bot follows them
+through [.github/prompts/ai-pr-review.md](./.github/prompts/ai-pr-review.md).
+
+### What to check
+
+1. The SDK invariants in
+   [packages/aws-durable-execution-sdk-js/AGENTS.md](./packages/aws-durable-execution-sdk-js/AGENTS.md).
+2. The contract tests named there. A change may edit, skip or delete a contract test case
+   only with a new ADR under [docs/adr](./docs/adr) that replaces the rule.
+3. The [rules for every change](./CONTRIBUTING.md#rules-for-every-change), rules 1 to 11.
+   A change can be correct and still break one.
+4. The PR description: the design note (rule 3), the root cause of a bug (rule 5),
+   unverified assumptions (rule 6) and decisions the task did not cover (rule 7).
+5. Correctness: regressions, edge cases, typing and error handling.
+6. Replay: determinism, checkpoint matching and the semantics of steps, waits, callbacks,
+   child contexts, invokes, maps and parallel branches.
+7. Suspension: SDK work awaited while no operation is `EXECUTING`, and plugin hooks awaited
+   on the operation path.
+8. Serialization, error propagation, retry, timeout and cancellation.
+9. Public API compatibility across ESM, CommonJS and the supported Node.js versions.
+10. Missing or weak unit, composed and integration tests. A change that needs a conformance
+    test says so in its description. It does not add one.
+
+### Severity
+
+1. Highest: a broken SDK invariant, even if the tests pass, and a contract test edited,
+   skipped or deleted without a new ADR.
+2. Below that: code findings (bugs, missing tests) and approach findings (a broken rule
+   from `CONTRIBUTING.md`), ordered by impact.
+
+### How to write a finding
+
+1. Report only confirmed, actionable findings, in severity order.
+2. A code finding names the file and changed line, the impact and a concrete fix.
+3. An approach finding names the rule and how the change breaks it, on the added line that
+   shows it best. For example, the first line of a new API that has no design note. Do not
+   ask for detailed code changes. Ask the contributor to return to the design phase
+   (rule 8), with a simpler direction if you see one.
+4. If there are no findings, say so and name any test risk that remains.
