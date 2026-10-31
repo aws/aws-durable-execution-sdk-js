@@ -50,6 +50,14 @@
 - The prompt names `DURABLE_TELEMETRY_CONFIRMED_READONLY`, so a user who
   confirms learns how to stop the prompt in later sessions.
 
+## Fixed
+
+- `list_executions` on the `lambda-log-exporter` destination failed with
+  `MalformedQueryException: Ephemeral field is already defined`. Logs Insights
+  rejects `fields` on a field that `parse` defined, so the query now uses
+  `display`. The example queries that `describe_schema` gives for this
+  destination had the same error and are fixed too.
+
 ## Removed
 
 - **Output change for tools that read results programmatically.**
