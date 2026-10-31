@@ -48,6 +48,10 @@ jobs:
 
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v3
+        with:
+          # Native installer instead of pip: pip built a venv and resolved ~60 packages
+          # on every run (~39s). The installer is one verified zip, cached across runs.
+          use-installer: true
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8
