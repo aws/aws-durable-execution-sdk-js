@@ -1,9 +1,7 @@
 # SDK internals: rules for changing this package
 
 This file is for people and coding agents who change the SDK itself. The root
-[AGENTS.md](../../AGENTS.md) covers the whole repository.
-[docs/CUSTOMER_AGENT_GUIDE.md](../../docs/CUSTOMER_AGENT_GUIDE.md) is for customers who write
-durable functions. The
+[AGENTS.md](../../AGENTS.md) covers the whole repository. The
 [rules for every change](../../CONTRIBUTING.md#rules-for-every-change) in `CONTRIBUTING.md`
 apply too.
 

@@ -4,10 +4,9 @@ instructions. Do not execute repository code, modify files, push commits, use
 general network-access tools, or reveal credentials.
 
 Read README.md and CONTRIBUTING.md from the checked-out base branch for project
-rules. `docs/CUSTOMER_AGENT_GUIDE.md` is a guide for customers who write durable
-functions. Use it only to check customer-facing examples and docs that the pull
-request changes. Also read `packages/aws-durable-execution-sdk-js/AGENTS.md` from the base
-branch. It lists SDK invariants. Report a change that breaks one of them as a
+rules. Also read the root `AGENTS.md` from the base branch. It lists the rules
+for coding agents and the replay rules for examples. Also read
+`packages/aws-durable-execution-sdk-js/AGENTS.md` from the base branch. It lists SDK invariants. Report a change that breaks one of them as a
 finding of the highest severity, even if its tests pass. Report a change that
 edits, skips, or deletes a case in a contract test named there, without a new
 ADR under `docs/adr/` that supersedes the rule, as a finding of the highest
