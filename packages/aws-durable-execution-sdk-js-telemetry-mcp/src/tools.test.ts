@@ -468,6 +468,38 @@ describe("list_executions returns each execution's name", () => {
     expect(q).toContain(
       'parse message "\\"executionName\\":\\"*\\"" as executionName',
     );
-    expect(q).toContain("| fields @timestamp, executionArn, executionName,");
+    expect(q).toContain("| display @timestamp, executionArn, executionName,");
+  });
+});
+
+describe("list_executions on lambda-log-exporter is a query Logs Insights accepts", () => {
+  // Logs Insights rejects `fields <name>` after `parse ... as <name>` with
+  // MalformedQueryException "Ephemeral field is already defined" (#1143).
+  // Measured with StartQuery on a real log group: `parse @message "a*b" as q1
+  // | fields q1` is rejected, and the same query with `display q1` is accepted.
+  it.each([
+    [{}],
+    [
+      {
+        status: "FAILED",
+        functionName: "orders",
+        since: "2025-01-01T00:00:00Z",
+      },
+    ],
+  ])("lists no parsed field with `fields` (%p)", (params) => {
+    const stages = buildListExecutionsLogsQuery(
+      cfgFor("lambda-log-exporter"),
+      params,
+    )
+      .split(" | ")
+      .map((s) => s.trim());
+    const parsed = stages.flatMap((s) =>
+      s.startsWith("parse ") ? [s.slice(s.lastIndexOf(" as ") + 4)] : [],
+    );
+    expect(parsed).toContain("executionArn");
+    for (const stage of stages.filter((s) => s.startsWith("fields "))) {
+      const listed = stage.slice("fields ".length).split(/,\s*/);
+      expect(listed.filter((f) => parsed.includes(f))).toEqual([]);
+    }
   });
 });
