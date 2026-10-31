@@ -75,8 +75,6 @@ jobs:
         run: npm ci
       - name: Build project
         run: npm run build
-      - name: Verify every package ships the files its package.json declares
-        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -85,6 +83,23 @@ jobs:
             packages/**/dist*/*
             package.json
             package-lock.json
+
+  # Split out of `build`: it takes ~80s and builds on its own, so inside `build` it sat on the
+  # critical path of every job that needs the build artifacts (unit, integration, capacity).
+  verify-declared-files:
+    needs: lint-commits
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify every package ships the files its package.json declares
+        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
 
   # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #
