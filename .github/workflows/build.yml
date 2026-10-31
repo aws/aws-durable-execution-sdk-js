@@ -30,6 +30,10 @@ jobs:
   lint-commits:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
     #
+    # Nothing `needs` this job. It is a required check, so a bad title still blocks
+    # the merge, and waiting on it cost every other job ~45s (21s run plus a
+    # second runner start).
+    #
     # Jobs run on the CodeBuild-hosted runner in the JS testing account (EC2
     # compute, Ubuntu standard image; the label must match the CodeBuild project
     # name). Pull requests from forks are routed to GitHub-hosted runners. This
@@ -62,7 +66,6 @@ jobs:
     # mergeable, and the tests never ran. Blocking is the ruleset's job -- `lint / lint`
     # is a required check -- and keeping these parallel means a PR with a lint error
     # still gets real test results in the same run.
-    needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -87,7 +90,6 @@ jobs:
   # Split out of `build`: it takes ~80s and builds on its own, so inside `build` it sat on the
   # critical path of every job that needs the build artifacts (unit, integration, capacity).
   verify-declared-files:
-    needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -113,7 +115,6 @@ jobs:
   # workspaces glob, so the root install never covers it, and it is the one place
   # the renderer is typechecked at all.
   telemetry-hosts:
-    needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -153,7 +154,6 @@ jobs:
   # config. It needs no build artifacts, so like telemetry-hosts it runs off
   # lint-commits.
   eslint-plugin-compat:
-    needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     strategy:
       fail-fast: false
@@ -188,7 +188,6 @@ jobs:
   # Runs off lint-commits rather than build: Biome needs only the sources, so
   # linting does not have to wait for compilation and reports failures earlier.
   lint:
-    needs: lint-commits
     uses: "./.github/workflows/lint.yml"
 
   unit-tests:
