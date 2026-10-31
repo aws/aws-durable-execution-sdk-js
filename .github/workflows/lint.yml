@@ -48,7 +48,7 @@ jobs:
         # id so the steps below can require THIS step specifically, rather than
         # "nothing failed" -- see the note on the first conditional step.
         id: install
-        run: npm ci
+        uses: ./.github/actions/npm-ci
 
       # @biomejs/biome is pinned exact in seven package.json files. A skew between
       # the root pin and a package's would format the same file two ways with no

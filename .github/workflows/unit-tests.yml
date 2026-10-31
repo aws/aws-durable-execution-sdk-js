@@ -25,7 +25,16 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  test:
+  # The examples package takes about as long as every other package together
+  # (~155s), so it gets its own runner. Running it beside the others on one
+  # 4-CPU runner was tried: the two Jest runs starved each other and tests hit
+  # their 5s timeouts.
+  shard:
+    name: test (${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [examples, rest]
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -40,6 +49,37 @@ jobs:
           name: built-artifacts
           path: .
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/npm-ci
       - name: Run tests
-        run: npm run test
+        # The root `test` script stays the one list of packages; this only
+        # splits it, and fails if the examples entry is not in it.
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          cmds=$(node -e '
+            const examples = "npm run test -w packages/aws-durable-execution-sdk-js-examples";
+            const all = require("./package.json").scripts.test.split(" && ");
+            if (!all.includes(examples)) {
+              throw new Error("examples tests not found in the root test script");
+            }
+            const shard = process.env.SHARD === "examples"
+              ? [examples]
+              : all.filter((c) => c !== examples);
+            console.log(shard.join(" && "));
+          ')
+          bash -e -c "$cmds"
+
+  # Keeps the `test` check name that branch rules require. `always()` so a
+  # failed shard fails this job instead of skipping it, since a skipped
+  # required check counts as passing.
+  test:
+    needs: shard
+    if: always()
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    steps:
+      - name: Check every shard passed
+        env:
+          RESULT: ${{ needs.shard.result }}
+        run: |
+          echo "Shards: $RESULT"
+          [ "$RESULT" = "success" ]
