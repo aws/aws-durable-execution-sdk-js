@@ -42,4 +42,34 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/npm-ci
       - name: Run tests
-        run: npm run test
+        # The examples package takes about as long as every other package
+        # together (~155s, mostly real waits rather than CPU), so it runs beside
+        # the rest instead of after them. The root `test` script stays the one
+        # list of packages; this only splits it. One job, so the required check
+        # names do not change.
+        run: |
+          examples=packages/aws-durable-execution-sdk-js-examples
+          rest=$(node -e '
+            const cmds = require("./package.json").scripts.test.split(" && ");
+            const rest = cmds.filter((c) => c !== `npm run test -w ${process.argv[1]}`);
+            if (rest.length !== cmds.length - 1) {
+              throw new Error("examples tests not found in the root test script");
+            }
+            console.log(rest.join(" && "));
+          ' "$examples")
+
+          npm run test -w "$examples" > examples-test.log 2>&1 &
+          examples_pid=$!
+
+          rest_status=0
+          bash -c "$rest" || rest_status=$?
+          examples_status=0
+          wait "$examples_pid" || examples_status=$?
+
+          echo "::group::Examples tests (exit $examples_status)"
+          cat examples-test.log
+          echo "::endgroup::"
+          if [ "$examples_status" -ne 0 ]; then
+            echo "::error::Examples tests failed; see the 'Examples tests' group above"
+          fi
+          [ "$rest_status" -eq 0 ] && [ "$examples_status" -eq 0 ]
