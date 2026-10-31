@@ -40,6 +40,6 @@ jobs:
           name: built-artifacts
           path: .
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/npm-ci
       - name: Run tests
         run: npm run test

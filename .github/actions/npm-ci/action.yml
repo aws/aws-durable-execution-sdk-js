@@ -1,0 +1,24 @@
+name: npm ci with cached node_modules
+description: >-
+  Restores node_modules (root and workspaces) keyed on the lockfile and Node version, and runs
+  `npm ci` only on a cache miss. Run after actions/checkout and actions/setup-node.
+
+runs:
+  using: composite
+  steps:
+    - name: Get Node version
+      id: node
+      shell: bash
+      run: echo "version=$(node --version)" >> "$GITHUB_OUTPUT"
+    - name: Restore node_modules
+      id: cache
+      uses: actions/cache@v6.1.0
+      with:
+        path: |
+          node_modules
+          packages/*/node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.version }}-${{ hashFiles('package-lock.json') }}
+    - name: npm ci
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci

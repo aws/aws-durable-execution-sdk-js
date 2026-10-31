@@ -72,7 +72,7 @@ jobs:
           node-version: 22.x
           cache: "npm"
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/npm-ci
       - name: Build project
         run: npm run build
       - name: Upload build artifacts
@@ -97,7 +97,7 @@ jobs:
           node-version: 22.x
           cache: "npm"
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/npm-ci
       - name: Verify every package ships the files its package.json declares
         run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
 
