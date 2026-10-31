@@ -9,6 +9,8 @@ import { ArgumentParser } from "argparse";
 import {
   LambdaClient,
   DeleteFunctionCommand,
+  UpdateFunctionCodeCommand,
+  waitUntilFunctionUpdatedV2,
   ResourceNotFoundException as ResourceNotFoundExceptionLambda,
 } from "@aws-sdk/client-lambda";
 import {
@@ -101,6 +103,9 @@ const CONFIG = {
 };
 
 const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
+
+const STABLE_STACK_STATUSES = new Set(["CREATE_COMPLETE", "UPDATE_COMPLETE"]);
+const CODE_UPDATE_CONCURRENCY = 10;
 
 function shellQuote(/** @type {string} */ value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
@@ -476,7 +481,14 @@ class IntegrationTestRunner {
 
     this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
 
-    if (!this.samStackExists()) {
+    // Every function shares one CodeUri, so a run that only changes code would
+    // otherwise send ~130 function updates through a CloudFormation changeset
+    // (~3 min). When the packaged template matches the one the stack holds in
+    // everything but the code location, push the new zip straight to the
+    // functions instead.
+    const stack = this.describeSamStack();
+
+    if (!stack) {
       log.info(
         `SAM stack ${stackName} does not exist; deleting legacy Lambda deployments before first stack create`,
       );
@@ -484,9 +496,45 @@ class IntegrationTestRunner {
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
 
+    const packagedTemplatePath = join(
+      samDir,
+      `integration-template-${this.getRuntimeId()}.packaged.yml`,
+    );
+    const packageCommand = [
+      "sam package",
+      `--template-file ${shellQuote(templatePath)}`,
+      `--output-template-file ${shellQuote(packagedTemplatePath)}`,
+      `--region ${shellQuote(CONFIG.AWS_REGION)}`,
+      "--resolve-s3",
+    ].join(" ");
+    log.info("Packaging function code with SAM...");
+    await this.execCommandWithRetry(packageCommand, {
+      cwd: examplesDir,
+      silent: true,
+    });
+    const code = this.getPackagedCodeLocation(packagedTemplatePath);
+
+    if (
+      stack &&
+      STABLE_STACK_STATUSES.has(stack.StackStatus) &&
+      this.isOnlyCodeChanged(packagedTemplatePath)
+    ) {
+      log.info(
+        `Template unchanged since last deploy of ${stackName}; updating function code directly`,
+      );
+      await this.updateStackFunctionCode(code);
+      log.success(`Updated function code in SAM stack: ${stackName}`);
+      return;
+    }
+    if (stack) {
+      log.info(
+        `Template or stack status (${stack.StackStatus}) changed; deploying through CloudFormation`,
+      );
+    }
+
     const deployCommand = [
       "sam deploy",
-      `--template-file ${shellQuote(templatePath)}`,
+      `--template-file ${shellQuote(packagedTemplatePath)}`,
       `--stack-name ${shellQuote(stackName)}`,
       `--region ${shellQuote(CONFIG.AWS_REGION)}`,
       "--resolve-s3",
@@ -497,7 +545,113 @@ class IntegrationTestRunner {
 
     log.info(`Deploying SAM stack: ${stackName}`);
     await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
+
+    // A direct update leaves CloudFormation's recorded code behind the code
+    // that is live. If this zip matches the recorded one, CloudFormation saw
+    // no code change and left the live code as it was, so push it here too.
+    if (stack) {
+      await this.updateStackFunctionCode(code);
+    }
     log.success(`Deployed SAM stack: ${stackName}`);
+  }
+
+  /** @returns {any | undefined} the stack, or undefined if it does not exist */
+  describeSamStack() {
+    try {
+      const { output } = this.execCommand(
+        `aws cloudformation describe-stacks --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --output json`,
+        { silent: true },
+      );
+      return JSON.parse(String(output)).Stacks?.[0];
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * True when the stack's deployed template equals this packaged template
+   * once the code locations are masked out.
+   * @param {string} packagedTemplatePath
+   */
+  isOnlyCodeChanged(packagedTemplatePath) {
+    const maskCode = (/** @type {string} */ template) =>
+      template.replace(/CodeUri:\s*\S+/g, "CodeUri: <code>").trim();
+    try {
+      const { output } = this.execCommand(
+        `aws cloudformation get-template --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --template-stage Original --query TemplateBody --output text`,
+        { silent: true },
+      );
+      return (
+        maskCode(String(output)) ===
+        maskCode(readFileSync(packagedTemplatePath, "utf8"))
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * @param {string} packagedTemplatePath
+   * @returns {{ S3Bucket: string, S3Key: string }}
+   */
+  getPackagedCodeLocation(packagedTemplatePath) {
+    const uris = new Set(
+      [
+        ...readFileSync(packagedTemplatePath, "utf8").matchAll(
+          /CodeUri:\s*['"]?(s3:\/\/[^\s'"]+)/g,
+        ),
+      ].map((match) => match[1]),
+    );
+    if (uris.size !== 1) {
+      throw new Error(
+        `Expected every function to share one packaged CodeUri, found ${uris.size}`,
+      );
+    }
+    const [uri] = uris;
+    const match = /^s3:\/\/([^/]+)\/(.+)$/.exec(uri);
+    if (!match) {
+      throw new Error(`Unexpected packaged CodeUri: ${uri}`);
+    }
+    return { S3Bucket: match[1], S3Key: match[2] };
+  }
+
+  /**
+   * Point every Lambda function in the stack at the given code and wait for
+   * the updates to finish.
+   * @param {{ S3Bucket: string, S3Key: string }} code
+   */
+  async updateStackFunctionCode(code) {
+    const { output } = this.execCommand(
+      `aws cloudformation list-stack-resources --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output json`,
+      { silent: true },
+    );
+    /** @type {string[]} */
+    const functionNames = JSON.parse(String(output));
+
+    // The default endpoint, not LAMBDA_ENDPOINT: these are the functions
+    // CloudFormation manages, so update them where it does.
+    const client = new LambdaClient({
+      region: CONFIG.AWS_REGION,
+      maxAttempts: 10,
+    });
+
+    let next = 0;
+    const worker = async () => {
+      while (next < functionNames.length) {
+        const FunctionName = functionNames[next++];
+        await client.send(
+          new UpdateFunctionCodeCommand({ FunctionName, ...code }),
+        );
+        await waitUntilFunctionUpdatedV2(
+          { client, maxWaitTime: 300, minDelay: 1, maxDelay: 5 },
+          { FunctionName },
+        );
+      }
+    };
+    await Promise.all(
+      Array.from({ length: CODE_UPDATE_CONCURRENCY }, () => worker()),
+    );
+    log.info(`Updated code for ${functionNames.length} functions`);
   }
 
   /**
