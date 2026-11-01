@@ -48,7 +48,7 @@ async function lint(code: string, overrideConfig: unknown[]) {
 
 /** Breaks all four recommended rules. */
 const VIOLATING = `
-export const handler = async (event: any, context: any) => {
+export const handler = async (event: any, context: DurableContext) => {
   const startedAt = Date.now();
   let counter = 0;
   await context.step("zähler", async () => {

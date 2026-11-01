@@ -351,21 +351,35 @@ Reports an operation name or `subType` that the durable execution service reject
 The service checks both when the operation's first checkpoint arrives, and fails the
 execution if a value breaks its limits:
 
-| Value     | Length      | Characters                       |
-| --------- | ----------- | -------------------------------- |
-| Name      | at most 256 | printable ASCII (0x20 to 0x7E)   |
-| `subType` | at most 32  | `a-z`, `A-Z`, `0-9`, `-` and `_` |
+| Value     | Length     | Characters                       |
+| --------- | ---------- | -------------------------------- |
+| Name      | 1 to 256   | printable ASCII (0x20 to 0x7E)   |
+| `subType` | at most 32 | `a-z`, `A-Z`, `0-9`, `-` and `_` |
 
 A step with the default `AT_LEAST_ONCE_PER_RETRY` semantics does not wait for its
 first checkpoint, so its function runs once before the execution fails. This rule
 reports the value before you deploy.
 
-The rule checks the first argument of `step`, `runInChildContext`, `wait`,
-`waitForCondition`, `createCallback`, `waitForCallback`, `map` and `parallel` when it
-is a string, and the `subType` option of `step`, `runInChildContext` and
-`createCallback`. It checks string literals and the fixed parts of template literals.
-A value the code builds at run time is not checked. `invoke` is not checked,
-because its first string can be the function name.
+The rule checks these values when they are string literals or template literals:
+
+- the name: the first argument of `step`, `runInChildContext`, `wait`,
+  `waitForCondition`, `createCallback`, `waitForCallback`, `map`, `parallel` and the
+  `context.promise` combinators (`all`, `allSettled`, `any`, `race`);
+- the name of `invoke(name, funcId, ...)`, when the second argument is a string,
+  which is how the SDK tells the two forms apart;
+- the `name` of a `parallel` branch written as `{ name, func }`;
+- the `subType` option of `step`, `runInChildContext` and `createCallback`.
+
+A template literal with expressions is checked only for its fixed characters. A
+value the code builds at run time, such as a variable, `itemNamer`, or a config
+object held in a variable, is not checked. The service still rejects it at run time.
+
+The rule checks only calls on a durable context, so methods with the same names on
+other objects, such as Playwright's `test.step`, are not reported. A durable context
+is a parameter typed `DurableContext`, the second parameter of a `withDurableExecution`
+handler, or the context a child-context function receives. A context the rule cannot
+recognize, for example an untyped parameter of a function outside
+`withDurableExecution`, is not checked.
 
 #### ❌ Incorrect
 

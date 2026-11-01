@@ -34,9 +34,9 @@ const NAMESPACE = "@aws/durable-functions";
 
 /**
  * The recommended rules report code that breaks replay, and code the service
- * always rejects (`valid-operation-identifiers`). Code the latter reports
- * already fails at run time, so turning it on cannot fail the lint of a
- * project that works.
+ * rejects (`valid-operation-identifiers`). The latter can make the lint of an
+ * existing project fail after an upgrade, but only on a call that fails the
+ * execution whenever it runs, so it is worth the break.
  * `require-durable-operation-in-child-context` is left out, because the code it
  * reports still replays correctly. Adding it here would also make the lint of
  * existing projects fail after an upgrade.

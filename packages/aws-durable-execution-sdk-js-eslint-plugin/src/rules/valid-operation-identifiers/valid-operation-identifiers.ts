@@ -1,4 +1,9 @@
 import { Rule } from "eslint";
+import {
+  createDurableContextTracker,
+  methodName,
+  unwrap,
+} from "../../utils/durable-context";
 
 /**
  * The service's limits for an operation's name and subtype. The checkpoint API
@@ -6,6 +11,10 @@ import { Rule } from "eslint";
  * the value as given. A step with the default AT_LEAST_ONCE_PER_RETRY
  * semantics does not wait for its START checkpoint, so its function runs
  * before the rejection arrives. This rule reports the value before deploy.
+ *
+ * The rule checks only calls on a durable context, so a method with the same
+ * name on another object, such as Playwright's `test.step`, is not reported.
+ * See `createDurableContextTracker` for how a durable context is recognized.
  */
 const NAME_MAX_LENGTH = 256;
 const SUBTYPE_MAX_LENGTH = 32;
@@ -26,7 +35,7 @@ function isSubTypeChar(code: number): boolean {
   );
 }
 
-/** Operations whose first argument is the name when it is a string. */
+/** Context methods whose first argument is the name when it is a string. */
 const NAMED_OPERATIONS = new Set([
   "step",
   "runInChildContext",
@@ -38,7 +47,10 @@ const NAMED_OPERATIONS = new Set([
   "parallel",
 ]);
 
-/** Operations whose config object accepts `subType`. */
+/** `context.promise` methods whose first argument is the name. */
+const PROMISE_COMBINATORS = new Set(["all", "allSettled", "any", "race"]);
+
+/** Context methods whose config object accepts `subType`. */
 const SUBTYPE_OPERATIONS = new Set([
   "step",
   "runInChildContext",
@@ -51,13 +63,14 @@ const SUBTYPE_OPERATIONS = new Set([
  * parts are known, not the length.
  */
 function staticText(node: any): { text: string; complete: boolean } | null {
-  if (node?.type === "Literal" && typeof node.value === "string") {
-    return { text: node.value, complete: true };
+  const target = unwrap(node);
+  if (target?.type === "Literal" && typeof target.value === "string") {
+    return { text: target.value, complete: true };
   }
-  if (node?.type === "TemplateLiteral") {
+  if (target?.type === "TemplateLiteral") {
     return {
-      text: node.quasis.map((q: any) => q.value.cooked ?? "").join(""),
-      complete: node.expressions.length === 0,
+      text: target.quasis.map((q: any) => q.value.cooked ?? "").join(""),
+      complete: target.expressions.length === 0,
     };
   }
   return null;
@@ -79,6 +92,20 @@ function describeChar(char: string): string {
   return code >= 0x20 && code !== 0x7f ? `"${char}" (${hex})` : hex;
 }
 
+/** Returns the value of a non-computed `key` property of an object literal. */
+function propertyValues(object: any, key: string): any[] {
+  const values: any[] = [];
+  for (const prop of object.properties) {
+    if (prop.type !== "Property" || prop.computed || prop.kind !== "init") {
+      continue;
+    }
+    const name =
+      prop.key.type === "Identifier" ? prop.key.name : prop.key.value;
+    if (name === key) values.push(prop.value);
+  }
+  return values;
+}
+
 export const validOperationIdentifiers: Rule.RuleModule = {
   meta: {
     type: "problem",
@@ -88,6 +115,8 @@ export const validOperationIdentifiers: Rule.RuleModule = {
       recommended: true,
     },
     messages: {
+      nameEmpty:
+        "Operation name is empty. The service requires at least 1 character and fails the execution. Omit the name instead.",
       invalidNameChar:
         "Operation name contains {{char}}. The service accepts only printable ASCII (0x20 to 0x7E) and fails the execution.",
       nameTooLong:
@@ -100,11 +129,21 @@ export const validOperationIdentifiers: Rule.RuleModule = {
     schema: [],
   },
   create(context) {
+    // See no-non-deterministic-outside-step for why both forms are read.
+    const sourceCode: any =
+      (context as any).sourceCode ?? (context as any).getSourceCode?.();
+    const tracker = createDurableContextTracker(sourceCode);
+
+    /** Member calls that may be durable operations, checked at the end. */
+    const calls: any[] = [];
+
     function checkName(node: any) {
       const value = staticText(node);
-      // An empty name is not reported. This rule only covers the character
-      // set and the maximum length.
-      if (!value || value.text === "") return;
+      if (!value) return;
+      if (value.complete && value.text === "") {
+        context.report({ node, messageId: "nameEmpty" });
+        return;
+      }
       const bad = firstBadChar(value.text, isNameChar);
       if (bad) {
         context.report({
@@ -141,36 +180,72 @@ export const validOperationIdentifiers: Rule.RuleModule = {
       }
     }
 
+    function checkContextCall(node: any, operation: string) {
+      const args = node.arguments;
+
+      if (NAMED_OPERATIONS.has(operation) && args.length > 0) {
+        checkName(args[0]);
+      }
+
+      // invoke(name, funcId, ...) or invoke(funcId, input?, ...). The SDK
+      // reads the first argument as the name only when the second is a
+      // string, so the rule does the same.
+      if (operation === "invoke" && staticText(args[1])) {
+        checkName(args[0]);
+      }
+
+      // A named parallel branch, `{ name, func }`, names its child context.
+      if (operation === "parallel") {
+        const branches = [unwrap(args[0]), unwrap(args[1])].find(
+          (arg) => arg?.type === "ArrayExpression",
+        );
+        for (const element of branches?.elements ?? []) {
+          const branch = unwrap(element);
+          if (branch?.type !== "ObjectExpression") continue;
+          for (const name of propertyValues(branch, "name")) checkName(name);
+        }
+      }
+
+      if (SUBTYPE_OPERATIONS.has(operation)) {
+        for (const arg of args) {
+          const config = unwrap(arg);
+          if (config?.type !== "ObjectExpression") continue;
+          for (const subType of propertyValues(config, "subType")) {
+            checkSubType(subType);
+          }
+        }
+      }
+    }
+
     return {
       CallExpression(node: any) {
-        const callee = node.callee;
-        if (
-          callee?.type !== "MemberExpression" ||
-          callee.computed ||
-          callee.property?.type !== "Identifier"
-        ) {
-          return;
-        }
-        const operation = callee.property.name;
+        tracker.visitCall(node);
+        if (methodName(node)) calls.push(node);
+      },
 
-        if (NAMED_OPERATIONS.has(operation) && node.arguments.length > 0) {
-          checkName(node.arguments[0]);
-        }
+      "Program:exit"() {
+        if (calls.length === 0) return;
+        tracker.analyze();
 
-        if (SUBTYPE_OPERATIONS.has(operation)) {
-          for (const arg of node.arguments) {
-            if (arg.type !== "ObjectExpression") continue;
-            for (const prop of arg.properties) {
-              if (
-                prop.type === "Property" &&
-                !prop.computed &&
-                ((prop.key.type === "Identifier" &&
-                  prop.key.name === "subType") ||
-                  (prop.key.type === "Literal" && prop.key.value === "subType"))
-              ) {
-                checkSubType(prop.value);
-              }
-            }
+        for (const node of calls) {
+          const operation = methodName(node)!;
+          const receiver = unwrap(node.callee.object);
+
+          if (tracker.isDurableContext(receiver)) {
+            checkContextCall(node, operation);
+            continue;
+          }
+
+          // context.promise.all(name, promises) and the other combinators.
+          if (
+            PROMISE_COMBINATORS.has(operation) &&
+            receiver?.type === "MemberExpression" &&
+            !receiver.computed &&
+            receiver.property?.name === "promise" &&
+            tracker.isDurableContext(receiver.object) &&
+            node.arguments.length > 0
+          ) {
+            checkName(node.arguments[0]);
           }
         }
       },

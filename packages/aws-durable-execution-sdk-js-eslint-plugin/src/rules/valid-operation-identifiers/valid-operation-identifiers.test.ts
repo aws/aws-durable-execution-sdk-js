@@ -6,6 +6,7 @@ const ruleTester = new RuleTester({
   languageOptions: { parser: typescriptParser },
 });
 
+/** A handler whose `context` parameter is typed as a durable context. */
 const wrap = (body: string) => `
   async function handler(event: any, context: DurableContext) {
     ${body}
@@ -18,6 +19,7 @@ describe("valid-operation-identifiers", () => {
       // Printable ASCII names, including spaces and punctuation
       wrap(`await context.step("charge card #1 (retry ok)", async () => 1);`),
       wrap(`await context.wait("pause", { seconds: 1 });`),
+      wrap(`await context.wait({ seconds: 1 });`),
       wrap(`await context.map("items", event.items, async (ctx, i) => i);`),
       // 256 characters is the limit
       wrap(`await context.step("${"a".repeat(256)}", async () => 1);`),
@@ -26,8 +28,15 @@ describe("valid-operation-identifiers", () => {
       // A name the code builds at run time is not checked
       wrap(`await context.step(event.name, async () => 1);`),
       wrap("await context.step(`order-${event.id}`, async () => 1);"),
-      // invoke's first string can be a function name, so it is not checked
+      // A template literal with an expression has no known length
+      wrap(
+        "await context.step(`${event.id}" +
+          "a".repeat(300) +
+          "`, async () => 1);",
+      ),
+      // invoke(funcId, input): the first string is the function, not a name
       wrap(`await context.invoke("ü-function", event);`),
+      wrap(`await context.invoke("ü-function");`),
       // Valid subtypes
       wrap(
         `await context.step("s", async () => 1, { subType: "Payment_v2-a" });`,
@@ -45,9 +54,18 @@ describe("valid-operation-identifiers", () => {
       wrap(
         `await context.waitForCallback("w", async () => {}, { subType: "a b" });`,
       ),
-      // Calls that are not durable operations
-      wrap(`foo("ü");`),
-      wrap(`obj["step"]("ü", async () => 1);`),
+      // Methods with the same names on other objects
+      `test.step("Log in → ok", async () => {});`,
+      wrap(`await page.wait("ü");`),
+      wrap(`event.items.map("é", [], () => 1);`),
+      wrap(`store.step("a", () => 1, { subType: "a b" });`),
+      wrap(`other.promise.all("ü", []);`),
+      `foo("ü");`,
+      wrap(`context["step"]("ü", async () => 1);`),
+      // An untyped context outside withDurableExecution is not recognized
+      `async function handler(event: any, context: any) {
+        await context.step("ü", async () => 1);
+      }`,
     ],
     invalid: [
       {
@@ -70,8 +88,25 @@ describe("valid-operation-identifiers", () => {
         errors: [{ messageId: "invalidNameChar", data: { char: "U+0009" } }],
       },
       {
+        // An escape is checked on the value it produces
+        code: wrap(`await context.step("caf\\u00e9", async () => 1);`),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
         code: wrap(`await context.step("${"a".repeat(257)}", async () => 1);`),
         errors: [{ messageId: "nameTooLong", data: { length: "257" } }],
+      },
+      {
+        code: wrap(`await context.step("", async () => 1);`),
+        errors: [{ messageId: "nameEmpty" }],
+      },
+      {
+        code: wrap(`await context?.step("ü", async () => 1);`),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
+        code: wrap(`await (context as any).step("ü", async () => 1);`),
+        errors: [{ messageId: "invalidNameChar" }],
       },
       {
         code: wrap(`await context.runInChildContext("😀", async (ctx) => 1);`),
@@ -86,11 +121,48 @@ describe("valid-operation-identifiers", () => {
         errors: [{ messageId: "invalidNameChar" }],
       },
       {
+        // invoke(name, funcId, input)
+        code: wrap(`await context.invoke("ü", "my-function", event);`),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
+        code: wrap(`await context.promise.all("ü", []);`),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
+        code: wrap(`await context.promise.race("", []);`),
+        errors: [{ messageId: "nameEmpty" }],
+      },
+      {
+        // A named parallel branch
+        code: wrap(
+          `await context.parallel([{ name: "zweig-ü", func: async (ctx) => 1 }]);`,
+        ),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
+        // A child context's parameter is a durable context too
+        code: wrap(
+          `await context.runInChildContext(async (ctx) => ctx.step("ü", async () => 1));`,
+        ),
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
+        // The handler passed to withDurableExecution receives a durable context
+        code: `export const handler = withDurableExecution(async (event, ctx) => {
+          await ctx.step("ü", async () => 1);
+        });`,
+        errors: [{ messageId: "invalidNameChar" }],
+      },
+      {
         code: wrap(
           `await context.step("pay", async () => 1, { subType: "pay ment" });`,
         ),
         errors: [
-          { messageId: "invalidSubTypeChar", data: { char: '" " (U+0020)' } },
+          {
+            messageId: "invalidSubTypeChar",
+            data: { char: '" " (U+0020)' },
+          },
         ],
       },
       {
@@ -105,6 +177,12 @@ describe("valid-operation-identifiers", () => {
       },
       {
         code: wrap(`await context.createCallback({ "subType": "ü" });`),
+        errors: [{ messageId: "invalidSubTypeChar" }],
+      },
+      {
+        code: wrap(
+          `await context.step(async () => 1, { ...event.config, subType: "a b" });`,
+        ),
         errors: [{ messageId: "invalidSubTypeChar" }],
       },
       {
