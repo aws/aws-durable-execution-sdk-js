@@ -7,6 +7,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Basic Map",
   description: "Processing arrays with concurrent operations",
+  testedBy: ["map/large-scale", "map/min-successful"],
 };
 
 export const handler = withDurableExecution(

@@ -14,9 +14,6 @@ Examples are organized in two ways:
        basic/
          wait-for-callback.ts
          wait-for-callback.test.ts
-       timeout/
-         wait-for-callback-timeout.ts
-         wait-for-callback-timeout.test.ts
        heartbeat/
          wait-for-callback-heartbeat.ts
          wait-for-callback-heartbeat.test.ts
@@ -83,6 +80,7 @@ export const config: ExampleConfig = {
 
   Both functions are deployed with automatically generated names (the capacity provider version gets a `-CapacityProvider` suffix) and both are tested during integration runs. This ensures your durable function works correctly in both standard Lambda and managed instance environments. If you don't need managed instance testing, simply omit this configuration option.
 - `localOnly`: (Default: false) Run the example's tests with `LocalDurableTestRunner` only. The example is left out of the SAM template, so it is never deployed, and its tests are skipped under `NODE_ENV=integration`. Use it for examples that depend on local-runner features, such as `pauseExecution()` in `src/examples/pause-resume/`.
+- `testedBy`: Paths under `src/examples/` whose tests already cover this example, for example `["map/large-scale", "map/min-successful"]`. Use it for an example kept as a customer sample with no test of its own, and skip steps 3 and 4. The example stays in the published `template.yml` but is left out of the integration deployment. Every tested example is deployed and run in the cloud, so add a test only for behavior no other example covers.
 - `usesMicrovm`: (Default: false) The example runs a job in a Lambda MicroVM, as in `src/examples/microvm/`. The integration test builds the MicroVM image from `microvm-image/` with `scripts/ensure-microvm-image.ts`, and sets `MICROVM_IMAGE_ARN` and `MICROVM_EXECUTION_ROLE_ARN` on the function. A SAM template generated without `--microvm-image-arn` leaves the example out. Pair it with `cloudOnly: true` in `createTests`, because the local runner cannot launch a MicroVM.
   - The function role needs `lambda:RunMicrovm`, `lambda:GetMicrovm`, `lambda:ResumeMicrovm`, `lambda:TerminateMicrovm`, and `lambda:CreateMicrovmAuthToken` on the image, `lambda:PassNetworkConnector` on the Lambda-provided network connectors, and `iam:PassRole` on the MicroVM execution role. The generated `DurableFunctionRole` has none of these. So deploy a MicroVM example with `--lambda-execution-role-arn` and a role that has them. In CI, `TEST_LAMBDA_EXECUTION_ROLE_ARN` is that role.
   - The MicroVM execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function.

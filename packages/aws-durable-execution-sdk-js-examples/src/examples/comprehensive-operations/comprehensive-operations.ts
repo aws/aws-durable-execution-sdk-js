@@ -9,6 +9,12 @@ export const config: ExampleConfig = {
   name: "Comprehensive Operations",
   description:
     "Complex multi-operation example demonstrating all major operations",
+  testedBy: [
+    "step/named",
+    "wait/basic",
+    "map/min-successful",
+    "parallel/heterogeneous",
+  ],
 };
 
 interface ComprehensiveExampleInput {

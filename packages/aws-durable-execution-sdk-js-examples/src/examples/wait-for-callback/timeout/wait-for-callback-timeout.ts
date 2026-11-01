@@ -7,6 +7,10 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Wait for Callback - Timeout",
   description: "Demonstrates waitForCallback timeout scenarios",
+  testedBy: [
+    "wait-for-callback/basic",
+    "wait-for-callback/error-instance-timeout",
+  ],
 };
 
 export const handler = withDurableExecution(

@@ -309,6 +309,8 @@ class IntegrationTestRunner {
     return examplesCatalog.filter(
       (example) =>
         !example.localOnly &&
+        // Covered by other examples' tests and has none of its own.
+        !example.testedBy &&
         !(
           example.excludeRuntimes &&
           example.excludeRuntimes.includes(this.runtime)
