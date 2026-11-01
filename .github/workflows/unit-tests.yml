@@ -95,7 +95,9 @@ jobs:
   test:
     needs: shard
     if: always()
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    # A GitHub-hosted runner: this job does 1s of work with no checkout and no
+    # secrets, and a CodeBuild runner took ~20s to start for it.
+    runs-on: ubuntu-latest
     steps:
       - name: Check every shard passed
         env:
