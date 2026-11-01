@@ -9,6 +9,7 @@ export const config: ExampleConfig = {
   name: "Error Determinism",
   description:
     "Demonstrates deterministic error handling behavior between initial execution and replay",
+  testedBy: ["step/step-error-determinism"],
 };
 
 class CustomBusinessError extends Error {
