@@ -788,6 +788,13 @@ class IntegrationTestRunner {
       const copy = structuredClone(template);
       for (const resource of Object.values(copy?.Resources ?? {})) {
         if (resource?.Properties) delete resource.Properties.CodeUri;
+        // `sam package` adds Metadata.SamResourceId to every resource.
+        if (resource?.Metadata) {
+          delete resource.Metadata.SamResourceId;
+          if (Object.keys(resource.Metadata).length === 0) {
+            delete resource.Metadata;
+          }
+        }
       }
       return copy;
     };
