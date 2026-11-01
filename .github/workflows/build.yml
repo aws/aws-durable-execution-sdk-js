@@ -48,7 +48,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Check PR title
         run: |
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
@@ -73,7 +72,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Install dependencies
         uses: ./.github/actions/npm-ci
       - name: Build project
@@ -97,7 +95,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Install dependencies
         uses: ./.github/actions/npm-ci
       - name: Verify every package ships the files its package.json declares

@@ -43,7 +43,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Install dependencies
         # id so the steps below can require THIS step specifically, rather than
         # "nothing failed" -- see the note on the first conditional step.
