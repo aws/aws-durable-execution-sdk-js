@@ -26,6 +26,7 @@ jobs:
   deploy:
     name: Deploy and test
     permissions:
+      actions: read # Required to read timings saved by earlier runs
       contents: read
       id-token: write # Required for AWS credentials
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
@@ -78,5 +79,26 @@ jobs:
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INTEG_TIMINGS_FILE: ${{ runner.temp }}/jest-integration.json
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}
+
+      # Writes per-file timings to the job summary and flags files that got much
+      # slower than on recent successful runs. Advisory: it never fails the job.
+      - name: Report test timings
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node .github/workflows/scripts/integration-test/timing-report.mjs \
+            "${{ runner.temp }}/jest-integration.json" \
+            "integration-test-timings-${{ inputs.node-version }}"
+
+      # Later runs compare with this.
+      - name: Upload test timings
+        if: always() && hashFiles('integration-timings.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-timings-${{ inputs.node-version }}
+          path: integration-timings.json
+          retention-days: 30

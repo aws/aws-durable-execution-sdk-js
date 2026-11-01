@@ -207,6 +207,7 @@ jobs:
       github.actor != 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository
     permissions:
+      actions: read
       contents: read
       id-token: write
     strategy:
