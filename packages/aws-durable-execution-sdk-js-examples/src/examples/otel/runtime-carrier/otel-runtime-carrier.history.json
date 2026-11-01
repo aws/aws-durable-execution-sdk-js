@@ -41,7 +41,7 @@
     "Name": "resume-with-runtime-carrier",
     "EventTimestamp": "2026-10-02T22:27:26.612Z",
     "WaitStartedDetails": {
-      "Duration": 30,
+      "Duration": 3,
       "ScheduledEndTimestamp": "2026-10-02T22:27:56.612Z"
     }
   },
@@ -64,7 +64,7 @@
     "Name": "resume-with-runtime-carrier",
     "EventTimestamp": "2026-10-02T22:27:56.624Z",
     "WaitSucceededDetails": {
-      "Duration": 30
+      "Duration": 3
     }
   },
   {
