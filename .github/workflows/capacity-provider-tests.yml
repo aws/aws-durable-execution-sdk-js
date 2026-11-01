@@ -23,7 +23,11 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  deploy-capacity-provider:
+  # One job for deploy, test and cleanup. As three jobs, each waited for a new
+  # runner and repeated Node setup, credentials and npm ci (~60s per job), for a
+  # 37s test step and a 1s cleanup step.
+  capacity-provider:
+    name: Deploy, test and clean up
     permissions:
       contents: read
       id-token: write # Required for AWS credentials
@@ -53,7 +57,8 @@ jobs:
           path: .
 
       - name: Install dependencies
-        run: npm ci
+        id: install
+        uses: ./.github/actions/npm-ci
 
       - name: Deploy all capacity provider functions
         id: deploy-capacity-providers
@@ -66,41 +71,6 @@ jobs:
           TEST_CAPACITY_PROVIDER_ARN: ${{ secrets.TEST_CAPACITY_PROVIDER_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --capacity-provider-only --runtime ${{ inputs.node-version }}
 
-  test-capacity-provider:
-    needs: deploy-capacity-provider
-    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
-    name: Test Capacity Provider Functions
-    permissions:
-      contents: read
-      id-token: write # Required for AWS credentials
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: "npm"
-
-      - name: Get AWS Credentials
-        id: credentials
-        if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
-          role-session-name: githubIntegrationTest
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Test all capacity provider functions
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
@@ -109,43 +79,10 @@ jobs:
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --capacity-provider-only --runtime ${{ inputs.node-version }}
 
-  cleanup-capacity-provider:
-    if: always()
-    needs: test-capacity-provider
-    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
-    name: Clean up capacity provider functions
-    permissions:
-      contents: read
-      id-token: write # Required for AWS credentials
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: "npm"
-
-      - name: Get AWS Credentials
-        id: credentials
-        if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
-          role-session-name: githubIntegrationTest
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Install dependencies
-        run: npm ci
-
+      # Runs after a failed deploy or test, and on cancel, like the old
+      # `if: always()` cleanup job. It needs dependencies to run at all.
       - name: Clean up capacity provider functions
+        if: always() && steps.install.outcome == 'success'
         env:
           # Cleanup can outlast a short control-plane throttling burst.
           AWS_MAX_ATTEMPTS: "8"
