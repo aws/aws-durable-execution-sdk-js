@@ -25,18 +25,19 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # Packages are split across runners by measured time (~70s per shard).
+  # Packages are split across runners by measured Jest time (~35-40s per shard).
   # Running two Jest runs on one 4-CPU runner was tried: they starved each
   # other and tests hit their 5s timeouts.
-  #   examples: the examples package
-  #   core:     sdk ~7s, testing ~30s, extras ~28s, microvm-worker ~7s
-  #   rest:     everything else, otel ~53s the largest
+  #   examples: examples ~10s, otel ~29s
+  #   testing:  sdk ~7s, testing ~29s
+  #   extras:   extras ~26s, microvm-worker ~7s
+  #   rest:     everything else
   shard:
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        shard: [examples, core, rest]
+        shard: [examples, testing, extras, rest]
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
@@ -63,10 +64,15 @@ jobs:
           cmds=$(node -e '
             const cmd = (pkg) => `npm run test -w packages/${pkg}`;
             const named = {
-              examples: ["aws-durable-execution-sdk-js-examples"],
-              core: [
+              examples: [
+                "aws-durable-execution-sdk-js-examples",
+                "aws-durable-execution-sdk-js-otel",
+              ],
+              testing: [
                 "aws-durable-execution-sdk-js",
                 "aws-durable-execution-sdk-js-testing",
+              ],
+              extras: [
                 "aws-durable-execution-sdk-js-extras",
                 "aws-durable-execution-sdk-js-microvm-worker",
               ],
