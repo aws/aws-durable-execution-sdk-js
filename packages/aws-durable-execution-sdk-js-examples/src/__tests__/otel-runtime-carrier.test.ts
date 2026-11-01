@@ -26,8 +26,8 @@ describe("runtime carrier example", () => {
     else process.env._X_AMZN_TRACE_ID = previousHeader;
   });
 
-  // Each case waits a real 30s for the durable resume, so the cases run at
-  // the same time (~30s) instead of one after another (~150s).
+  // Each case waits a real 3s for the durable resume, so the cases run at
+  // the same time (~3s) instead of one after another (~15s).
   it.concurrent.each(["absent", "undefined", "null", "empty", "explicit"])(
     "keeps helper and extractor consistent for an %s runtime carrier across resume",
     async (availability) => {
