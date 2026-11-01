@@ -780,6 +780,14 @@ describe("auto-suspend when idle", () => {
         const worker = listen();
         await runHook(worker, IDLE_SECONDS);
         await advance(IDLE_MS);
+        // This client has no explicit credentials or endpoint, so the AWS
+        // SDK resolves its config before the first attempt. That can need
+        // real I/O, which fake time cannot advance. Wait for the attempt on
+        // the real event loop (setImmediate is not faked).
+        for (let i = 0; i < 200 && handler.attempts.length === 0; i++) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          await advance(0);
+        }
         expect(handler.attempts).toEqual([[]]);
 
         // The service suspended the MicroVM. The answer was lost, and after
