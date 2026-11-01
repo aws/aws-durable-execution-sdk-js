@@ -18,9 +18,9 @@ import { ArgumentParser } from "argparse";
 import {
   LambdaClient,
   DeleteFunctionCommand,
-  GetFunctionConfigurationCommand,
   UpdateFunctionCodeCommand,
   waitUntilFunctionUpdatedV2,
+  paginateListFunctions,
   ResourceNotFoundException as ResourceNotFoundExceptionLambda,
 } from "@aws-sdk/client-lambda";
 import {
@@ -726,7 +726,11 @@ class IntegrationTestRunner {
     rmSync(zipPath, { force: true });
     execSync(
       "find . -type f -exec touch -h -d '1980-01-02 00:00:00' {} + && " +
-        `find . -type f | LC_ALL=C sort | zip -X -D -q ${shellQuote(zipPath)} -@`,
+        // examples-catalog.js holds absolute source paths, which differ on every
+        // CI runner, and no handler loads it. Leaving it out keeps the zip the
+        // same for the same code.
+        "find . -type f ! -name 'examples-catalog.js*' | LC_ALL=C sort | " +
+        `zip -X -D -q ${shellQuote(zipPath)} -@`,
       {
         cwd: distDir,
         shell: "/bin/bash",
@@ -864,14 +868,21 @@ class IntegrationTestRunner {
   async findFunctionsWithOtherCode(codeSha256) {
     const functionNames = this.listStackFunctionNames();
     const client = this.getStackLambdaClient();
-    /** @type {string[]} */
-    const outdated = [];
-    await runWithConcurrency(functionNames, async (FunctionName) => {
-      const config = await client.send(
-        new GetFunctionConfigurationCommand({ FunctionName }),
-      );
-      if (config.CodeSha256 !== codeSha256) outdated.push(FunctionName);
-    });
+    // ListFunctions returns CodeSha256 for 50 functions per call. One
+    // GetFunctionConfiguration per function took 15-24s, mostly throttling.
+    /** @type {Map<string, string | undefined>} */
+    const shaByName = new Map();
+    for await (const page of paginateListFunctions(
+      { client },
+      { MaxItems: 50 },
+    )) {
+      for (const fn of page.Functions ?? []) {
+        if (fn.FunctionName) shaByName.set(fn.FunctionName, fn.CodeSha256);
+      }
+    }
+    const outdated = functionNames.filter(
+      (name) => shaByName.get(name) !== codeSha256,
+    );
     log.info(
       `${outdated.length} of ${functionNames.length} functions run other code`,
     );
