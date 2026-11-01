@@ -1,6 +1,6 @@
 // @ts-check
 
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -182,6 +182,53 @@ class IntegrationTestRunner {
 
     const result = execSync(command, execOptions);
     return { output: result };
+  }
+
+  /**
+   * Like execCommand, but does not block, so commands can run side by side.
+   * Each output line starts with `prefix` so parallel logs stay readable.
+   * @param {string} command
+   * @param {Object} options
+   * @param {string} [options.cwd]
+   * @param {Object} [options.env]
+   * @param {string} [options.prefix]
+   * @returns {Promise<void>}
+   */
+  execCommandAsync(command, options = {}) {
+    const prefix = options.prefix ?? "";
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, {
+        shell: true,
+        cwd: options.cwd || CONFIG.PROJECT_ROOT,
+        env: { ...process.env, ...options.env },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      for (const [stream, sink] of /** @type {const} */ ([
+        [child.stdout, process.stdout],
+        [child.stderr, process.stderr],
+      ])) {
+        let pending = "";
+        stream.setEncoding("utf8");
+        stream.on("data", (/** @type {string} */ chunk) => {
+          const lines = (pending + chunk).split("\n");
+          pending = lines.pop() ?? "";
+          for (const line of lines) sink.write(`${prefix}${line}\n`);
+        });
+        stream.on("end", () => {
+          if (pending) sink.write(`${prefix}${pending}\n`);
+        });
+      }
+      child.on("error", reject);
+      child.on("close", (code, signal) => {
+        if (code === 0) resolve();
+        else
+          reject(
+            new Error(
+              `Command failed (${signal ?? `exit ${code}`}): ${command}`,
+            ),
+          );
+      });
+    });
   }
 
   /**
@@ -376,6 +423,10 @@ class IntegrationTestRunner {
       return;
     }
 
+    // Each deploy spends ~90s waiting for Lambda to publish the version, so
+    // the deploys run at the same time. Packaging is quick and stays in order.
+    /** @type {Promise<void>[]} */
+    const deploys = [];
     for (const example of examples) {
       const exampleHandler = example.handler;
 
@@ -387,32 +438,48 @@ class IntegrationTestRunner {
         continue;
       }
 
-      if (capacityProviderOnly && !example.capacityProviderConfig) {
+      if (!example.capacityProviderConfig) {
         continue;
       }
 
-      // Package the function once for both deployments (if needed)
       this.execCommand(`npm run package -- "${handlerFile}"`, {
         cwd: examplesDir,
       });
 
-      if (capacityProviderOnly && example.capacityProviderConfig) {
-        const capacityProviderKey = `${handlerFile}-capacity-provider`;
-        const capacityProviderFunctionName =
-          functionNameMap[capacityProviderKey].functionName;
-        log.info(
-          `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
-        );
+      const capacityProviderKey = `${handlerFile}${CAPACITY_PROVIDER_FUNCTION_SUFFIX}`;
+      const capacityProviderFunctionName =
+        functionNameMap[capacityProviderKey].functionName;
+      log.info(
+        `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
+      );
 
-        const capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
-        this.execCommand(capacityDeployCommand, {
+      const capacityDeployCommand = `npm run deploy -- ${shellQuote(handlerFile)} ${shellQuote(capacityProviderFunctionName)} --runtime ${shellQuote(this.runtime)} --use-capacity-provider`;
+      deploys.push(
+        this.execCommandAsync(capacityDeployCommand, {
           cwd: examplesDir,
           env: this.getLegacyTestSecretEnv(),
-        });
-        log.success(
-          `Deployed capacity provider function: ${capacityProviderFunctionName}`,
-        );
-      }
+          prefix: `[${capacityProviderFunctionName}] `,
+        }).then(() =>
+          log.success(
+            `Deployed capacity provider function: ${capacityProviderFunctionName}`,
+          ),
+        ),
+      );
+    }
+
+    // allSettled so every deploy finishes before the step reports a failure.
+    const failures = (await Promise.allSettled(deploys)).filter(
+      (result) => result.status === "rejected",
+    );
+    if (failures.length > 0) {
+      throw new Error(
+        `${failures.length} capacity provider deploy(s) failed:\n` +
+          failures
+            .map((failure) =>
+              String(/** @type {any} */ (failure).reason?.message ?? failure),
+            )
+            .join("\n"),
+      );
     }
 
     if (this.isGitHubActions) {
