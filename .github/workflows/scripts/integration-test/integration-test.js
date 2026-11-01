@@ -151,6 +151,27 @@ async function runWithConcurrency(items, fn) {
   );
 }
 
+/**
+ * Describes where two parsed templates first differ, for the CI log.
+ * @param {any} a
+ * @param {any} b
+ * @param {string} path
+ * @returns {string}
+ */
+function firstDifference(a, b, path = "") {
+  if (isDeepStrictEqual(a, b)) return "";
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (!isDeepStrictEqual(a[key], b[key])) {
+        return firstDifference(a[key], b[key], `${path}/${key}`);
+      }
+    }
+  }
+  const show = (/** @type {any} */ value) =>
+    JSON.stringify(value)?.slice(0, 200);
+  return `${path || "/"}: deployed ${show(a)}, local ${show(b)}`;
+}
+
 function shellQuote(/** @type {string} */ value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
@@ -775,10 +796,13 @@ class IntegrationTestRunner {
         `aws cloudformation get-template --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --template-stage Original --query TemplateBody --output text`,
         { silent: true },
       );
-      return isDeepStrictEqual(
-        withoutCode(yaml.load(String(output))),
-        withoutCode(yaml.load(readFileSync(templatePath, "utf8"))),
+      const deployed = withoutCode(yaml.load(String(output)));
+      const local = withoutCode(yaml.load(readFileSync(templatePath, "utf8")));
+      if (isDeepStrictEqual(deployed, local)) return true;
+      log.info(
+        `Deployed template differs at ${firstDifference(deployed, local)}`,
       );
+      return false;
     } catch (error) {
       log.warning(`Could not compare the deployed template: ${error}`);
       return false;
