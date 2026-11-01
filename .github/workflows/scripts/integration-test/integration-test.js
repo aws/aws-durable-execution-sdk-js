@@ -1,7 +1,16 @@
 // @ts-check
 
 import { execSync, spawn } from "child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { createHash } from "crypto";
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
+import { createRequire } from "module";
+import { isDeepStrictEqual } from "util";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ArgumentParser } from "argparse";
@@ -11,6 +20,7 @@ import {
   DeleteFunctionCommand,
   UpdateFunctionCodeCommand,
   waitUntilFunctionUpdatedV2,
+  paginateListFunctions,
   ResourceNotFoundException as ResourceNotFoundExceptionLambda,
 } from "@aws-sdk/client-lambda";
 import {
@@ -106,6 +116,61 @@ const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
 
 const STABLE_STACK_STATUSES = new Set(["CREATE_COMPLETE", "UPDATE_COMPLETE"]);
 const CODE_UPDATE_CONCURRENCY = 10;
+
+/**
+ * Runs `fn` and logs how long it took, so CI logs show where deploy time goes.
+ * @template T
+ * @param {string} label
+ * @param {() => T | Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function timed(label, fn) {
+  const start = Date.now();
+  try {
+    return await fn();
+  } finally {
+    log.info(`[timing] ${label}: ${((Date.now() - start) / 1000).toFixed(1)}s`);
+  }
+}
+
+/**
+ * Runs `fn` on every item, at most CODE_UPDATE_CONCURRENCY at a time.
+ * @template T
+ * @param {T[]} items
+ * @param {(item: T) => Promise<void>} fn
+ */
+async function runWithConcurrency(items, fn) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      await fn(items[next++]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: CODE_UPDATE_CONCURRENCY }, () => worker()),
+  );
+}
+
+/**
+ * Describes where two parsed templates first differ, for the CI log.
+ * @param {any} a
+ * @param {any} b
+ * @param {string} path
+ * @returns {string}
+ */
+function firstDifference(a, b, path = "") {
+  if (isDeepStrictEqual(a, b)) return "";
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (!isDeepStrictEqual(a[key], b[key])) {
+        return firstDifference(a[key], b[key], `${path}/${key}`);
+      }
+    }
+  }
+  const show = (/** @type {any} */ value) =>
+    JSON.stringify(value)?.slice(0, 200);
+  return `${path || "/"}: deployed ${show(a)}, local ${show(b)}`;
+}
 
 function shellQuote(/** @type {string} */ value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
@@ -516,13 +581,25 @@ class IntegrationTestRunner {
     mkdirSync(samDir, { recursive: true });
     writeFileSync(functionNameMapPath, JSON.stringify(functionNameMap), "utf8");
 
-    this.execCommand("npm run generate-examples", { cwd: examplesDir });
+    await timed("generate examples", () =>
+      this.execCommand("npm run generate-examples", { cwd: examplesDir }),
+    );
+
+    // The template names each function after this map, so these are the
+    // stack's functions. Listing them from CloudFormation took ~12s.
+    const functionNames = Object.values(functionNameMap).map(
+      ({ functionName }) => functionName,
+    );
+    const codeZipPath = join(samDir, `code-${this.getRuntimeId()}.zip`);
+    const codeSha256 = await timed("zip function code", () =>
+      this.zipFunctionCode(join(examplesDir, "dist"), codeZipPath),
+    );
 
     const templateArgs = [
       "npm run generate-sam-template --",
       `--runtime ${shellQuote(this.runtime)}`,
       `--aws-region ${shellQuote(CONFIG.AWS_REGION)}`,
-      "--code-uri ../dist",
+      `--code-uri ${shellQuote(codeZipPath)}`,
       `--function-name-map-file ${shellQuote(functionNameMapPath)}`,
       `--output-template-file ${shellQuote(templatePath)}`,
     ];
@@ -541,21 +618,25 @@ class IntegrationTestRunner {
 
     const examples = await this.getIntegrationExamples();
     if (examples.some((example) => example.usesMicrovm)) {
-      const { imageArn, executionRoleArn } = this.ensureMicrovmImage(samDir);
+      const { imageArn, executionRoleArn } = await timed("MicroVM image", () =>
+        this.ensureMicrovmImage(samDir),
+      );
       templateArgs.push(
         `--microvm-image-arn ${shellQuote(imageArn)}`,
         `--microvm-execution-role-arn ${shellQuote(executionRoleArn)}`,
       );
     }
 
-    this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
+    await timed("generate SAM template", () =>
+      this.execCommand(templateArgs.join(" "), { cwd: examplesDir }),
+    );
 
     // Every function shares one CodeUri, so a run that only changes code would
-    // otherwise send ~130 function updates through a CloudFormation changeset
-    // (~3 min). When the packaged template matches the one the stack holds in
-    // everything but the code location, push the new zip straight to the
-    // functions instead.
-    const stack = this.describeSamStack();
+    // otherwise send ~120 function updates through a CloudFormation changeset
+    // (~4 min). When the template matches the one the stack holds in
+    // everything but the code location, update the functions directly, and
+    // only those that do not already run this exact zip.
+    const stack = await timed("describe stack", () => this.describeSamStack());
 
     if (!stack) {
       log.info(
@@ -569,29 +650,33 @@ class IntegrationTestRunner {
       samDir,
       `integration-template-${this.getRuntimeId()}.packaged.yml`,
     );
-    const packageCommand = [
-      "sam package",
-      `--template-file ${shellQuote(templatePath)}`,
-      `--output-template-file ${shellQuote(packagedTemplatePath)}`,
-      `--region ${shellQuote(CONFIG.AWS_REGION)}`,
-      "--resolve-s3",
-    ].join(" ");
-    log.info("Packaging function code with SAM...");
-    await this.execCommandWithRetry(packageCommand, {
-      cwd: examplesDir,
-      silent: true,
-    });
-    const code = this.getPackagedCodeLocation(packagedTemplatePath);
 
     if (
       stack &&
       STABLE_STACK_STATUSES.has(stack.StackStatus) &&
-      this.isOnlyCodeChanged(packagedTemplatePath)
+      (await timed("compare deployed template", () =>
+        this.isOnlyCodeChanged(templatePath),
+      ))
     ) {
-      log.info(
-        `Template unchanged since last deploy of ${stackName}; updating function code directly`,
+      const outdated = await timed("check function code", () =>
+        this.findFunctionsWithOtherCode(functionNames, codeSha256),
       );
-      await this.updateStackFunctionCode(code);
+      if (outdated.length === 0) {
+        log.success(
+          `Every function in ${stackName} already runs this code; skipping upload and update`,
+        );
+        return;
+      }
+      log.info(
+        `Template unchanged since last deploy of ${stackName}; updating code of ${outdated.length} functions directly`,
+      );
+      const code = await this.packageFunctionCode(
+        templatePath,
+        packagedTemplatePath,
+      );
+      await timed("update function code", () =>
+        this.updateFunctionCode(outdated, code),
+      );
       log.success(`Updated function code in SAM stack: ${stackName}`);
       return;
     }
@@ -600,6 +685,11 @@ class IntegrationTestRunner {
         `Template or stack status (${stack.StackStatus}) changed; deploying through CloudFormation`,
       );
     }
+
+    const code = await this.packageFunctionCode(
+      templatePath,
+      packagedTemplatePath,
+    );
 
     const deployCommand = [
       "sam deploy",
@@ -613,15 +703,73 @@ class IntegrationTestRunner {
     ].join(" ");
 
     log.info(`Deploying SAM stack: ${stackName}`);
-    await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
+    await timed("sam deploy", () =>
+      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }),
+    );
 
     // A direct update leaves CloudFormation's recorded code behind the code
     // that is live. If this zip matches the recorded one, CloudFormation saw
     // no code change and left the live code as it was, so push it here too.
     if (stack) {
-      await this.updateStackFunctionCode(code);
+      const outdated = await this.findFunctionsWithOtherCode(
+        functionNames,
+        codeSha256,
+      );
+      if (outdated.length > 0) {
+        await this.updateFunctionCode(outdated, code);
+      }
     }
     log.success(`Deployed SAM stack: ${stackName}`);
+  }
+
+  /**
+   * Zips the function code with sorted entries and fixed timestamps, so the
+   * same files always give the same zip, and so the same CodeSha256 in Lambda.
+   * @param {string} distDir
+   * @param {string} zipPath
+   * @returns {string} the zip's SHA-256, base64, as Lambda reports CodeSha256
+   */
+  zipFunctionCode(distDir, zipPath) {
+    // zip adds to an existing archive, so start from nothing.
+    rmSync(zipPath, { force: true });
+    execSync(
+      "find . -type f -exec touch -h -d '1980-01-02 00:00:00' {} + && " +
+        // examples-catalog.js holds absolute source paths, which differ on every
+        // CI runner, and no handler loads it. Leaving it out keeps the zip the
+        // same for the same code.
+        "find . -type f ! -name 'examples-catalog.js*' | LC_ALL=C sort | " +
+        `zip -X -D -q ${shellQuote(zipPath)} -@`,
+      {
+        cwd: distDir,
+        shell: "/bin/bash",
+        stdio: "pipe",
+        env: { ...process.env, TZ: "UTC" },
+      },
+    );
+    return createHash("sha256").update(readFileSync(zipPath)).digest("base64");
+  }
+
+  /**
+   * Uploads the code zip with `sam package` and returns where it landed.
+   * @param {string} templatePath
+   * @param {string} packagedTemplatePath
+   */
+  async packageFunctionCode(templatePath, packagedTemplatePath) {
+    const packageCommand = [
+      "sam package",
+      `--template-file ${shellQuote(templatePath)}`,
+      `--output-template-file ${shellQuote(packagedTemplatePath)}`,
+      `--region ${shellQuote(CONFIG.AWS_REGION)}`,
+      "--resolve-s3",
+    ].join(" ");
+    log.info("Packaging function code with SAM...");
+    await timed("sam package", () =>
+      this.execCommandWithRetry(packageCommand, {
+        cwd: CONFIG.EXAMPLES_PACKAGE_PATH,
+        silent: true,
+      }),
+    );
+    return this.getPackagedCodeLocation(packagedTemplatePath);
   }
 
   /** @returns {any | undefined} the stack, or undefined if it does not exist */
@@ -638,23 +786,44 @@ class IntegrationTestRunner {
   }
 
   /**
-   * True when the stack's deployed template equals this packaged template
-   * once the code locations are masked out.
-   * @param {string} packagedTemplatePath
+   * True when the stack's deployed template equals this template once every
+   * function's CodeUri is removed. Both are parsed, so YAML formatting from
+   * `sam package` does not matter.
+   * @param {string} templatePath
    */
-  isOnlyCodeChanged(packagedTemplatePath) {
-    const maskCode = (/** @type {string} */ template) =>
-      template.replace(/CodeUri:\s*\S+/g, "CodeUri: <code>").trim();
+  isOnlyCodeChanged(templatePath) {
+    // js-yaml is a dependency of the examples package, so load it from there.
+    const yaml = createRequire(
+      join(CONFIG.EXAMPLES_PACKAGE_PATH, "package.json"),
+    )("js-yaml");
+    const withoutCode = (/** @type {any} */ template) => {
+      const copy = structuredClone(template);
+      for (const resource of Object.values(copy?.Resources ?? {})) {
+        if (resource?.Properties) delete resource.Properties.CodeUri;
+        // `sam package` adds Metadata.SamResourceId to every resource.
+        if (resource?.Metadata) {
+          delete resource.Metadata.SamResourceId;
+          if (Object.keys(resource.Metadata).length === 0) {
+            delete resource.Metadata;
+          }
+        }
+      }
+      return copy;
+    };
     try {
       const { output } = this.execCommand(
         `aws cloudformation get-template --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --template-stage Original --query TemplateBody --output text`,
         { silent: true },
       );
-      return (
-        maskCode(String(output)) ===
-        maskCode(readFileSync(packagedTemplatePath, "utf8"))
+      const deployed = withoutCode(yaml.load(String(output)));
+      const local = withoutCode(yaml.load(readFileSync(templatePath, "utf8")));
+      if (isDeepStrictEqual(deployed, local)) return true;
+      log.info(
+        `Deployed template differs at ${firstDifference(deployed, local)}`,
       );
-    } catch {
+      return false;
+    } catch (error) {
+      log.warning(`Could not compare the deployed template: ${error}`);
       return false;
     }
   }
@@ -684,42 +853,61 @@ class IntegrationTestRunner {
     return { S3Bucket: match[1], S3Key: match[2] };
   }
 
+  // The default endpoint, not LAMBDA_ENDPOINT: these are the functions
+  // CloudFormation manages, so read and update them where it does.
+  getStackLambdaClient() {
+    return new LambdaClient({ region: CONFIG.AWS_REGION, maxAttempts: 10 });
+  }
+
   /**
-   * Point every Lambda function in the stack at the given code and wait for
-   * the updates to finish.
+   * The deployed functions, of those named, whose code differs from the zip.
+   * Names that are not deployed (such as MicroVM examples left out of the
+   * template) are skipped.
+   * @param {string[]} functionNames
+   * @param {string} codeSha256
+   * @returns {Promise<string[]>}
+   */
+  async findFunctionsWithOtherCode(functionNames, codeSha256) {
+    const client = this.getStackLambdaClient();
+    // ListFunctions returns CodeSha256 for 50 functions per call. One
+    // GetFunctionConfiguration per function took 15-24s, mostly throttling.
+    /** @type {Map<string, string | undefined>} */
+    const shaByName = new Map();
+    for await (const page of paginateListFunctions(
+      { client },
+      { MaxItems: 50 },
+    )) {
+      for (const fn of page.Functions ?? []) {
+        if (fn.FunctionName) shaByName.set(fn.FunctionName, fn.CodeSha256);
+      }
+    }
+    const deployed = functionNames.filter((name) => shaByName.has(name));
+    const outdated = deployed.filter(
+      (name) => shaByName.get(name) !== codeSha256,
+    );
+    log.info(
+      `${outdated.length} of ${deployed.length} functions run other code`,
+    );
+    return outdated;
+  }
+
+  /**
+   * Point the given functions at the given code and wait for the updates to
+   * finish.
+   * @param {string[]} functionNames
    * @param {{ S3Bucket: string, S3Key: string }} code
    */
-  async updateStackFunctionCode(code) {
-    const { output } = this.execCommand(
-      `aws cloudformation list-stack-resources --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output json`,
-      { silent: true },
-    );
-    /** @type {string[]} */
-    const functionNames = JSON.parse(String(output));
-
-    // The default endpoint, not LAMBDA_ENDPOINT: these are the functions
-    // CloudFormation manages, so update them where it does.
-    const client = new LambdaClient({
-      region: CONFIG.AWS_REGION,
-      maxAttempts: 10,
+  async updateFunctionCode(functionNames, code) {
+    const client = this.getStackLambdaClient();
+    await runWithConcurrency(functionNames, async (FunctionName) => {
+      await client.send(
+        new UpdateFunctionCodeCommand({ FunctionName, ...code }),
+      );
+      await waitUntilFunctionUpdatedV2(
+        { client, maxWaitTime: 300, minDelay: 1, maxDelay: 5 },
+        { FunctionName },
+      );
     });
-
-    let next = 0;
-    const worker = async () => {
-      while (next < functionNames.length) {
-        const FunctionName = functionNames[next++];
-        await client.send(
-          new UpdateFunctionCodeCommand({ FunctionName, ...code }),
-        );
-        await waitUntilFunctionUpdatedV2(
-          { client, maxWaitTime: 300, minDelay: 1, maxDelay: 5 },
-          { FunctionName },
-        );
-      }
-    };
-    await Promise.all(
-      Array.from({ length: CODE_UPDATE_CONCURRENCY }, () => worker()),
-    );
     log.info(`Updated code for ${functionNames.length} functions`);
   }
 
