@@ -27,7 +27,8 @@ Two rules in this plugin protect this requirement: `no-non-deterministic-outside
 and `no-closure-in-durable-operations`. A third rule, `no-nested-durable-operations`,
 checks how durable operations are nested. A fourth rule,
 `require-durable-operation-in-child-context`, reports a child context that does no
-durable work. It is off by default.
+durable work. It is off by default. A fifth rule, `valid-operation-identifiers`,
+reports an operation name or `subType` that the service rejects.
 
 ## Requirements
 
@@ -149,9 +150,10 @@ deprecated and remains only so that code which reads its `rules` keeps working.
 
 ## Rules
 
-The first three rules are in `flat/recommended` as errors.
-`require-durable-operation-in-child-context` is not, because the code it reports
-still replays correctly. To use it, turn it on as shown in
+All rules except `require-durable-operation-in-child-context` are in
+`flat/recommended` as errors.
+`require-durable-operation-in-child-context` is left out, because the code it
+reports still replays correctly. To use it, turn it on as shown in
 [Choose the rules yourself](#choose-the-rules-yourself).
 
 | Rule                                                                                                             | What it reports                                                           |
@@ -159,6 +161,7 @@ still replays correctly. To use it, turn it on as shown in
 | [`no-nested-durable-operations`](#no-nested-durable-operations)                                                  | A durable operation started on the context of the operation it runs in    |
 | [`no-closure-in-durable-operations`](#no-closure-in-durable-operations)                                          | A variable declared outside a step that the step changes                  |
 | [`no-non-deterministic-outside-step`](#no-non-deterministic-outside-step)                                        | Non-deterministic code outside a step, such as the time and random values |
+| [`valid-operation-identifiers`](#valid-operation-identifiers)                                                    | An operation name or `subType` the service rejects                        |
 | [`require-durable-operation-in-child-context`](#require-durable-operation-in-child-context) (not in recommended) | A child context whose function calls no durable operation on its context  |
 
 ### `no-nested-durable-operations`
@@ -342,6 +345,60 @@ const handler = withDurableExecution(
 );
 ```
 
+### `valid-operation-identifiers`
+
+Reports an operation name or `subType` that the durable execution service rejects.
+The service checks both when the operation's first checkpoint arrives, and fails the
+execution if a value breaks its limits:
+
+| Value     | Length     | Characters                       |
+| --------- | ---------- | -------------------------------- |
+| Name      | 1 to 256   | printable ASCII (0x20 to 0x7E)   |
+| `subType` | at most 32 | `a-z`, `A-Z`, `0-9`, `-` and `_` |
+
+A step with the default `AT_LEAST_ONCE_PER_RETRY` semantics does not wait for its
+first checkpoint, so its function runs once before the execution fails. This rule
+reports the value before you deploy.
+
+The rule checks these values when they are string literals or template literals:
+
+- the name: the first argument of `step`, `runInChildContext`, `wait`,
+  `waitForCondition`, `createCallback`, `waitForCallback`, `map`, `parallel` and the
+  `context.promise` combinators (`all`, `allSettled`, `any`, `race`);
+- the name of `invoke(name, funcId, ...)`, when the second argument is a string,
+  which is how the SDK tells the two forms apart;
+- the `name` of a `parallel` branch written as `{ name, func }`;
+- the `subType` option of `step`, `runInChildContext` and `createCallback`.
+
+A template literal with expressions is checked only for its fixed characters. A
+value the code builds at run time, such as a variable, `itemNamer`, or a config
+object held in a variable, is not checked. The service still rejects it at run time.
+
+The rule checks only calls on a durable context, so methods with the same names on
+other objects, such as Playwright's `test.step`, are not reported. A durable context
+is a parameter typed `DurableContext`, the second parameter of a `withDurableExecution`
+handler, or the context a child-context function receives. A context the rule cannot
+recognize, for example an untyped parameter of a function outside
+`withDurableExecution`, is not checked.
+
+#### ❌ Incorrect
+
+```typescript
+// Error: "ü" and "步" are not printable ASCII
+await context.step("schritt-ü-步骤", async () => "ok");
+
+// Error: a space is not allowed in a subType
+await context.step("charge", async () => charge(), { subType: "card payment" });
+```
+
+#### ✅ Correct
+
+```typescript
+await context.step("schritt-ue-buzhou", async () => "ok");
+
+await context.step("charge", async () => charge(), { subType: "card-payment" });
+```
+
 ### `require-durable-operation-in-child-context`
 
 Requires a child context to perform at least one durable operation on its context.
@@ -458,6 +515,12 @@ Reading closure variables is safe because it doesn't change state. Only mutation
 A durable operation that uses the same context as the operation it runs in can cause
 runtime errors and unexpected behavior. The SDK expects grouped work to run in a
 child context. This rule helps catch these issues at development time.
+
+### Valid Operation Identifiers
+
+The service, not the SDK, sets the limits on names and subtypes. The SDK sends the
+value as given, and a value outside the limits fails the execution at run time. A
+lint check finds the mistake in the editor instead.
 
 ### Require a Durable Operation in a Child Context
 
