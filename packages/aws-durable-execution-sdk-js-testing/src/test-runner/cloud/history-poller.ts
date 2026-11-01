@@ -37,6 +37,22 @@ export interface HistoryApiClient {
   ) => Promise<GetDurableExecutionHistoryCommandOutput>;
 }
 
+/**
+ * True when the events' IDs do not cover every number from 1 to the highest
+ * ID. IDs may arrive out of order. Events without an ID skip the check, since
+ * there is then nothing to count.
+ */
+export function hasEventIdGap(events: Event[]): boolean {
+  const ids = new Set<number>();
+  for (const event of events) {
+    if (event.EventId === undefined) return false;
+    ids.add(event.EventId);
+  }
+  let max = 0;
+  for (const id of ids) max = Math.max(max, id);
+  return ids.size < max;
+}
+
 export class HistoryPoller {
   private readonly events: Event[] = [];
   private readonly pollInterval: number;
@@ -48,6 +64,7 @@ export class HistoryPoller {
   private readonly onOperationEventsReceived: ReceivedOperationEventsCallback;
 
   private lastHistoryMarker: string | undefined = undefined;
+  private incompleteHistoryRetries = 0;
 
   constructor(params: HistoryPollerParams) {
     this.pollInterval = params.pollInterval;
@@ -68,6 +85,14 @@ export class HistoryPoller {
 
   static getMaxRetryAttempts() {
     return 3;
+  }
+
+  /**
+   * How many extra polls to make when a closed execution's history has a gap
+   * in its event IDs. After that the poller resolves with what it has.
+   */
+  static getMaxIncompleteHistoryRetries() {
+    return 10;
   }
 
   private async callWithRetries<Result>(
@@ -120,16 +145,33 @@ export class HistoryPoller {
 
     const lastEvent = pages.at(-1)?.at(-1);
     const eventsExceptLastPage = pages.slice(0, -1).flat();
-    this.events.push(...eventsExceptLastPage);
 
     if (!isClosedExecution(lastEvent)) {
       // If the execution has not completed, do not add the last page
       // since we will be reading the same page again.
+      this.events.push(...eventsExceptLastPage);
       return;
     }
 
-    const lastPage = pages.at(-1);
-    this.events.push(...(lastPage ?? []));
+    const lastPage = pages.at(-1) ?? [];
+    const allEvents = [...this.events, ...eventsExceptLastPage, ...lastPage];
+
+    // The history API is eventually consistent. It can return the terminal
+    // event while an earlier event is still missing, such as the final
+    // InvocationCompleted or some map children. Event IDs count up from 1, so
+    // a gap means the history is not complete yet. Read it again from the
+    // start, up to a limit, rather than resolve with missing events.
+    if (
+      hasEventIdGap(allEvents) &&
+      this.incompleteHistoryRetries < HistoryPoller.getMaxIncompleteHistoryRetries()
+    ) {
+      this.incompleteHistoryRetries++;
+      this.events.length = 0;
+      this.lastHistoryMarker = undefined;
+      return;
+    }
+
+    this.events.push(...eventsExceptLastPage, ...lastPage);
 
     const historyEventType = historyEventTypes[
       lastEvent.EventType

@@ -5,6 +5,7 @@ import {
   GetDurableExecutionHistoryCommandOutput,
 } from "@aws-sdk/client-lambda";
 import {
+  hasEventIdGap,
   HistoryPoller,
   HistoryPollerParams,
   HistoryApiClient,
@@ -467,6 +468,90 @@ describe("HistoryPoller", () => {
       await waitForPollerCycles(3);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe("Incomplete history", () => {
+    const started = () =>
+      createMockEvent({ EventId: 1, EventType: EventType.ExecutionStarted });
+    const invocationCompleted = () =>
+      createMockEvent({
+        EventId: 2,
+        EventType: EventType.InvocationCompleted,
+      });
+    const succeeded = () =>
+      createMockEvent({
+        EventId: 3,
+        EventType: EventType.ExecutionSucceeded,
+        ExecutionSucceededDetails: { Result: { Payload: '"done"' } },
+      });
+    const response = (events: Event[]) =>
+      createMockHistoryResponse({ Events: events }, false);
+
+    it("reads the history again when an event ID is missing", async () => {
+      const { poller, mockApiClient, testExecutionState } =
+        createHistoryPoller({
+          historyResponses: [
+            response([started(), succeeded()]),
+            response([started(), invocationCompleted(), succeeded()]),
+          ],
+        });
+      const executionPromise = testExecutionState.createExecutionPromise();
+
+      poller.startPolling();
+      await waitForPollerCycles(1);
+      expect(poller.getEvents()).toEqual([]);
+
+      await waitForPollerCycles(1);
+      await expect(executionPromise).resolves.toEqual({
+        status: ExecutionStatus.SUCCEEDED,
+        result: '"done"',
+      });
+      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(2);
+      // The second read starts from the beginning, not from a marker.
+      expect(mockApiClient.getHistory.mock.calls[1][0].Marker).toBeUndefined();
+      expect(poller.getEvents().map((event) => event.EventId)).toEqual([
+        1, 2, 3,
+      ]);
+    });
+
+    it("resolves with what it has after the retry limit", async () => {
+      const { poller, mockApiClient, testExecutionState } =
+        createHistoryPoller({
+          historyResponses: [response([started(), succeeded()])],
+        });
+      const executionPromise = testExecutionState.createExecutionPromise();
+
+      poller.startPolling();
+      await waitForPollerCycles(
+        HistoryPoller.getMaxIncompleteHistoryRetries() + 1,
+      );
+
+      await expect(executionPromise).resolves.toEqual({
+        status: ExecutionStatus.SUCCEEDED,
+        result: '"done"',
+      });
+      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
+        HistoryPoller.getMaxIncompleteHistoryRetries() + 1,
+      );
+      expect(poller.getEvents().map((event) => event.EventId)).toEqual([1, 3]);
+    });
+  });
+
+  describe("hasEventIdGap", () => {
+    const withIds = (...ids: (number | undefined)[]) =>
+      ids.map((EventId) => createMockEvent({ EventId }));
+
+    it.each([
+      ["contiguous", withIds(1, 2, 3), false],
+      ["out of order", withIds(1, 3, 2), false],
+      ["repeated", withIds(1, 1, 2), false],
+      ["empty", withIds(), false],
+      ["a middle ID missing", withIds(1, 3), true],
+      ["the first ID missing", withIds(2, 3), true],
+      ["an event without an ID", withIds(1, undefined, 3), false],
+    ])("is right for %s", (_name, events, expected) => {
+      expect(hasEventIdGap(events)).toBe(expected);
     });
   });
 
