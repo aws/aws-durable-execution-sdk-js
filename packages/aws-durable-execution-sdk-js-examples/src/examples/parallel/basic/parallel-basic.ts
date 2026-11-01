@@ -7,6 +7,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Basic Parallel",
   description: "Running multiple operations in parallel",
+  testedBy: ["parallel/heterogeneous", "parallel/wait"],
 };
 
 export const handler = withDurableExecution(

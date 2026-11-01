@@ -8,6 +8,7 @@ export const config: ExampleConfig = {
   name: "Wait for Callback - Anonymous Submitter",
   description:
     "Demonstrates waitForCallback with anonymous (inline) submitter function",
+  testedBy: ["wait-for-callback/failures"],
 };
 
 export const handler = withDurableExecution(

@@ -7,6 +7,7 @@ import { ExampleConfig } from "../../types";
 export const config: ExampleConfig = {
   name: "No Replay Execution",
   description: "Demonstrates step execution tracking when no replay occurs",
+  testedBy: ["step/named"],
 };
 
 export const handler = withDurableExecution(

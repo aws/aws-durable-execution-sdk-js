@@ -264,9 +264,13 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
       (catalog: {
         excludeRuntimes?: string[];
         localOnly?: boolean;
+        testedBy?: string[];
         usesMicrovm?: boolean;
       }) =>
         !catalog.localOnly &&
+        // The integration template (built with a function name map) leaves out
+        // examples with no test of their own. The published template keeps them.
+        !(normalizedOptions.functionNameMap && catalog.testedBy) &&
         (!catalog.usesMicrovm || hasMicrovmImage) &&
         !catalog.excludeRuntimes?.includes(normalizedOptions.runtime ?? "22.x"),
     )
