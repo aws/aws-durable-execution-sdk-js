@@ -115,9 +115,7 @@ const CONFIG = {
 const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
 
 const STABLE_STACK_STATUSES = new Set(["CREATE_COMPLETE", "UPDATE_COMPLETE"]);
-// Lambda throttles control-plane calls per account; the client retries a
-// throttled call (maxAttempts below), so 30 at a time is safe.
-const CODE_UPDATE_CONCURRENCY = 30;
+const CODE_UPDATE_CONCURRENCY = 10;
 
 /**
  * Runs `fn` and logs how long it took, so CI logs show where deploy time goes.
