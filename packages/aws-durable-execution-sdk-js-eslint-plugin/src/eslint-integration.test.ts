@@ -46,12 +46,12 @@ async function lint(code: string, overrideConfig: unknown[]) {
   return result.messages;
 }
 
-/** Breaks all three rules. */
+/** Breaks all four recommended rules. */
 const VIOLATING = `
 export const handler = async (event: any, context: any) => {
   const startedAt = Date.now();
   let counter = 0;
-  await context.step(async () => {
+  await context.step("zähler", async () => {
     counter++;
     await context.wait({ seconds: 1 });
     return startedAt;
@@ -88,6 +88,7 @@ describe(`plugin on ESLint ${eslintVersion}`, () => {
           `${NAMESPACE}/no-nested-durable-operations`,
           `${NAMESPACE}/no-closure-in-durable-operations`,
           `${NAMESPACE}/no-non-deterministic-outside-step`,
+          `${NAMESPACE}/valid-operation-identifiers`,
         ]),
       );
       expect(messages.every((m) => m.severity === 2)).toBe(true);
