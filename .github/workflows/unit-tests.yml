@@ -28,10 +28,10 @@ jobs:
   # Packages are split across runners by measured Jest time (~35-40s per shard).
   # Running two Jest runs on one 4-CPU runner was tried: they starved each
   # other and tests hit their 5s timeouts.
-  #   examples: examples ~10s, otel ~29s
+  #   examples: examples ~26s
   #   testing:  sdk ~7s, testing ~29s
   #   extras:   extras ~26s, microvm-worker ~7s
-  #   rest:     everything else
+  #   rest:     everything else, otel ~31s the largest
   shard:
     name: test (${{ matrix.shard }})
     strategy:
@@ -64,10 +64,7 @@ jobs:
           cmds=$(node -e '
             const cmd = (pkg) => `npm run test -w packages/${pkg}`;
             const named = {
-              examples: [
-                "aws-durable-execution-sdk-js-examples",
-                "aws-durable-execution-sdk-js-otel",
-              ],
+              examples: ["aws-durable-execution-sdk-js-examples"],
               testing: [
                 "aws-durable-execution-sdk-js",
                 "aws-durable-execution-sdk-js-testing",
