@@ -585,6 +585,11 @@ class IntegrationTestRunner {
       this.execCommand("npm run generate-examples", { cwd: examplesDir }),
     );
 
+    // The template names each function after this map, so these are the
+    // stack's functions. Listing them from CloudFormation took ~12s.
+    const functionNames = Object.values(functionNameMap).map(
+      ({ functionName }) => functionName,
+    );
     const codeZipPath = join(samDir, `code-${this.getRuntimeId()}.zip`);
     const codeSha256 = await timed("zip function code", () =>
       this.zipFunctionCode(join(examplesDir, "dist"), codeZipPath),
@@ -654,7 +659,7 @@ class IntegrationTestRunner {
       ))
     ) {
       const outdated = await timed("check function code", () =>
-        this.findFunctionsWithOtherCode(codeSha256),
+        this.findFunctionsWithOtherCode(functionNames, codeSha256),
       );
       if (outdated.length === 0) {
         log.success(
@@ -706,7 +711,10 @@ class IntegrationTestRunner {
     // that is live. If this zip matches the recorded one, CloudFormation saw
     // no code change and left the live code as it was, so push it here too.
     if (stack) {
-      const outdated = await this.findFunctionsWithOtherCode(codeSha256);
+      const outdated = await this.findFunctionsWithOtherCode(
+        functionNames,
+        codeSha256,
+      );
       if (outdated.length > 0) {
         await this.updateFunctionCode(outdated, code);
       }
@@ -845,15 +853,6 @@ class IntegrationTestRunner {
     return { S3Bucket: match[1], S3Key: match[2] };
   }
 
-  /** @returns {string[]} the names of the stack's Lambda functions */
-  listStackFunctionNames() {
-    const { output } = this.execCommand(
-      `aws cloudformation list-stack-resources --stack-name ${shellQuote(this.getSamStackName())} --region ${shellQuote(CONFIG.AWS_REGION)} --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output json`,
-      { silent: true },
-    );
-    return JSON.parse(String(output));
-  }
-
   // The default endpoint, not LAMBDA_ENDPOINT: these are the functions
   // CloudFormation manages, so read and update them where it does.
   getStackLambdaClient() {
@@ -861,12 +860,14 @@ class IntegrationTestRunner {
   }
 
   /**
-   * The stack's functions whose code differs from the given zip.
+   * The deployed functions, of those named, whose code differs from the zip.
+   * Names that are not deployed (such as MicroVM examples left out of the
+   * template) are skipped.
+   * @param {string[]} functionNames
    * @param {string} codeSha256
    * @returns {Promise<string[]>}
    */
-  async findFunctionsWithOtherCode(codeSha256) {
-    const functionNames = this.listStackFunctionNames();
+  async findFunctionsWithOtherCode(functionNames, codeSha256) {
     const client = this.getStackLambdaClient();
     // ListFunctions returns CodeSha256 for 50 functions per call. One
     // GetFunctionConfiguration per function took 15-24s, mostly throttling.
@@ -880,11 +881,12 @@ class IntegrationTestRunner {
         if (fn.FunctionName) shaByName.set(fn.FunctionName, fn.CodeSha256);
       }
     }
-    const outdated = functionNames.filter(
+    const deployed = functionNames.filter((name) => shaByName.has(name));
+    const outdated = deployed.filter(
       (name) => shaByName.get(name) !== codeSha256,
     );
     log.info(
-      `${outdated.length} of ${functionNames.length} functions run other code`,
+      `${outdated.length} of ${deployed.length} functions run other code`,
     );
     return outdated;
   }
