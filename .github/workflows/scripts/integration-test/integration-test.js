@@ -107,6 +107,22 @@ const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
 const STABLE_STACK_STATUSES = new Set(["CREATE_COMPLETE", "UPDATE_COMPLETE"]);
 const CODE_UPDATE_CONCURRENCY = 10;
 
+/**
+ * Runs `fn` and logs how long it took, so CI logs show where deploy time goes.
+ * @template T
+ * @param {string} label
+ * @param {() => T | Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function timed(label, fn) {
+  const start = Date.now();
+  try {
+    return await fn();
+  } finally {
+    log.info(`[timing] ${label}: ${((Date.now() - start) / 1000).toFixed(1)}s`);
+  }
+}
+
 function shellQuote(/** @type {string} */ value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
@@ -516,7 +532,9 @@ class IntegrationTestRunner {
     mkdirSync(samDir, { recursive: true });
     writeFileSync(functionNameMapPath, JSON.stringify(functionNameMap), "utf8");
 
-    this.execCommand("npm run generate-examples", { cwd: examplesDir });
+    await timed("generate examples", () =>
+      this.execCommand("npm run generate-examples", { cwd: examplesDir }),
+    );
 
     const templateArgs = [
       "npm run generate-sam-template --",
@@ -541,21 +559,25 @@ class IntegrationTestRunner {
 
     const examples = await this.getIntegrationExamples();
     if (examples.some((example) => example.usesMicrovm)) {
-      const { imageArn, executionRoleArn } = this.ensureMicrovmImage(samDir);
+      const { imageArn, executionRoleArn } = await timed("MicroVM image", () =>
+        this.ensureMicrovmImage(samDir),
+      );
       templateArgs.push(
         `--microvm-image-arn ${shellQuote(imageArn)}`,
         `--microvm-execution-role-arn ${shellQuote(executionRoleArn)}`,
       );
     }
 
-    this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
+    await timed("generate SAM template", () =>
+      this.execCommand(templateArgs.join(" "), { cwd: examplesDir }),
+    );
 
     // Every function shares one CodeUri, so a run that only changes code would
     // otherwise send ~130 function updates through a CloudFormation changeset
     // (~3 min). When the packaged template matches the one the stack holds in
     // everything but the code location, push the new zip straight to the
     // functions instead.
-    const stack = this.describeSamStack();
+    const stack = await timed("describe stack", () => this.describeSamStack());
 
     if (!stack) {
       log.info(
@@ -577,21 +599,27 @@ class IntegrationTestRunner {
       "--resolve-s3",
     ].join(" ");
     log.info("Packaging function code with SAM...");
-    await this.execCommandWithRetry(packageCommand, {
-      cwd: examplesDir,
-      silent: true,
-    });
+    await timed("sam package", () =>
+      this.execCommandWithRetry(packageCommand, {
+        cwd: examplesDir,
+        silent: true,
+      }),
+    );
     const code = this.getPackagedCodeLocation(packagedTemplatePath);
 
     if (
       stack &&
       STABLE_STACK_STATUSES.has(stack.StackStatus) &&
-      this.isOnlyCodeChanged(packagedTemplatePath)
+      (await timed("compare deployed template", () =>
+        this.isOnlyCodeChanged(packagedTemplatePath),
+      ))
     ) {
       log.info(
         `Template unchanged since last deploy of ${stackName}; updating function code directly`,
       );
-      await this.updateStackFunctionCode(code);
+      await timed("update function code", () =>
+        this.updateStackFunctionCode(code),
+      );
       log.success(`Updated function code in SAM stack: ${stackName}`);
       return;
     }
@@ -613,7 +641,9 @@ class IntegrationTestRunner {
     ].join(" ");
 
     log.info(`Deploying SAM stack: ${stackName}`);
-    await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
+    await timed("sam deploy", () =>
+      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }),
+    );
 
     // A direct update leaves CloudFormation's recorded code behind the code
     // that is live. If this zip matches the recorded one, CloudFormation saw
