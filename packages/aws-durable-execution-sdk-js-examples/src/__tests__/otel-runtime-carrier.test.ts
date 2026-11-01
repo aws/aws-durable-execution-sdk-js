@@ -12,20 +12,23 @@ describe("runtime carrier example", () => {
     "Root=1-bbbbbbbb-bbbbbbbbbbbbbbbbbbbbbbbb;Parent=bbbbbbbbbbbbbbbb;Sampled=1";
   let previousHeader: string | undefined;
 
-  beforeAll(() =>
-    LocalDurableTestRunner.setupTestEnvironment({ skipTime: false }),
-  );
-  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-  beforeEach(() => {
+  // The header is set once for the whole file, not per test: concurrent tests
+  // do not get their own beforeEach/afterEach, and every case uses the same
+  // header anyway.
+  beforeAll(async () => {
     previousHeader = process.env._X_AMZN_TRACE_ID;
     process.env._X_AMZN_TRACE_ID = environmentHeader;
+    await LocalDurableTestRunner.setupTestEnvironment({ skipTime: false });
   });
-  afterEach(() => {
+  afterAll(async () => {
+    await LocalDurableTestRunner.teardownTestEnvironment();
     if (previousHeader === undefined) delete process.env._X_AMZN_TRACE_ID;
     else process.env._X_AMZN_TRACE_ID = previousHeader;
   });
 
-  it.each(["absent", "undefined", "null", "empty", "explicit"])(
+  // Each case waits a real 30s for the durable resume, so the cases run at
+  // the same time (~30s) instead of one after another (~150s).
+  it.concurrent.each(["absent", "undefined", "null", "empty", "explicit"])(
     "keeps helper and extractor consistent for an %s runtime carrier across resume",
     async (availability) => {
       const expectedFallbacks: string[] = [];
