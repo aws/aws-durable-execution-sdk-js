@@ -1,4 +1,4 @@
-// Jest setup for the OTel plugin unit tests.
+// Vitest setup for the OTel plugin unit tests.
 //
 // The X-Ray context extractor falls back to the ambient `_X_AMZN_TRACE_ID`
 // environment variable. CI runners on Lambda/CodeBuild compute inject it,

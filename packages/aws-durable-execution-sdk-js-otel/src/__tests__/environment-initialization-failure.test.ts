@@ -12,6 +12,15 @@
  * success path is pinned alongside it, because latching must not turn "resolved
  * once" into "resolved never" or "resolved again".
  */
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { context, propagation, trace } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
@@ -48,10 +57,10 @@ describe.each([
   ["ExecutionOtelPlugin", createExecutionOtelPluginFactory],
   ["InvocationOtelPlugin", createInvocationOtelPluginFactory],
 ] as const)("%s environment initialization failure", (_name, createFactory) => {
-  let consoleError: jest.SpyInstance;
+  let consoleError: MockInstance;
 
   beforeEach(() => {
-    consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -62,7 +71,7 @@ describe.each([
   });
 
   it("calls a throwing tracerProviderFactory once, not once per invocation", () => {
-    const tracerProviderFactory = jest.fn(() => {
+    const tracerProviderFactory = vi.fn(() => {
       throw new Error("provider boom");
     });
     const factory = createFactory({
@@ -179,7 +188,7 @@ describe.each([
   it("still resolves a working tracerProviderFactory exactly once", async () => {
     const exporter = new InMemorySpanExporter();
     let tracerProvider: NodeTracerProvider | undefined;
-    const tracerProviderFactory = jest.fn(
+    const tracerProviderFactory = vi.fn(
       (createIdGenerator: IdGeneratorFactory) => {
         tracerProvider ??= new NodeTracerProvider({
           idGenerator: createIdGenerator(),

@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,

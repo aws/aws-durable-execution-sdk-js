@@ -9,6 +9,7 @@
  * - Custom instrumentationName support
  * - forceFlush error handling
  */
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -333,21 +334,21 @@ describe("InvocationOtelPlugin - forceFlush error handling", () => {
   it("swallows forceFlush errors gracefully", async () => {
     const failingProvider = {
       getTracer: () => ({
-        startSpan: jest.fn().mockReturnValue({
+        startSpan: vi.fn().mockReturnValue({
           spanContext: () => ({
             traceId: "a".repeat(32),
             spanId: "b".repeat(16),
             traceFlags: 1,
           }),
-          setAttribute: jest.fn(),
-          setStatus: jest.fn(),
-          recordException: jest.fn(),
-          end: jest.fn(),
+          setAttribute: vi.fn(),
+          setStatus: vi.fn(),
+          recordException: vi.fn(),
+          end: vi.fn(),
           isRecording: () => true,
         }),
-        startActiveSpan: jest.fn(),
+        startActiveSpan: vi.fn(),
       }),
-      forceFlush: jest.fn().mockRejectedValue(new Error("flush failed")),
+      forceFlush: vi.fn().mockRejectedValue(new Error("flush failed")),
     };
 
     const plugin = newPlugin({

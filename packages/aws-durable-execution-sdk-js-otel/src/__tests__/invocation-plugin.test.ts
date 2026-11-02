@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -455,7 +456,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       const originalFlush = provider!.forceFlush.bind(provider);
       let calls = 0;
-      jest.spyOn(provider!, "forceFlush").mockImplementation(async () => {
+      vi.spyOn(provider!, "forceFlush").mockImplementation(async () => {
         calls++;
         if (calls === 1) {
           await plugin.onOperationStart(
@@ -771,7 +772,7 @@ describe("InvocationOtelPlugin", () => {
     it("uses one invocation clock so nested SDK spans stay strictly contained", async () => {
       const wallClockStart = Date.now();
       let wallClockCalls = 0;
-      const dateNow = jest
+      const dateNow = vi
         .spyOn(Date, "now")
         .mockImplementation(() => wallClockStart + wallClockCalls++ * 100);
 

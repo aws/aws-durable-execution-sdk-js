@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import {
@@ -73,7 +82,7 @@ describe.each([
             ],
           })),
       });
-      const step = jest.fn(async () => {
+      const step = vi.fn(async () => {
         bodyEntered.open();
         await releaseBody.opened;
         return "late result";

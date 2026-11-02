@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import type {
   InvocationInfo,
   OperationInfo,
@@ -63,8 +64,7 @@ describe.each([
     const plugin = factory.createPlugin(info);
     provider.register();
     const original = provider.forceFlush.bind(provider);
-    jest
-      .spyOn(provider, "forceFlush")
+    vi.spyOn(provider, "forceFlush")
       .mockImplementationOnce(() => {
         entered.open();
         return release.opened;

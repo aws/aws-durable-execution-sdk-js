@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -47,12 +56,12 @@ describe.each([
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
   let plugin: ExecutionOtelPlugin | InvocationOtelPlugin;
-  let log: jest.SpyInstance;
+  let log: MockInstance;
   let factory: ReturnType<typeof Plugin>;
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    log = jest.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
+    log = vi.spyOn(console, "error").mockImplementation(() => {});
     exporter = new InMemorySpanExporter();
     factory = Plugin({
       flushTimeoutMillis: 70,
@@ -68,9 +77,9 @@ describe.each([
 
   afterEach(async () => {
     // Complete InMemorySpanExporter's zero-delay acknowledgments.
-    await jest.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(1);
     await provider.shutdown();
-    jest.useRealTimers();
+    vi.useRealTimers();
     log.mockRestore();
     trace.disable();
     context.disable();
@@ -81,7 +90,7 @@ describe.each([
       secondCalled = gate();
     const first = gate(),
       second = gate();
-    const flush = jest
+    const flush = vi
       .spyOn(provider, "forceFlush")
       .mockImplementationOnce(async () => {
         firstCalled.open();
@@ -115,14 +124,14 @@ describe.each([
     };
     try {
       await firstCalled.opened;
-      await jest.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(40);
       await complete("during-first", "SUCCEEDED");
       first.open();
       await secondCalled.opened;
       await complete("during-timeout", "FAILED");
-      await jest.advanceTimersByTimeAsync(29);
+      await vi.advanceTimersByTimeAsync(29);
       expect(settled).toBe(false);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(settled).toBe(true);
       await end;
       expect(flush).toHaveBeenCalledTimes(2);
@@ -149,7 +158,7 @@ describe.each([
       secondCalled = gate();
     const first = gate(),
       second = gate();
-    const flush = jest
+    const flush = vi
       .spyOn(provider, "forceFlush")
       .mockImplementationOnce(async () => {
         firstCalled.open();
@@ -167,7 +176,7 @@ describe.each([
     });
     try {
       await firstCalled.opened;
-      await jest.advanceTimersByTimeAsync(40);
+      await vi.advanceTimersByTimeAsync(40);
       const late: OperationInfo = {
         id: "late",
         name: "late",
@@ -185,9 +194,9 @@ describe.each([
       await plugin.onOperationEnd({ ...late, status: "SUCCEEDED" });
       first.open();
       await secondCalled.opened;
-      await jest.advanceTimersByTimeAsync(29);
+      await vi.advanceTimersByTimeAsync(29);
       expect(settled).toBe(false);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(settled).toBe(true);
       await end;
       expect(flush).toHaveBeenCalledTimes(2);
@@ -209,7 +218,7 @@ describe.each([
   it("preserves factory reuse after timeout and handles the old provider's late rejection", async () => {
     const called = gate(),
       release = gate();
-    const flush = jest
+    const flush = vi
       .spyOn(provider, "forceFlush")
       .mockImplementationOnce(async () => {
         called.open();
@@ -217,13 +226,13 @@ describe.each([
         throw new Error("late exporter failure");
       })
       .mockResolvedValue(undefined);
-    const shutdown = jest.spyOn(provider, "shutdown");
+    const shutdown = vi.spyOn(provider, "shutdown");
     const first = invocation();
     await plugin.onInvocationStart(first);
     const end = plugin.onInvocationEnd(ending(first));
     try {
       await called.opened;
-      await jest.advanceTimersByTimeAsync(70);
+      await vi.advanceTimersByTimeAsync(70);
       await end;
       expect(shutdown).not.toHaveBeenCalled();
       const next = invocation("next");
@@ -247,7 +256,7 @@ describe.each([
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
     "rejects invalid budget %s before invoking a provider factory",
     (flushTimeoutMillis) => {
-      const factory = jest.fn(() => provider);
+      const factory = vi.fn(() => provider);
       expect(() =>
         Plugin({
           flushTimeoutMillis,
@@ -260,16 +269,16 @@ describe.each([
 });
 
 describe("flushTracerProvider timer ownership", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it.each(["resolved", "rejected"] as const)(
     "releases its budget timer when the provider is %s",
     async (outcome) => {
       const failure = new Error("provider failure");
       const provider = {
-        getTracer: jest.fn(),
-        forceFlush: jest.fn(async () => {
+        getTracer: vi.fn(),
+        forceFlush: vi.fn(async () => {
           if (outcome === "rejected") throw failure;
         }),
       };
@@ -280,7 +289,7 @@ describe("flushTracerProvider timer ownership", () => {
         await flushing;
       }
       // This fixture creates no spans and no exporter acknowledgment timers.
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     },
   );
 });

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   type InvocationInfo,
@@ -67,8 +68,8 @@ describe.each([
       const updates: OperationInfo[] = [];
       const parentsAtRead: SpanContext[] = [];
       const exportsAtChildEnd: number[] = [];
-      const savedBody = jest.fn(async () => "saved");
-      const checkpointBody = jest.fn(async () => {
+      const savedBody = vi.fn(async () => "saved");
+      const checkpointBody = vi.fn(async () => {
         checkpointBodyEntered.open();
         await releaseCheckpointBody.opened;
         return "checkpointed";

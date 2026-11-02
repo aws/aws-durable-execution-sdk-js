@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -68,7 +69,7 @@ export function testChainedInvokeReplay(
         await targetGate;
         return targetHandler(...args);
       };
-      const target = jest.fn(gatedTarget);
+      const target = vi.fn(gatedTarget);
       const runner = new LocalDurableTestRunner({ handlerFunction: handler });
       runner.registerDurableFunction("case11-target:1", target);
       const input = { scenario: "chained-invoke", nested: { value: 42 } };

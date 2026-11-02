@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import type { Context as LambdaContext } from "aws-lambda";
 import {
   DurableExecutionInvocationInputWithClient,
@@ -82,10 +83,10 @@ it.each([createExecutionOtelPluginFactory, createInvocationOtelPluginFactory])(
             },
           },
           {
-            checkpoint: jest.fn(() => {
+            checkpoint: vi.fn(() => {
               throw new Error("unexpected checkpoint");
             }),
-            getExecutionState: jest.fn(() => {
+            getExecutionState: vi.fn(() => {
               throw new Error("unexpected state request");
             }),
           },
@@ -207,10 +208,10 @@ describe.each([
             },
           },
           {
-            checkpoint: jest.fn(() => {
+            checkpoint: vi.fn(() => {
               throw new Error("unexpected checkpoint");
             }),
-            getExecutionState: jest.fn(() => {
+            getExecutionState: vi.fn(() => {
               throw new Error("unexpected state request");
             }),
           },

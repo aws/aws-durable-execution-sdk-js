@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import type {
   DurableInstrumentationPluginFactory,
   InvocationInfo,
@@ -7,13 +8,9 @@ import { ExecutionOtelPlugin } from "../execution-plugin";
 import { durableExecutionPluginProvider as invocationProvider } from "../invocation-plugin-provider";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 
-jest.mock(
-  "@aws/durable-execution-sdk-js",
-  () => {
-    throw new Error("OTel provider entry points loaded the SDK at runtime");
-  },
-  { virtual: true },
-);
+vi.mock("@aws/durable-execution-sdk-js", () => {
+  throw new Error("OTel provider entry points loaded the SDK at runtime");
+});
 
 function invocationInfo(): InvocationInfo {
   return {
