@@ -1,3 +1,4 @@
+import { describe } from "vitest";
 import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { noNonDeterministicOutsideStep } from "./no-non-deterministic-outside-step";

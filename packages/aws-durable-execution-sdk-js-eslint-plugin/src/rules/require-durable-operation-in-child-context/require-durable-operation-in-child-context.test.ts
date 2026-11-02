@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { requireDurableOperationInChildContext } from "./require-durable-operation-in-child-context";

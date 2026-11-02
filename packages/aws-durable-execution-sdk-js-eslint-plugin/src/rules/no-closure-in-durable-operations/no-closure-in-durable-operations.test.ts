@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { noClosureInDurableOperations } from "./no-closure-in-durable-operations";
@@ -61,7 +62,7 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("resolves scope via context.sourceCode", () => {
     const { callback, scope, write } = fixture();
-    const report = jest.fn();
+    const report = vi.fn();
 
     const rule = noClosureInDurableOperations.create({
       report,
@@ -76,7 +77,7 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("falls back to context.getSourceCode() on eslint versions without context.sourceCode", () => {
     const { callback, scope, write } = fixture();
-    const report = jest.fn();
+    const report = vi.fn();
 
     const rule = noClosureInDurableOperations.create({
       report,
@@ -91,8 +92,8 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("unwraps nothing extra: acquire returns the function scope directly", () => {
     const { callback, scope, write } = fixture();
-    const report = jest.fn();
-    const acquire = jest.fn(() => scope);
+    const report = vi.fn();
+    const acquire = vi.fn(() => scope);
 
     const rule = noClosureInDurableOperations.create({
       report,
@@ -109,7 +110,7 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("skips variables declared by the callback itself", () => {
     const { callback, scope } = fixture();
-    const report = jest.fn();
+    const report = vi.fn();
 
     // A named function expression's own name resolves to a definition whose
     // node is the callback.
@@ -133,7 +134,7 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("does not throw when no scope information is available", () => {
     const { callback } = fixture();
-    const report = jest.fn();
+    const report = vi.fn();
 
     const rule = noClosureInDurableOperations.create({ report } as any);
 
@@ -143,7 +144,7 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 
   it("ignores callbacks that are not durable operations", () => {
     const { scope } = fixture();
-    const report = jest.fn();
+    const report = vi.fn();
 
     const callback: any = { type: "ArrowFunctionExpression" };
     callback.parent = {
