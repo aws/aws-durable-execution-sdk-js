@@ -57,7 +57,7 @@
     "jest": "^30.5.2",
     "typescript": "^6.0.3",
     "@aws/durable-execution-sdk-js-previous": "npm:@aws/durable-execution-sdk-js@2.6.0",
-    "semver": "^7.8.5",
+    "semver": "^7.8.6",
     "@types/semver": "^7.8.0"
   },
   "peerDependencies": {
