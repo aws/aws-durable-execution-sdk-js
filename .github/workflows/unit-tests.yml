@@ -84,20 +84,3 @@ jobs:
             console.log(shard.join(" && "));
           ')
           bash -e -c "$cmds"
-
-  # Keeps the `test` check name that branch rules require. `always()` so a
-  # failed shard fails this job instead of skipping it, since a skipped
-  # required check counts as passing.
-  test:
-    needs: shard
-    if: always()
-    # A GitHub-hosted runner: this job does 1s of work with no checkout and no
-    # secrets, and a CodeBuild runner took ~20s to start for it.
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check every shard passed
-        env:
-          RESULT: ${{ needs.shard.result }}
-        run: |
-          echo "Shards: $RESULT"
-          [ "$RESULT" = "success" ]
