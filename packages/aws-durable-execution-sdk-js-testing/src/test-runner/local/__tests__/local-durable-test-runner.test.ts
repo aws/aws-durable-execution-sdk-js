@@ -108,12 +108,11 @@ describe("LocalDurableTestRunner", () => {
     (FunctionStorage as Mock).mockImplementation(function () {
       return mockFunctionStorage;
     });
+    const orchestratorMock = TestExecutionOrchestrator as unknown as Mock;
     // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
-    (TestExecutionOrchestrator as unknown as Mock).mockImplementation(
-      function () {
-        return mockOrchestrator;
-      },
-    );
+    orchestratorMock.mockImplementation(function () {
+      return mockOrchestrator;
+    });
     // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
     (ResultFormatter as Mock).mockImplementation(function () {
       return mockResultFormatter;

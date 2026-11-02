@@ -26,18 +26,15 @@ function effective(i: Inspect | undefined): unknown {
   );
 }
 
-vi.mock(
-  "vscode",
-  () => ({
-    workspace: {
-      getConfiguration: () => ({
-        get: (k: string) => effective(layers[k]),
-        inspect: (k: string) =>
-          layers[k] ? { key: k, ...layers[k] } : undefined,
-      }),
-    },
-  }),
-);
+vi.mock("vscode", () => ({
+  workspace: {
+    getConfiguration: () => ({
+      get: (k: string) => effective(layers[k]),
+      inspect: (k: string) =>
+        layers[k] ? { key: k, ...layers[k] } : undefined,
+    }),
+  },
+}));
 
 import { readConfig } from "./config";
 

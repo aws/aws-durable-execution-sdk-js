@@ -6,7 +6,9 @@ export default defineConfig({
     alias: {
       // `vscode` only exists inside the extension host. Tests that need
       // behaviour override it with vi.mock("vscode", factory).
-      vscode: fileURLToPath(new URL("./src/test/vscodeStub.ts", import.meta.url)),
+      vscode: fileURLToPath(
+        new URL("./src/test/vscodeStub.ts", import.meta.url),
+      ),
     },
   },
   test: {

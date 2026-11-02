@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "rootDir": "./handlers",
-    "types": ["node", "jest"],
+    "types": ["node"],
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022"],

@@ -29,9 +29,7 @@ const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 // the typeof guard takes that branch.
 //
 // The Vitest unit tests load this file as-is (Vitest compiles to ESM,
-// so `import.meta.url` is fine). `__mocks__/version.ts` is a hardcoded
-// stand-in kept only for the examples package's coverage copy, which
-// still compiles the SDK source as CommonJS.
+// so `import.meta.url` is fine).
 let moduleFilePath: string | undefined;
 if (typeof __filename !== "undefined") {
   moduleFilePath = __filename;

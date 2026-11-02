@@ -154,7 +154,7 @@ describe("WaitForCondition Handler", () => {
       // The error is thrown synchronously during handler call, not when awaiting
       try {
         handler(checkFunc, undefined as any);
-        fail("Should have thrown an error");
+        expect.fail("Should have thrown an error");
       } catch (error: any) {
         expect(error.message).toContain(
           "waitForCondition requires config with waitStrategy and initialState",

@@ -16,5 +16,11 @@
     "incremental": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.typecheck.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.typecheck.ts",
+    "src/vitest.setup.ts"
+  ]
 }

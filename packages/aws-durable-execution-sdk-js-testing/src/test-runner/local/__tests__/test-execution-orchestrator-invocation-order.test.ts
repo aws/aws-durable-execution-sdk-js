@@ -366,6 +366,9 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         new Promise<DurableExecutionInvocationOutput>((_, reject) => {
           rejectHandler = reject;
         });
+      // The orchestrator may attach its handler after the rejection. Vitest
+      // reports that gap as an unhandled rejection, which Jest ignored.
+      delayedExceptionPromise.catch(() => undefined);
       mockInvoke.mockReturnValue(delayedExceptionPromise);
 
       // Start execution

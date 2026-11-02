@@ -74,7 +74,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.5",
     "@typescript-eslint/parser": "^8.72.1",
-    "@vitest/coverage-v8": "5.0.4",
+    "@vitest/coverage-v8": "^5.1.0",
     "argparse": "^3.0.4",
     "dotenv": "^18.0.9",
     "esbuild": "^0.28.2",
