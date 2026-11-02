@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {

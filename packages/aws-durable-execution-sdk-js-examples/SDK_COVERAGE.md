@@ -5,30 +5,13 @@ This package is configured to collect code coverage for the core SDK (`aws-durab
 ## How It Works
 
 1. **Pre-test Copy**: Before tests run, `scripts/copy-sdk-source.js` copies the SDK source files into `src/dur-sdk/`
-2. **Version Stub Substitution**: The copy script then overwrites the copied `utils/constants/version.ts` with its own `utils/constants/__mocks__/version.ts` stub (see below)
-3. **Module Mapping**: Jest is configured to resolve `@aws/durable-execution-sdk-js` imports to the local `src/dur-sdk/index.ts`
-4. **Coverage Collection**: Jest collects coverage from both example files and SDK source files
+2. **Module Alias**: When `SDK_COVERAGE=true`, `vitest.config.ts` resolves `@aws/durable-execution-sdk-js` imports to the local `src/dur-sdk/index.ts`
+3. **Coverage Collection**: Vitest collects V8 coverage (`@vitest/coverage-v8`) from both example files and SDK source files
 
-### Why version.ts is substituted
-
-The real `utils/constants/version.ts` reads `import.meta.url` at the top level.
-`ts-jest` compiles with `module: commonjs`, where `import.meta` is a hard
-compile error (TS1343) — so _every_ suite that transitively imports the SDK
-fails to compile and the harness reports no coverage at all.
-
-The SDK's own unit tests already avoid this through the manual mock at
-`utils/constants/__mocks__/version.ts`, so the copy script reuses it. Only the
-UserAgent version string differs, and no example asserts on it.
-
-Two things to know if you touch this:
-
-- If `__mocks__/version.ts` is ever renamed or removed, the copy script prints a
-  warning (`⚠ Expected version mock ... was not found`) and the coverage run
-  will fail with TS1343. The warning is the thing to grep for.
-- The substitution means `src/dur-sdk/` is _not_ a byte-faithful copy of the
-  SDK. If new top-level `import.meta` usage is added anywhere else in the SDK,
-  TS1343 will return and will need the same treatment (or the coverage config
-  moved to an ESM-capable `module` target).
+The copy is byte-faithful. Vitest compiles the tests as ESM, so the SDK's
+top-level `import.meta.url` in `utils/constants/version.ts` works as is. The
+Jest setup had to swap that file for a stub, because `ts-jest` compiled with
+`module: commonjs` and failed with TS1343. That step is gone.
 
 ## Running Tests
 
@@ -47,8 +30,8 @@ npm run test-with-sdk-coverage
 This will:
 
 - Copy SDK source to `src/dur-sdk/`
-- Run all example tests
-- Generate coverage report in `coverage-sdk/` directory
+- Run all example tests with `SDK_COVERAGE=true vitest run --coverage`
+- Generate coverage report in `coverage-sdk/` directory, even when a test fails
 
 ## Coverage Output
 
@@ -59,8 +42,7 @@ This will:
 ## Files
 
 - `scripts/copy-sdk-source.js` - Copies SDK source before tests
-- `jest.config.js` - Regular test configuration
-- `jest.config.sdk-coverage.js` - SDK coverage configuration
+- `vitest.config.ts` - Test configuration for all modes. `SDK_COVERAGE=true` turns on the SDK alias, and the `coverage` block sets the reporters, the `coverage-sdk/` output directory and the included files
 - `src/dur-sdk/` - Temporary SDK source (gitignored)
 - `coverage-sdk/` - Coverage output directory (gitignored)
 
@@ -69,5 +51,3 @@ This will:
 - The `src/dur-sdk/` folder is automatically created and should not be committed
 - Coverage includes both example code and SDK code executed by the examples
 - The SDK source is copied fresh before each test run to ensure it's up-to-date
-- The copied `utils/constants/version.ts` is a stub, not the real module (see
-  [Why version.ts is substituted](#why-versionts-is-substituted))

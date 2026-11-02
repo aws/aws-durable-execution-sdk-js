@@ -1,8 +1,9 @@
+import { vi } from "vitest";
 import { handler } from "./parent-context-in-step";
 import { createTests } from "../../../utils/test-helper";
 
 // Set shorter timeout for context validation tests since they should fail quickly
-jest.setTimeout(5000);
+vi.setConfig({ testTimeout: 5000 });
 
 createTests({
   handler,

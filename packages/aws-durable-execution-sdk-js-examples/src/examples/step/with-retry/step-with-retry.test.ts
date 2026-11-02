@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   LocalDurableTestRunner,
   OperationType,
@@ -18,7 +19,7 @@ describe("step-with-retry test", () => {
   });
 
   it("should return expected result - happy case", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(1);
+    vi.spyOn(Math, "random").mockReturnValue(1);
     const execution = await durableTestRunner.run();
 
     expect(execution.getResult()).toStrictEqual(EXPECTED_RESULT);
@@ -29,7 +30,7 @@ describe("step-with-retry test", () => {
   });
 
   it("should execute the step upon retry - happy case", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.1).mockReturnValue(1);
+    vi.spyOn(Math, "random").mockReturnValue(0.1).mockReturnValue(1);
     const execution = await durableTestRunner.run();
 
     expect(execution.getResult()).toStrictEqual(EXPECTED_RESULT);
@@ -40,7 +41,7 @@ describe("step-with-retry test", () => {
   });
 
   it("should retry until all attempts fail - failure case", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.1);
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
     const execution = await durableTestRunner.run();
 
     expect(execution.getError()).toBeDefined();
@@ -52,8 +53,7 @@ describe("step-with-retry test", () => {
 
   it("should track retry attempts and success details", async () => {
     // Mock to fail twice, then succeed
-    jest
-      .spyOn(Math, "random")
+    vi.spyOn(Math, "random")
       .mockReturnValueOnce(0.1)
       .mockReturnValueOnce(0.1)
       .mockReturnValue(1);

@@ -72,7 +72,7 @@ function classifyOutcome(/** @type {unknown} */ error) {
     /failed to enter successful state|failed to settle|State.*Failed/i.test(msg)
   )
     return "runtime";
-  if (/jest|test.*failed|assertion/i.test(msg)) return "assertion";
+  if (/jest|vitest|test.*failed|assertion/i.test(msg)) return "assertion";
   return "unknown";
 }
 
@@ -1005,7 +1005,7 @@ class IntegrationTestRunner {
       cwd: examplesDir,
       env,
     });
-    log.success("Jest integration tests passed");
+    log.success("Vitest integration tests passed");
   }
 
   /**
