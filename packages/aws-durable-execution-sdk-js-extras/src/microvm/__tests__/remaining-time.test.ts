@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
   withDurableExecution,
@@ -113,7 +114,7 @@ describe("sendJob without a known deadline", () => {
     // The fake clock advances by each sleep, so the retry window ends
     // without real waiting.
     let now = 1_000_000;
-    const spy = jest.spyOn(Date, "now").mockImplementation(() => now);
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const promise = sendJob({
       client: new FakeMicrovmsClient().asClient(),
       fetch: endpoint.fetch,
@@ -124,7 +125,7 @@ describe("sendJob without a known deadline", () => {
       body: "{}",
       retryWindowMs: 2_000,
       remainingTimeMs,
-      log: jest.fn(),
+      log: vi.fn(),
       sleep: async (ms) => {
         now += ms;
       },
@@ -163,7 +164,7 @@ describe("sendJob without a known deadline", () => {
 describe("sendJob with a recheck", () => {
   it("gives each recheck only what remains of the retry window", async () => {
     let now = 1_000_000;
-    const spy = jest.spyOn(Date, "now").mockImplementation(() => now);
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const endpoint = new FakeEndpoint();
     endpoint.responses = Array.from({ length: 50 }, () => 502);
     const budgets: number[] = [];
@@ -177,7 +178,7 @@ describe("sendJob with a recheck", () => {
       port: 8080,
       body: "{}",
       retryWindowMs: 2_000,
-      log: jest.fn(),
+      log: vi.fn(),
       sleep: async (ms) => {
         now += ms;
       },
@@ -203,10 +204,10 @@ describe("sendJob with a recheck", () => {
 
   it("skips the recheck and ends the tier when no time remains after the backoff", async () => {
     let now = 1_000_000;
-    const spy = jest.spyOn(Date, "now").mockImplementation(() => now);
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const endpoint = new FakeEndpoint();
     endpoint.responses = [502, 202];
-    const recheck = jest.fn(async () => undefined);
+    const recheck = vi.fn(async () => undefined);
 
     const promise = sendJob({
       client: new FakeMicrovmsClient().asClient(),
@@ -218,7 +219,7 @@ describe("sendJob with a recheck", () => {
       body: "{}",
       // The first backoff, 250 ms, uses up the whole window.
       retryWindowMs: 250,
-      log: jest.fn(),
+      log: vi.fn(),
       sleep: async (ms) => {
         now += ms;
       },
@@ -238,7 +239,7 @@ describe("sendJob with a window that started earlier", () => {
     // A session's state check waited 1,500 ms of a 2,000 ms window before
     // the request. The fake clock advances by each sleep.
     let now = 1_000_000;
-    const spy = jest.spyOn(Date, "now").mockImplementation(() => now);
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => now);
     const endpoint = new FakeEndpoint();
     endpoint.responses = Array.from({ length: 50 }, () => 503);
     try {
@@ -252,7 +253,7 @@ describe("sendJob with a window that started earlier", () => {
         body: "{}",
         retryWindowMs: 2_000,
         windowStartedAt: now - 1_500,
-        log: jest.fn(),
+        log: vi.fn(),
         sleep: async (ms) => {
           now += ms;
         },

@@ -2,6 +2,7 @@
 // The two packages declare the contract types separately, because one runs in
 // the function and the other in the MicroVM. These tests fail when the two
 // declarations or the two implementations drift apart.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
   withDurableExecution,

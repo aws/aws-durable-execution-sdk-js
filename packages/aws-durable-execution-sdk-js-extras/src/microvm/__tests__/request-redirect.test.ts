@@ -8,6 +8,15 @@
 // checkpointed. So the message names the path, and the status of a 3xx
 // answer. It omits the Location, and the URL that a followed redirect
 // reached.
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { MicrovmRequestRejectedError, sendJob } from "../request";
@@ -23,7 +32,7 @@ const send = (fetchImpl: typeof fetch, endpoint: string, path: string) =>
     port: 8080,
     body: "{}",
     retryWindowMs: 5_000,
-    log: jest.fn(),
+    log: vi.fn(),
   });
 
 const rejection = (path: string, status: number): string =>

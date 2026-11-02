@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import {
   AccessDeniedException,
   ResourceNotFoundException,
@@ -19,8 +20,8 @@ const options = (client: FakeMicrovmsClient) => ({
   client: client.asClient(),
   microvmId: "mvm-1",
   maxWaitMs: 60_000,
-  log: jest.fn(),
-  sleep: jest.fn(async () => {}),
+  log: vi.fn(),
+  sleep: vi.fn(async () => {}),
 });
 
 const meta = { $metadata: { httpStatusCode: 403, requestId: "req-9" } };
@@ -106,12 +107,12 @@ describe("resumeIfSuspended", () => {
     ];
     // Each sleep advances the clock. So a wait that never resumes ends at
     // maxWaitMs.
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     let clock = 1_000_000;
     now.mockImplementation(() => clock);
     const opts = {
       ...options(client),
-      sleep: jest.fn(async (ms: number) => {
+      sleep: vi.fn(async (ms: number) => {
         clock += ms;
       }),
     };
@@ -134,7 +135,7 @@ describe("resumeIfSuspended", () => {
 
   it("calls ResumeMicrovm at most once per poll while it conflicts, and stops at maxWaitMs", async () => {
     const client = new FakeMicrovmsClient();
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     let clock = 1_000_000;
     now.mockImplementation(() => clock);
     try {
@@ -149,7 +150,7 @@ describe("resumeIfSuspended", () => {
       const opts = {
         ...options(client),
         maxWaitMs: 2_000,
-        sleep: jest.fn(async (ms: number) => {
+        sleep: vi.fn(async (ms: number) => {
           clock += ms;
         }),
       };
@@ -306,7 +307,7 @@ describe("resumeIfSuspended", () => {
 
   it("throws MicrovmEndpointUnavailableError when no time is left for ResumeMicrovm", async () => {
     const client = new FakeMicrovmsClient();
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     let clock = 1_000_000;
     now.mockImplementation(() => clock);
     try {
@@ -331,7 +332,7 @@ describe("resumeIfSuspended", () => {
 
   it("gives the wait after the resume what remains of maxWaitMs", async () => {
     const client = new FakeMicrovmsClient();
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     let clock = 1_000_000;
     now.mockImplementation(() => clock);
     try {
@@ -347,7 +348,7 @@ describe("resumeIfSuspended", () => {
       const opts = {
         ...options(client),
         maxWaitMs: 1_000,
-        sleep: jest.fn(async (ms: number) => {
+        sleep: vi.fn(async (ms: number) => {
           clock += ms;
         }),
       };

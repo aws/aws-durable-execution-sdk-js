@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
   withDurableExecution,
@@ -747,7 +748,7 @@ describe("sendJob when CreateMicrovmAuthToken reports the MicroVM removed", () =
         port: 8080,
         body: "{}",
         retryWindowMs: 60_000,
-        log: jest.fn(),
+        log: vi.fn(),
       }).catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(MicrovmStateError);

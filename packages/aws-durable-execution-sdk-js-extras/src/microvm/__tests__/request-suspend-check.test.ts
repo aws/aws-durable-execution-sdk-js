@@ -1,5 +1,14 @@
 // The first retry tier's check after a sign of a suspended MicroVM: an HTTP
 // 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer.
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { MicrovmEndpointUnavailableError } from "..";
 import { type SendJobOptions, sendJob } from "../request";
 import { FakeEndpoint, FakeMicrovmsClient } from "./fakes";
@@ -13,11 +22,11 @@ const connectFailed = (): Response =>
 
 describe("sendJob with suspendCheck", () => {
   let clock: number;
-  let now: jest.SpyInstance;
+  let now: MockInstance;
 
   beforeEach(() => {
     clock = 1_000_000;
-    now = jest.spyOn(Date, "now").mockImplementation(() => clock);
+    now = vi.spyOn(Date, "now").mockImplementation(() => clock);
   });
 
   afterEach(() => {
@@ -38,7 +47,7 @@ describe("sendJob with suspendCheck", () => {
       port: 8080,
       body: "{}",
       retryWindowMs: 60_000,
-      log: jest.fn(),
+      log: vi.fn(),
       sleep: async (ms) => {
         clock += ms;
       },
@@ -49,7 +58,7 @@ describe("sendJob with suspendCheck", () => {
   it("checks the state after a 502 with MICROVM_CONNECT_FAILED, and sends the job to the endpoint that the check reports", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
-    const suspendCheck = jest.fn(async () => "resumed.example");
+    const suspendCheck = vi.fn(async () => "resumed.example");
 
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
@@ -66,7 +75,7 @@ describe("sendJob with suspendCheck", () => {
   it("checks the state after a request without an answer", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [new TypeError("fetch failed")];
-    const suspendCheck = jest.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
@@ -103,7 +112,7 @@ describe("sendJob with suspendCheck", () => {
   ])("does not check the state after %s", async (_label, answer) => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [answer(), answer(), answer()];
-    const suspendCheck = jest.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
@@ -113,7 +122,7 @@ describe("sendJob with suspendCheck", () => {
 
   it("makes no call for a job accepted at once", async () => {
     const endpoint = new FakeEndpoint();
-    const suspendCheck = jest.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
@@ -133,7 +142,7 @@ describe("sendJob with suspendCheck", () => {
       connectFailed(),
     ];
     const checkedAt: number[] = [];
-    const suspendCheck = jest.fn(async () => {
+    const suspendCheck = vi.fn(async () => {
       checkedAt.push(clock - 1_000_000);
       return undefined;
     });
@@ -151,7 +160,7 @@ describe("sendJob with suspendCheck", () => {
     // The worker suspends again after the check reported RUNNING. So the
     // second sign of a suspended MicroVM gets its own check.
     endpoint.responses = [connectFailed(), 503, 503, 503, connectFailed()];
-    const suspendCheck = jest.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
@@ -177,8 +186,8 @@ describe("sendJob with suspendCheck", () => {
     const endpoint = new FakeEndpoint();
     // A sign that both checks act on.
     endpoint.responses = [connectFailed()];
-    const recheck = jest.fn(async () => undefined);
-    const suspendCheck = jest.fn(async () => undefined);
+    const recheck = vi.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     await expect(send(endpoint, { recheck, suspendCheck })).resolves.toBe(202);
 
@@ -189,7 +198,7 @@ describe("sendJob with suspendCheck", () => {
   it("fails without a check when no time is left for it", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
-    const suspendCheck = jest.fn(async () => undefined);
+    const suspendCheck = vi.fn(async () => undefined);
 
     // The first backoff of 250 milliseconds ends exactly at the end of the
     // window. So the check would get 0 milliseconds.

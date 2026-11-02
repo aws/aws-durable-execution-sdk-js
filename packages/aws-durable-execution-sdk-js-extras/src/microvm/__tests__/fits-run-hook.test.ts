@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { fitsRunHook, MAX_RUN_HOOK_PAYLOAD_LENGTH } from "../shared";
 
 // The cases mirror e2e/probe-service.mjs. The service accepted 4,096 code

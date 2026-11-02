@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import {
   AccessDeniedException,
   ResourceNotFoundException,
@@ -16,8 +17,8 @@ const state =
   });
 
 const options = (client: FakeMicrovmsClient) => {
-  const log = jest.fn();
-  const sleep = jest.fn(async () => {});
+  const log = vi.fn();
+  const sleep = vi.fn(async () => {});
   return {
     client: client.asClient(),
     microvmId: "mvm-1",
@@ -82,11 +83,11 @@ describe("ensureRunning", () => {
     // Each sleep advances the clock. So a wait that never resumes ends at
     // maxWaitMs.
     let clock = 1_000_000;
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     now.mockImplementation(() => clock);
     const opts = {
       ...options(client),
-      sleep: jest.fn(async (ms: number) => {
+      sleep: vi.fn(async (ms: number) => {
         clock += ms;
       }),
     };

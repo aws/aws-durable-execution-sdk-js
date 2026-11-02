@@ -10,6 +10,7 @@
 //    `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, as the service does.
 // 4. The worker reports each outcome with SendDurableExecutionCallbackSuccess.
 //    The test passes that result to the test runner's callback.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import {
