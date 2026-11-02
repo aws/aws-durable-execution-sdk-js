@@ -117,7 +117,23 @@ A route that answers another 4xx status fails the operation without a retry. So 
 
 ### Errors
 
-Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them, or a subclass for one kind:
+Every MicroVM failure is a `MicrovmError`, and every `MicrovmError` is a `ComputeError`. Catch `ComputeError` for a failure of any compute type, `MicrovmError` for every MicroVM failure, or a subclass for one kind:
+
+```
+DurableOperationError            (core SDK)
+└── ComputeError                 (any compute type)
+    └── MicrovmError
+        ├── MicrovmLaunchError
+        ├── MicrovmDeliveryError
+        │   ├── MicrovmNotRunningError
+        │   ├── MicrovmRequestRejectedError       (request step only)
+        │   ├── MicrovmRequestUnauthorizedError   (request step only)
+        │   └── MicrovmEndpointUnavailableError   (request step only)
+        ├── MicrovmJobFailedError
+        └── MicrovmTimeoutError
+```
+
+The three errors marked "request step only" are thrown inside the request step, so only a step `retryStrategy` sees them. When the step fails, the operation reports `MicrovmDeliveryError` or `MicrovmNotRunningError`, and `cause.name` keeps the name of the step's error.
 
 | Error | When |
 |---|---|
