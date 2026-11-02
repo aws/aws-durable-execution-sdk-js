@@ -11,6 +11,7 @@
  * requirement coverage is complete, and the template honours the runner's
  * `TelemetryLogGroupName` parameter contract.
  */
+import { describe, it, expect } from "vitest";
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
