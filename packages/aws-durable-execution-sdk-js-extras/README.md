@@ -10,6 +10,18 @@ Ready-made custom operations for the [AWS Durable Execution SDK](../aws-durable-
 npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras
 ```
 
+Each group of operations has its own subpath, and needs its own AWS SDK client. The clients are optional peer dependencies, so npm does not install them for you. Install only the clients of the subpaths you import:
+
+| Subpath | Operations | Install too |
+|---|---|---|
+| `@aws/durable-execution-sdk-js-extras/compute/microvm` | `microvm`, `microvmSession` | `@aws-sdk/client-lambda-microvms` |
+
+```bash
+npm install @aws-sdk/client-lambda-microvms
+```
+
+An import of a subpath without its client fails with `Cannot find module '@aws-sdk/client-lambda-microvms'`. The package root, `@aws/durable-execution-sdk-js-extras`, exports only `ComputeError` and needs no client.
+
 This package needs `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier versions have no `subType` option on steps and callbacks. They would drop the subtypes that these operations record, and replay after an upgrade would then fail.
 
 ## `microvm`: run a job in an AWS Lambda MicroVM

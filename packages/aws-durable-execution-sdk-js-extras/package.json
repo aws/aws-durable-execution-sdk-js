@@ -45,10 +45,8 @@
     "dist-cjs/",
     "dist-types"
   ],
-  "dependencies": {
-    "@aws-sdk/client-lambda-microvms": "^3.1161.0"
-  },
   "devDependencies": {
+    "@aws-sdk/client-lambda-microvms": "^3.1161.0",
     "@aws/durable-execution-sdk-js-microvm-worker": "0.1.0-alpha.0",
     "@aws/durable-execution-sdk-js-testing": "*",
     "@biomejs/biome": "2.5.15",
@@ -57,7 +55,13 @@
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.6.0"
+    "@aws/durable-execution-sdk-js": ">=2.6.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1161.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-lambda-microvms": {
+      "optional": true
+    }
   },
   "private": false
 }
