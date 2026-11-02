@@ -64,6 +64,7 @@
  * self-tests contain pattern text, and three earlier scanners in this repo flagged
  * their own documentation.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

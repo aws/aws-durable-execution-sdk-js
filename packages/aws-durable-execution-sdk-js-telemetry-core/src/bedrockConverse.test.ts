@@ -1,7 +1,12 @@
-const send = jest.fn();
-jest.mock("@aws-sdk/client-bedrock-runtime", () => ({
-  BedrockRuntimeClient: jest.fn(() => ({ send })),
-  ConverseCommand: jest.fn((input) => ({ __t: "converse", input })),
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+const send = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
+  BedrockRuntimeClient: vi.fn(function () {
+    return { send };
+  }),
+  ConverseCommand: vi.fn(function (input) {
+    return { __t: "converse", input };
+  }),
 }));
 
 import { sendConverse, modelRejectsTemperature } from "./bedrockConverse";
@@ -10,11 +15,11 @@ import { ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 const client = { send } as never;
 
 function lastInput() {
-  const calls = (ConverseCommand as unknown as jest.Mock).mock.calls;
+  const calls = (ConverseCommand as unknown as Mock).mock.calls;
   return calls[calls.length - 1][0];
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe("modelRejectsTemperature", () => {
   it("flags Claude 5-gen (and newer) models", () => {

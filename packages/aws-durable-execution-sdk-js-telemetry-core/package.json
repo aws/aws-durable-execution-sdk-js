@@ -6,7 +6,7 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -28,27 +28,8 @@
     "quickjs-emscripten-core": "^0.32.0"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.43",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.15",
-    "typescript": "^6.0.3"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/src/**/*.test.ts"
-    ],
-    "transform": {
-      "^.+\\.ts$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.test.json",
-          "diagnostics": false,
-          "isolatedModules": true
-        }
-      ]
-    }
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   }
 }

@@ -1,6 +1,7 @@
-jest.mock("./athena", () => ({
-  getTableLocation: jest.fn(),
-  getWorkGroupOutput: jest.fn(),
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+vi.mock("./athena", () => ({
+  getTableLocation: vi.fn(),
+  getWorkGroupOutput: vi.fn(),
 }));
 
 import { getTableLocation, getWorkGroupOutput } from "./athena";
@@ -29,13 +30,15 @@ function cfg(overrides: Partial<TelemetryConfig>): TelemetryConfig {
   } as TelemetryConfig;
 }
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => vi.resetAllMocks());
 
 describe("checkAthenaResultLocation", () => {
-  const location = getTableLocation as jest.Mock;
-  const workgroup = getWorkGroupOutput as jest.Mock;
+  const location = getTableLocation as Mock;
+  const workgroup = getWorkGroupOutput as Mock;
   const credentials = (() => Promise.resolve({})) as never;
-  beforeEach(() => workgroup.mockResolvedValue({ enforced: false }));
+  beforeEach(() => {
+    workgroup.mockResolvedValue({ enforced: false });
+  });
 
   it("is inside when the result location is inside the table's data", async () => {
     location.mockResolvedValue("s3://bucket/telemetry");

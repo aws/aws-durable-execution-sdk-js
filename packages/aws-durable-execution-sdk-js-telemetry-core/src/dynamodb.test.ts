@@ -14,11 +14,16 @@
  * a version that stops reading `NextToken` still satisfies them. This is the test
  * that pins the behavior to the SDK response.
  */
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.hoisted(() => vi.fn());
 
-jest.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: jest.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: jest.fn((i) => ({ __type: "execute", i })),
+vi.mock("@aws-sdk/client-dynamodb", () => ({
+  DynamoDBClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  ExecuteStatementCommand: vi.fn(function (i) {
+    return { __type: "execute", i };
+  }),
 }));
 
 import { runDynamoDBQuery } from "./dynamodb";
@@ -34,7 +39,7 @@ const OPTS = {
 const item = (n: number) => ({ n: { N: String(n) } });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe("runDynamoDBQuery reports response completeness", () => {
