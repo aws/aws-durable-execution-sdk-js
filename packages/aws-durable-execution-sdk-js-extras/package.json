@@ -38,6 +38,11 @@
       "types": "./dist-types/microvm/index.d.ts",
       "import": "./dist/microvm.mjs",
       "require": "./dist-cjs/microvm.js"
+    },
+    "./llm": {
+      "types": "./dist-types/llm/index.d.ts",
+      "import": "./dist/llm.mjs",
+      "require": "./dist-cjs/llm.js"
     }
   },
   "files": [
@@ -51,12 +56,19 @@
   "devDependencies": {
     "@aws/durable-execution-sdk-js-microvm-worker": "0.1.0-alpha.0",
     "@aws/durable-execution-sdk-js-testing": "*",
+    "@aws-sdk/client-bedrock-runtime": "^3.1150.0",
     "@biomejs/biome": "2.5.15",
     "jest": "^30.5.2",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.6.0"
+    "@aws/durable-execution-sdk-js": ">=2.6.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1150.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    }
   },
   "private": false
 }

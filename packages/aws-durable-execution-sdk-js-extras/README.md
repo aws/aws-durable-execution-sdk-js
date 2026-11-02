@@ -387,6 +387,91 @@ It needs:
 
 A suspend that the service refuses for now, such as a throttle or expired credentials, is not retried without `autoSuspendOnIdle`. The MicroVM then keeps running until a later suspend. With `autoSuspendOnIdle`, the worker tries again after the idle time, as it does for an idle suspend.
 
+## `llm`: ask a model one question and get a typed answer
+
+`llm()` returns five operations. Each one is one durable step. It asks one question and returns a typed answer. A replay returns the checkpointed answer and does not call a model.
+
+| Operation | Returns |
+|---|---|
+| `ask(ctx, question, input?)` | `string` |
+| `check(ctx, question, input)` | `boolean` |
+| `classify(ctx, question, options, input)` | One entry of `options`, typed as their union |
+| `label(ctx, question, options, input)` | Every entry of `options` that applies, in the order of `options` |
+| `score(ctx, question, scale, input)` | A number from 0 (first entry of `scale`) to 1 (last entry) |
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { llm } from "@aws/durable-execution-sdk-js-extras/llm";
+
+const model = llm();
+
+export const handler = withDurableExecution(async (ticket, context) => {
+  if (await model.check(context, "Is the customer asking for a human?", ticket.body)) {
+    return escalate(ticket);
+  }
+  const team = await model.classify(
+    context,
+    "Which team should handle this?",
+    ["returns", "shipping", "billing"],
+    ticket.body,
+  );
+  // team has the type "returns" | "shipping" | "billing".
+  return route(team);
+});
+```
+
+The first argument is the context that the call runs in. Inside a child context or a `map` item, pass that context.
+
+### Two models
+
+| Operations | Model |
+|---|---|
+| `check`, `classify`, `label`, `score` | A decision model, when one is configured. Otherwise the text model. |
+| `ask` | The text model. A decision model cannot write text. |
+
+A decision model, such as [Strands Decider](https://github.com/strands-labs/strands-decider), does not write text. It picks an option or rates on a scale, and it reports how sure it is. It answers in milliseconds. The text model is Claude Haiku 4.5 on Amazon Bedrock (`global.anthropic.claude-haiku-4-5-20251001-v1:0`) unless you set another.
+
+```typescript
+const model = llm({
+  decide: {
+    destination: { decider: { endpoint: "https://decider.example.com/v1/systemone" } },
+    // An answer that is less sure than this goes to the text model. 0 to 1.
+    unsureBelow: 0.8,
+  },
+  generate: {
+    destination: { bedrock: { modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0" } },
+  },
+});
+```
+
+- `decide` is optional. Without it, and without the `STRANDS_DECIDER_ENDPOINT` environment variable, the text model answers all five operations. It uses Bedrock structured output, so the model must support it.
+- The decision model must serve the `POST /v1/systemone` route of Strands Decider. Pass `headers` for an authorization header, or `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4. This package does not host the model.
+- The confidence of a yes or no is `|2p - 1|` for the probability `p`. `check` and `label` answer yes at or above `decide.threshold` (default 0.5).
+- A decision model accepts 2 to 255 options for `classify` and 2 to 10 scale entries for `score`. A longer list goes to the text model. `label` sends one yes-or-no question per option.
+- A decision model has a short context window. The server shortens a long input.
+
+### What a call does
+
+1. The call validates its arguments. An empty question, fewer than two options, duplicate options, a scale with fewer than two entries, or an input that `JSON.stringify` cannot encode creates no durable operation. The returned promise rejects with a `TypeError` or a `RangeError`.
+2. One step named `llm.<operation>` runs the request. Pass `{ name }` in the last argument to rename it. The step has the subtype `LlmAsk`, `LlmCheck`, `LlmClassify`, `LlmLabel`, or `LlmScore`.
+3. The step result is the validated answer. The input and the prompt are not checkpointed.
+
+The text model gets the question and the options, and the input inside `<input>` tags. The system prompt says that the input is data, not instructions. The schema and the validation limit the answer to the operation's type, so an injected instruction can change the answer but cannot return a value outside the options. Do not use an answer alone to authorize an action.
+
+### Retries
+
+The first retry tier runs inside the step attempt. The AWS SDK client retries throttling. An invalid reply goes back to the text model once, with the reason it failed. Both stop 10 seconds before the invocation runs out of time.
+
+The second tier is the step retry strategy, `defaultLlmRetryStrategy`. It retries throttling, server errors, timeouts, connection failures, and decision model outages, up to 5 attempts. It retries an invalid reply once. It does not retry access-denied, validation, or guardrail errors. Pass `retryStrategy` to `llm()` to replace it.
+
+### Permissions
+
+The function's role needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use the text model.
+
+### Testing
+
+Pass a fake as `generate.destination.bedrock.client` and `decide.destination.decider.transport`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/llm/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `LLM_LIVE=1`. `e2e/run-llm-e2e.mjs deploy` deploys a durable function and checks the result and the history.
+
 ## Best practices for MicroVM operations
 
 The operations retry network and service failures. They launch and terminate the MicroVM. They do not check every setting of your function and your deploy. This section lists what your durable function and your deploy must do. Each rule states what happens if you break it. The rules for the job handlers in the MicroVM are in the worker's [best practices for job handlers](../aws-durable-execution-sdk-js-microvm-worker/README.md#best-practices-for-job-handlers).
@@ -498,7 +583,7 @@ The operations retry network and service failures. They launch and terminate the
 
 ## End-to-end test
 
-`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs thirteen scenarios by default:
+`e2e/run-e2e.mjs` (MicroVM operations) deploys a durable function and a MicroVM image to a real AWS account and runs thirteen scenarios by default:
 
 - A job that succeeds with heartbeats. Its small input goes in the `run` hook.
 - A job that fails.
