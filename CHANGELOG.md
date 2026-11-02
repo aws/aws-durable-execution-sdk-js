@@ -561,6 +561,14 @@ below describe each change in detail.
 
 ### Added
 
+- **eslint-plugin**: a new rule, `valid-operation-identifiers`, in `flat/recommended`. It reports
+  an operation name that is empty, is not printable ASCII or is over 256 characters, and a
+  `subType` that is not `[a-zA-Z0-9-_]` or is over 32 characters. The service rejects these values
+  at the first checkpoint and fails the execution. A step with the default semantics runs its
+  function once before that. The rule checks string literals and the fixed parts of template
+  literals, on calls whose receiver is a durable context. **Upgrading can make lint fail** on a
+  project that has such a value, even if that call has not run yet.
+
 - **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
   `runInChildContext` function, a `map` function, or a `parallel` branch that calls no durable
   operation on its context, and tells the user to put the work in a step. A step retries the

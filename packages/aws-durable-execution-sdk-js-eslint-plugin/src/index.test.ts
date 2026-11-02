@@ -5,6 +5,7 @@ const RECOMMENDED_RULE_NAMES = [
   "no-closure-in-durable-operations",
   "no-nested-durable-operations",
   "no-non-deterministic-outside-step",
+  "valid-operation-identifiers",
 ];
 const RULE_NAMES = [
   ...RECOMMENDED_RULE_NAMES,
@@ -12,8 +13,8 @@ const RULE_NAMES = [
 ];
 
 describe("plugin", () => {
-  it("exports the four rules", () => {
-    expect(Object.keys(plugin.rules).sort()).toEqual(RULE_NAMES);
+  it("exports the five rules", () => {
+    expect(Object.keys(plugin.rules).sort()).toEqual([...RULE_NAMES].sort());
   });
 
   it("names itself after the package, with the package version", () => {
@@ -30,7 +31,7 @@ describe("plugin", () => {
       expect(config.plugins[NAMESPACE]).toBe(plugin);
     });
 
-    it("enables the three replay rules as errors, and no other rule", () => {
+    it("enables the recommended rules as errors, and no other rule", () => {
       expect(config.rules).toEqual(
         Object.fromEntries(
           RECOMMENDED_RULE_NAMES.map((r) => [`${NAMESPACE}/${r}`, "error"]),
