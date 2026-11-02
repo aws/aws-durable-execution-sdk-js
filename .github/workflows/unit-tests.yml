@@ -25,8 +25,8 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # Packages are split across runners by measured Jest time (~35-40s per shard).
-  # Running two Jest runs on one 4-CPU runner was tried: they starved each
+  # Packages are split across runners by measured test time (~35-40s per shard).
+  # Running two test runs on one 4-CPU runner was tried: they starved each
   # other and tests hit their 5s timeouts.
   #   examples: examples ~26s
   #   testing:  sdk ~7s, testing ~29s

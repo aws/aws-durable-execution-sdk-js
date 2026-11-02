@@ -984,21 +984,22 @@ class IntegrationTestRunner {
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
     // Build test command with optional pattern
-    const jestArgs = [];
+    const vitestArgs = [];
     // CI sets this so timing-report.mjs can report how long each test took.
     if (process.env.INTEG_TIMINGS_FILE) {
-      jestArgs.push(
-        "--json",
-        `--outputFile=${shellQuote(process.env.INTEG_TIMINGS_FILE)}`,
+      vitestArgs.push(
+        "--reporter=default",
+        "--reporter=json",
+        `--outputFile.json=${shellQuote(process.env.INTEG_TIMINGS_FILE)}`,
       );
     }
     if (testPattern) {
-      jestArgs.push(testPattern);
+      vitestArgs.push(testPattern);
       log.info(`Running tests with pattern: ${testPattern}`);
     }
     let testCommand = "npm run test:integration";
-    if (jestArgs.length > 0) {
-      testCommand += ` -- ${jestArgs.join(" ")}`;
+    if (vitestArgs.length > 0) {
+      testCommand += ` -- ${vitestArgs.join(" ")}`;
     }
 
     this.execCommand(testCommand, {
