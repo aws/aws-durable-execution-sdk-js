@@ -8,6 +8,7 @@ on:
         type: string
 
 permissions:
+  actions: read # Required to wait for the build job
   contents: read # Required for actions/checkout
 
 # Cancel when pull request is updated for this node version
@@ -45,13 +46,20 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ inputs.node-version }}
+      - name: Install dependencies
+        uses: ./.github/actions/npm-ci
+      # This job starts together with `build` (see build.yml); the setup above
+      # runs while build compiles. The artifacts are only dist files, so
+      # extracting them after npm ci is safe.
+      - name: Wait for the build job
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/scripts/integration-test/wait-for-build.mjs
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: built-artifacts
           path: .
-      - name: Install dependencies
-        uses: ./.github/actions/npm-ci
       - name: Run tests
         # The root `test` script stays the one list of packages; this only
         # splits it. `rest` takes whatever the named shards do not, so a new

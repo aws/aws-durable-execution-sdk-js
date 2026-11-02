@@ -188,7 +188,10 @@ jobs:
     uses: "./.github/workflows/lint.yml"
 
   unit-tests:
-    needs: build
+    # No `needs: build`; see integration-tests below.
+    permissions:
+      actions: read
+      contents: read
     strategy:
       fail-fast: false
       matrix:
