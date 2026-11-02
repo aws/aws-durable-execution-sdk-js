@@ -69,6 +69,18 @@ describe("compute error hierarchy", () => {
     },
   );
 
+  // MicrovmEndpointUnavailableError extended Error, and inherited its
+  // (message?, options?) constructor. It keeps that constructor.
+  it("keeps the Error constructor contract on MicrovmEndpointUnavailableError", () => {
+    const cause = new Error("socket closed");
+
+    expect(new MicrovmEndpointUnavailableError().message).toBe("");
+    expect(new MicrovmEndpointUnavailableError().cause).toBeUndefined();
+    expect(
+      new MicrovmEndpointUnavailableError("unavailable", { cause }).cause,
+    ).toBe(cause);
+  });
+
   it("keeps the HTTP status on the request errors", () => {
     expect(new MicrovmRequestRejectedError("rejected", 404).status).toBe(404);
     expect(

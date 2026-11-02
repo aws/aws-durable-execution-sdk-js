@@ -12,8 +12,6 @@ const packageJson = JSON.parse(
   readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"),
 ) as PackageJson;
 
-const root = readFileSync(join(__dirname, "..", "index.ts"), "utf8");
-
 describe("package dependencies", () => {
   // A customer installs only the clients of the subpaths they import. So no
   // client can be a dependency that npm installs for every customer.
@@ -37,12 +35,29 @@ describe("package dependencies", () => {
     );
   });
 
-  // The root entry point loads every module it re-exports, and every client
-  // those modules import. So it re-exports only modules that import no client.
-  it("re-exports only the shared compute module from the root", () => {
-    const reExports = [...root.matchAll(/from "([^"]+)"/g)].map(
-      (match) => match[1],
-    );
-    expect(reExports).toEqual(["./compute"]);
+  // The root entry point loads every module it imports, directly or through
+  // other modules. So loading it must never load an AWS SDK client.
+  describe.each(clients)("without %s installed", (client) => {
+    async function load(path: string): Promise<unknown> {
+      let loaded: unknown;
+      await jest.isolateModulesAsync(async () => {
+        jest.doMock(client, () => {
+          throw new Error(`Cannot find module '${client}'`);
+        });
+        loaded = await import(path);
+      });
+      return loaded;
+    }
+
+    it("loads the package root", async () => {
+      await expect(load("..")).resolves.toHaveProperty("ComputeError");
+    });
+
+    // The control: the mock does stop a module that imports the client.
+    it("fails to load compute/microvm", async () => {
+      await expect(load("../compute/microvm")).rejects.toThrow(
+        `Cannot find module '${client}'`,
+      );
+    });
   });
 });

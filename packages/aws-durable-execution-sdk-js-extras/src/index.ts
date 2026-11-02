@@ -1,1 +1,1 @@
-export * from "./compute";
+export { ComputeError } from "./compute/errors";

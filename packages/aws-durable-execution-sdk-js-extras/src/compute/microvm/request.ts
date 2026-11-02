@@ -196,8 +196,15 @@ export class MicrovmEndpointUnavailableError extends MicrovmDeliveryError {
   override readonly name = "MicrovmEndpointUnavailableError";
   readonly errorType: string = "MicrovmEndpointUnavailableError";
 
-  constructor(message: string) {
-    super(message);
+  /**
+   * Takes the same arguments as the `Error` constructor, which this class
+   * extended before it extended {@link MicrovmDeliveryError}.
+   */
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message ?? "");
+    if (options !== undefined && "cause" in options) {
+      this.cause = options.cause as Error;
+    }
   }
 }
 
