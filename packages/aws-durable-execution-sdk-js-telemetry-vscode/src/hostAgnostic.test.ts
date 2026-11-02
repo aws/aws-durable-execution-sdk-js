@@ -25,6 +25,7 @@
  * not re-implemented: two divergent copies of a correctness-critical regex is the
  * duplication this package boundary exists to remove.
  */
+import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import {

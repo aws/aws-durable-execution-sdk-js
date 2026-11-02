@@ -12,6 +12,7 @@
  * AI consent has a stricter rule, enforced in config.ts and tested in
  * config.test.ts: it is read from user settings only, even in a trusted folder.
  */
+import { describe, expect, it } from "vitest";
 // biome-ignore lint/style/noCommonJs: reads the extension manifest at runtime. `resolveJsonModule` is not enabled for this package, so a static import would not type-check.
 const manifest = require("../package.json") as {
   capabilities: {
