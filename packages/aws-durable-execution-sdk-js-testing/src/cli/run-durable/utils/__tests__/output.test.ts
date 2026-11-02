@@ -1,14 +1,15 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TestResult } from "../../../../test-runner";
 import { logExecutionStart, logExecutionResults } from "../output";
 
 describe("Output Functions", () => {
   const originalConsoleLog = console.log;
   const originalConsoleTable = console.table;
-  const mockConsoleLog = jest.fn();
-  const mockConsoleTable = jest.fn();
+  const mockConsoleLog = vi.fn();
+  const mockConsoleTable = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     console.log = mockConsoleLog;
     console.table = mockConsoleTable;
   });
@@ -64,16 +65,16 @@ describe("Output Functions", () => {
   describe("logExecutionResults", () => {
     it("should log execution results with history when enabled", () => {
       const mockExecution: TestResult = {
-        print: jest.fn(),
-        getStatus: jest.fn().mockReturnValue("SUCCEEDED"),
-        getHistoryEvents: jest.fn().mockReturnValue([
+        print: vi.fn(),
+        getStatus: vi.fn().mockReturnValue("SUCCEEDED"),
+        getHistoryEvents: vi.fn().mockReturnValue([
           { EventType: "ExecutionStarted", EventId: 1 },
           { EventType: "ExecutionSucceeded", EventId: 2 },
         ]),
-        getResult: jest.fn().mockReturnValue({ message: "Success" }),
-        getError: jest.fn(),
-        getOperations: jest.fn(),
-        getInvocations: jest.fn(),
+        getResult: vi.fn().mockReturnValue({ message: "Success" }),
+        getError: vi.fn(),
+        getOperations: vi.fn(),
+        getInvocations: vi.fn(),
       };
 
       logExecutionResults(mockExecution, true);
@@ -96,13 +97,13 @@ describe("Output Functions", () => {
 
     it("should log execution results without history when disabled", () => {
       const mockExecution: TestResult = {
-        print: jest.fn(),
-        getStatus: jest.fn().mockReturnValue("SUCCEEDED"),
-        getHistoryEvents: jest.fn(),
-        getResult: jest.fn().mockReturnValue("Simple result"),
-        getError: jest.fn(),
-        getOperations: jest.fn(),
-        getInvocations: jest.fn(),
+        print: vi.fn(),
+        getStatus: vi.fn().mockReturnValue("SUCCEEDED"),
+        getHistoryEvents: vi.fn(),
+        getResult: vi.fn().mockReturnValue("Simple result"),
+        getError: vi.fn(),
+        getOperations: vi.fn(),
+        getInvocations: vi.fn(),
       };
 
       logExecutionResults(mockExecution, false);
@@ -122,17 +123,17 @@ describe("Output Functions", () => {
 
     it("should log error when getResult throws", () => {
       const mockExecution: TestResult = {
-        print: jest.fn(),
-        getStatus: jest.fn().mockReturnValue("FAILED"),
-        getHistoryEvents: jest.fn(),
-        getResult: jest.fn().mockImplementation(() => {
+        print: vi.fn(),
+        getStatus: vi.fn().mockReturnValue("FAILED"),
+        getHistoryEvents: vi.fn(),
+        getResult: vi.fn().mockImplementation(() => {
           throw new Error("No result available");
         }),
-        getError: jest
+        getError: vi
           .fn()
           .mockReturnValue({ errorType: "TestError", message: "Test failed" }),
-        getOperations: jest.fn(),
-        getInvocations: jest.fn(),
+        getOperations: vi.fn(),
+        getInvocations: vi.fn(),
       };
 
       logExecutionResults(mockExecution, false);
@@ -154,13 +155,13 @@ describe("Output Functions", () => {
 
     it("should call execution print method", () => {
       const mockExecution: TestResult = {
-        print: jest.fn(),
-        getStatus: jest.fn().mockReturnValue("SUCCEEDED"),
-        getHistoryEvents: jest.fn(),
-        getResult: jest.fn().mockReturnValue(null),
-        getError: jest.fn(),
-        getOperations: jest.fn(),
-        getInvocations: jest.fn(),
+        print: vi.fn(),
+        getStatus: vi.fn().mockReturnValue("SUCCEEDED"),
+        getHistoryEvents: vi.fn(),
+        getResult: vi.fn().mockReturnValue(null),
+        getError: vi.fn(),
+        getOperations: vi.fn(),
+        getInvocations: vi.fn(),
       };
 
       logExecutionResults(mockExecution, false);

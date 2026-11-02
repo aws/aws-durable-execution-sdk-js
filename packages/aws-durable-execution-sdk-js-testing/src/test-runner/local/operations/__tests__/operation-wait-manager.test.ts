@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from "vitest";
 import { OperationWaitManager } from "../operation-wait-manager";
 import {
   OperationStatus,

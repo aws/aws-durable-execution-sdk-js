@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { LocalDurableTestRunner } from "../local-durable-test-runner";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
@@ -11,96 +21,103 @@ import { IndexedOperations } from "../../common/indexed-operations";
 import { CheckpointWorkerApiClient } from "../api-client/checkpoint-worker-api-client";
 import { install } from "@sinonjs/fake-timers";
 
-jest.mock("../test-execution-orchestrator");
-jest.mock("../result-formatter");
-jest.mock("../operations/local-operation-storage");
-jest.mock("../operations/operation-wait-manager");
-jest.mock("../operations/function-storage");
-jest.mock("@sinonjs/fake-timers");
+vi.mock("../test-execution-orchestrator");
+vi.mock("../result-formatter");
+vi.mock("../operations/local-operation-storage");
+vi.mock("../operations/operation-wait-manager");
+vi.mock("../operations/function-storage");
+vi.mock("@sinonjs/fake-timers");
 
 describe("LocalDurableTestRunner", () => {
-  const mockHandlerFunction = jest.fn();
-  let mockOrchestrator: jest.Mocked<TestExecutionOrchestrator>;
-  let mockResultFormatter: jest.Mocked<ResultFormatter<{ success: boolean }>>;
-  let mockOperationStorage: Partial<jest.Mocked<LocalOperationStorage>>;
-  let mockWaitManager: Partial<jest.Mocked<OperationWaitManager>>;
-  let mockCheckpointServerWorkerManager: jest.Mocked<CheckpointWorkerManager>;
-  let mockFunctionStorage: jest.Mocked<FunctionStorage>;
+  const mockHandlerFunction = vi.fn();
+  let mockOrchestrator: Mocked<TestExecutionOrchestrator>;
+  let mockResultFormatter: Mocked<ResultFormatter<{ success: boolean }>>;
+  let mockOperationStorage: Partial<Mocked<LocalOperationStorage>>;
+  let mockWaitManager: Partial<Mocked<OperationWaitManager>>;
+  let mockCheckpointServerWorkerManager: Mocked<CheckpointWorkerManager>;
+  let mockFunctionStorage: Mocked<FunctionStorage>;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     // Mock CheckpointServerWorkerManager first since it's used in constructor
     const checkpointServerUrl = "http://127.0.0.1:1234";
     mockCheckpointServerWorkerManager = {
-      getServerInfo: jest.fn().mockReturnValue({
+      getServerInfo: vi.fn().mockReturnValue({
         url: checkpointServerUrl,
         port: 1234,
       }),
-      setup: jest.fn().mockResolvedValue({
+      setup: vi.fn().mockResolvedValue({
         url: checkpointServerUrl,
         port: 1234,
       }),
-      teardown: jest.fn().mockResolvedValue(undefined),
-    } as unknown as jest.Mocked<CheckpointWorkerManager>;
+      teardown: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Mocked<CheckpointWorkerManager>;
 
     // Mock the getInstance method
-    jest
-      .spyOn(CheckpointWorkerManager, "getInstance")
-      .mockReturnValue(mockCheckpointServerWorkerManager);
+    vi.spyOn(CheckpointWorkerManager, "getInstance").mockReturnValue(
+      mockCheckpointServerWorkerManager,
+    );
 
     // Create mock instances for dependency injection testing - now type-safe!
     mockWaitManager = {
-      waitForOperation: jest.fn(),
-      clearWaitingOperations: jest.fn(),
-      handleCheckpointReceived: jest.fn(),
+      waitForOperation: vi.fn(),
+      clearWaitingOperations: vi.fn(),
+      handleCheckpointReceived: vi.fn(),
     };
 
     mockOperationStorage = {
-      registerOperation: jest.fn(),
-      populateOperations: jest.fn(),
-      getHistoryEvents: jest.fn().mockReturnValue([]),
+      registerOperation: vi.fn(),
+      populateOperations: vi.fn(),
+      getHistoryEvents: vi.fn().mockReturnValue([]),
     };
 
     mockFunctionStorage = {
-      registerFunction: jest.fn().mockReturnValue(mockFunctionStorage),
-      registerDurableFunction: jest.fn().mockReturnValue(mockFunctionStorage),
-      runHandler: jest.fn(),
-    } as unknown as jest.Mocked<FunctionStorage>;
+      registerFunction: vi.fn().mockReturnValue(mockFunctionStorage),
+      registerDurableFunction: vi.fn().mockReturnValue(mockFunctionStorage),
+      runHandler: vi.fn(),
+    } as unknown as Mocked<FunctionStorage>;
 
     mockOrchestrator = {
-      executeHandler: jest.fn().mockResolvedValue({
+      executeHandler: vi.fn().mockResolvedValue({
         Status: InvocationStatus.SUCCEEDED,
         Result: JSON.stringify({ success: true }),
       }),
-      getInvocations: jest.fn().mockReturnValue([]),
-    } as unknown as jest.Mocked<TestExecutionOrchestrator>;
+      getInvocations: vi.fn().mockReturnValue([]),
+    } as unknown as Mocked<TestExecutionOrchestrator>;
 
     mockResultFormatter = {
-      formatTestResult: jest.fn().mockReturnValue({
-        getOperations: jest.fn().mockReturnValue([]),
-        getInvocations: jest.fn().mockReturnValue([]),
-        getResult: jest.fn().mockReturnValue({ data: { success: true } }),
-        getHistoryEvents: jest.fn(),
+      formatTestResult: vi.fn().mockReturnValue({
+        getOperations: vi.fn().mockReturnValue([]),
+        getInvocations: vi.fn().mockReturnValue([]),
+        getResult: vi.fn().mockReturnValue({ data: { success: true } }),
+        getHistoryEvents: vi.fn(),
       }),
-    } as unknown as jest.Mocked<ResultFormatter<{ success: boolean }>>;
+    } as unknown as Mocked<ResultFormatter<{ success: boolean }>>;
 
     // Mock constructors to return our mocks and verify proper dependency injection
-    (OperationWaitManager as jest.Mock).mockImplementation(
-      () => mockWaitManager,
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (OperationWaitManager as Mock).mockImplementation(function () {
+      return mockWaitManager;
+    });
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (LocalOperationStorage as Mock).mockImplementation(function () {
+      return mockOperationStorage;
+    });
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (FunctionStorage as Mock).mockImplementation(function () {
+      return mockFunctionStorage;
+    });
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (TestExecutionOrchestrator as unknown as Mock).mockImplementation(
+      function () {
+        return mockOrchestrator;
+      },
     );
-    (LocalOperationStorage as jest.Mock).mockImplementation(
-      () => mockOperationStorage,
-    );
-    (FunctionStorage as jest.Mock).mockImplementation(
-      () => mockFunctionStorage,
-    );
-    (TestExecutionOrchestrator as unknown as jest.Mock).mockImplementation(
-      () => mockOrchestrator,
-    );
-    (ResultFormatter as jest.Mock).mockImplementation(
-      () => mockResultFormatter,
-    );
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (ResultFormatter as Mock).mockImplementation(function () {
+      return mockResultFormatter;
+    });
   });
 
   // biome-ignore lint/suspicious/noDuplicateTestHooks: GENUINE DEFECT, not stylistic -- two beforeEach hooks in one describe run in declaration order, which is easy to misread and to break by reordering. Should be merged; tracked as follow-up rather than changing test setup inside a toolchain migration.
@@ -164,9 +181,7 @@ describe("LocalDurableTestRunner", () => {
       });
 
       const mockError = new Error("Execution failed");
-      (mockOrchestrator.executeHandler as jest.Mock).mockRejectedValue(
-        mockError,
-      );
+      (mockOrchestrator.executeHandler as Mock).mockRejectedValue(mockError);
 
       await expect(runner.run()).rejects.toThrow("Execution failed");
     });
@@ -220,9 +235,7 @@ describe("LocalDurableTestRunner", () => {
       });
 
       const mockError = new Error("Execution failed");
-      (mockOrchestrator.executeHandler as jest.Mock).mockRejectedValue(
-        mockError,
-      );
+      (mockOrchestrator.executeHandler as Mock).mockRejectedValue(mockError);
 
       await expect(runner.run()).rejects.toThrow("Execution failed");
 
@@ -240,7 +253,7 @@ describe("LocalDurableTestRunner", () => {
         { EventId: 1 },
         { EventId: 3 },
       ];
-      (mockOperationStorage.getHistoryEvents as jest.Mock).mockReturnValue(
+      (mockOperationStorage.getHistoryEvents as Mock).mockReturnValue(
         mockHistoryEvents,
       );
 
@@ -330,7 +343,7 @@ describe("LocalDurableTestRunner", () => {
         handlerFunction: mockHandlerFunction,
       });
 
-      const mockDurableHandler = jest.fn();
+      const mockDurableHandler = vi.fn();
 
       runner.registerDurableFunction("durableFunction", mockDurableHandler);
 
@@ -345,7 +358,7 @@ describe("LocalDurableTestRunner", () => {
         handlerFunction: mockHandlerFunction,
       });
 
-      const mockHandler = jest.fn();
+      const mockHandler = vi.fn();
 
       runner.registerFunction("function", mockHandler);
 
@@ -360,8 +373,8 @@ describe("LocalDurableTestRunner", () => {
         handlerFunction: mockHandlerFunction,
       });
 
-      const mockHandler = jest.fn();
-      const mockDurableHandler = jest.fn();
+      const mockHandler = vi.fn();
+      const mockDurableHandler = vi.fn();
 
       runner
         .registerFunction("function", mockHandler)
@@ -380,13 +393,13 @@ describe("LocalDurableTestRunner", () => {
 
   describe("static environment methods", () => {
     describe("setupTestEnvironment", () => {
-      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+      let mockFakeClock: { uninstall: Mock };
 
       beforeEach(() => {
         mockFakeClock = {
-          uninstall: jest.fn(),
+          uninstall: vi.fn(),
         };
-        (install as jest.Mock).mockReturnValue(mockFakeClock);
+        (install as Mock).mockReturnValue(mockFakeClock);
       });
 
       it("should pass undefined parameters to CheckpointWorkerManager", async () => {
@@ -417,7 +430,7 @@ describe("LocalDurableTestRunner", () => {
       });
 
       it("should install fake timers with correct configuration", async () => {
-        jest.spyOn(Date, "now").mockReturnValue(1);
+        vi.spyOn(Date, "now").mockReturnValue(1);
 
         await LocalDurableTestRunner.setupTestEnvironment({
           skipTime: true,
@@ -432,7 +445,7 @@ describe("LocalDurableTestRunner", () => {
 
       it("should throw error if fake timers failed to be installed", async () => {
         const installError = new Error("Failed to install fake timers");
-        (install as jest.Mock).mockImplementation(() => {
+        (install as Mock).mockImplementation(() => {
           throw installError;
         });
 
@@ -460,13 +473,13 @@ describe("LocalDurableTestRunner", () => {
     });
 
     describe("teardownTestEnvironment", () => {
-      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+      let mockFakeClock: { uninstall: Mock };
 
       beforeEach(() => {
         mockFakeClock = {
-          uninstall: jest.fn(),
+          uninstall: vi.fn(),
         };
-        (install as jest.Mock).mockReturnValue(mockFakeClock);
+        (install as Mock).mockReturnValue(mockFakeClock);
       });
 
       it("should delegate to CheckpointServerWorkerManager.getInstance().teardown()", async () => {
@@ -496,13 +509,13 @@ describe("LocalDurableTestRunner", () => {
     });
 
     describe("environment lifecycle integration", () => {
-      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+      let mockFakeClock: { uninstall: Mock };
 
       beforeEach(() => {
         mockFakeClock = {
-          uninstall: jest.fn(),
+          uninstall: vi.fn(),
         };
-        (install as jest.Mock).mockReturnValue(mockFakeClock);
+        (install as Mock).mockReturnValue(mockFakeClock);
       });
 
       it("should allow setup and teardown to be called in sequence", async () => {
@@ -525,7 +538,7 @@ describe("LocalDurableTestRunner", () => {
 
       it("should handle complete fake clock lifecycle with skipTime enabled", async () => {
         const mockNow = 1640995200000; // 2022-01-01T00:00:00.000Z
-        jest.spyOn(Date, "now").mockReturnValue(mockNow);
+        vi.spyOn(Date, "now").mockReturnValue(mockNow);
 
         // Setup with skipTime enabled
         await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });

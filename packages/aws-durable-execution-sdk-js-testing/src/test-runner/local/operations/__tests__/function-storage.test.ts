@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
@@ -13,17 +23,17 @@ import {
 } from "../../interfaces/durable-test-runner-factory";
 
 // Mock dependencies
-jest.mock("../../invoke-handler");
+vi.mock("../../invoke-handler");
 
 describe("FunctionStorage", () => {
   let functionStorage: FunctionStorage;
-  let mockLocalDurableTestRunner: jest.Mocked<
+  let mockLocalDurableTestRunner: Mocked<
     ILocalDurableTestRunnerExecutor<unknown>
   >;
-  let mockInvokeHandler: jest.Mocked<InvokeHandler>;
-  let mockDurableHandler: jest.MockedFunction<DurableLambdaHandler>;
-  let mockNonDurableHandler: jest.MockedFunction<Handler>;
-  let mockFactory: jest.Mocked<ILocalDurableTestRunnerFactory>;
+  let mockInvokeHandler: Mocked<InvokeHandler>;
+  let mockDurableHandler: MockedFunction<DurableLambdaHandler>;
+  let mockNonDurableHandler: MockedFunction<Handler>;
+  let mockFactory: Mocked<ILocalDurableTestRunnerFactory>;
 
   // Helper function to create mock execution objects
   const createMockExecution = (
@@ -33,15 +43,15 @@ describe("FunctionStorage", () => {
       error: unknown;
     }> = {},
   ) => ({
-    getStatus: jest
+    getStatus: vi
       .fn()
       .mockReturnValue(overrides.status ?? ExecutionStatus.SUCCEEDED),
-    getResult: jest.fn().mockReturnValue(overrides.result ?? { success: true }),
-    getError: jest.fn().mockReturnValue(overrides.error),
-    getOperations: jest.fn().mockReturnValue([]),
-    getInvocations: jest.fn().mockReturnValue([]),
-    getHistoryEvents: jest.fn().mockReturnValue([]),
-    print: jest.fn(),
+    getResult: vi.fn().mockReturnValue(overrides.result ?? { success: true }),
+    getError: vi.fn().mockReturnValue(overrides.error),
+    getOperations: vi.fn().mockReturnValue([]),
+    getInvocations: vi.fn().mockReturnValue([]),
+    getHistoryEvents: vi.fn().mockReturnValue([]),
+    print: vi.fn(),
   });
 
   // Helper function to setup durable function registration
@@ -55,33 +65,36 @@ describe("FunctionStorage", () => {
   };
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     mockLocalDurableTestRunner = {
-      run: jest.fn().mockResolvedValue(createMockExecution()),
+      run: vi.fn().mockResolvedValue(createMockExecution()),
     };
 
     // Create a mock factory for FunctionStorage
     mockFactory = {
-      createRunner: jest.fn().mockReturnValue(mockLocalDurableTestRunner),
+      createRunner: vi.fn().mockReturnValue(mockLocalDurableTestRunner),
     };
 
     functionStorage = new FunctionStorage(mockFactory);
 
     // Mock InvokeHandler
     mockInvokeHandler = {
-      buildContext: jest.fn().mockReturnValue({
+      buildContext: vi.fn().mockReturnValue({
         functionName: "test-function",
         awsRequestId: "test-request-id",
         getRemainingTimeInMillis: () => 30000,
       }),
-    } as unknown as jest.Mocked<InvokeHandler>;
+    } as unknown as Mocked<InvokeHandler>;
 
-    (InvokeHandler as jest.Mock).mockImplementation(() => mockInvokeHandler);
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (InvokeHandler as Mock).mockImplementation(function () {
+      return mockInvokeHandler;
+    });
 
     // Mock handlers
-    mockDurableHandler = jest.fn();
-    mockNonDurableHandler = jest.fn();
+    mockDurableHandler = vi.fn();
+    mockNonDurableHandler = vi.fn();
   });
 
   describe("registerDurableFunction", () => {
@@ -95,7 +108,7 @@ describe("FunctionStorage", () => {
     });
 
     it("should overwrite previously registered durable functions", async () => {
-      const newHandler = jest.fn() as jest.MockedFunction<DurableLambdaHandler>;
+      const newHandler = vi.fn() as MockedFunction<DurableLambdaHandler>;
 
       setupDurableFunction("test-function");
       functionStorage.registerDurableFunction("test-function", newHandler);
@@ -123,7 +136,7 @@ describe("FunctionStorage", () => {
     });
 
     it("should overwrite previously registered non-durable functions", async () => {
-      const newHandler = jest.fn() as jest.MockedFunction<Handler>;
+      const newHandler = vi.fn() as MockedFunction<Handler>;
       newHandler.mockImplementation((_event, _context, callback) => {
         callback(null, { message: "new handler result" });
       });

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Scheduler } from "../scheduler";
 import { TimerScheduler } from "../timer-scheduler";
 
@@ -6,11 +7,11 @@ describe("TimerScheduler", () => {
 
   beforeEach(() => {
     scheduler = new TimerScheduler();
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("initial state", () => {
@@ -21,8 +22,8 @@ describe("TimerScheduler", () => {
 
   describe("scheduleFunction", () => {
     it("should set hasScheduledFunction to true when a function is scheduled", () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setMilliseconds(new Date().getMilliseconds() + 1);
@@ -32,55 +33,55 @@ describe("TimerScheduler", () => {
     });
 
     it("should use current time as default timestamp", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       // Schedule function without timestamp parameter
       scheduler.scheduleFunction(mockFn, mockOnError);
 
       // Should execute immediately since default is new Date()
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
 
     it("should execute immediately for past timestamps", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const pastTimestamp = new Date();
       pastTimestamp.setSeconds(pastTimestamp.getSeconds() - 10); // 10 seconds ago
       scheduler.scheduleFunction(mockFn, mockOnError, pastTimestamp);
 
       // Should execute immediately (0ms delay)
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
 
     it("should handle zero delay correctly", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const currentTime = new Date();
       scheduler.scheduleFunction(mockFn, mockOnError, currentTime);
 
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
 
     it("should execute updateCheckpoint before startInvocation", async () => {
       const executionOrder: string[] = [];
-      const mockFn = jest.fn().mockImplementation(() => {
+      const mockFn = vi.fn().mockImplementation(() => {
         executionOrder.push("startInvocation");
         return Promise.resolve();
       });
-      const mockUpdateCheckpoint = jest.fn().mockImplementation(() => {
+      const mockUpdateCheckpoint = vi.fn().mockImplementation(() => {
         executionOrder.push("updateCheckpoint");
         return Promise.resolve();
       });
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(timestamp.getSeconds() + 1);
@@ -91,16 +92,16 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(executionOrder).toEqual(["updateCheckpoint", "startInvocation"]);
     });
 
     it("should call onError when updateCheckpoint throws an error", async () => {
       const checkpointError = new Error("Checkpoint error");
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = vi.fn().mockRejectedValue(checkpointError);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(timestamp.getSeconds() + 1);
@@ -111,7 +112,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockOnError).toHaveBeenCalledWith(checkpointError);
       expect(mockFn).not.toHaveBeenCalled();
@@ -119,9 +120,9 @@ describe("TimerScheduler", () => {
 
     it("should not execute startInvocation when updateCheckpoint fails", async () => {
       const checkpointError = new Error("Checkpoint error");
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = vi.fn().mockRejectedValue(checkpointError);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(timestamp.getSeconds() + 1);
@@ -132,7 +133,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockUpdateCheckpoint).toHaveBeenCalledTimes(1);
       expect(mockFn).not.toHaveBeenCalled();
@@ -140,8 +141,8 @@ describe("TimerScheduler", () => {
     });
 
     it("should execute the scheduled function after the specified delay", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(new Date().getSeconds() + 2);
@@ -150,14 +151,14 @@ describe("TimerScheduler", () => {
       expect(mockFn).not.toHaveBeenCalled();
 
       // Fast-forward time by 2 seconds
-      await jest.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2000);
 
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
 
     it("should set hasScheduledFunction to false after the function executes", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(new Date().getSeconds() + 1);
@@ -165,31 +166,31 @@ describe("TimerScheduler", () => {
       expect(scheduler.hasScheduledFunction()).toBe(true);
 
       // Fast-forward time by 1 second
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(scheduler.hasScheduledFunction()).toBe(false);
     });
 
     it("should call onError when the scheduled function throws an error", async () => {
       const error = new Error("Test error");
-      const mockFn = jest.fn().mockRejectedValue(error);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockRejectedValue(error);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(new Date().getSeconds() + 1);
       scheduler.scheduleFunction(mockFn, mockOnError, timestamp);
 
       // Fast-forward time by 1 second
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockOnError).toHaveBeenCalledWith(error);
     });
 
     it("should handle multiple scheduled functions independently", async () => {
-      const mockFn1 = jest.fn().mockResolvedValue(undefined);
-      const mockFn2 = jest.fn().mockResolvedValue(undefined);
-      const mockOnError1 = jest.fn();
-      const mockOnError2 = jest.fn();
+      const mockFn1 = vi.fn().mockResolvedValue(undefined);
+      const mockFn2 = vi.fn().mockResolvedValue(undefined);
+      const mockOnError1 = vi.fn();
+      const mockOnError2 = vi.fn();
 
       const timestamp1 = new Date();
       timestamp1.setSeconds(new Date().getSeconds() + 1);
@@ -199,40 +200,40 @@ describe("TimerScheduler", () => {
       scheduler.scheduleFunction(mockFn2, mockOnError2, timestamp2);
 
       // Fast-forward by 1 second - only first function should execute
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockFn1).toHaveBeenCalledTimes(1);
       expect(mockFn2).not.toHaveBeenCalled();
 
       // Fast-forward by another second - second function should execute
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockFn2).toHaveBeenCalledTimes(1);
     });
 
     it("should convert delay from seconds to milliseconds correctly", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setMilliseconds(new Date().getMilliseconds() + 500);
       scheduler.scheduleFunction(mockFn, mockOnError, timestamp);
 
       // Fast-forward by 499ms - function should not execute yet
-      await jest.advanceTimersByTimeAsync(499);
+      await vi.advanceTimersByTimeAsync(499);
       expect(mockFn).not.toHaveBeenCalled();
 
       // Fast-forward by 1ms more (total 500ms) - function should execute
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("flushTimers", () => {
     it("should clear all running timers and prevent functions from executing", async () => {
-      const mockFn1 = jest.fn().mockResolvedValue(undefined);
-      const mockFn2 = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn1 = vi.fn().mockResolvedValue(undefined);
+      const mockFn2 = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       // Schedule multiple functions
       const timestamp1 = new Date();
@@ -248,7 +249,7 @@ describe("TimerScheduler", () => {
       scheduler.flushTimers();
 
       // Fast-forward time - functions should not execute
-      await jest.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(3000);
 
       expect(mockFn1).not.toHaveBeenCalled();
       expect(mockFn2).not.toHaveBeenCalled();
@@ -256,8 +257,8 @@ describe("TimerScheduler", () => {
     });
 
     it("should reset hasScheduledFunction flag to false", () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(new Date().getSeconds() + 1);
@@ -279,9 +280,9 @@ describe("TimerScheduler", () => {
     });
 
     it("should allow scheduling new functions after flushing", async () => {
-      const mockFn1 = jest.fn().mockResolvedValue(undefined);
-      const mockFn2 = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn1 = vi.fn().mockResolvedValue(undefined);
+      const mockFn2 = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       // Schedule and flush
       const timestamp1 = new Date();
@@ -296,7 +297,7 @@ describe("TimerScheduler", () => {
       expect(scheduler.hasScheduledFunction()).toBe(true);
 
       // New function should execute normally
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockFn1).not.toHaveBeenCalled(); // First function was flushed
       expect(mockFn2).toHaveBeenCalledTimes(1); // Second function executed
@@ -305,8 +306,8 @@ describe("TimerScheduler", () => {
 
     it("should handle flushing timers that would have thrown errors", async () => {
       const error = new Error("Test error");
-      const mockFn = jest.fn().mockRejectedValue(error);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockRejectedValue(error);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(new Date().getSeconds() + 1);
@@ -314,7 +315,7 @@ describe("TimerScheduler", () => {
       scheduler.flushTimers();
 
       // Advance time - error handler should not be called
-      await jest.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2000);
 
       expect(mockFn).not.toHaveBeenCalled();
       expect(mockOnError).not.toHaveBeenCalled();
@@ -327,21 +328,21 @@ describe("TimerScheduler", () => {
         phase: string;
         hasScheduledFunction: boolean;
       }[] = [];
-      const mockFn = jest.fn().mockImplementation(() => {
+      const mockFn = vi.fn().mockImplementation(() => {
         executionOrder.push({
           phase: "startInvocation",
           hasScheduledFunction: scheduler.hasScheduledFunction(),
         });
         return Promise.resolve();
       });
-      const mockUpdateCheckpoint = jest.fn().mockImplementation(() => {
+      const mockUpdateCheckpoint = vi.fn().mockImplementation(() => {
         executionOrder.push({
           phase: "updateCheckpoint",
           hasScheduledFunction: scheduler.hasScheduledFunction(),
         });
         return Promise.resolve();
       });
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(
         mockFn,
@@ -350,7 +351,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(executionOrder).toEqual([
         { phase: "updateCheckpoint", hasScheduledFunction: true },
         { phase: "startInvocation", hasScheduledFunction: false },
@@ -364,9 +365,9 @@ describe("TimerScheduler", () => {
       const checkpointPromise = new Promise<void>((resolve) => {
         resolveCheckpoint = resolve;
       });
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockUpdateCheckpoint = jest.fn().mockReturnValue(checkpointPromise);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = vi.fn().mockReturnValue(checkpointPromise);
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(
         mockFn,
@@ -375,22 +376,22 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(mockUpdateCheckpoint).toHaveBeenCalledTimes(1);
       expect(mockFn).not.toHaveBeenCalled();
       expect(scheduler.hasScheduledFunction()).toBe(true);
 
       resolveCheckpoint!();
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(mockFn).toHaveBeenCalledTimes(1);
       expect(scheduler.hasScheduledFunction()).toBe(false);
     });
 
     it("should remove timer entry when updateCheckpoint fails", async () => {
       const checkpointError = new Error("Checkpoint error");
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = vi.fn().mockRejectedValue(checkpointError);
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(
         mockFn,
@@ -400,7 +401,7 @@ describe("TimerScheduler", () => {
       );
 
       expect(scheduler.hasScheduledFunction()).toBe(true);
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(mockOnError).toHaveBeenCalledWith(checkpointError);
       expect(scheduler.hasScheduledFunction()).toBe(false);
     });
@@ -408,23 +409,23 @@ describe("TimerScheduler", () => {
 
   describe("updateCheckpoint functionality", () => {
     it("should work correctly when updateCheckpoint is not provided", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(timestamp.getSeconds() + 1);
       scheduler.scheduleFunction(mockFn, mockOnError, timestamp);
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockFn).toHaveBeenCalledTimes(1);
       expect(mockOnError).not.toHaveBeenCalled();
     });
 
     it("should handle updateCheckpoint returning undefined", async () => {
-      const mockFn = jest.fn().mockResolvedValue(undefined);
-      const mockUpdateCheckpoint = jest.fn().mockResolvedValue(undefined);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = vi.fn().mockResolvedValue(undefined);
+      const mockOnError = vi.fn();
 
       const timestamp = new Date();
       timestamp.setSeconds(timestamp.getSeconds() + 1);
@@ -435,7 +436,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mockUpdateCheckpoint).toHaveBeenCalledTimes(1);
       expect(mockFn).toHaveBeenCalledTimes(1);

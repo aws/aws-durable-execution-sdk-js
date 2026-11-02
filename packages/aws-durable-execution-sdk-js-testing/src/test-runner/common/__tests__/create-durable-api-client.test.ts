@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import {
   LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
@@ -8,11 +9,11 @@ import { createDurableApiClient } from "../create-durable-api-client";
 
 describe("create-durable-api-client", () => {
   const client = {
-    send: jest.fn(),
+    send: vi.fn(),
   } as unknown as LambdaClient;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should create client with expected properties", () => {

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { EventType } from "@aws-sdk/client-lambda";
 import { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "../local-operation-storage";
@@ -10,12 +11,12 @@ import {
 import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 // Mock the OperationWaitManager
-jest.mock("../operation-wait-manager");
+vi.mock("../operation-wait-manager");
 
 describe("LocalOperationStorage", () => {
   let mockWaitManager: OperationWaitManager;
   let mockIndexedOperations: IndexedOperations;
-  let mockCallback: jest.Mock;
+  let mockCallback: Mock;
   let mockDurableApiClient: DurableApiClient;
 
   // Sample operations for testing
@@ -118,14 +119,14 @@ describe("LocalOperationStorage", () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockIndexedOperations = new IndexedOperations([]);
     mockWaitManager = new OperationWaitManager(mockIndexedOperations);
-    mockCallback = jest.fn();
+    mockCallback = vi.fn();
     mockDurableApiClient = {
-      sendCallbackSuccess: jest.fn(),
-      sendCallbackFailure: jest.fn(),
-      sendCallbackHeartbeat: jest.fn(),
+      sendCallbackSuccess: vi.fn(),
+      sendCallbackFailure: vi.fn(),
+      sendCallbackHeartbeat: vi.fn(),
     };
   });
 
@@ -261,7 +262,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should notify wait manager when operations are populated", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -290,7 +291,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should notify wait manager for multiple populated operations", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -547,7 +548,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should notify wait manager when registering operations with existing data", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -604,7 +605,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should call callback with empty populated operations when no operations are populated", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -630,7 +631,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should call callback with empty arrays when no operations provided", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -646,7 +647,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should call callback for all operations that are registered", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -685,7 +686,7 @@ describe("LocalOperationStorage", () => {
     });
 
     it("should call callback when registering operation with existing data", () => {
-      const mockCallback = jest.fn();
+      const mockCallback = vi.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,

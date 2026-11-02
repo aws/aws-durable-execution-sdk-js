@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { OperationType, OperationStatus } from "@aws/durable-execution-sdk-js";
 import { historyEventTypes } from "../history-event-types";
 

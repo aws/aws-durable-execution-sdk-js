@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   ErrorObject,
   OperationType,
@@ -66,11 +67,11 @@ describe("callbacks handlers", () => {
       const { storage, callbackId } = createExecutionWithCallback();
 
       // Spy on the key side effects
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByCallbackId",
       );
-      const completeCallbackSpy = jest.spyOn(storage, "completeCallback");
+      const completeCallbackSpy = vi.spyOn(storage, "completeCallback");
 
       const errorObject: ErrorObject = {
         ErrorType: "TestError",
@@ -101,11 +102,11 @@ describe("callbacks handlers", () => {
 
     it("should default to empty error object when input is undefined", () => {
       const { storage, callbackId } = createExecutionWithCallback();
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByCallbackId",
       );
-      const completeCallbackSpy = jest.spyOn(storage, "completeCallback");
+      const completeCallbackSpy = vi.spyOn(storage, "completeCallback");
 
       const result = processCallbackFailure(
         callbackId,
@@ -126,7 +127,7 @@ describe("callbacks handlers", () => {
     });
 
     it("should throw error when execution manager cannot find storage", () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByCallbackId")
         .mockReturnValue(undefined);
 
@@ -147,11 +148,11 @@ describe("callbacks handlers", () => {
     it("should look up storage and complete callback with converted buffer result", () => {
       const { storage, callbackId } = createExecutionWithCallback();
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByCallbackId",
       );
-      const completeCallbackSpy = jest.spyOn(storage, "completeCallback");
+      const completeCallbackSpy = vi.spyOn(storage, "completeCallback");
 
       const result = processCallbackSuccess(
         callbackId,
@@ -184,7 +185,7 @@ describe("callbacks handlers", () => {
       },
     ])("should handle $name in buffer conversion", ({ buffer, expected }) => {
       const { storage, callbackId } = createExecutionWithCallback();
-      const completeCallbackSpy = jest.spyOn(storage, "completeCallback");
+      const completeCallbackSpy = vi.spyOn(storage, "completeCallback");
 
       const result = processCallbackSuccess(
         callbackId,
@@ -203,11 +204,11 @@ describe("callbacks handlers", () => {
     it("should validate buffer input and execution existence", () => {
       // Test execution manager lookup behavior for invalid buffer
       const mockStorage = {
-        completeCallback: jest.fn(),
-        heartbeatCallback: jest.fn(),
+        completeCallback: vi.fn(),
+        heartbeatCallback: vi.fn(),
       } as Partial<CheckpointManager> as CheckpointManager;
 
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByCallbackId")
         .mockReturnValue(mockStorage);
 
@@ -244,11 +245,11 @@ describe("callbacks handlers", () => {
         heartbeatTimeoutSeconds: 60,
       });
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByCallbackId",
       );
-      const heartbeatSpy = jest.spyOn(storage, "heartbeatCallback");
+      const heartbeatSpy = vi.spyOn(storage, "heartbeatCallback");
 
       const result = processCallbackHeartbeat(callbackId, executionManager);
 
@@ -259,7 +260,7 @@ describe("callbacks handlers", () => {
     });
 
     it("should throw error when execution manager cannot find storage", () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByCallbackId")
         .mockReturnValue(undefined);
 

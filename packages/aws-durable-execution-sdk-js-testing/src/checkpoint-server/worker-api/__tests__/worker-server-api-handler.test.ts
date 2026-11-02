@@ -1,3 +1,15 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type MockedFunction,
+  type MockedClass,
+  type MockInstance,
+} from "vitest";
 import { WorkerServerApiHandler } from "../worker-server-api-handler";
 import { ApiType } from "../worker-api-types";
 import {
@@ -31,52 +43,50 @@ import {
 import { StartInvocationRequest } from "../worker-api-request";
 
 // Mock all dependencies
-jest.mock("../../storage/execution-manager");
-jest.mock("../../handlers/execution-handlers");
-jest.mock("../../handlers/checkpoint-handlers");
-jest.mock("../../handlers/state-handlers");
-jest.mock("../../handlers/callbacks");
-jest.mock("../../../logger");
+vi.mock("../../storage/execution-manager");
+vi.mock("../../handlers/execution-handlers");
+vi.mock("../../handlers/checkpoint-handlers");
+vi.mock("../../handlers/state-handlers");
+vi.mock("../../handlers/callbacks");
+vi.mock("../../../logger");
 
-const mockExecutionManager = ExecutionManager as jest.MockedClass<
+const mockExecutionManager = ExecutionManager as MockedClass<
   typeof ExecutionManager
 >;
 
 // Mock handler functions
 const mockProcessStartDurableExecution =
-  processStartDurableExecution as jest.MockedFunction<
+  processStartDurableExecution as MockedFunction<
     typeof processStartDurableExecution
   >;
-const mockProcessStartInvocation =
-  processStartInvocation as jest.MockedFunction<typeof processStartInvocation>;
+const mockProcessStartInvocation = processStartInvocation as MockedFunction<
+  typeof processStartInvocation
+>;
 const mockProcessCompleteInvocation =
-  processCompleteInvocation as jest.MockedFunction<
-    typeof processCompleteInvocation
-  >;
+  processCompleteInvocation as MockedFunction<typeof processCompleteInvocation>;
 const mockProcessUpdateCheckpointData =
-  processUpdateCheckpointData as jest.MockedFunction<
+  processUpdateCheckpointData as MockedFunction<
     typeof processUpdateCheckpointData
   >;
 const mockProcessPollCheckpointData =
-  processPollCheckpointData as jest.MockedFunction<
-    typeof processPollCheckpointData
-  >;
+  processPollCheckpointData as MockedFunction<typeof processPollCheckpointData>;
 const mockProcessGetDurableExecutionState =
-  processGetDurableExecutionState as jest.MockedFunction<
+  processGetDurableExecutionState as MockedFunction<
     typeof processGetDurableExecutionState
   >;
 const mockProcessCheckpointDurableExecution =
-  processCheckpointDurableExecution as jest.MockedFunction<
+  processCheckpointDurableExecution as MockedFunction<
     typeof processCheckpointDurableExecution
   >;
-const mockProcessCallbackSuccess =
-  processCallbackSuccess as jest.MockedFunction<typeof processCallbackSuccess>;
-const mockProcessCallbackFailure =
-  processCallbackFailure as jest.MockedFunction<typeof processCallbackFailure>;
-const mockProcessCallbackHeartbeat =
-  processCallbackHeartbeat as jest.MockedFunction<
-    typeof processCallbackHeartbeat
-  >;
+const mockProcessCallbackSuccess = processCallbackSuccess as MockedFunction<
+  typeof processCallbackSuccess
+>;
+const mockProcessCallbackFailure = processCallbackFailure as MockedFunction<
+  typeof processCallbackFailure
+>;
+const mockProcessCallbackHeartbeat = processCallbackHeartbeat as MockedFunction<
+  typeof processCallbackHeartbeat
+>;
 
 // Predefined UUIDs for consistent testing
 const TEST_UUIDS = {
@@ -92,19 +102,22 @@ const TEST_UUIDS = {
 
 describe("WorkerServerApiHandler", () => {
   let handler: WorkerServerApiHandler;
-  let mockExecutionManagerInstance: jest.Mocked<ExecutionManager>;
+  let mockExecutionManagerInstance: Mocked<ExecutionManager>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create mock execution manager instance
     mockExecutionManagerInstance = {
-      startExecution: jest.fn(),
-      getExecution: jest.fn(),
-    } as unknown as jest.Mocked<ExecutionManager>;
+      startExecution: vi.fn(),
+      getExecution: vi.fn(),
+    } as unknown as Mocked<ExecutionManager>;
 
     // Mock ExecutionManager constructor to return our mock instance
-    mockExecutionManager.mockImplementation(() => mockExecutionManagerInstance);
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    mockExecutionManager.mockImplementation(function () {
+      return mockExecutionManagerInstance;
+    });
 
     handler = new WorkerServerApiHandler();
   });
@@ -369,12 +382,12 @@ describe("WorkerServerApiHandler", () => {
   });
 
   describe("CheckpointDurableExecutionState with delayMs", () => {
-    let setTimeoutSpy: jest.SpyInstance;
-    let mathRandomSpy: jest.SpyInstance;
+    let setTimeoutSpy: MockInstance;
+    let mathRandomSpy: MockInstance;
 
     beforeEach(() => {
-      setTimeoutSpy = jest.spyOn(global, "setTimeout");
-      mathRandomSpy = jest.spyOn(Math, "random");
+      setTimeoutSpy = vi.spyOn(global, "setTimeout");
+      mathRandomSpy = vi.spyOn(Math, "random");
 
       mockProcessCheckpointDurableExecution.mockReturnValue({
         CheckpointToken: "test-response-token",

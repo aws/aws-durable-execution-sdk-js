@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, type Mocked } from "vitest";
 import { InvocationType } from "@aws-sdk/client-lambda";
 import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { CloudOperation } from "../cloud-operation";
@@ -10,10 +11,10 @@ import { OperationEvents } from "../../../common/operations/operation-with-data"
 describe("CloudOperation", () => {
   const mockIndexedOperations = new IndexedOperations([]);
   const waitManager = new OperationWaitManager(mockIndexedOperations);
-  const mockApiClient: jest.Mocked<DurableApiClient> = {
-    sendCallbackSuccess: jest.fn(),
-    sendCallbackFailure: jest.fn(),
-    sendCallbackHeartbeat: jest.fn(),
+  const mockApiClient: Mocked<DurableApiClient> = {
+    sendCallbackSuccess: vi.fn(),
+    sendCallbackFailure: vi.fn(),
+    sendCallbackHeartbeat: vi.fn(),
   };
 
   describe("waitForData", () => {

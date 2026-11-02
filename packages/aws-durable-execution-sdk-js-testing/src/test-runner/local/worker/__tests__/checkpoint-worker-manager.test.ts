@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type MockedClass,
+} from "vitest";
 import { CheckpointWorkerManager } from "../checkpoint-worker-manager";
 import { Worker } from "worker_threads";
 import * as path from "path";
@@ -7,37 +17,40 @@ import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-s
 import { StartDurableExecutionRequest } from "../../../../checkpoint-server/worker-api/worker-api-request";
 
 // Mock worker_threads
-jest.mock("worker_threads");
+vi.mock("worker_threads");
 
-const MockWorker = Worker as jest.MockedClass<typeof Worker>;
+const MockWorker = Worker as MockedClass<typeof Worker>;
 
 describe("CheckpointWorkerManager", () => {
-  let mockWorker: jest.Mocked<Worker>;
+  let mockWorker: Mocked<Worker>;
   let manager: CheckpointWorkerManager;
   let originalNodeEnv: string | undefined;
   let originalIsESM: string | undefined;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.resetModules();
+    vi.clearAllMocks();
+    vi.resetModules();
 
     // Store original env values
     originalNodeEnv = process.env.NODE_ENV;
     originalIsESM = process.env.IS_ESM;
 
     // Mock defaultLogger.warn to avoid noise in test output
-    defaultLogger.warn = jest.fn();
+    defaultLogger.warn = vi.fn();
 
     // Create a simplified mock worker
     mockWorker = {
-      on: jest.fn().mockReturnThis(),
-      postMessage: jest.fn(),
-      terminate: jest.fn().mockResolvedValue(undefined),
-      unref: jest.fn(),
-    } as unknown as jest.Mocked<Worker>;
+      on: vi.fn().mockReturnThis(),
+      postMessage: vi.fn(),
+      terminate: vi.fn().mockResolvedValue(undefined),
+      unref: vi.fn(),
+    } as unknown as Mocked<Worker>;
 
     // Mock Worker constructor
-    MockWorker.mockImplementation(() => mockWorker);
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    MockWorker.mockImplementation(function () {
+      return mockWorker;
+    });
 
     // Reset singleton instance before each test
     CheckpointWorkerManager.resetInstanceForTesting();

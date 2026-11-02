@@ -1,22 +1,30 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockedFunction,
+} from "vitest";
 import { existsSync } from "fs";
 import { resolve } from "path";
 import * as validation from "../validation";
+import { loadModuleFromPath } from "../load-module";
 
-jest.mock("fs");
-jest.mock("path");
-jest.mock("url", () => ({
-  pathToFileURL: jest.fn((path) => ({ href: `file://${path}` })),
-}));
+vi.mock("fs");
+vi.mock("path");
+vi.mock("../load-module");
 
 describe("Validation Functions", () => {
   const originalConsoleError = console.error;
-  const mockConsoleError = jest.fn();
+  const mockConsoleError = vi.fn();
 
-  const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
-  const mockResolve = resolve as jest.MockedFunction<typeof resolve>;
+  const mockExistsSync = existsSync as MockedFunction<typeof existsSync>;
+  const mockResolve = resolve as MockedFunction<typeof resolve>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     console.error = mockConsoleError;
     delete process.env.DURABLE_VERBOSE_MODE;
   });
@@ -104,10 +112,10 @@ describe("Validation Functions", () => {
   });
 
   describe("loadAndValidateHandler", () => {
-    const mockLoadModuleFromPath = jest.spyOn(validation, "loadModuleFromPath");
+    const mockLoadModuleFromPath = vi.mocked(loadModuleFromPath);
 
     it("should successfully load and validate a handler function", async () => {
-      const mockHandler = jest.fn();
+      const mockHandler = vi.fn();
       const mockModule = { handler: mockHandler };
       mockLoadModuleFromPath.mockResolvedValue(mockModule);
 
@@ -151,7 +159,7 @@ describe("Validation Functions", () => {
     });
 
     it("should exit when handler export is missing", async () => {
-      const mockModule = { otherExport: jest.fn() };
+      const mockModule = { otherExport: vi.fn() };
       mockLoadModuleFromPath.mockResolvedValue(mockModule);
 
       await expect(async () => {
@@ -201,7 +209,7 @@ describe("Validation Functions", () => {
     });
 
     it("should handle custom handler export names", async () => {
-      const mockHandler = jest.fn();
+      const mockHandler = vi.fn();
       const mockModule = { customHandler: mockHandler };
       mockLoadModuleFromPath.mockResolvedValue(mockModule);
 
