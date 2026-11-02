@@ -34,7 +34,7 @@
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
     "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
     "lint": "biome check src --diagnostic-level=error",
-    "test": "jest",
+    "test": "vitest run",
     "clean": "rm -rf dist dist-cjs dist-types",
     "lint:fix": "biome check --write src"
   },
@@ -93,8 +93,7 @@
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js": "*",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.15",
+    "vitest": "^5.1.0",
     "@aws-sdk/client-s3": "^3.1161.0",
     "@aws-sdk/client-dynamodb": "^3.1161.0",
     "@aws-sdk/util-dynamodb": "^3.996.9",

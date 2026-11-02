@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll } from "vitest";
 import * as cdk from "aws-cdk-lib";
 import { Template, Match } from "aws-cdk-lib/assertions";
 import { TelemetryDestinationsStack } from "./stack";
