@@ -12,7 +12,7 @@
   "scripts": {
     "clean": "rm -rf dist node_modules .rollup.cache",
     "build": "rollup --config rollup.config.mjs --silent",
-    "test": "npm run typecheck && jest --config jest.config.mjs",
+    "test": "npm run typecheck && vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,12 +25,10 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.1",
-    "@types/jest": "^30.0.0",
     "@types/node": "^22.20.5",
-    "jest": "^30.5.2",
     "rollup": "^4.67.4",
-    "ts-jest": "^29.4.15",
     "tslib": "^2.9.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   }
 }

@@ -11,6 +11,7 @@
  * function the templates deploy resolves to a handler that exists, that the requirement
  * coverage is complete, and that the workflow still aims the shared orchestrator here.
  */
+import { describe, it, expect } from "vitest";
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
