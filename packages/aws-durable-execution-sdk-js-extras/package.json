@@ -34,10 +34,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist-cjs/index.js"
     },
-    "./microvm": {
-      "types": "./dist-types/microvm/index.d.ts",
-      "import": "./dist/microvm.mjs",
-      "require": "./dist-cjs/microvm.js"
+    "./compute/microvm": {
+      "types": "./dist-types/compute/microvm/index.d.ts",
+      "import": "./dist/compute/microvm.mjs",
+      "require": "./dist-cjs/compute/microvm.js"
     }
   },
   "files": [

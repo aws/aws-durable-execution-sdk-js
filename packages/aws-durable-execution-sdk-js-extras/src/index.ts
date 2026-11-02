@@ -1,1 +1,1 @@
-export * from "./microvm";
+export * from "./compute/microvm";
