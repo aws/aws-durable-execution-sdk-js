@@ -29,6 +29,7 @@ jobs:
   capacity-provider:
     name: Deploy, test and clean up
     permissions:
+      actions: read # Required to wait for the build job
       contents: read
       id-token: write # Required for AWS credentials
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
@@ -49,15 +50,23 @@ jobs:
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Install dependencies
+        id: install
+        uses: ./.github/actions/npm-ci
+
+      # This job starts together with `build` (see build.yml); the setup above
+      # runs while build compiles. The artifacts are only dist files, so
+      # extracting them after npm ci is safe.
+      - name: Wait for the build job
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/scripts/integration-test/wait-for-build.mjs
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: built-artifacts
           path: .
-
-      - name: Install dependencies
-        id: install
-        uses: ./.github/actions/npm-ci
 
       - name: Deploy all capacity provider functions
         id: deploy-capacity-providers

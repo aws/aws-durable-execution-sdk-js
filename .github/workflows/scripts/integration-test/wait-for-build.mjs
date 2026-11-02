@@ -12,6 +12,7 @@ const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GI
 
 const started = Date.now();
 let lastStatus = "";
+let apiErrors = 0;
 while (Date.now() - started < TIMEOUT_MS) {
   let job;
   try {
@@ -22,12 +23,19 @@ while (Date.now() - started < TIMEOUT_MS) {
       },
     });
     if (res.ok) {
+      apiErrors = 0;
       job = (await res.json()).jobs.find((j) => j.name === "build");
     } else {
+      apiErrors++;
       console.log(`Jobs API returned ${res.status}, retrying`);
     }
   } catch (err) {
+    apiErrors++;
     console.log(`Jobs API call failed (${err.message}), retrying`);
+  }
+  if (apiErrors >= 10) {
+    console.error("Jobs API keeps failing; does the job have actions: read?");
+    process.exit(1);
   }
   const status = job ? `${job.status}/${job.conclusion ?? "-"}` : "not found";
   if (status !== lastStatus) {
