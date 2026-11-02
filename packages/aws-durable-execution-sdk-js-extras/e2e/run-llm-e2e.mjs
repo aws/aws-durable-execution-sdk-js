@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // End-to-end test for the llm operations.
 //
-//   node e2e/run-llm-e2e.mjs deploy   Deploys a durable function that runs the
-//                                     five operations against Amazon Bedrock only,
-//                                     invokes it, and checks the result and the
-//                                     execution history.
+//   node e2e/run-llm-e2e.mjs deploy   Deploys a durable function that runs ask
+//                                     against Amazon Bedrock, invokes it, and
+//                                     checks the result and the execution
+//                                     history. The function has no decision
+//                                     model, so it also checks that check
+//                                     rejects.
 //   node e2e/run-llm-e2e.mjs cleanup  Deletes the function and its role.
 //
-// The same operations also run against a live decision model server and Amazon
-// Bedrock in the local test runner: see src/llm/__tests__/live.test.ts.
+// The decision operations run against a live decision model server in the
+// local test runner: see src/llm/__tests__/live.test.ts.
 //
 // Every resource is named with the "dex-llm-e2e" prefix.
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
@@ -24,7 +26,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "build-llm");
 const REGION = process.env.AWS_REGION ?? "us-east-1";
 const PREFIX = "dex-llm-e2e";
-const MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+const MODEL = "global.anthropic.claude-haiku-5-5";
 const log = (message) =>
   console.log(`[${new Date().toISOString()}] ${message}`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -98,7 +100,7 @@ function ensureRole(account) {
             Effect: "Allow",
             Action: ["bedrock:InvokeModel"],
             Resource: [
-              "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+              "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-5-5",
               `arn:aws:bedrock:*:${account}:inference-profile/${MODEL}`,
             ],
           },
@@ -239,28 +241,13 @@ async function deploy() {
   assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
 
   const result = JSON.parse(execution.Result);
-  assert(typeof result.urgent === "boolean", `urgent ${result.urgent}`);
-  assert(
-    ["billing", "sales", "retail"].includes(result.team),
-    `team ${result.team}`,
-  );
-  assert(
-    Array.isArray(result.topics) &&
-      result.topics.every((t) =>
-        ["payments", "shipping", "pricing", "security"].includes(t),
-      ),
-    `topics ${JSON.stringify(result.topics)}`,
-  );
-  assert(
-    typeof result.frustration === "number" &&
-      result.frustration >= 0 &&
-      result.frustration <= 1,
-    `frustration ${result.frustration}`,
-  );
-  assert(
-    typeof result.summary === "string" && result.summary.length > 0,
-    "no summary",
-  );
+  assert(result.checkError === "TypeError", `check gave ${result.checkError}`);
+  for (const field of ["summary", "team"]) {
+    assert(
+      typeof result[field] === "string" && result[field].length > 0,
+      `no ${field}`,
+    );
+  }
 
   const history = aws([
     "lambda",
@@ -275,21 +262,12 @@ async function deploy() {
   );
   console.log(JSON.stringify(subTypes));
   assert(
-    subTypes["llm.check"] === "LlmCheck" &&
-      subTypes["llm.classify"] === "LlmClassify" &&
-      subTypes["llm.label"] === "LlmLabel" &&
-      subTypes["llm.score"] === "LlmScore" &&
-      subTypes["llm.ask"] === "LlmAsk",
+    subTypes["llm.ask"] === "LlmAsk" && subTypes["llm.ask.team"] === "LlmAsk",
     `subtypes ${JSON.stringify(subTypes)}`,
   );
+  assert(!("llm.check" in subTypes), "check created a durable operation");
   // The wait made the handler replay. Each step still ran once.
-  for (const stepName of [
-    "llm.check",
-    "llm.classify",
-    "llm.label",
-    "llm.score",
-    "llm.ask",
-  ]) {
+  for (const stepName of ["llm.ask", "llm.ask.team"]) {
     const started = events.filter(
       (e) => e.Name === stepName && e.EventType === "StepStarted",
     ).length;

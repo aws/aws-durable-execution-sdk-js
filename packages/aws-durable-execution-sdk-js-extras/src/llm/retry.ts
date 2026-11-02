@@ -1,5 +1,5 @@
 import type { RetryDecision } from "@aws/durable-execution-sdk-js";
-import { LlmDeciderError, LlmInvalidResponseError } from "./errors";
+import { LlmDeciderError } from "./errors";
 
 /** Error names that a later attempt can succeed after. */
 const RETRYABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
@@ -26,7 +26,6 @@ const RETRYABLE_ERROR_CODES: ReadonlySet<string> = new Set([
 ]);
 
 const MAX_ATTEMPTS = 5;
-const MAX_INVALID_RESPONSE_ATTEMPTS = 2;
 const MAX_DELAY_SECONDS = 60;
 
 /**
@@ -36,10 +35,12 @@ const MAX_DELAY_SECONDS = 60;
  * @remarks
  * It retries throttling, server errors, timeouts, and connection failures, up
  * to 5 attempts in total, with an exponential delay of 2, 4, 8, and 16
- * seconds. It retries an invalid reply once, because a new attempt samples a
- * new reply. It does not retry access-denied, validation, unknown-model, or
- * guardrail errors, because a later attempt with the same input fails the same
- * way.
+ * seconds. A decision model outage counts, and so does its HTTP 408, 429, or
+ * 5xx. It does not retry an invalid reply, a reply at the token limit, a 4xx
+ * from the decision model, or access-denied, validation, unknown-model, or
+ * guardrail errors. A decision model gives the same answer to the same
+ * request, and the other errors also repeat. So a later attempt fails the
+ * same way.
  *
  * @public
  *
@@ -49,12 +50,6 @@ export const defaultLlmRetryStrategy = (
   error: Error,
   attemptCount: number,
 ): RetryDecision => {
-  if (error instanceof LlmInvalidResponseError) {
-    return {
-      shouldRetry: attemptCount < MAX_INVALID_RESPONSE_ATTEMPTS,
-      delay: { seconds: 1 },
-    };
-  }
   const { code, $retryable } = error as {
     code?: unknown;
     $retryable?: unknown;

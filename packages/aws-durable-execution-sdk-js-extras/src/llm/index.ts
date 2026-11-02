@@ -6,6 +6,7 @@ export {
 } from "./errors";
 export { defaultLlmRetryStrategy } from "./retry";
 export { DEFAULT_GENERATE_MODEL_ID } from "./generate";
+export { MAX_CLASSIFY_OPTIONS, MAX_SCORE_LEVELS } from "./shared";
 export { LlmOperationSubType } from "./subtypes";
 export type {
   BedrockConfig,

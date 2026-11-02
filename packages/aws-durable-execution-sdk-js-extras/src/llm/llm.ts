@@ -3,20 +3,15 @@ import {
   DurablePromise,
 } from "@aws/durable-execution-sdk-js";
 import {
-  DECIDER_MAX_CHOICE_OPTIONS,
-  DECIDER_MAX_SCORE_LEVELS,
   deadlineSignal,
+  MAX_CLASSIFY_OPTIONS,
   serializeInput,
   validateOptions,
   validateQuestion,
   validateScale,
 } from "./shared";
-import { Decider, DEFAULT_DECIDER_MODEL, type Decision } from "./decider";
-import {
-  BedrockGenerator,
-  DEFAULT_GENERATE_MODEL_ID,
-  type Operation,
-} from "./generate";
+import { Decider, DEFAULT_DECIDER_MODEL, resolveTransport } from "./decider";
+import { BedrockGenerator, DEFAULT_GENERATE_MODEL_ID } from "./generate";
 import { defaultLlmRetryStrategy } from "./retry";
 import { LlmOperationSubType } from "./subtypes";
 import type {
@@ -26,7 +21,8 @@ import type {
   LlmCallOptions,
   LlmConfig,
 } from "./types";
-import { resolveTransport } from "./decider";
+
+type Operation = "ask" | "check" | "classify" | "label" | "score";
 
 const SUBTYPES: Record<Operation, LlmOperationSubType> = {
   ask: LlmOperationSubType.ASK,
@@ -51,7 +47,7 @@ function onlyKey(destination: unknown, key: string, where: string): unknown {
 
 function unitInterval(value: number | undefined, name: string): number {
   if (value === undefined) {
-    return -1;
+    return 0.5;
   }
   if (typeof value !== "number" || !(value >= 0 && value <= 1)) {
     throw new RangeError(`${name} must be a number from 0 to 1.`);
@@ -62,25 +58,21 @@ function unitInterval(value: number | undefined, name: string): number {
 /**
  * Creates the five LLM operations: `ask`, `check`, `classify`, `label`, and
  * `score`. Each call is one durable step that asks one question and returns a
- * typed answer.
+ * typed answer. {@link Llm} lists each operation's limits.
  *
  * @remarks
  * The operations use two kinds of model:
  *
- * 1. `check`, `classify`, `label`, and `score` use a decision model, when one
- *    is configured. A decision model does not write text. It picks an option or
- *    rates on a scale, in milliseconds, and it reports how sure it is. Set
- *    `decide.unsureBelow` to send the less sure answers to the text model.
- * 2. `ask` uses a text model. It also answers the other four operations when
- *    no decision model is configured.
+ * 1. `check`, `classify`, `label`, and `score` use a decision model. A
+ *    decision model does not write text. It picks an option or rates on a
+ *    scale, so its answer is always one of the caller's options. The default
+ *    is a Strands Decider at the URL in the `STRANDS_DECIDER_ENDPOINT`
+ *    environment variable. This package does not host the model.
+ * 2. `ask` uses a text model on Amazon Bedrock,
+ *    {@link DEFAULT_GENERATE_MODEL_ID} unless `generate` names another.
  *
- * The decision model is a Strands Decider at the URL in the
- * `STRANDS_DECIDER_ENDPOINT` environment variable, or at
- * `decide.destination.decider.endpoint`. The text model is Claude Haiku 4.5 on
- * Amazon Bedrock, unless `generate` names another.
- *
- * The step result is the validated answer. A replay returns it from the
- * checkpoint and does not call a model.
+ * The step result is the answer. A replay returns it from the checkpoint and
+ * does not call a model.
  *
  * ```typescript
  * const model = llm();
@@ -92,16 +84,11 @@ function unitInterval(value: number | undefined, name: string): number {
  * });
  * ```
  *
- * An invalid argument (an empty question, fewer than two options, a scale
- * with fewer than two entries) creates no durable operation. The returned
- * promise rejects with a `TypeError` or a `RangeError`, as `microvm` does.
- *
  * @param config - The models. Every field has a default.
  * @throws \{TypeError\} When a `destination` is not valid, or `decide` names
  * neither an endpoint, a transport, nor the `STRANDS_DECIDER_ENDPOINT`
  * environment variable.
- * @throws \{RangeError\} When `unsureBelow` or `threshold` is not between 0
- * and 1.
+ * @throws \{RangeError\} When `decide.threshold` is not between 0 and 1.
  *
  * @public
  *
@@ -118,7 +105,6 @@ export function llm(config: LlmConfig = {}): Llm {
   const generator = new BedrockGenerator(bedrockConfig);
 
   let decider: Decider | undefined;
-  let unsureBelow = -1;
   const decideConfig =
     config.decide ??
     (process.env.STRANDS_DECIDER_ENDPOINT
@@ -136,20 +122,14 @@ export function llm(config: LlmConfig = {}): Llm {
         "decide needs an endpoint, a transport, or the STRANDS_DECIDER_ENDPOINT environment variable.",
       );
     }
-    unsureBelow = unitInterval(decideConfig.unsureBelow, "unsureBelow");
-    const threshold = unitInterval(decideConfig.threshold, "threshold");
     decider = new Decider(
       transport,
       deciderConfig.model ?? DEFAULT_DECIDER_MODEL,
-      threshold < 0 ? 0.5 : threshold,
+      unitInterval(decideConfig.threshold, "threshold"),
     );
   }
 
   const retryStrategy = config.retryStrategy ?? defaultLlmRetryStrategy;
-
-  /** A decision below `unsureBelow` goes to the text model. */
-  const accept = <T>(decision: Decision<T>): boolean =>
-    decision.confidence >= unsureBelow;
 
   function run<T>(
     context: DurableContext,
@@ -168,6 +148,16 @@ export function llm(config: LlmConfig = {}): Llm {
     return new DurablePromise<T>(() => Promise.reject(error));
   }
 
+  /** Returns the decision model, or throws when none is configured. */
+  function needDecider(operation: Operation): Decider {
+    if (!decider) {
+      throw new TypeError(
+        `llm.${operation} needs a decision model. Set decide in the llm() config, or the STRANDS_DECIDER_ENDPOINT environment variable.`,
+      );
+    }
+    return decider;
+  }
+
   return {
     ask(context, question, input, options) {
       try {
@@ -182,21 +172,17 @@ export function llm(config: LlmConfig = {}): Llm {
     },
 
     check(context, question, input, options) {
+      let model: Decider;
       try {
         validateQuestion(question);
         serializeInput(input);
+        model = needDecider("check");
       } catch (error) {
         return rejected(error);
       }
-      return run(context, "check", options, async (signal) => {
-        if (decider) {
-          const decision = await decider.check(question, input, signal);
-          if (accept(decision)) {
-            return decision.value;
-          }
-        }
-        return generator.check(question, input, options?.bedrock, signal);
-      });
+      return run(context, "check", options, (signal) =>
+        model.check(question, input, signal),
+      );
     },
 
     classify<const T extends readonly string[]>(
@@ -206,33 +192,22 @@ export function llm(config: LlmConfig = {}): Llm {
       input: unknown,
       options?: LlmCallOptions,
     ) {
+      let model: Decider;
       try {
         validateQuestion(question);
-        validateOptions(choices);
+        validateOptions(choices, MAX_CLASSIFY_OPTIONS);
         serializeInput(input);
+        model = needDecider("classify");
       } catch (error) {
         return rejected<T[number]>(error);
       }
-      return run<T[number]>(context, "classify", options, async (signal) => {
-        if (decider && choices.length <= DECIDER_MAX_CHOICE_OPTIONS) {
-          const decision = await decider.classify(
-            question,
-            choices,
-            input,
-            signal,
-          );
-          if (accept(decision)) {
-            return decision.value as T[number];
-          }
-        }
-        return (await generator.classify(
-          question,
-          choices,
-          input,
-          options?.bedrock,
-          signal,
-        )) as T[number];
-      });
+      return run<T[number]>(
+        context,
+        "classify",
+        options,
+        async (signal) =>
+          (await model.classify(question, choices, input, signal)) as T[number],
+      );
     },
 
     label<const T extends readonly string[]>(
@@ -242,58 +217,37 @@ export function llm(config: LlmConfig = {}): Llm {
       input: unknown,
       options?: LlmCallOptions,
     ) {
+      let model: Decider;
       try {
         validateQuestion(question);
         validateOptions(choices);
         serializeInput(input);
+        model = needDecider("label");
       } catch (error) {
         return rejected<T[number][]>(error);
       }
-      return run<T[number][]>(context, "label", options, async (signal) => {
-        if (decider) {
-          const decision = await decider.label(
-            question,
-            choices,
-            input,
-            signal,
-          );
-          if (accept(decision)) {
-            return decision.value as T[number][];
-          }
-        }
-        return (await generator.label(
-          question,
-          choices,
-          input,
-          options?.bedrock,
-          signal,
-        )) as T[number][];
-      });
+      return run<T[number][]>(
+        context,
+        "label",
+        options,
+        async (signal) =>
+          (await model.label(question, choices, input, signal)) as T[number][],
+      );
     },
 
     score(context, question, scale, input, options) {
+      let model: Decider;
       try {
         validateQuestion(question);
         validateScale(scale);
         serializeInput(input);
+        model = needDecider("score");
       } catch (error) {
         return rejected(error);
       }
-      return run(context, "score", options, async (signal) => {
-        if (decider && scale.length <= DECIDER_MAX_SCORE_LEVELS) {
-          const decision = await decider.score(question, scale, input, signal);
-          if (accept(decision)) {
-            return decision.value;
-          }
-        }
-        return generator.score(
-          question,
-          scale,
-          input,
-          options?.bedrock,
-          signal,
-        );
-      });
+      return run(context, "score", options, (signal) =>
+        model.score(question, scale, input, signal),
+      );
     },
   };
 }

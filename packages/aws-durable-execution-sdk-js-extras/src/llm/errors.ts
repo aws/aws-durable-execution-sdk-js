@@ -13,9 +13,9 @@ export class LlmError extends Error {
 }
 
 /**
- * The model answered, but the answer is not usable: it is not valid JSON, it
- * names an option that the caller did not offer, a number is out of range, or
- * the reply stopped at the token limit.
+ * The decision model answered, but the answer is not usable: it has the wrong
+ * shape, or it names an option that the caller did not offer. This usually
+ * means that the server speaks another version of the `/v1/systemone` API.
  *
  * @public
  *

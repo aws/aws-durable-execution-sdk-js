@@ -4,12 +4,6 @@ import type { DeciderConfig, DeciderRequest, DeciderTransport } from "./types";
 
 export const DEFAULT_DECIDER_MODEL = "strands-decider-latest";
 
-/** An answer and how sure the model is, from 0 to 1. */
-export interface Decision<T> {
-  value: T;
-  confidence: number;
-}
-
 const ANSWER = "answer";
 
 function httpTransport(
@@ -56,11 +50,6 @@ export function resolveTransport(
   return endpoint ? httpTransport(endpoint, config.headers) : undefined;
 }
 
-/** The confidence of a yes-or-no probability: 0 for a coin flip, 1 when certain. */
-function yesNoConfidence(probability: number): number {
-  return Math.abs(2 * probability - 1);
-}
-
 type Answers = Record<string, Record<string, unknown> | undefined>;
 
 function answersOf(response: unknown): Answers {
@@ -85,13 +74,6 @@ function numberField(
     return invalid(`The decision model's "${field}" is not a number.`);
   }
   return value;
-}
-
-function confidenceField(answer: Record<string, unknown>): number {
-  const value = answer.confidence;
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(1, Math.max(0, value))
-    : invalid("The decision model's confidence is not a number.");
 }
 
 /** Asks typed questions of a decision model. */
@@ -119,7 +101,7 @@ export class Decider {
     question: string,
     input: unknown,
     signal: AbortSignal | undefined,
-  ): Promise<Decision<boolean>> {
+  ): Promise<boolean> {
     const answers = answersOf(
       await this.ask(
         input,
@@ -128,10 +110,7 @@ export class Decider {
       ),
     );
     const probability = numberField(answers[ANSWER], "noul", "noul");
-    return {
-      value: probability >= this.threshold,
-      confidence: yesNoConfidence(probability),
-    };
+    return probability >= this.threshold;
   }
 
   async classify(
@@ -139,7 +118,7 @@ export class Decider {
     options: readonly string[],
     input: unknown,
     signal: AbortSignal | undefined,
-  ): Promise<Decision<string>> {
+  ): Promise<string> {
     const criteria = Object.fromEntries(
       options.map((option) => [option, null]),
     );
@@ -152,10 +131,10 @@ export class Decider {
     if (answer?.type !== "choice") {
       return invalid("The decision model's answer is not a choice.");
     }
-    const choice =
+    return (
       matchOption(options, answer.choice) ??
-      invalid(`"${String(answer.choice)}" is not one of the options.`);
-    return { value: choice, confidence: confidenceField(answer) };
+      invalid(`"${String(answer.choice)}" is not one of the options.`)
+    );
   }
 
   async label(
@@ -163,7 +142,7 @@ export class Decider {
     options: readonly string[],
     input: unknown,
     signal: AbortSignal | undefined,
-  ): Promise<Decision<string[]>> {
+  ): Promise<string[]> {
     // One yes-or-no question per option. The model reads the input once.
     const questions = Object.fromEntries(
       options.map((option, i) => [
@@ -176,15 +155,13 @@ export class Decider {
     );
     const answers = answersOf(await this.ask(input, questions, signal));
     const picked: string[] = [];
-    let confidence = 1;
     options.forEach((option, i) => {
       const probability = numberField(answers[`o${i}`], "noul", "noul");
-      confidence = Math.min(confidence, yesNoConfidence(probability));
       if (probability >= this.threshold) {
         picked.push(option);
       }
     });
-    return { value: picked, confidence };
+    return picked;
   }
 
   async score(
@@ -192,7 +169,7 @@ export class Decider {
     scale: readonly string[],
     input: unknown,
     signal: AbortSignal | undefined,
-  ): Promise<Decision<number>> {
+  ): Promise<number> {
     const answers = answersOf(
       await this.ask(
         input,
@@ -202,12 +179,8 @@ export class Decider {
         signal,
       ),
     );
-    const answer = answers[ANSWER];
     // The model's score is the expected level index, from 0 to levels - 1.
-    const position = numberField(answer, "score", "score");
-    return {
-      value: toUnitScore(position, scale.length),
-      confidence: confidenceField(answer as Record<string, unknown>),
-    };
+    const position = numberField(answers[ANSWER], "score", "score");
+    return toUnitScore(position, scale.length);
   }
 }

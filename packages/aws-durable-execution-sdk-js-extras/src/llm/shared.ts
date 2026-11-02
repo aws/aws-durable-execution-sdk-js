@@ -4,10 +4,24 @@ import { LlmInvalidResponseError } from "./errors";
 /** Time that the first retry tier leaves for the step to record its outcome. */
 export const INVOCATION_RESERVE_MS = 10_000;
 
-/** The most options that a decision model's `choice` question accepts. */
-export const DECIDER_MAX_CHOICE_OPTIONS = 255;
-/** The most levels that a decision model's `score` question accepts. */
-export const DECIDER_MAX_SCORE_LEVELS = 10;
+/**
+ * The most options of `classify`. A Strands Decider `choice` question accepts
+ * at most 255.
+ *
+ * @public
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const MAX_CLASSIFY_OPTIONS = 255;
+/**
+ * The most entries of a `score` scale. A Strands Decider `score` question
+ * accepts at most 10 levels.
+ *
+ * @public
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const MAX_SCORE_LEVELS = 10;
 
 /**
  * Returns a signal that fires {@link INVOCATION_RESERVE_MS} before the
@@ -70,17 +84,24 @@ export function validateQuestion(
 
 /**
  * Checks the options of `classify` or `label`: at least two non-empty strings
- * that differ after trimming and ignoring case.
+ * that differ after trimming and ignoring case, and at most `max`.
  *
  * @throws \{TypeError\} When an option is not valid.
- * @throws \{RangeError\} When there are fewer than two options.
+ * @throws \{RangeError\} When there are fewer than two options, or more than
+ * `max`.
  */
-export function validateOptions(options: unknown): readonly string[] {
+export function validateOptions(
+  options: unknown,
+  max = Number.POSITIVE_INFINITY,
+): readonly string[] {
   if (!Array.isArray(options)) {
     throw new TypeError("The options must be an array of strings.");
   }
   if (options.length < 2) {
     throw new RangeError("The options must have at least two entries.");
+  }
+  if (options.length > max) {
+    throw new RangeError(`The options must have at most ${max} entries.`);
   }
   const seen = new Set<string>();
   for (const option of options) {
@@ -99,10 +120,12 @@ export function validateOptions(options: unknown): readonly string[] {
 }
 
 /**
- * Checks the scale of `score`: at least two non-empty strings.
+ * Checks the scale of `score`: from 2 to {@link MAX_SCORE_LEVELS} non-empty
+ * strings.
  *
  * @throws \{TypeError\} When an entry is not a non-empty string.
- * @throws \{RangeError\} When there are fewer than two entries.
+ * @throws \{RangeError\} When there are fewer than 2 entries or more than
+ * {@link MAX_SCORE_LEVELS}.
  */
 export function validateScale(scale: unknown): readonly string[] {
   if (!Array.isArray(scale)) {
@@ -110,6 +133,11 @@ export function validateScale(scale: unknown): readonly string[] {
   }
   if (scale.length < 2) {
     throw new RangeError("The scale must have at least two entries.");
+  }
+  if (scale.length > MAX_SCORE_LEVELS) {
+    throw new RangeError(
+      `The scale must have at most ${MAX_SCORE_LEVELS} entries.`,
+    );
   }
   for (const entry of scale) {
     if (typeof entry !== "string" || entry.trim() === "") {

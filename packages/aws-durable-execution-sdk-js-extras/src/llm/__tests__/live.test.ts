@@ -4,7 +4,7 @@
 // 1. A Strands Decider server. Set STRANDS_DECIDER_ENDPOINT to its
 //    `POST /v1/systemone` URL, such as http://127.0.0.1:8000/v1/systemone.
 // 2. AWS credentials that can call bedrock:InvokeModel on
-//    global.anthropic.claude-haiku-4-5-20251001-v1:0, and AWS_REGION.
+//    global.anthropic.claude-haiku-5-5, and AWS_REGION.
 //
 // Usage: LLM_LIVE=1 STRANDS_DECIDER_ENDPOINT=... npx jest src/llm/__tests__/live.test.ts
 import {
@@ -86,7 +86,7 @@ live("llm against live services", () => {
     return result;
   }
 
-  it("answers with the decision model for four operations and Bedrock for ask", async () => {
+  it("answers four operations with the decision model and ask with Bedrock", async () => {
     const result = await runAll(llm());
 
     expect(result.getStatus()).toBe("SUCCEEDED");
@@ -100,19 +100,35 @@ live("llm against live services", () => {
     expect((value.summary as string).length).toBeGreaterThan(0);
   }, 120_000);
 
-  it("answers all five operations with Bedrock when no decision model is set", async () => {
+  it("rejects the decision operations, and still answers ask, without a decision model", async () => {
     const saved = process.env.STRANDS_DECIDER_ENDPOINT;
     delete process.env.STRANDS_DECIDER_ENDPOINT;
     try {
-      const result = await runAll(llm());
+      const model = llm();
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: withDurableExecution(
+          async (_event: unknown, context: DurableContext) => {
+            const rejected = await model
+              .check(context, "Is it urgent?", BODY)
+              .then(
+                () => "resolved",
+                (error: unknown) => (error as Error).name,
+              );
+            const summary = await model.ask(
+              context,
+              "Summarize the message in one short sentence.",
+              BODY,
+            );
+            return { rejected, summary };
+          },
+        ),
+      });
+      const result = await runner.run({ payload: {} });
 
       expect(result.getStatus()).toBe("SUCCEEDED");
-      const value = result.getResult() as Record<string, unknown>;
-      expect(value.urgent).toBe(true);
-      expect(value.team).toBe("billing");
-      expect(value.topics).toContain("payments");
-      expect(value.frustration).toBeGreaterThanOrEqual(0);
-      expect(value.frustration).toBeLessThanOrEqual(1);
+      const value = result.getResult() as { rejected: string; summary: string };
+      expect(value.rejected).toBe("TypeError");
+      expect(value.summary.length).toBeGreaterThan(0);
     } finally {
       if (saved !== undefined) {
         process.env.STRANDS_DECIDER_ENDPOINT = saved;
