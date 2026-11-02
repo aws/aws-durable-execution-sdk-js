@@ -6,23 +6,36 @@
  * query path. Deleting any tool's `if (blocked) return blocked;` fails a test
  * here.
  */
-const testDestination = jest.fn();
-const checkAthenaResultLocation = jest.fn();
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => ({
-  ...jest.requireActual("@aws/durable-execution-sdk-js-telemetry-core"),
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const {
+  testDestination,
+  checkAthenaResultLocation,
+  runReadOnlyQuery,
+  runGetExecution,
+  runListExecutions,
+} = vi.hoisted(() => ({
+  testDestination: vi.fn(),
+  checkAthenaResultLocation: vi.fn(),
+  runReadOnlyQuery: vi.fn(),
+  runGetExecution: vi.fn(),
+  runListExecutions: vi.fn(),
+}));
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => ({
+  ...(await vi.importActual<
+    typeof import("@aws/durable-execution-sdk-js-telemetry-core")
+  >("@aws/durable-execution-sdk-js-telemetry-core")),
   testDestination: (...args: unknown[]) => testDestination(...args),
   checkAthenaResultLocation: (...args: unknown[]) =>
     checkAthenaResultLocation(...args),
 }));
-const runReadOnlyQuery = jest.fn();
-jest.mock("./readOnlyQuery", () => ({
-  ...jest.requireActual("./readOnlyQuery"),
+vi.mock("./readOnlyQuery", async () => ({
+  ...(await vi.importActual<typeof import("./readOnlyQuery")>(
+    "./readOnlyQuery",
+  )),
   runReadOnlyQuery: (...args: unknown[]) => runReadOnlyQuery(...args),
 }));
-const runGetExecution = jest.fn();
-const runListExecutions = jest.fn();
-jest.mock("./tools", () => ({
-  ...jest.requireActual("./tools"),
+vi.mock("./tools", async () => ({
+  ...(await vi.importActual<typeof import("./tools")>("./tools")),
   runGetExecution: (...args: unknown[]) => runGetExecution(...args),
   runListExecutions: (...args: unknown[]) => runListExecutions(...args),
 }));
@@ -75,7 +88,7 @@ function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>) {
 }
 
 beforeEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
   runReadOnlyQuery.mockResolvedValue({
     columns: [],
     rows: [],

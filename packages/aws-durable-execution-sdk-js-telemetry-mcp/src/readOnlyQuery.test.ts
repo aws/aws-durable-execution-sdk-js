@@ -18,6 +18,14 @@
  * two — the read-only guard and the row cap must hold for every one.
  */
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
+import {
   configFromWireSettings,
   runAthenaQuery,
   runAuroraQuery,
@@ -29,8 +37,8 @@ import {
 } from "@aws/durable-execution-sdk-js-telemetry-core";
 import { MAX_ROWS, runReadOnlyQuery } from "./readOnlyQuery";
 
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
-  const actual = jest.requireActual<
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => {
+  const actual = await vi.importActual<
     typeof import("@aws/durable-execution-sdk-js-telemetry-core")
   >("@aws/durable-execution-sdk-js-telemetry-core");
   return {
@@ -38,28 +46,24 @@ jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
     // Real: assertReadOnly, configFromWireSettings, normalizeConfig, ...
     // Stubbed: every engine runner (so a rejection cannot reach the network)
     // and the credential resolver (so no provider chain is constructed).
-    runAthenaQuery: jest.fn(),
-    runDynamoDBQuery: jest.fn(),
-    runAuroraQuery: jest.fn(),
-    runRedshiftQuery: jest.fn(),
-    runOpenSearchQuery: jest.fn(),
-    resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
+    runAthenaQuery: vi.fn(),
+    runDynamoDBQuery: vi.fn(),
+    runAuroraQuery: vi.fn(),
+    runRedshiftQuery: vi.fn(),
+    runOpenSearchQuery: vi.fn(),
+    resolveCredentials: vi.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
-const runAthenaMock = runAthenaQuery as jest.MockedFunction<
-  typeof runAthenaQuery
->;
-const runDynamoDBMock = runDynamoDBQuery as jest.MockedFunction<
+const runAthenaMock = runAthenaQuery as MockedFunction<typeof runAthenaQuery>;
+const runDynamoDBMock = runDynamoDBQuery as MockedFunction<
   typeof runDynamoDBQuery
 >;
-const runAuroraMock = runAuroraQuery as jest.MockedFunction<
-  typeof runAuroraQuery
->;
-const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+const runAuroraMock = runAuroraQuery as MockedFunction<typeof runAuroraQuery>;
+const runRedshiftMock = runRedshiftQuery as MockedFunction<
   typeof runRedshiftQuery
 >;
-const runOpenSearchMock = runOpenSearchQuery as jest.MockedFunction<
+const runOpenSearchMock = runOpenSearchQuery as MockedFunction<
   typeof runOpenSearchQuery
 >;
 
@@ -81,7 +85,7 @@ const PLAIN_OK = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   runAthenaMock.mockResolvedValue(ATHENA_OK);
   runDynamoDBMock.mockResolvedValue(PLAIN_OK);
   runAuroraMock.mockResolvedValue(PLAIN_OK);

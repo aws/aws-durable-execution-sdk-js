@@ -19,6 +19,7 @@
  * needed at runtime (a module marked `external` in the bundle) must stay in
  * `dependencies` instead.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

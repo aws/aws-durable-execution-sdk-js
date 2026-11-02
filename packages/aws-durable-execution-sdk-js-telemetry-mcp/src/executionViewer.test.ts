@@ -2,15 +2,33 @@
  * The local execution viewer: its links, its listener, its page, and the
  * links it adds to tool results.
  */
-const runReadOnlyQuery = jest.fn();
-jest.mock("./readOnlyQuery", () => ({
-  ...jest.requireActual("./readOnlyQuery"),
+import { vi, describe, it, expect, afterEach } from "vitest";
+const { runReadOnlyQuery, runGetExecution, runListExecutions, httpSeam } =
+  vi.hoisted(() => ({
+    runReadOnlyQuery: vi.fn(),
+    runGetExecution: vi.fn(),
+    runListExecutions: vi.fn(),
+    // executionViewer.ts binds `createServer` at import time, so tests spy on
+    // this seam, which the node:http mock below calls through.
+    httpSeam: {} as { createServer: typeof import("node:http").createServer },
+  }));
+vi.mock("node:http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:http")>();
+  httpSeam.createServer = actual.createServer;
+  return {
+    ...actual,
+    createServer: ((...args: Parameters<typeof actual.createServer>) =>
+      httpSeam.createServer(...args)) as typeof actual.createServer,
+  };
+});
+vi.mock("./readOnlyQuery", async () => ({
+  ...(await vi.importActual<typeof import("./readOnlyQuery")>(
+    "./readOnlyQuery",
+  )),
   runReadOnlyQuery: (...args: unknown[]) => runReadOnlyQuery(...args),
 }));
-const runGetExecution = jest.fn();
-const runListExecutions = jest.fn();
-jest.mock("./tools", () => ({
-  ...jest.requireActual("./tools"),
+vi.mock("./tools", async () => ({
+  ...(await vi.importActual<typeof import("./tools")>("./tools")),
   runGetExecution: (...args: unknown[]) => runGetExecution(...args),
   runListExecutions: (...args: unknown[]) => runListExecutions(...args),
 }));
@@ -153,10 +171,10 @@ describe("viewer links", () => {
   it("gives no links when the listener fails, says why, and tries again on the next link", async () => {
     const made = makeViewer();
     viewer = made.viewer;
-    // The real module object, which executionViewer.ts calls through.
-    const http = jest.requireActual<typeof import("node:http")>("node:http");
+    // The seam executionViewer.ts's createServer calls through.
+    const http = httpSeam;
     const realCreateServer = http.createServer;
-    const spy = jest.spyOn(http, "createServer").mockImplementationOnce(((
+    const spy = vi.spyOn(http, "createServer").mockImplementationOnce(((
       ...args: Parameters<typeof realCreateServer>
     ) => {
       const s = realCreateServer(...args);
@@ -189,10 +207,10 @@ describe("viewer links", () => {
 
   /** Records every server the viewer creates. `failFirst` makes the first listen fail after `ms`. */
   function watchServers(failFirst?: { ms: number }) {
-    const http = jest.requireActual<typeof import("node:http")>("node:http");
+    const http = httpSeam;
     const realCreateServer = http.createServer;
     const servers: import("node:http").Server[] = [];
-    const spy = jest.spyOn(http, "createServer").mockImplementation(((
+    const spy = vi.spyOn(http, "createServer").mockImplementation(((
       ...args: Parameters<typeof realCreateServer>
     ) => {
       const s = realCreateServer(...args);

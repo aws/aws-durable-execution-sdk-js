@@ -9,6 +9,7 @@
  * copy of a value pasted into the test — so the README is checked against the
  * source of truth, and a drift in either direction fails the build.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 

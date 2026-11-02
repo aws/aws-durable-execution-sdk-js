@@ -17,6 +17,14 @@
  * tautology is never BUILT in the first place, which is this package's job.
  */
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
+import {
   configFromWireSettings,
   runAthenaQuery,
   runAuroraQuery,
@@ -28,36 +36,32 @@ import {
 import { runGetExecution, runListExecutions } from "./tools";
 import { escapeSqlString } from "./sqlSafe";
 
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
-  const actual = jest.requireActual<
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => {
+  const actual = await vi.importActual<
     typeof import("@aws/durable-execution-sdk-js-telemetry-core")
   >("@aws/durable-execution-sdk-js-telemetry-core");
   return {
     ...actual,
     // Real: assertReadOnly, configFromWireSettings, buildSystemPrompt, ...
     // Stubbed: the runners (capture SQL, never hit the network) + credentials.
-    runAthenaQuery: jest.fn(),
-    runDynamoDBQuery: jest.fn(),
-    runAuroraQuery: jest.fn(),
-    runRedshiftQuery: jest.fn(),
-    runOpenSearchQuery: jest.fn(),
-    resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
+    runAthenaQuery: vi.fn(),
+    runDynamoDBQuery: vi.fn(),
+    runAuroraQuery: vi.fn(),
+    runRedshiftQuery: vi.fn(),
+    runOpenSearchQuery: vi.fn(),
+    resolveCredentials: vi.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
-const runAthenaMock = runAthenaQuery as jest.MockedFunction<
-  typeof runAthenaQuery
->;
-const runDynamoDBMock = runDynamoDBQuery as jest.MockedFunction<
+const runAthenaMock = runAthenaQuery as MockedFunction<typeof runAthenaQuery>;
+const runDynamoDBMock = runDynamoDBQuery as MockedFunction<
   typeof runDynamoDBQuery
 >;
-const runAuroraMock = runAuroraQuery as jest.MockedFunction<
-  typeof runAuroraQuery
->;
-const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+const runAuroraMock = runAuroraQuery as MockedFunction<typeof runAuroraQuery>;
+const runRedshiftMock = runRedshiftQuery as MockedFunction<
   typeof runRedshiftQuery
 >;
-const runOpenSearchMock = runOpenSearchQuery as jest.MockedFunction<
+const runOpenSearchMock = runOpenSearchQuery as MockedFunction<
   typeof runOpenSearchQuery
 >;
 
@@ -79,7 +83,7 @@ const EMPTY_PLAIN = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   runAthenaMock.mockResolvedValue(EMPTY_ATHENA);
   runDynamoDBMock.mockResolvedValue(EMPTY_PLAIN);
   runAuroraMock.mockResolvedValue(EMPTY_PLAIN);

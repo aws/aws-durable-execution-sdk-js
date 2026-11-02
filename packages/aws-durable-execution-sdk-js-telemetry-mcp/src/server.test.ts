@@ -8,6 +8,7 @@
  * The missing-config assertion deliberately runs with an incomplete environment
  * and NO AWS credentials, exercising the path that returns before any AWS call.
  */
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -60,7 +61,7 @@ describeIfBuilt("durable-telemetry MCP server (spawned binary)", () => {
   }, TIMEOUT_MS);
 
   afterAll(async () => {
-    // Closing the transport terminates the child process; without this jest
+    // Closing the transport terminates the child process; without this vitest
     // could hang waiting on an open handle.
     await client?.close();
   });

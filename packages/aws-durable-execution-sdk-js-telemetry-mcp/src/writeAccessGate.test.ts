@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import {
   CONFIRMED_READONLY_ENV_VAR,
   askUserToAccept,
@@ -14,11 +15,11 @@ function gate(opts: {
   acceptedByEnv?: boolean;
   warning?: string;
 }) {
-  const ask = jest.fn(async () => {
+  const ask = vi.fn(async () => {
     if (opts.answer instanceof Error) throw opts.answer;
     return opts.answer;
   });
-  const configurationWarning = jest.fn(async () => opts.warning);
+  const configurationWarning = vi.fn(async () => opts.warning);
   const run = createWriteAccessGate({
     ask,
     acceptedByEnv: opts.acceptedByEnv ?? false,
@@ -125,7 +126,7 @@ describe("askUserToAccept", () => {
   ) {
     return {
       getClientCapabilities: () => capabilities,
-      elicitInput: jest.fn(async () => reply),
+      elicitInput: vi.fn(async () => reply),
     };
   }
 
