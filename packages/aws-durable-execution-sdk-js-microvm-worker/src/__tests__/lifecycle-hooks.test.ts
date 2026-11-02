@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import type {
   IncomingHttpHeaders,
   IncomingMessage,
@@ -154,8 +163,8 @@ describe("suspend and terminate hooks", () => {
   beforeEach(() => {
     // The requests go straight to the listener, so no socket timer runs.
     // Stream reads use nextTick and microtasks, which stay real.
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
     });
     lambda = new FakeLambdaClient();
     microvms = new FakeMicrovmsClient();
@@ -172,16 +181,16 @@ describe("suspend and terminate hooks", () => {
     for (const release of releases.values()) {
       release();
     }
-    await jest.runOnlyPendingTimersAsync();
+    await vi.runOnlyPendingTimersAsync();
     await target?.idle();
     target = undefined;
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   const start = (
-    warn: jest.Mock = jest.fn(),
-    info: jest.Mock = jest.fn(),
-    error: jest.Mock = jest.fn(),
+    warn: Mock = vi.fn(),
+    info: Mock = vi.fn(),
+    error: Mock = vi.fn(),
   ): MicrovmWorkerListener => {
     target = createMicrovmWorkerListener({
       handler: (_input, context) => {
@@ -399,9 +408,9 @@ describe("suspend and terminate hooks", () => {
     });
 
     it("logs a failure report that the service refuses as terminal at info, not error", async () => {
-      const info = jest.fn();
-      const error = jest.fn();
-      const worker = start(jest.fn(), info, error);
+      const info = vi.fn();
+      const error = vi.fn();
+      const worker = start(vi.fn(), info, error);
       await runHook(worker);
       await job(worker, "cb-1");
       lambda.completionError = Object.assign(
@@ -495,7 +504,7 @@ describe("suspend and terminate hooks", () => {
       ],
       ["a request without a Host header", {}],
     ])("ignores %s", async (_name, headers) => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(warn);
       await runHook(worker);
       await job(worker, "cb-1");
@@ -804,7 +813,7 @@ describe("suspend and terminate hooks", () => {
   });
 
   it("answers a hook that it does not know with 200, and does not act on it", async () => {
-    const info = jest.fn();
+    const info = vi.fn();
     const worker = start(undefined, info);
     await runHook(worker, 10);
     await advance(5_000);
@@ -829,7 +838,7 @@ describe("suspend and terminate hooks", () => {
     });
 
     it("answers a resend of a finished job with 202 during the refusal, and does not run it again", async () => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(warn);
       await runHook(worker);
       expect(await job(worker, "cb-1")).toBe(202);
@@ -853,7 +862,7 @@ describe("suspend and terminate hooks", () => {
       // The running job can freeze with the MicroVM. A 202 would end the
       // durable function's delivery, and nothing would resume the MicroVM.
       // The 503 makes the durable function check the state and resume it.
-      const info = jest.fn();
+      const info = vi.fn();
       const worker = start(undefined, info);
       await runHook(worker);
       expect(await job(worker, "cb-1")).toBe(202);
@@ -958,7 +967,7 @@ describe("suspend and terminate hooks", () => {
       microvms.failure = Object.assign(new Error("not authorized"), {
         name: "AccessDeniedException",
       });
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(warn);
       await runHook(worker, 10);
       await advance(10_000);
@@ -986,7 +995,7 @@ describe("suspend and terminate hooks", () => {
       microvms.failure = Object.assign(new Error("not authorized"), {
         name: "AccessDeniedException",
       });
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(warn);
       await runHook(worker, 10);
       await advance(10_000);
@@ -1023,25 +1032,25 @@ describe("suspend and terminate hooks", () => {
 
 describe("a failure report whose client cannot be closed", () => {
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("neither rejects unhandled nor holds the request", async () => {
     // The worker creates and destroys the default client itself. A destroy
     // that throws must not turn into an unhandled rejection, which would end
     // the worker process.
-    jest
-      .spyOn(LambdaClient.prototype, "send")
-      .mockImplementation(async () => ({}));
-    const destroy = jest
+    vi.spyOn(LambdaClient.prototype, "send").mockImplementation(
+      async () => ({}),
+    );
+    const destroy = vi
       .spyOn(LambdaClient.prototype, "destroy")
       .mockImplementation(() => {
         throw new Error("destroy failed");
       });
-    // Jest fails the test on an unhandled rejection. A listener on
+    // Vitest fails the test on an unhandled rejection. A listener on
     // `process` here would not see it, because each test file gets its own
     // copy of `process`.
-    const error = jest.fn();
+    const error = vi.fn();
     const worker = createMicrovmWorkerListener({
       handler: async () => "done",
       logger: { info: () => {}, warn: () => {}, error },
@@ -1055,7 +1064,7 @@ describe("a failure report whose client cannot be closed", () => {
       }),
     });
     await worker.idle();
-    // Let a rejection that nothing handles reach Jest before the test ends.
+    // Let a rejection that nothing handles reach Vitest before the test ends.
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
 
