@@ -66,7 +66,7 @@ jobs:
     # mergeable, and the tests never ran. Blocking is the ruleset's job -- `lint / lint`
     # is a required check -- and keeping these parallel means a PR with a lint error
     # still gets real test results in the same run.
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}-instance-size:large', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
@@ -90,7 +90,7 @@ jobs:
   # Split out of `build`: it takes ~80s and builds on its own, so inside `build` it sat on the
   # critical path of every job that needs the build artifacts (unit, integration, capacity).
   verify-declared-files:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}-instance-size:large', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
