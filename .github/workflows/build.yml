@@ -198,7 +198,8 @@ jobs:
       node-version: ${{ matrix.node-version }}
 
   integration-tests:
-    needs: build
+    # No `needs: build`: the job does its setup while build runs, then waits for the
+    # build job itself (wait-for-build.mjs) before it downloads the artifacts.
     # Skip integration tests for PRs from forked repos or Dependabot (no access to secrets)
     if: >-
       github.actor != 'dependabot[bot]' &&

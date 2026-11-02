@@ -54,14 +54,22 @@ jobs:
           # on every run (~39s). The installer is one verified zip, cached across runs.
           use-installer: true
 
+      - name: Install dependencies
+        uses: ./.github/actions/npm-ci
+
+      # This job starts together with `build` (see build.yml) so the setup above runs
+      # while build compiles. The artifacts are only dist files, so extracting them after
+      # npm ci is safe.
+      - name: Wait for the build job
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/scripts/integration-test/wait-for-build.mjs
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           name: built-artifacts
           path: .
-
-      - name: Install dependencies
-        uses: ./.github/actions/npm-ci
 
       - name: Deploy functions with SAM
         id: deploy-functions
