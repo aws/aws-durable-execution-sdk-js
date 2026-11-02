@@ -5,6 +5,16 @@
  * change breaks an invariant. Do not edit, skip or delete those cases to make the change pass.
  * Change the ADR first. The other cases in this file are ordinary unit tests.
  */
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
@@ -16,10 +26,10 @@ import { DurableExecutionApiClient } from "../../durable-execution-api-client/du
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 
 // Mock dependencies
-jest.mock("../../durable-execution-api-client/durable-execution-api-client");
-jest.mock("../../utils/logger/logger");
-jest.mock("../../termination-manager/termination-manager");
-jest.mock("../../utils/logger/default-logger");
+vi.mock("../../durable-execution-api-client/durable-execution-api-client");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../termination-manager/termination-manager");
+vi.mock("../../utils/logger/default-logger");
 
 describe("initializeExecutionContext", () => {
   // Matcher for Logger interface
@@ -94,27 +104,28 @@ describe("initializeExecutionContext", () => {
     succeed: () => {},
   };
 
-  const mockDurableExecutionClient: jest.Mocked<DurableExecutionClient> = {
-    checkpoint: jest.fn(),
-    getExecutionState: jest.fn(),
+  const mockDurableExecutionClient: Mocked<DurableExecutionClient> = {
+    checkpoint: vi.fn(),
+    getExecutionState: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup default mocks
-    (DurableExecutionApiClient as jest.Mock).mockImplementation(
-      () => mockDurableExecutionClient,
-    );
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (DurableExecutionApiClient as Mock).mockImplementation(function () {
+      return mockDurableExecutionClient;
+    });
 
     // Mock default logger
-    (createDefaultLogger as jest.Mock).mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn(),
+    (createDefaultLogger as Mock).mockReturnValue({
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn(),
     });
 
     // Mock environment variables
@@ -156,7 +167,7 @@ describe("initializeExecutionContext", () => {
   it("reports remaining time from the platform context on each call", async () => {
     // This is the single point where the compute's deadline enters the SDK, so it has to
     // delegate rather than capture: the value changes over the life of the invocation.
-    const remaining = jest
+    const remaining = vi
       .fn()
       .mockReturnValueOnce(120_000)
       .mockReturnValueOnce(90_000);
@@ -609,9 +620,9 @@ describe("initializeExecutionContext", () => {
 
   it("should use event.durableExecutionClient when event is instance of DurableExecutionInvocationInputWithClient", async () => {
     // Setup - create a custom durable execution client
-    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
-      checkpoint: jest.fn(),
-      getExecutionState: jest.fn(),
+    const mockCustomDurableClient: Mocked<DurableExecutionClient> = {
+      checkpoint: vi.fn(),
+      getExecutionState: vi.fn(),
     };
 
     // Create event with custom client
@@ -637,9 +648,9 @@ describe("initializeExecutionContext", () => {
 
   it("should use custom durableExecutionClient for pagination when event is DurableExecutionInvocationInputWithClient", async () => {
     // Setup - create a custom durable execution client
-    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
-      checkpoint: jest.fn(),
-      getExecutionState: jest.fn(),
+    const mockCustomDurableClient: Mocked<DurableExecutionClient> = {
+      checkpoint: vi.fn(),
+      getExecutionState: vi.fn(),
     };
 
     // Setup event with pagination
@@ -696,9 +707,9 @@ describe("initializeExecutionContext", () => {
 
   it("should use custom durableExecutionClient for multiple pagination calls", async () => {
     // Setup - create a custom durable execution client
-    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
-      checkpoint: jest.fn(),
-      getExecutionState: jest.fn(),
+    const mockCustomDurableClient: Mocked<DurableExecutionClient> = {
+      checkpoint: vi.fn(),
+      getExecutionState: vi.fn(),
     };
 
     const mockOperations2: Operation[] = [
@@ -909,8 +920,8 @@ describe("initializeExecutionContext", () => {
 
   describe("transport selection", () => {
     const stubClient = (): DurableExecutionClient => ({
-      getExecutionState: jest.fn().mockResolvedValue({ Operations: [] }),
-      checkpoint: jest.fn().mockResolvedValue({ NewExecutionState: undefined }),
+      getExecutionState: vi.fn().mockResolvedValue({ Operations: [] }),
+      checkpoint: vi.fn().mockResolvedValue({ NewExecutionState: undefined }),
     });
 
     it("uses a caller-supplied durableExecutionClient instead of the Lambda transport", async () => {

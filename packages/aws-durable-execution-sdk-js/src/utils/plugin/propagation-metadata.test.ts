@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { createPluginRunner } from "./plugin-runner";
 import type {
   DurableInstrumentationPlugin,
@@ -13,9 +22,9 @@ const input: PropagationInput = {
 };
 
 describe("propagation metadata collector", () => {
-  let warning: jest.SpyInstance;
+  let warning: MockInstance;
   beforeEach(() => {
-    warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+    warning = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
     warning.mockRestore();
@@ -174,7 +183,7 @@ describe("propagation metadata collector", () => {
     warning.mockImplementation(() => {
       throw new Error("diagnostic");
     });
-    const onInvocationStart = jest.fn(async () => undefined);
+    const onInvocationStart = vi.fn(async () => undefined);
     const runner = createPluginRunner([
       hookGetter,
       identityGetter,
@@ -235,7 +244,7 @@ describe("propagation metadata collector", () => {
       xAmznTraceId: "healthy",
     });
     const expected = { Status: "SUCCEEDED", Result: '"ok"' } as const;
-    const handler = jest.fn(async () => expected);
+    const handler = vi.fn(async () => expected);
     // Metadata collection is independent of normal wrapper dispatch.
     const result = await runner.wrapChildContextFn?.(
       { id: "context", type: "CONTEXT", isReplay: false },

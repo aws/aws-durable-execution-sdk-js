@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import {
   validateDurableExecutionConfig,
   validateTransportConfig,
@@ -46,8 +47,8 @@ describe("validateDurableExecutionConfig", () => {
       validateDurableExecutionConfig({
         client: {} as never,
         durableExecutionClient: {
-          getExecutionState: jest.fn(),
-          checkpoint: jest.fn(),
+          getExecutionState: vi.fn(),
+          checkpoint: vi.fn(),
         } as never,
       }),
     ).toBeUndefined();
@@ -56,7 +57,7 @@ describe("validateDurableExecutionConfig", () => {
 
 describe("validateTransportConfig", () => {
   const stubClient = () =>
-    ({ getExecutionState: jest.fn(), checkpoint: jest.fn() }) as never;
+    ({ getExecutionState: vi.fn(), checkpoint: vi.fn() }) as never;
 
   it("rejects supplying both, since they configure the transport incompatibly", () => {
     const error = validateTransportConfig({

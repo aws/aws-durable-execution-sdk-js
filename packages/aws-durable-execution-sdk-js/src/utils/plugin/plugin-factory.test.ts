@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, type Mocked } from "vitest";
 import {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
@@ -29,7 +30,7 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("calls each factory's createPlugin exactly once per runner", () => {
-    const createPlugin = jest.fn(() => ({}));
+    const createPlugin = vi.fn(() => ({}));
 
     createInvocationPluginRunner([{ createPlugin }], invocationInfo);
 
@@ -63,7 +64,7 @@ describe("createInvocationPluginRunner", () => {
     const created: DurableInstrumentationPlugin[] = [];
     const factory: DurableInstrumentationPluginFactory = {
       createPlugin: () => {
-        const plugin = { onInvocationStart: jest.fn() };
+        const plugin = { onInvocationStart: vi.fn() };
         created.push(plugin);
         return plugin;
       },
@@ -139,8 +140,8 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("contains a throwing factory and keeps the remaining plugins", async () => {
-    const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-      onInvocationStart: jest.fn(),
+    const plugin: Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: vi.fn(),
     };
     const throwingFactory: DurableInstrumentationPluginFactory = {
       createPlugin: () => {
@@ -190,14 +191,14 @@ describe("createInvocationPluginRunner", () => {
         throw new Error("async factory bug");
       },
     } as unknown as DurableInstrumentationPluginFactory;
-    const start = jest.fn();
+    const start = vi.fn();
     const runner = createInvocationPluginRunner(
       [factory, { createPlugin: () => ({ onInvocationStart: start }) }],
       invocationInfo,
     );
 
     await runner.onInvocationStart?.(invocationInfo);
-    const execute = jest.fn().mockResolvedValue(succeededOutput);
+    const execute = vi.fn().mockResolvedValue(succeededOutput);
     await expect(
       runner.wrapInvocation?.(invocationInfo, execute) ?? execute(),
     ).resolves.toEqual(succeededOutput);
@@ -208,7 +209,7 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("skips fulfilled promises rather than treating them as plugin instances", async () => {
-    const start = jest.fn();
+    const start = vi.fn();
     const promise = Object.assign(
       Promise.resolve({ onInvocationStart: start }),
       { onInvocationStart: start },
@@ -224,8 +225,8 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("observes a rejecting thenable without dispatching its hooks", async () => {
-    const start = jest.fn();
-    const then = jest.fn(
+    const start = vi.fn();
+    const then = vi.fn(
       (_resolve: (value: unknown) => void, reject: (error: Error) => void) =>
         reject(new Error("thenable factory bug")),
     );
@@ -241,7 +242,7 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("contains a throwing then getter and keeps the remaining plugins", async () => {
-    const invalidStart = jest.fn();
+    const invalidStart = vi.fn();
     const invalid = Object.defineProperty(
       { onInvocationStart: invalidStart },
       // biome-ignore lint/suspicious/noThenProperty: This malformed thenable intentionally exercises the isolation boundary.
@@ -252,7 +253,7 @@ describe("createInvocationPluginRunner", () => {
         },
       },
     );
-    const start = jest.fn();
+    const start = vi.fn();
     const runner = createInvocationPluginRunner(
       [
         { createPlugin: () => invalid },
@@ -267,8 +268,8 @@ describe("createInvocationPluginRunner", () => {
   });
 
   it("recovers on the next invocation after a factory throws once", async () => {
-    const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-      onInvocationStart: jest.fn(),
+    const plugin: Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: vi.fn(),
     };
     let attempt = 0;
     const factory: DurableInstrumentationPluginFactory = {
@@ -295,8 +296,8 @@ describe("createInvocationPluginRunner", () => {
   it.each([undefined, null])(
     "skips a factory that returns %p",
     async (value) => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
       };
       const factory: DurableInstrumentationPluginFactory = {
         createPlugin: () => value,

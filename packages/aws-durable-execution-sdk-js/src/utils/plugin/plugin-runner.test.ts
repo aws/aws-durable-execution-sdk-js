@@ -5,6 +5,7 @@
  * change breaks an invariant. Do not edit, skip or delete the case to make the change pass.
  * Change the ADR first.
  */
+import { vi, describe, it, expect, type Mocked } from "vitest";
 import {
   createPluginRunner,
   PLUGIN_DRAIN_RESERVE_MS,
@@ -82,8 +83,8 @@ describe("createPluginRunner", () => {
 
   describe("lifecycle hooks (awaited via run)", () => {
     it("calls onInvocationStart on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -93,8 +94,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationStart on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationStart: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationStart: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -104,8 +105,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationStart on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationStart: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationStart: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -115,8 +116,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationEnd on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationEnd: vi.fn(),
       };
       const infoWithError = { ...operationInfo, error: new Error("oops") };
 
@@ -127,8 +128,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationAttemptStart on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationAttemptStart: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationAttemptStart: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -138,8 +139,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationAttemptEnd on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationAttemptEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationAttemptEnd: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -149,8 +150,8 @@ describe("createPluginRunner", () => {
     });
 
     it("calls onOperationChange on all plugins", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationChange: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onOperationChange: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -167,8 +168,8 @@ describe("createPluginRunner", () => {
           throw new Error("sync plugin error");
         },
       };
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
       };
 
       const runner = createPluginRunner([throwingPlugin, plugin2]);
@@ -252,8 +253,8 @@ describe("createPluginRunner", () => {
 
     it("skips plugins that do not implement the hook", () => {
       const plugin1: DurableInstrumentationPlugin = {};
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
@@ -265,11 +266,11 @@ describe("createPluginRunner", () => {
 
   describe("onInvocationEnd hook (run)", () => {
     it("calls onInvocationEnd on all plugins with InvocationEndInfo", () => {
-      const plugin1: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin1: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
@@ -280,8 +281,8 @@ describe("createPluginRunner", () => {
     });
 
     it("passes FAILED status with executionError in InvocationEndInfo", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
       const failedInfo: InvocationEndInfo = {
         ...invocationInfo,
@@ -298,8 +299,8 @@ describe("createPluginRunner", () => {
     });
 
     it("passes PENDING status in InvocationEndInfo", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
       const pendingInfo: InvocationEndInfo = {
         ...invocationInfo,
@@ -315,8 +316,8 @@ describe("createPluginRunner", () => {
     });
 
     it("passes RETRYING status in InvocationEndInfo", () => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
       const retryingInfo: InvocationEndInfo = {
         ...invocationInfo,
@@ -338,8 +339,8 @@ describe("createPluginRunner", () => {
           throw new Error("plugin1 failed");
         },
       };
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
@@ -350,8 +351,8 @@ describe("createPluginRunner", () => {
 
     it("skips plugins that do not implement the hook", () => {
       const plugin1: DurableInstrumentationPlugin = {};
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
@@ -417,8 +418,8 @@ describe("createPluginRunner", () => {
       const rejectingPlugin: DurableInstrumentationPlugin = {
         onInvocationEnd: () => Promise.reject(new Error("async plugin error")),
       };
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn(),
+      const plugin2: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: vi.fn(),
       };
 
       const runner = createPluginRunner([rejectingPlugin, plugin2]);
@@ -545,7 +546,7 @@ describe("createPluginRunner", () => {
     });
 
     it("skips waiting when less time is left than the end reserve", async () => {
-      const onInvocationEnd = jest.fn(() => new Promise<void>(() => {}));
+      const onInvocationEnd = vi.fn(() => new Promise<void>(() => {}));
       const runner = createPluginRunner(
         [
           {
@@ -603,7 +604,7 @@ describe("createPluginRunner", () => {
 
     it("caps each drain timer, so a far deadline does not overflow setTimeout", async () => {
       // Node runs a delay above 2^31 - 1 ms after 1 ms instead.
-      const timerSpy = jest.spyOn(global, "setTimeout");
+      const timerSpy = vi.spyOn(global, "setTimeout");
       const runner = createPluginRunner(
         [
           {
@@ -763,8 +764,8 @@ describe("createPluginRunner", () => {
         Status: InvocationStatus.SUCCEEDED,
         Result: "short-circuited",
       };
-      const fn = jest
-        .fn<Promise<DurableExecutionInvocationOutput>, []>()
+      const fn = vi
+        .fn<() => Promise<DurableExecutionInvocationOutput>>()
         .mockResolvedValue(succeededOutput);
       const plugin: DurableInstrumentationPlugin = {
         wrapInvocation: () => Promise.resolve(shortCircuitOutput),
@@ -842,7 +843,7 @@ describe("createPluginRunner", () => {
     });
 
     it("runs fn when a wrapper rejects without calling it", async () => {
-      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const fn = vi.fn(() => Promise.resolve("customer-result"));
       const plugin: DurableInstrumentationPlugin = {
         wrapOperationAttemptFn: async () => {
           throw new Error("wrapper failed before fn");
@@ -876,8 +877,8 @@ describe("createPluginRunner", () => {
     });
 
     it("still runs the inner wrapper when an outer wrapper rejects before calling it", async () => {
-      const innerRan = jest.fn();
-      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const innerRan = vi.fn();
+      const fn = vi.fn(() => Promise.resolve("customer-result"));
       const outer: DurableInstrumentationPlugin = {
         wrapOperationAttemptFn: async () => {
           throw new Error("outer wrapper failed before next");
@@ -900,8 +901,8 @@ describe("createPluginRunner", () => {
     });
 
     it("does not run the inner wrapper twice when an outer wrapper rejects after calling it", async () => {
-      const innerRan = jest.fn();
-      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const innerRan = vi.fn();
+      const fn = vi.fn(() => Promise.resolve("customer-result"));
       const outer: DurableInstrumentationPlugin = {
         wrapOperationAttemptFn: async (_info, next) => {
           await next();
@@ -1194,40 +1195,40 @@ describe("createPluginRunner", () => {
   describe("multiple plugins integration", () => {
     it("all hooks are called on all plugins for a full lifecycle", async () => {
       const plugin1 = {
-        onInvocationStart: jest.fn(),
-        wrapInvocation: jest.fn(
+        onInvocationStart: vi.fn(),
+        wrapInvocation: vi.fn(
           (
             _info: InvocationInfo,
             fn: () => Promise<DurableExecutionInvocationOutput>,
           ) => fn(),
         ),
-        onOperationStart: jest.fn(),
-        onOperationAttemptStart: jest.fn(),
-        wrapOperationAttemptFn: jest.fn((_info: any, fn: () => any) => fn()),
-        onOperationAttemptEnd: jest.fn(),
-        onOperationEnd: jest.fn(),
-        onOperationChange: jest.fn(),
-        onInvocationEnd: jest.fn().mockResolvedValue(undefined),
-        enrichLogContext: jest.fn().mockReturnValue({ p1: "v1" }),
-      } as unknown as jest.Mocked<DurableInstrumentationPlugin>;
+        onOperationStart: vi.fn(),
+        onOperationAttemptStart: vi.fn(),
+        wrapOperationAttemptFn: vi.fn((_info: any, fn: () => any) => fn()),
+        onOperationAttemptEnd: vi.fn(),
+        onOperationEnd: vi.fn(),
+        onOperationChange: vi.fn(),
+        onInvocationEnd: vi.fn().mockResolvedValue(undefined),
+        enrichLogContext: vi.fn().mockReturnValue({ p1: "v1" }),
+      } as unknown as Mocked<DurableInstrumentationPlugin>;
 
       const plugin2 = {
-        onInvocationStart: jest.fn(),
-        wrapInvocation: jest.fn(
+        onInvocationStart: vi.fn(),
+        wrapInvocation: vi.fn(
           (
             _info: InvocationInfo,
             fn: () => Promise<DurableExecutionInvocationOutput>,
           ) => fn(),
         ),
-        onOperationStart: jest.fn(),
-        onOperationAttemptStart: jest.fn(),
-        wrapOperationAttemptFn: jest.fn((_info: any, fn: () => any) => fn()),
-        onOperationAttemptEnd: jest.fn(),
-        onOperationEnd: jest.fn(),
-        onOperationChange: jest.fn(),
-        onInvocationEnd: jest.fn().mockResolvedValue(undefined),
-        enrichLogContext: jest.fn().mockReturnValue({ p2: "v2" }),
-      } as unknown as jest.Mocked<DurableInstrumentationPlugin>;
+        onOperationStart: vi.fn(),
+        onOperationAttemptStart: vi.fn(),
+        wrapOperationAttemptFn: vi.fn((_info: any, fn: () => any) => fn()),
+        onOperationAttemptEnd: vi.fn(),
+        onOperationEnd: vi.fn(),
+        onOperationChange: vi.fn(),
+        onInvocationEnd: vi.fn().mockResolvedValue(undefined),
+        enrichLogContext: vi.fn().mockReturnValue({ p2: "v2" }),
+      } as unknown as Mocked<DurableInstrumentationPlugin>;
 
       const runner = createPluginRunner([plugin1, plugin2]);
 

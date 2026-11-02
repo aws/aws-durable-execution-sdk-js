@@ -1,13 +1,14 @@
+import { describe, it, expect } from "vitest";
 import * as sdk from "./index";
 
 /**
  * Smoke test for the package entry point.
  *
- * Importing the barrel under ts-jest is its own assertion. Nothing else in the suite does
- * it, which has already allowed one regression: adding an import of the version module to
- * `index.ts` under a specifier the `moduleNameMapper` did not cover made the real module
- * load, and ts-jest rejected its `import.meta.url` with TS1343. CI stayed green because no
- * test reached the barrel. This file closes that gap — if the entry point cannot be
+ * Importing the barrel is its own assertion. Nothing else in the suite does it, which has
+ * already allowed one regression under the previous Jest setup: adding an import of the
+ * version module to `index.ts` under a specifier the `moduleNameMapper` did not cover made
+ * the real module load, and ts-jest rejected its `import.meta.url` with TS1343. CI stayed
+ * green because no test reached the barrel. This file closes that gap — if the entry point cannot be
  * compiled or evaluated, it fails here rather than for whoever next writes a barrel-level
  * test.
  *

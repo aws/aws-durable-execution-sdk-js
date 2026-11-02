@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { Operation } from "../../types/wire";
 import { DurableExecutionInvocationInput } from "../../types";
 import { DurableExecutionClient } from "../../types/durable-execution";
@@ -9,8 +10,8 @@ describe("DurableExecutionInvocationInputWithClient", () => {
 
   beforeEach(() => {
     mockDurableExecutionClient = {
-      getExecutionState: jest.fn(),
-      checkpoint: jest.fn(),
+      getExecutionState: vi.fn(),
+      checkpoint: vi.fn(),
     };
 
     basicInvocationInput = {

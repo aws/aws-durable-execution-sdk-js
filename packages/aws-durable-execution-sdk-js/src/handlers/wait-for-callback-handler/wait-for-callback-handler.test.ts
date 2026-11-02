@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createWaitForCallbackHandler } from "./wait-for-callback-handler";
 import { ExecutionContext, WaitForCallbackConfig } from "../../types";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
@@ -25,16 +26,16 @@ function makeMockChildCtx(opts: {
 }) {
   const mockTelemetry = {
     logger: {
-      log: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      info: jest.fn(),
-      debug: jest.fn(),
+      log: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
     },
   };
 
   return {
-    _createCallbackWithPluginOperationName: jest
+    _createCallbackWithPluginOperationName: vi
       .fn()
       .mockImplementation((pluginOperationName: unknown, config: unknown) => {
         opts.onCreateCallback?.(
@@ -46,7 +47,7 @@ function makeMockChildCtx(opts: {
           opts.callbackId,
         ]);
       }),
-    _stepWithPluginOperationName: jest
+    _stepWithPluginOperationName: vi
       .fn()
       .mockImplementation(
         async (pluginOperationName: unknown, fn: unknown, config?: unknown) => {
@@ -66,37 +67,37 @@ function makeMockChildCtx(opts: {
 describe("waitForCallback handler", () => {
   let mockExecutionContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let mockRunInChildContext: jest.Mock;
-  let mockGetNextStepId: jest.Mock;
+  let mockRunInChildContext: Mock;
+  let mockGetNextStepId: Mock;
 
   beforeEach(() => {
     // Clear all mocks before each test
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockExecutionContext = {
       _stepData: {},
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
       durableExecutionArn: "test-arn",
     } as any;
 
-    mockCheckpoint = { markOperationState: jest.fn() } as unknown as Checkpoint;
-    mockRunInChildContext = jest.fn();
-    mockGetNextStepId = jest.fn().mockReturnValue("test-step-id");
+    mockCheckpoint = { markOperationState: vi.fn() } as unknown as Checkpoint;
+    mockRunInChildContext = vi.fn();
+    mockGetNextStepId = vi.fn().mockReturnValue("test-step-id");
 
     // Mock the external functions
-    jest
-      .spyOn(serdesErrors, "safeDeserialize")
-      .mockImplementation(async (serdes, data) => data);
-    jest.spyOn(callbackHandler, "createPassThroughSerdes").mockReturnValue({
-      serialize: jest.fn().mockResolvedValue("serialized"),
-      deserialize: jest.fn().mockResolvedValue("deserialized"),
+    vi.spyOn(serdesErrors, "safeDeserialize").mockImplementation(
+      async (serdes, data) => data,
+    );
+    vi.spyOn(callbackHandler, "createPassThroughSerdes").mockReturnValue({
+      serialize: vi.fn().mockResolvedValue("serialized"),
+      deserialize: vi.fn().mockResolvedValue("deserialized"),
     });
   });
 
   it("should handle waitForCallback with submitter function", async () => {
-    const submitter = jest.fn().mockResolvedValue(undefined);
+    const submitter = vi.fn().mockResolvedValue(undefined);
     const expectedResult = "callback result";
 
     // Mock runInChildContext to handle the unified signature (name, function)
@@ -137,7 +138,7 @@ describe("waitForCallback handler", () => {
   });
 
   it("should handle waitForCallback with name and submitter", async () => {
-    const submitter = jest.fn().mockResolvedValue(undefined);
+    const submitter = vi.fn().mockResolvedValue(undefined);
     const expectedResult = "named callback result";
     const callbackName = "myCallback";
 
@@ -218,7 +219,7 @@ describe("waitForCallback handler", () => {
   });
 
   it("should call runInChildContext with unified signature when no name is provided", async () => {
-    const submitter = jest.fn().mockResolvedValue(undefined);
+    const submitter = vi.fn().mockResolvedValue(undefined);
     const expectedResult = "no name result";
 
     let callbackPluginName: string | undefined = "unset";
@@ -270,7 +271,7 @@ describe("waitForCallback handler", () => {
   });
 
   it("should accept undefined as name parameter", async () => {
-    const submitter = jest.fn().mockResolvedValue(undefined);
+    const submitter = vi.fn().mockResolvedValue(undefined);
     const expectedResult = "undefined name result";
 
     mockRunInChildContext.mockImplementation(async (name: any, fn: any) => {
@@ -328,7 +329,7 @@ describe("waitForCallback handler", () => {
       timeout: { minutes: 5 },
       heartbeatTimeout: { seconds: 30 },
     };
-    const submitter = jest.fn().mockResolvedValue(undefined);
+    const submitter = vi.fn().mockResolvedValue(undefined);
     const expectedResult = "config result";
 
     let capturedConfig: any;
@@ -375,8 +376,8 @@ describe("waitForCallback handler", () => {
   });
 
   it("should pass retryStrategy to submitter step", async () => {
-    const submitter = jest.fn().mockRejectedValue(new Error("Submitter error"));
-    const retryStrategy = jest.fn().mockReturnValue({
+    const submitter = vi.fn().mockRejectedValue(new Error("Submitter error"));
+    const retryStrategy = vi.fn().mockReturnValue({
       shouldRetry: false,
     });
 
@@ -409,8 +410,8 @@ describe("waitForCallback handler", () => {
 
   describe("serdes parameter usage", () => {
     const customSerdes = {
-      serialize: jest.fn().mockResolvedValue("serialized-data"),
-      deserialize: jest.fn().mockResolvedValue({ data: "deserialized" }),
+      serialize: vi.fn().mockResolvedValue("serialized-data"),
+      deserialize: vi.fn().mockResolvedValue({ data: "deserialized" }),
     };
 
     it.each([
@@ -427,7 +428,7 @@ describe("waitForCallback handler", () => {
     ])(
       "should not pass serdes to runInChildContext or createCallback, but use for deserialization ($name)",
       async ({ name, config, expectedSerdes }) => {
-        const submitter = jest.fn().mockResolvedValue(undefined);
+        const submitter = vi.fn().mockResolvedValue(undefined);
         const rawResult = `raw-result-${name}`;
         const deserializedResult = `deserialized-${name}`;
 
@@ -435,13 +436,13 @@ describe("waitForCallback handler", () => {
         let capturedCreateCallbackConfig: any;
 
         // Mock safeDeserialize to return our expected result
-        const mockSafeDeserialize = jest.spyOn(serdesErrors, "safeDeserialize");
+        const mockSafeDeserialize = vi.spyOn(serdesErrors, "safeDeserialize");
         mockSafeDeserialize.mockResolvedValue(deserializedResult);
 
         // Re-mock createPassThroughSerdes for this test case
-        jest.spyOn(callbackHandler, "createPassThroughSerdes").mockReturnValue({
-          serialize: jest.fn().mockResolvedValue("serialized"),
-          deserialize: jest.fn().mockResolvedValue("deserialized"),
+        vi.spyOn(callbackHandler, "createPassThroughSerdes").mockReturnValue({
+          serialize: vi.fn().mockResolvedValue("serialized"),
+          deserialize: vi.fn().mockResolvedValue("deserialized"),
         });
 
         mockRunInChildContext.mockImplementation(
@@ -503,7 +504,7 @@ describe("waitForCallback handler", () => {
         } else {
           // When no serdes is provided, createPassThroughSerdes should be called
           const mockPassThroughSerdes = (
-            callbackHandler.createPassThroughSerdes as jest.Mock
+            callbackHandler.createPassThroughSerdes as Mock
           ).mock.results[0].value;
           expect(callbackHandler.createPassThroughSerdes).toHaveBeenCalled();
           expect(mockSafeDeserialize).toHaveBeenCalledWith(

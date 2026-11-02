@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DurableLogData, DurableLogLevel } from "../../types";
 import {
   createDefaultLogger,
@@ -7,16 +8,19 @@ import {
 import { Console } from "node:console";
 
 // Mock the Console constructor
-jest.mock("node:console", () => {
+vi.mock("node:console", () => {
   const mockConsole = {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   };
 
   return {
-    Console: jest.fn().mockImplementation(() => mockConsole),
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    Console: vi.fn().mockImplementation(function () {
+      return mockConsole;
+    }),
   };
 });
 
@@ -32,12 +36,12 @@ describe("Default Logger", () => {
     mockConsole = new (Console as any)();
 
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Mock Date.now to have consistent timestamps in tests
-    jest
-      .spyOn(Date.prototype, "toISOString")
-      .mockReturnValue("2025-11-21T18:33:33.938Z");
+    vi.spyOn(Date.prototype, "toISOString").mockReturnValue(
+      "2025-11-21T18:33:33.938Z",
+    );
   });
 
   afterEach(() => {
@@ -48,7 +52,7 @@ describe("Default Logger", () => {
       delete process.env["AWS_LAMBDA_LOG_LEVEL"];
     }
 
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   const loggingExecutionContext: LoggingExecutionContext = {
@@ -501,14 +505,16 @@ describe("Default Logger", () => {
         const expectedCall = mockConsole.error.mock.calls[0][0];
         const parsedLog = JSON.parse(expectedCall);
 
-        // With breakLength: Infinity, the message stays on a single line (no newlines from formatting)
+        // util.inspect recognises the object as an error (it inherits from Error.prototype in this
+        // realm), so it prints the stack followed by the extra own property. The only newlines are
+        // the ones inside the stack itself; breakLength: Infinity adds none.
         expect(parsedLog).toMatchObject({
           timestamp: "2025-11-21T18:33:33.938Z",
           level: "ERROR",
           requestId: "request-id",
           executionArn: "durable-execution-arn",
           message:
-            "Error occurred: Error { message: 'Test error', stack: 'Test error\\n    at test.js:1:1', constructor: null }",
+            "Error occurred: Test error\n    at test.js:1:1 {\n  constructor: null\n}",
           errorType: "UnknownError",
           errorMessage: "Test error",
           stackTrace: ["Test error", "    at test.js:1:1"],
@@ -712,8 +718,8 @@ describe("Default Logger", () => {
         };
 
         const mockContext = {
-          shouldLog: jest.fn().mockReturnValue(true),
-          getDurableLogData: jest.fn().mockReturnValue(mockDurableLogData),
+          shouldLog: vi.fn().mockReturnValue(true),
+          getDurableLogData: vi.fn().mockReturnValue(mockDurableLogData),
         };
 
         logger.configureDurableLoggingContext?.(mockContext);

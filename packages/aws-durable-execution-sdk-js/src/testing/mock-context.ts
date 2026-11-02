@@ -1,3 +1,4 @@
+import { vi, type Mocked } from "vitest";
 import { ExecutionContext, DurableExecutionMode } from "../types";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
@@ -9,16 +10,16 @@ import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-u
  */
 export const createMockExecutionContext = (
   overrides: Partial<ExecutionContext & { mutex?: unknown }> = {},
-): jest.Mocked<ExecutionContext> => {
+): Mocked<ExecutionContext> => {
   const mockTerminationManager = {
-    terminate: jest.fn(),
-    getTerminationPromise: jest.fn(),
-  } as unknown as jest.Mocked<TerminationManager>;
+    terminate: vi.fn(),
+    getTerminationPromise: vi.fn(),
+  } as unknown as Mocked<TerminationManager>;
 
-  const defaultMockContext: jest.Mocked<ExecutionContext> = {
+  const defaultMockContext: Mocked<ExecutionContext> = {
     state: {
-      getStepData: jest.fn(),
-      checkpoint: jest.fn(),
+      getStepData: vi.fn(),
+      checkpoint: vi.fn(),
     },
     _stepData: {},
     _durableExecutionMode: DurableExecutionMode.ExecutionMode,
@@ -27,12 +28,12 @@ export const createMockExecutionContext = (
     requestId: "test-request-id",
     tenantId: "test-tenant-id",
     pendingCompletions: new Set<string>(),
-    getStepData: jest.fn((stepId: string) => {
+    getStepData: vi.fn((stepId: string) => {
       return getStepDataUtil(defaultMockContext._stepData, stepId);
     }),
-    isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+    isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     ...overrides,
-  } as unknown as jest.Mocked<ExecutionContext>;
+  } as unknown as Mocked<ExecutionContext>;
 
   return defaultMockContext;
 };

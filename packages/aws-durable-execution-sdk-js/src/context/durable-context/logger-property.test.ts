@@ -1,3 +1,4 @@
+import { vi, describe, test, expect, beforeEach, type Mock } from "vitest";
 import { createDurableContext, DurableExecution } from "./durable-context";
 import { ExecutionContext, DurableExecutionMode } from "../../types";
 import { Context } from "aws-lambda";
@@ -14,33 +15,33 @@ describe("DurableContext Logger Property", () => {
   beforeEach(() => {
     mockDurableExecution = {
       checkpointManager: {
-        checkpoint: jest.fn(),
-        force: jest.fn(),
-        setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
+        checkpoint: vi.fn(),
+        force: vi.fn(),
+        setTerminating: vi.fn(),
+        hasPendingAncestorCompletion: vi.fn(),
       },
     } as any;
 
     customLogger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn(),
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn(),
     };
 
     mockExecutionContext = {
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn().mockResolvedValue({ reason: "test" }),
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn().mockResolvedValue({ reason: "test" }),
       },
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
       state: {
-        getStepData: jest.fn(),
-        checkpoint: jest.fn(),
+        getStepData: vi.fn(),
+        checkpoint: vi.fn(),
       },
     } as any;
 
@@ -98,7 +99,9 @@ describe("DurableContext Logger Property", () => {
   test("Logger property should be a live reference (getter)", () => {
     const defaultLogger = createDefaultLogger();
 
-    const infoLogSpy = jest.spyOn(defaultLogger, "info").mockImplementation();
+    const infoLogSpy = vi
+      .spyOn(defaultLogger, "info")
+      .mockImplementation(() => {});
 
     const context = createDurableContext(
       mockExecutionContext,
@@ -135,17 +138,17 @@ describe("DurableContext Logger Property", () => {
     // Helper to create a mock logger that respects shouldLog
     const createMockLogger = (): any => {
       let _loggingContext: any = null;
-      const infoMock = jest.fn();
+      const infoMock = vi.fn();
 
       return {
-        log: jest.fn(),
-        info: jest.fn((...args: any[]) => {
+        log: vi.fn(),
+        info: vi.fn((...args: any[]) => {
           infoMock(...args);
         }),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        configureDurableLoggingContext: jest.fn((ctx: any): void => {
+        error: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        configureDurableLoggingContext: vi.fn((ctx: any): void => {
           _loggingContext = ctx;
         }),
         _getInfoMock: (): any => infoMock,
@@ -234,21 +237,21 @@ describe("DurableContext Logger Property", () => {
 
   test("configureDurableLoggingContext should be called when configureLogger is called", () => {
     const logger1: any = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn(),
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn(),
     };
 
     const logger2: any = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn(),
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn(),
     };
 
     const context = createDurableContext(
@@ -271,8 +274,8 @@ describe("DurableContext Logger Property", () => {
     });
 
     // Capture the context passed to logger1
-    const logger1Context = (logger1.configureDurableLoggingContext as jest.Mock)
-      .mock.calls[0][0];
+    const logger1Context = (logger1.configureDurableLoggingContext as Mock).mock
+      .calls[0][0];
 
     // Second call to configureLogger with logger2
     context.configureLogger({ customLogger: logger2 });
@@ -288,8 +291,8 @@ describe("DurableContext Logger Property", () => {
     expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
 
     // Capture the context passed to logger2
-    const logger2Context = (logger2.configureDurableLoggingContext as jest.Mock)
-      .mock.calls[0][0];
+    const logger2Context = (logger2.configureDurableLoggingContext as Mock).mock
+      .calls[0][0];
 
     // Verify both contexts have the same structure but are different instances
     expect(logger1Context).toHaveProperty("getDurableLogData");
@@ -349,12 +352,12 @@ describe("DurableContext Logger Property", () => {
   test("Logger in child context should have operation ID", () => {
     // Use a fresh mock logger for this test
     const childLogger: any = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn(),
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn(),
     };
 
     // Create a child context with a step prefix
@@ -377,8 +380,8 @@ describe("DurableContext Logger Property", () => {
 
     // Verify the getDurableLogData function returns the correct operationId
     // when called within a child context
-    const contextArg = (childLogger.configureDurableLoggingContext as jest.Mock)
-      .mock.calls[0][0];
+    const contextArg = (childLogger.configureDurableLoggingContext as Mock).mock
+      .calls[0][0];
 
     // Simulate being inside a child context operation
     runWithContext(

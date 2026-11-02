@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type MockInstance,
+} from "vitest";
 import { CheckpointManager } from "./checkpoint-manager";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -7,26 +17,26 @@ import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
-jest.mock("../logger/logger");
+vi.mock("../logger/logger");
 
 describe("CheckpointManager - Centralized Termination", () => {
   let checkpointManager: CheckpointManager;
-  let mockTerminationManager: jest.Mocked<TerminationManager>;
+  let mockTerminationManager: Mocked<TerminationManager>;
   let mockClient: any;
   let mockStepDataEmitter: EventEmitter;
   // Default: no deadline reported. Individual tests narrow this.
   let mockRemainingTimeMs: number;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
 
     mockTerminationManager = {
-      terminate: jest.fn(),
+      terminate: vi.fn(),
     } as any;
 
     mockClient = {
-      checkpointDurableExecution: jest.fn().mockResolvedValue({}),
+      checkpointDurableExecution: vi.fn().mockResolvedValue({}),
     };
 
     mockStepDataEmitter = new EventEmitter();
@@ -48,7 +58,7 @@ describe("CheckpointManager - Centralized Termination", () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("markOperationState", () => {
@@ -241,7 +251,7 @@ describe("CheckpointManager - Centralized Termination", () => {
             Status: operationStatus,
           };
 
-          jest.clearAllTimers();
+          vi.clearAllTimers();
 
           // Call waitForRetryTimer - should resolve immediately
           const promise = checkpointManager.waitForRetryTimer(stepId);
@@ -256,7 +266,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           expect(op?.pollCount).toBeUndefined();
 
           // Verify no timers were scheduled
-          expect(jest.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount()).toBe(0);
         },
       );
 
@@ -284,7 +294,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           Status: "SUCCEEDED",
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForRetryTimer - should resolve immediately despite future endTimestamp
         const promise = checkpointManager.waitForRetryTimer(stepId);
@@ -299,7 +309,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBeUndefined();
 
         // Verify no timers were scheduled
-        expect(jest.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
       });
 
       it("should set up polling when status is not terminal", async () => {
@@ -326,7 +336,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           Status: "STARTED", // Non-terminal status
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForRetryTimer - should set up polling
         const promise = checkpointManager.waitForRetryTimer(stepId);
@@ -339,7 +349,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -365,7 +375,7 @@ describe("CheckpointManager - Centralized Termination", () => {
 
         // Don't set up stepData - should be missing/undefined
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForRetryTimer - should set up polling
         const promise = checkpointManager.waitForRetryTimer(stepId);
@@ -378,7 +388,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -409,7 +419,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           // Status is undefined
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForRetryTimer - should set up polling
         const promise = checkpointManager.waitForRetryTimer(stepId);
@@ -422,7 +432,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -515,7 +525,7 @@ describe("CheckpointManager - Centralized Termination", () => {
             Status: operationStatus,
           };
 
-          jest.clearAllTimers();
+          vi.clearAllTimers();
 
           // Call waitForStatusChange - should resolve immediately
           const promise = checkpointManager.waitForStatusChange(stepId);
@@ -530,7 +540,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           expect(op?.pollCount).toBeUndefined();
 
           // Verify no timers were scheduled
-          expect(jest.getTimerCount()).toBe(0);
+          expect(vi.getTimerCount()).toBe(0);
         },
       );
 
@@ -558,7 +568,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           Status: "SUCCEEDED",
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForStatusChange - should resolve immediately despite endTimestamp
         const promise = checkpointManager.waitForStatusChange(stepId);
@@ -573,7 +583,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBeUndefined();
 
         // Verify no timers were scheduled
-        expect(jest.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
       });
 
       it("should set up polling when status is not terminal", async () => {
@@ -599,7 +609,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           Status: "STARTED", // Non-terminal status
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForStatusChange - should set up polling
         const promise = checkpointManager.waitForStatusChange(stepId);
@@ -612,7 +622,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -637,7 +647,7 @@ describe("CheckpointManager - Centralized Termination", () => {
 
         // Don't set up stepData - should be missing/undefined
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForStatusChange - should set up polling
         const promise = checkpointManager.waitForStatusChange(stepId);
@@ -650,7 +660,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -680,7 +690,7 @@ describe("CheckpointManager - Centralized Termination", () => {
           // Status is undefined
         };
 
-        jest.clearAllTimers();
+        vi.clearAllTimers();
 
         // Call waitForStatusChange - should set up polling
         const promise = checkpointManager.waitForStatusChange(stepId);
@@ -693,7 +703,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.pollCount).toBe(0);
 
         // Verify timer was scheduled
-        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(vi.getTimerCount()).toBeGreaterThan(0);
 
         // Clean up by resolving the operation
         op?.resolver?.();
@@ -717,7 +727,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past cooldown
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -738,7 +748,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance partway through cooldown
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS / 2);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS / 2);
 
       // Start new operation
       checkpointManager.markOperationState(
@@ -754,7 +764,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past original cooldown
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
 
       // Should not have terminated
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
@@ -787,7 +797,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
@@ -819,7 +829,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -839,7 +849,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CALLBACK_PENDING,
@@ -861,7 +871,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
@@ -907,7 +917,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       // Mock stepData for status checking
       (checkpointManager as any).stepData = {};
       // Clear any pending timers from previous tests
-      jest.clearAllTimers();
+      vi.clearAllTimers();
     });
 
     it("should initialize polling with timer", () => {
@@ -923,12 +933,12 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
 
       checkpointManager.waitForStatusChange("step-1");
 
       // Should schedule a timer
-      expect(jest.getTimerCount()).toBeGreaterThanOrEqual(1);
+      expect(vi.getTimerCount()).toBeGreaterThanOrEqual(1);
 
       // Check operation has timer set
       const ops = checkpointManager.getAllOperations();
@@ -949,7 +959,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
 
       checkpointManager.waitForStatusChange("step-1");
 
@@ -975,7 +985,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
 
       checkpointManager.waitForRetryTimer(stepId);
 
@@ -1003,7 +1013,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
 
       checkpointManager.waitForRetryTimer(stepId);
 
@@ -1025,7 +1035,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
 
       checkpointManager.waitForStatusChange("step-1");
 
@@ -1050,7 +1060,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
       checkpointManager.waitForStatusChange("step-1");
 
       // Verify timer and resolver are set
@@ -1101,7 +1111,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.clearAllTimers();
+      vi.clearAllTimers();
       checkpointManager.waitForStatusChange("step-1");
       checkpointManager.waitForRetryTimer("step-2");
 
@@ -1145,7 +1155,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -1169,7 +1179,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -1193,7 +1203,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -1226,7 +1236,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      vi.advanceTimersByTime(300);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
   });
@@ -1239,7 +1249,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       });
 
       // Spy on checkAndTerminate BEFORE any operations that trigger it
-      const checkAndTerminateSpy = jest.spyOn(
+      const checkAndTerminateSpy = vi.spyOn(
         checkpointManager as any,
         "checkAndTerminate",
       );
@@ -1275,7 +1285,7 @@ describe("CheckpointManager - Centralized Termination", () => {
 
       // 4. Let the queue drain — since no terminationTimer is set,
       //    processQueue should call checkAndTerminate
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(checkAndTerminateSpy).toHaveBeenCalledTimes(2);
     });
@@ -1286,7 +1296,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         checkpointToken: "new-token",
       });
 
-      const checkAndTerminateSpy = jest.spyOn(
+      const checkAndTerminateSpy = vi.spyOn(
         checkpointManager as any,
         "checkAndTerminate",
       );
@@ -1317,14 +1327,14 @@ describe("CheckpointManager - Centralized Termination", () => {
 
       // 3. Let the queue drain — terminationTimer is already set,
       //    so processQueue should NOT call checkAndTerminate again
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       // checkAndTerminate should still have been called only once
       // (from markOperationState), not again from processQueue
       expect(checkAndTerminateSpy).toHaveBeenCalledTimes(1);
 
       // 4. Let the cooldown fire — termination should still happen
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1373,12 +1383,12 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
       // 4. Let the queue drain (processQueue runs via setImmediate)
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
 
       // 5. After queue drains, processQueue should call checkAndTerminate,
       //    which now sees: queue empty, not processing, all ops IDLE_AWAITED
       //    → schedules termination → cooldown fires → terminates
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1439,8 +1449,8 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
       // Queue drains → processQueue finally block → checkAndTerminate
-      await jest.advanceTimersByTimeAsync(0);
-      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+      await vi.advanceTimersByTimeAsync(0);
+      vi.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
 
       // Function should suspend with all 3 pending invokes in IDLE_AWAITED
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
@@ -1462,7 +1472,7 @@ describe("CheckpointManager - Centralized Termination", () => {
     const spyOnPollTimerFor = (
       stepId: string,
       waitEndsInMs: number,
-    ): jest.SpyInstance => {
+    ): MockInstance => {
       checkpointManager.markOperationState(
         stepId,
         OperationLifecycleState.IDLE_AWAITED,
@@ -1476,7 +1486,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      const spy = jest.spyOn(global, "setTimeout");
+      const spy = vi.spyOn(global, "setTimeout");
       checkpointManager.waitForStatusChange(stepId);
       return spy;
     };
@@ -1539,7 +1549,7 @@ describe("CheckpointManager - Centralized Termination", () => {
     const runPollWithRemaining = async (
       stepId: string,
       remainingTimeMs: number,
-    ): Promise<jest.SpyInstance> => {
+    ): Promise<MockInstance> => {
       // Polling only matters while the invocation is alive for some other reason: a lone
       // awaited wait makes shouldTerminate suspend after the cooldown, which clears the poll
       // timer before it can fire. A concurrently EXECUTING operation blocks termination
@@ -1569,14 +1579,14 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      const forceCheckpointSpy = jest
+      const forceCheckpointSpy = vi
         .spyOn(checkpointManager, "forceCheckpoint")
         .mockResolvedValue();
 
       checkpointManager.waitForStatusChange(stepId);
 
       mockRemainingTimeMs = remainingTimeMs;
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       return forceCheckpointSpy;
     };
@@ -1622,17 +1632,17 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      const forceCheckpointSpy = jest
+      const forceCheckpointSpy = vi
         .spyOn(checkpointManager, "forceCheckpoint")
         .mockResolvedValue();
 
       checkpointManager.waitForStatusChange(stepId);
 
-      await jest.advanceTimersByTimeAsync(16 * 60 * 1000);
+      await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
       const pollsInFirst16Minutes = forceCheckpointSpy.mock.calls.length;
 
       forceCheckpointSpy.mockClear();
-      await jest.advanceTimersByTimeAsync(60 * 1000);
+      await vi.advanceTimersByTimeAsync(60 * 1000);
 
       expect(pollsInFirst16Minutes).toBeGreaterThan(0);
       expect(forceCheckpointSpy).toHaveBeenCalled();
@@ -1669,20 +1679,20 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Stand in for the backend reporting completion on the next refresh.
-      jest
-        .spyOn(checkpointManager, "forceCheckpoint")
-        .mockImplementation(async () => {
+      vi.spyOn(checkpointManager, "forceCheckpoint").mockImplementation(
+        async () => {
           (checkpointManager as any).stepData[hashId(stepId)] = {
             Status: "SUCCEEDED",
           };
-        });
+        },
+      );
 
       let resolved = false;
       void checkpointManager.waitForStatusChange(stepId).then(() => {
         resolved = true;
       });
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(resolved).toBe(true);
       const op = checkpointManager.getAllOperations().get(stepId);
@@ -1747,7 +1757,7 @@ describe("CheckpointManager - Centralized Termination", () => {
     it("clears armed timers so they cannot fire into a later invocation", async () => {
       // The gap this closes: a handler completing normally never terminates, so nothing
       // else clears its timers.
-      const forceCheckpointSpy = jest
+      const forceCheckpointSpy = vi
         .spyOn(checkpointManager, "forceCheckpoint")
         .mockResolvedValue();
       armPollTimerFor("armed-then-disposed");
@@ -1761,12 +1771,12 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(
         checkpointManager.getAllOperations().get("armed-then-disposed")?.timer,
       ).toBeUndefined();
-      await jest.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       expect(forceCheckpointSpy).not.toHaveBeenCalled();
     });
 
     it("refuses to arm new timers once disposed", async () => {
-      const forceCheckpointSpy = jest
+      const forceCheckpointSpy = vi
         .spyOn(checkpointManager, "forceCheckpoint")
         .mockResolvedValue();
 
@@ -1776,7 +1786,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(
         checkpointManager.getAllOperations().get("armed-after-disposal")?.timer,
       ).toBeUndefined();
-      await jest.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       expect(forceCheckpointSpy).not.toHaveBeenCalled();
     });
 
@@ -1797,9 +1807,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       checkpointManager.dispose();
-      await jest.advanceTimersByTimeAsync(
-        CHECKPOINT_TERMINATION_COOLDOWN_MS * 5,
-      );
+      await vi.advanceTimersByTimeAsync(CHECKPOINT_TERMINATION_COOLDOWN_MS * 5);
 
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
@@ -1818,7 +1826,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       // the local test runner's factory creates nested runners for exactly that. This is not
       // reachable through a single deployed invocation, which is why it needs a test rather
       // than review vigilance.
-      const firstForceCheckpoint = jest
+      const firstForceCheckpoint = vi
         .spyOn(checkpointManager, "forceCheckpoint")
         .mockResolvedValue();
       armPollTimerFor("first-execution");
@@ -1840,14 +1848,14 @@ describe("CheckpointManager - Centralized Termination", () => {
       armPollTimerFor("second-execution", secondManager);
 
       // The first execution must be unaffected, both by the second starting...
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(firstForceCheckpoint).toHaveBeenCalled();
 
       // ...and by it finishing.
       firstForceCheckpoint.mockClear();
       secondManager.dispose();
       armPollTimerFor("first-execution-again");
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(firstForceCheckpoint).toHaveBeenCalled();
     });
   });

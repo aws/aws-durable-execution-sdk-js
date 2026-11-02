@@ -1,4 +1,4 @@
-// Jest setup file to configure environment variables for tests
+// Vitest setup file to configure environment variables for tests
 // This ensures verbose logging is disabled during test runs
 
 // Disable verbose logging during tests

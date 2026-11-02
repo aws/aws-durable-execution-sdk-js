@@ -28,10 +28,10 @@ const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 // In CJS the rollup output makes `__filename` a normal binding, so
 // the typeof guard takes that branch.
 //
-// The Jest unit tests never run this file directly: a manual mock
-// at `__mocks__/version.ts` substitutes a hardcoded SDK_VERSION,
-// which sidesteps ts-jest's TS1343 ("import.meta is only allowed
-// when module is es2020+") error during CJS test compilation.
+// The Vitest unit tests load this file as-is (Vitest compiles to ESM,
+// so `import.meta.url` is fine). `__mocks__/version.ts` is a hardcoded
+// stand-in kept only for the examples package's coverage copy, which
+// still compiles the SDK source as CommonJS.
 let moduleFilePath: string | undefined;
 if (typeof __filename !== "undefined") {
   moduleFilePath = __filename;

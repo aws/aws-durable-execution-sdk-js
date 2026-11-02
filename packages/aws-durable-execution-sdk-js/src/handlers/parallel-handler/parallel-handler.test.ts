@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+} from "vitest";
 import { refreshLogConfig } from "../../utils/logger/logger";
 import { createParallelHandler } from "./parallel-handler";
 import {
@@ -11,13 +20,13 @@ import { MockBatchResult } from "../../testing/mock-batch-result";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 
 describe("Parallel Handler", () => {
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockExecuteConcurrently: jest.MockedFunction<any>;
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockExecuteConcurrently: MockedFunction<any>;
   let parallelHandler: ReturnType<typeof createParallelHandler>;
 
   beforeEach(() => {
-    mockExecutionContext = {} as jest.Mocked<ExecutionContext>;
-    mockExecuteConcurrently = jest.fn();
+    mockExecutionContext = {} as Mocked<ExecutionContext>;
+    mockExecuteConcurrently = vi.fn();
     parallelHandler = createParallelHandler(
       mockExecutionContext,
       mockExecuteConcurrently,
@@ -32,7 +41,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should throw for non-function branches", async () => {
-      const branches = [jest.fn(), "not-function" as any];
+      const branches = [vi.fn(), "not-function" as any];
       await expect(parallelHandler(branches as any)).rejects.toThrow(
         "All branches must be functions",
       );
@@ -41,7 +50,7 @@ describe("Parallel Handler", () => {
 
   describe("parameter parsing", () => {
     it("should handle name and branches", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -74,7 +83,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should handle branches and config", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -109,7 +118,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should handle name, branches and config", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -145,10 +154,10 @@ describe("Parallel Handler", () => {
   });
 
   it("should execute parallel branches and return BatchResult", async () => {
-    const branch1: ParallelFunc<string, DurableLogger> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result1");
-    const branch2: ParallelFunc<string, DurableLogger> = jest
+    const branch2: ParallelFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result2");
     const branches = [branch1, branch2];
@@ -192,9 +201,9 @@ describe("Parallel Handler", () => {
     process.env.DURABLE_VERBOSE_MODE = "true";
     refreshLogConfig();
 
-    const consoleSpy = jest.spyOn(console, "debug").mockImplementation();
+    const consoleSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
-    const branch1: ParallelFunc<string, DurableLogger> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result1");
     const branches = [branch1];
@@ -257,7 +266,7 @@ describe("Parallel Handler", () => {
     it("should handle named parallel branches", async () => {
       const namedBranch: NamedParallelBranch<string, DurableLogger> = {
         name: "custom-branch",
-        func: jest.fn().mockResolvedValue("result1"),
+        func: vi.fn().mockResolvedValue("result1"),
       };
       const branches = [namedBranch];
 
@@ -291,9 +300,9 @@ describe("Parallel Handler", () => {
     it("should handle mixed named and unnamed branches", async () => {
       const namedBranch: NamedParallelBranch<string, DurableLogger> = {
         name: "named-branch",
-        func: jest.fn().mockResolvedValue("result1"),
+        func: vi.fn().mockResolvedValue("result1"),
       };
-      const unnamedBranch: ParallelFunc<string, DurableLogger> = jest
+      const unnamedBranch: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result2");
       const branches = [namedBranch, unnamedBranch];
@@ -333,10 +342,10 @@ describe("Parallel Handler", () => {
     });
 
     it("should use undefined names for unnamed branches", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
-      const branch2: ParallelFunc<string, DurableLogger> = jest
+      const branch2: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result2");
       const branches = [branch1, branch2];
@@ -378,11 +387,11 @@ describe("Parallel Handler", () => {
 
   describe("summaryGenerator", () => {
     it("should compose a user-provided summaryGenerator with the SDK record", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
-      const customSummaryGenerator = jest.fn(() => "custom-summary");
+      const customSummaryGenerator = vi.fn(() => "custom-summary");
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
@@ -412,7 +421,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should fall back to the default generator when none is provided", async () => {
-      const branch1: ParallelFunc<string, DurableLogger> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];

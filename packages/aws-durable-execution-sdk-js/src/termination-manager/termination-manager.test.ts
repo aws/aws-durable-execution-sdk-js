@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
 
@@ -6,7 +7,7 @@ describe("TerminationManager", () => {
 
   beforeEach(() => {
     terminationManager = new TerminationManager();
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   it("should not be terminated by default", () => {
@@ -70,7 +71,7 @@ describe("TerminationManager", () => {
 
   it("should execute cleanup function if provided", async () => {
     // Setup
-    const cleanup = jest.fn().mockResolvedValue(undefined);
+    const cleanup = vi.fn().mockResolvedValue(undefined);
     const terminationPromise = terminationManager.getTerminationPromise();
 
     // Terminate with cleanup
@@ -88,7 +89,7 @@ describe("TerminationManager", () => {
 
   it("should handle errors in cleanup function", async () => {
     // Setup
-    const cleanup = jest.fn().mockRejectedValue(new Error("Cleanup error"));
+    const cleanup = vi.fn().mockRejectedValue(new Error("Cleanup error"));
     const terminationPromise = terminationManager.getTerminationPromise();
 
     // Terminate with failing cleanup
@@ -105,7 +106,7 @@ describe("TerminationManager", () => {
 
   it("should win Promise.race against a longer-running promise", async () => {
     // This spy will help us track which promise resolved first
-    const raceSpy = jest.fn();
+    const raceSpy = vi.fn();
 
     // Create a promise that will take some time to resolve
     const longRunningPromise = new Promise<string>((resolve) => {

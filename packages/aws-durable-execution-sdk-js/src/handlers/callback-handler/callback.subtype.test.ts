@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createCallback } from "./callback";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { Operation, OperationStatus, OperationType } from "../../types/wire";
@@ -5,7 +6,7 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
+vi.mock("../../utils/logger/logger");
 
 // CreateCallbackConfig.subType replaces the default "Callback" subtype
 // everywhere the callback handler records one: the START checkpoint, replay
@@ -23,30 +24,30 @@ describe("Callback Handler subType", () => {
       mockContext,
       mockCheckpoint,
       () => stepId,
-      jest.fn(),
+      vi.fn(),
       undefined,
       undefined,
       plugin,
     );
 
   const lifecycleSubTypes = (): unknown[] =>
-    (mockCheckpoint.markOperationState as jest.Mock).mock.calls
+    (mockCheckpoint.markOperationState as Mock).mock.calls
       .map((call) => call[2]?.metadata?.subType)
       .filter((subType) => subType !== undefined);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepData = undefined;
     mockContext = {
-      getStepData: jest.fn(() => stepData),
+      getStepData: vi.fn(() => stepData),
       _stepData: {},
       durableExecutionArn: "test-arn",
-      terminationManager: { terminate: jest.fn() },
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      terminationManager: { terminate: vi.fn() },
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as unknown as ExecutionContext;
     mockCheckpoint = {
       // The START checkpoint makes the service assign a callback ID.
-      checkpoint: jest.fn(async (_id: string, update: { SubType: string }) => {
+      checkpoint: vi.fn(async (_id: string, update: { SubType: string }) => {
         stepData = {
           Id: hashId(stepId),
           Type: OperationType.CALLBACK,
@@ -55,9 +56,9 @@ describe("Callback Handler subType", () => {
           CallbackDetails: { CallbackId: "callback-id" },
         } as Operation;
       }),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as unknown as Checkpoint;
   });
 
@@ -65,9 +66,7 @@ describe("Callback Handler subType", () => {
     const [, callbackId] = await handler()("plain");
 
     expect(callbackId).toBe("callback-id");
-    expect(
-      (mockCheckpoint.checkpoint as jest.Mock).mock.calls[0][1],
-    ).toMatchObject({
+    expect((mockCheckpoint.checkpoint as Mock).mock.calls[0][1]).toMatchObject({
       Action: "START",
       Type: OperationType.CALLBACK,
       SubType: OperationSubType.CALLBACK,
@@ -78,9 +77,7 @@ describe("Callback Handler subType", () => {
   it("records the custom subtype on START and in lifecycle metadata", async () => {
     await handler()("job.callback", { subType: "OrderCallback" });
 
-    expect(
-      (mockCheckpoint.checkpoint as jest.Mock).mock.calls[0][1],
-    ).toMatchObject({
+    expect((mockCheckpoint.checkpoint as Mock).mock.calls[0][1]).toMatchObject({
       Action: "START",
       Type: OperationType.CALLBACK,
       SubType: "OrderCallback",
@@ -90,7 +87,7 @@ describe("Callback Handler subType", () => {
   });
 
   it("passes the custom subtype to plugin events", async () => {
-    const onOperationStart = jest.fn();
+    const onOperationStart = vi.fn();
 
     await handler({ onOperationStart })("job.callback", {
       subType: "OrderCallback",
@@ -110,7 +107,7 @@ describe("Callback Handler subType", () => {
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: { CallbackId: "callback-id", Result: "done" },
     } as Operation;
-    const onOperationEnd = jest.fn();
+    const onOperationEnd = vi.fn();
 
     const [result] = await handler({ onOperationEnd })("job.callback", {
       subType: "OrderCallback",

@@ -84,7 +84,7 @@ export {
  *
  * @internal Exposed for `lambda-runtime-detection-integration-test`, which has to observe
  * the value from a real CommonJS and a real ES module process — the detection relies on
- * `__filename` / `import.meta.url`, which Jest cannot exercise.
+ * `__filename` / `import.meta.url`, which the unit tests cannot exercise.
  */
 export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";

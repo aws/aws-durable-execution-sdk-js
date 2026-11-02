@@ -1,11 +1,12 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { CheckpointManager } from "./checkpoint-manager";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
-jest.mock("../../utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("../../utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 describe("CheckpointManager Queue Completion", () => {
@@ -44,7 +45,7 @@ describe("CheckpointManager Queue Completion", () => {
     });
 
     it("should wait until queue is empty", async () => {
-      const mockCheckpoint = jest
+      const mockCheckpoint = vi
         .fn()
         .mockImplementation(
           () => new Promise((resolve) => setTimeout(() => resolve({}), 200)),
@@ -74,7 +75,7 @@ describe("CheckpointManager Queue Completion", () => {
 
   describe("clearQueue", () => {
     it("should clear the queue", () => {
-      const mockCheckpoint = jest.fn().mockResolvedValue({});
+      const mockCheckpoint = vi.fn().mockResolvedValue({});
       (checkpointManager as any).storage = { checkpoint: mockCheckpoint };
 
       // Add items to queue
@@ -89,7 +90,7 @@ describe("CheckpointManager Queue Completion", () => {
     });
 
     it("should allow waitForQueueCompletion to resolve after clearQueue", async () => {
-      const mockCheckpoint = jest.fn().mockResolvedValue({});
+      const mockCheckpoint = vi.fn().mockResolvedValue({});
       (checkpointManager as any).storage = { checkpoint: mockCheckpoint };
 
       // Add item to queue

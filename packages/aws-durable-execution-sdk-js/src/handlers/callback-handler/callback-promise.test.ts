@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createCallbackPromise } from "./callback-promise";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { OperationStatus } from "../../types/wire";
@@ -9,42 +18,42 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 
-jest.mock("../../errors/serdes-errors/serdes-errors");
-jest.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/logger/logger");
 
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
 
 describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let mockCheckAndUpdateReplayMode: jest.Mock;
+  let mockCheckAndUpdateReplayMode: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockContext = {
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
       durableExecutionArn: "test-arn",
     } as any;
 
     mockCheckpoint = {
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
     } as any;
 
-    mockCheckAndUpdateReplayMode = jest.fn();
+    mockCheckAndUpdateReplayMode = vi.fn();
   });
 
   it("should handle succeeded callback with callback ID", async () => {
-    const mockSerdes = { deserialize: jest.fn() };
+    const mockSerdes = { deserialize: vi.fn() };
 
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: {
@@ -89,7 +98,7 @@ describe("createCallbackPromise", () => {
   });
 
   it("keeps the callback EXECUTING until its result is deserialized", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: {
@@ -102,7 +111,7 @@ describe("createCallbackPromise", () => {
     let callsDuringDeserialize: unknown[][] = [];
     mockSafeDeserialize.mockImplementation(async () => {
       callsDuringDeserialize = [
-        ...(mockCheckpoint.markOperationState as jest.Mock).mock.calls,
+        ...(mockCheckpoint.markOperationState as Mock).mock.calls,
       ];
       return "deserialized-result";
     });
@@ -112,23 +121,21 @@ describe("createCallbackPromise", () => {
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: jest.fn() },
+      { deserialize: vi.fn() },
       mockCheckAndUpdateReplayMode,
     );
 
     expect(callsDuringDeserialize).toEqual([
       ["test-step-id", OperationLifecycleState.EXECUTING, undefined],
     ]);
-    expect((mockCheckpoint.markOperationState as jest.Mock).mock.calls).toEqual(
-      [
-        ["test-step-id", OperationLifecycleState.EXECUTING, undefined],
-        ["test-step-id", OperationLifecycleState.COMPLETED],
-      ],
-    );
+    expect((mockCheckpoint.markOperationState as Mock).mock.calls).toEqual([
+      ["test-step-id", OperationLifecycleState.EXECUTING, undefined],
+      ["test-step-id", OperationLifecycleState.COMPLETED],
+    ]);
   });
 
   it("should throw error when callback data is missing", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: undefined,
@@ -139,7 +146,7 @@ describe("createCallbackPromise", () => {
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: jest.fn() },
+      { deserialize: vi.fn() },
       mockCheckAndUpdateReplayMode,
     );
 
@@ -150,7 +157,7 @@ describe("createCallbackPromise", () => {
   });
 
   it("should handle failed callback with error details", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.FAILED,
       CallbackDetails: {
@@ -168,7 +175,7 @@ describe("createCallbackPromise", () => {
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: jest.fn() },
+      { deserialize: vi.fn() },
       mockCheckAndUpdateReplayMode,
     );
 
@@ -191,7 +198,7 @@ describe("createCallbackPromise", () => {
   });
 
   it("should handle failed callback without error details", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.FAILED,
       CallbackDetails: {},
@@ -202,7 +209,7 @@ describe("createCallbackPromise", () => {
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: jest.fn() },
+      { deserialize: vi.fn() },
       mockCheckAndUpdateReplayMode,
     );
 
@@ -211,7 +218,7 @@ describe("createCallbackPromise", () => {
   });
 
   it("should handle timed out callback", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.TIMED_OUT,
       CallbackDetails: {},
@@ -222,7 +229,7 @@ describe("createCallbackPromise", () => {
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: jest.fn() },
+      { deserialize: vi.fn() },
       mockCheckAndUpdateReplayMode,
     );
 

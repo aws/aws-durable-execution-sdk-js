@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createConcurrentExecutionHandler } from "./concurrent-execution-handler";
 import {
   ExecutionContext,
@@ -9,28 +10,28 @@ import { DurablePromise } from "../../types/durable-promise";
 
 describe("Concurrent Execution Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
-  let mockRunInChildContext: jest.Mock;
+  let mockRunInChildContext: Mock;
   let executionStarted = false;
 
   beforeEach(() => {
     executionStarted = false;
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       durableExecutionArn: "test-arn",
       terminationManager: {
-        shouldTerminate: jest.fn().mockReturnValue(false),
-        terminate: jest.fn(),
+        shouldTerminate: vi.fn().mockReturnValue(false),
+        terminate: vi.fn(),
       },
     } as any;
 
     // Mock runInChildContext to track when execution starts
-    mockRunInChildContext = jest
+    mockRunInChildContext = vi
       .fn()
       .mockImplementation(async (name, fn, _config) => {
         executionStarted = true;
         // Create a mock child context with runInChildContext method
         const mockChildContext = {
-          runInChildContext: jest
+          runInChildContext: vi
             .fn()
             .mockImplementation(async (childName, childFn) => {
               return await childFn({} as any);
@@ -50,7 +51,7 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
       { id: "item1", data: "test1", index: 0 },
     ];
 
-    const executor: ConcurrentExecutor<string, string, DurableLogger> = jest
+    const executor: ConcurrentExecutor<string, string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("processed");
 
@@ -85,7 +86,7 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
       { id: "item1", data: "test1", index: 0 },
     ];
 
-    const executor: ConcurrentExecutor<string, string, DurableLogger> = jest
+    const executor: ConcurrentExecutor<string, string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result");
 

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { buildPreview, PreviewMode, FieldMatchMode } from "./preview";
 
 describe("buildPreview - issue #621: PATH exclude should drop entire subtree", () => {

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createWaitHandler } from "./wait-handler";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
@@ -13,21 +14,21 @@ describe("Wait Handler Tests", () => {
 
     context = {
       _stepData: {},
-      getStepData: jest.fn((stepId: string) => context._stepData[stepId]),
+      getStepData: vi.fn((stepId: string) => context._stepData[stepId]),
       durableExecutionArn: "test-arn",
       requestId: "test-request",
       tenantId: "test-tenant",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
     checkpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      forceCheckpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-      markOperationAwaited: jest.fn(),
-      getOperationState: jest.fn(),
-      getAllOperations: jest.fn().mockReturnValue(new Map()),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      forceCheckpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+      markOperationAwaited: vi.fn(),
+      getOperationState: vi.fn(),
+      getAllOperations: vi.fn().mockReturnValue(new Map()),
     } as any;
   });
 

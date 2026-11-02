@@ -1,10 +1,11 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createParallelHandler } from "./parallel-handler";
 import { DurableLogger, ExecutionContext, ParallelFunc } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Parallel Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
-  let mockExecuteConcurrently: jest.Mock;
+  let mockExecuteConcurrently: Mock;
   let executionStarted = false;
 
   beforeEach(() => {
@@ -13,7 +14,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
       durableExecutionArn: "test-arn",
     } as any;
 
-    mockExecuteConcurrently = jest.fn().mockImplementation(async () => {
+    mockExecuteConcurrently = vi.fn().mockImplementation(async () => {
       executionStarted = true;
       return {
         totalCount: 1,
@@ -34,7 +35,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
       mockExecuteConcurrently,
     );
 
-    const branch1: ParallelFunc<string, DurableLogger> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("branch1-result");
 
@@ -64,7 +65,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
       mockExecuteConcurrently,
     );
 
-    const branch1: ParallelFunc<string, DurableLogger> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result");
 

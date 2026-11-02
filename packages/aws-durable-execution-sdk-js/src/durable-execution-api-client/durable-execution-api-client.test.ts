@@ -1,4 +1,13 @@
 import {
+  vi,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
+import {
   CheckpointDurableExecutionCommand,
   CheckpointDurableExecutionRequest,
   LambdaClient,
@@ -14,37 +23,43 @@ import { DurableExecutionClient } from "../types/durable-execution";
 import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 // Mock the logger
-jest.mock("../utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("../utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 // Mock the LambdaClient
-jest.mock("@aws-sdk/client-lambda", () => {
-  const originalModule = jest.requireActual("@aws-sdk/client-lambda");
+vi.mock("@aws-sdk/client-lambda", async () => {
+  const originalModule = await vi.importActual("@aws-sdk/client-lambda");
   return {
     ...originalModule,
-    LambdaClient: jest.fn().mockImplementation(() => ({
-      send: jest.fn(),
-    })),
-    CheckpointDurableExecutionCommand: jest.fn(),
-    GetDurableExecutionStateCommand: jest.fn(),
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    LambdaClient: vi.fn().mockImplementation(function () {
+      return {
+        send: vi.fn(),
+      };
+    }),
+    CheckpointDurableExecutionCommand: vi.fn(),
+    GetDurableExecutionStateCommand: vi.fn(),
   };
 });
 
 describe("ApiStorage", () => {
-  let logSpy: jest.MockedFunction<typeof log>;
+  let logSpy: MockedFunction<typeof log>;
 
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Get the mocked log function
-    logSpy = log as jest.MockedFunction<typeof log>;
+    logSpy = log as MockedFunction<typeof log>;
   });
 
   test("should not create the default LambdaClient until the first request", async () => {
-    const mockSend = jest.fn().mockResolvedValue({});
-    (LambdaClient as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+    const mockSend = vi.fn().mockResolvedValue({});
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (LambdaClient as Mock).mockImplementation(function () {
+      return { send: mockSend };
+    });
 
     const apiStorage = new DurableExecutionApiClient();
 
@@ -71,9 +86,9 @@ describe("ApiStorage", () => {
 
   test("should not create LambdaClient when custom client is passed", async () => {
     // Clear mocks to reset call counts
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    const customClient = { send: jest.fn().mockResolvedValue({}) };
+    const customClient = { send: vi.fn().mockResolvedValue({}) };
 
     // Create ApiStorage with custom client (should not call LambdaClient constructor)
     const apiStorage = new DurableExecutionApiClient(customClient as any);
@@ -94,10 +109,13 @@ describe("ApiStorage", () => {
       name: "default LambdaClient",
       setup: async () => {
         // Create a fresh mock client for this test
-        const mockLambdaClient = { send: jest.fn() };
+        const mockLambdaClient = { send: vi.fn() };
 
         // Mock the LambdaClient constructor to return our mock when called
-        (LambdaClient as jest.Mock).mockImplementation(() => mockLambdaClient);
+        // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+        (LambdaClient as Mock).mockImplementation(function () {
+          return mockLambdaClient;
+        });
 
         // Create the API client - it will use either the cached client or create a new one
         const apiStorage = new DurableExecutionApiClient();
@@ -121,7 +139,7 @@ describe("ApiStorage", () => {
     {
       name: "custom LambdaClient",
       setup: async () => {
-        const customMockClient = { send: jest.fn() };
+        const customMockClient = { send: vi.fn() };
         return {
           apiStorage: new DurableExecutionApiClient(customMockClient as any),
           mockClient: customMockClient,
@@ -134,7 +152,7 @@ describe("ApiStorage", () => {
   // Using describe.each to create separate describe blocks for each client type
   describe.each(clientConfigurations)("Testing with %s", ({ setup }) => {
     let apiStorage: DurableExecutionClient;
-    let mockClient: { send: jest.Mock };
+    let mockClient: { send: Mock };
 
     beforeEach(async () => {
       const clientSetup = await setup();
@@ -336,12 +354,12 @@ describe("ApiStorage", () => {
       mockClient.send.mockRejectedValue(mockError);
 
       const mockLogger = {
-        error: jest.fn(),
-        info: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        log: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        log: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       try {
@@ -372,12 +390,12 @@ describe("ApiStorage", () => {
       mockClient.send.mockRejectedValue(mockError);
 
       const mockLogger = {
-        error: jest.fn(),
-        info: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        log: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        log: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       const checkpointData: CheckpointDurableExecutionRequest = {
