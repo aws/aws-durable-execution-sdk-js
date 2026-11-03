@@ -528,26 +528,88 @@ ownership does not change this topology.
 
 ### Sampling
 
-Sampling follows this precedence, highest first:
+The configured provider sampler decides sampling for both views. This is a
+**proposed, unreleased behavior change** from OTel 2.0.0, which gives an explicit
+upstream `Sampled=0/1` unconditional precedence. Release applicability is tracked
+in [the shared sampling contract](https://github.com/aws/aws-durable-execution-docs/issues/295),
+with companion [Python](https://github.com/aws/aws-durable-execution-sdk-python/issues/887)
+and [Java](https://github.com/aws/aws-durable-execution-sdk-java/issues/853) work pending.
 
-1. **Explicit upstream decision** — an explicit `Sampled=1` / `Sampled=0` in a
-   valid propagated header is authoritative and preserved. It is applied only
-   when the extracted trace ID is itself valid, so an unusable trace never
-   carries its sampling bit into the derived execution trace.
-2. **Configured sampler** — when the header carries no usable decision, the
-   provider sampler decides. It is evaluated at its **root policy**
-   (`ROOT_CONTEXT`, no parent) with the real trace ID, span name, and attributes,
-   so a `ParentBasedSampler` applies its `root` sampler rather than inheriting an
-   unrelated ambient span's decision.
-3. **Default to sampled** — used only when no sampler decision can be obtained.
+| Provider sampler | Sampled parent | Unsampled parent | No usable parent |
+| --- | --- | --- | --- |
+| `always_on` | Sample | Sample | Sample |
+| `always_off` | Drop | Drop | Drop |
+| `traceidratio` | Trace ID and ratio | Trace ID and ratio | Trace ID and ratio |
+| `parentbased_always_on` | Sample | Drop | Sample |
+| `parentbased_always_off` | Sample | Drop | Drop |
+| `parentbased_traceidratio` | Sample | Drop | Trace ID and ratio |
 
-The resolved execution decision is enforced for all SDK-created spans through a
-durable sampler wrapper around the provider sampler. This makes explicit backend
-sampling authoritative even for direct/custom samplers that ignore parent
-`traceFlags`. Unrelated application spans still use the original configured
-sampler. If the resolved tracer does not expose a compatible writable sampler,
-the plugin preserves normal tracing through the configured provider; in that
-case direct samplers may make their normal span-level decisions.
+The sampler receives the canonical execution trace ID and the **original
+complete propagated remote parent**, with its original sampled bit. A valid
+parent with no sampled flag has an unset bit and is unsampled for ParentBased;
+it is not a root. Without a valid trace ID and parent span ID, the sampler
+receives `ROOT_CONTEXT` (no parent), even if a partial header includes `Sampled`.
+Ambient handler spans and synthetic execution ancestors never determine this
+input. Span names and attributes supplied for the decision are the configured
+Workflow name and execution ARN, consistently in both views.
+
+The decision is recomputed with these stable inputs on every invocation and
+applied to every SDK-created Workflow, Invocation, operation, attempt, and
+synthetic-root span through the existing `DurableSampler` bridge. Keep the
+sampling policy and configuration unchanged throughout an execution. Supported
+custom samplers must be deterministic for these inputs; random, time-dependent,
+load-dependent, and mutable-state-dependent decisions are unsupported. Decisions
+are not persisted or cached across invocations.
+
+#### Provider configuration and migration
+
+The durable plugin reads neither `OTEL_TRACES_SAMPLER` nor
+`OTEL_TRACES_SAMPLER_ARG` itself. The supported OpenTelemetry
+`NodeTracerProvider` resolves them when constructed, unless an explicit
+`sampler` is supplied. This works with an application-owned
+`tracerProviderFactory` and with a compatible globally registered provider,
+including one registered by ADOT/autoconfiguration before invocation start.
+An ADOT distribution may supply its own sampler; that resolved sampler remains
+authoritative. Setting environment variables after provider construction does
+not replace its sampler. The plugin does not own provider shutdown or change
+exporters, resources, or ordinary application/ADOT span sampling.
+
+For `NodeTracerProvider`, an unset or invalid sampler name resolves to
+`parentbased_always_on`; an unset or invalid ratio resolves to `1`. Validation
+and diagnostic messages come from OpenTelemetry. A programmatically supplied
+sampler takes precedence over these environment settings. Other provider
+setups retain their own defaults and validation.
+
+To retain upstream sampling decisions for complete propagated parents, migrate
+a direct sampler to its `parentbased_*` counterpart. For example, configure the
+provider before initialization with:
+
+```sh
+OTEL_TRACES_SAMPLER=parentbased_traceidratio
+OTEL_TRACES_SAMPLER_ARG=0.1
+```
+
+This samples 10% of root traces and follows complete parents. Use
+`traceidratio` to apply the ratio regardless of the parent's sampled bit, or
+`always_off` to suppress all durable spans even with upstream `Sampled=1`.
+The default now drops a complete parent with an unset sampled bit. Partial
+headers without a usable parent follow the root policy; ParentBased does not
+preserve the previous special case for `Sampled` on such a header.
+
+Coordinated execution sampling requires a compatible writable sampler on the
+resolved SDK tracer, using the existing `DurableSampler` bridge. An opaque or
+custom tracer returned by a factory can retain its provider's ordinary per-span
+sampling, but coordinated execution sampling is **not guaranteed**. A global
+tracer without compatible deterministic-ID support disables durable telemetry
+for that invocation. The existing best-effort fallback when a sampler cannot be
+read or throws is not an additional supported sampling mode. It gives the
+plugin's non-recording ancestor a sampled bit; an opaque ParentBased provider
+can therefore export even when the propagated parent has `Sampled=0`. Use a
+compatible SDK tracer when execution-wide sampling controls are required.
+
+Local tests verify provider configuration, exported spans, parent selection,
+retries, and replay. They do not qualify an ADOT Lambda deployment or X-Ray
+backend/console rendering.
 
 ### Context extractors
 
@@ -576,8 +638,9 @@ type ContextExtractor = (info: InvocationInfo) =>
 A complete remote parent needs a valid `traceId` and a valid `parentSpanId`.
 `sampling` is the tri-state upstream decision; when omitted it is derived from
 `traceFlags` (sampled bit), and when neither is present the decision is
-`UNDECIDED` and the sampling rules above decide. A custom extractor must return
-the durable execution's own trace context: a valid trace ID anchors the
+`UNDECIDED`. For sampling, a complete parent with this value has an unset
+sampled bit; an incomplete parent invokes the root policy. A custom extractor
+must return the durable execution's own trace context: a valid trace ID anchors the
 execution across replays, so returning stale or per-invocation context (for
 example an ambient span that changes each invocation) would split one durable
 execution across traces.

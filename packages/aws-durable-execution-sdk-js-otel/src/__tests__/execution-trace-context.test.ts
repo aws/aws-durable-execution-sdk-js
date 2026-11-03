@@ -11,7 +11,7 @@ import {
 import {
   canonicalTraceId,
   resolveExecutionTraceContext,
-  rootSamplingDecision,
+  configuredSamplingDecision,
 } from "../execution-trace-context";
 import { deriveExecutionTraceId } from "../index";
 import {
@@ -40,13 +40,13 @@ function canonical(extracted: ContextExtractorResult): string {
 function resolve(
   extracted: ContextExtractorResult,
   canonicalId: string,
-  rootSamplingDecision: () => SamplingDecision,
+  configuredSamplingDecision: () => SamplingDecision,
 ) {
   return resolveExecutionTraceContext(
     extracted,
     canonicalId,
     ARN,
-    rootSamplingDecision,
+    configuredSamplingDecision,
   );
 }
 
@@ -572,7 +572,7 @@ describe("resolveExecutionTraceContext", () => {
   });
 });
 
-describe("rootSamplingDecision", () => {
+describe("configuredSamplingDecision", () => {
   function tracerWithSampler(decision: SamplingDecision | undefined): Tracer {
     // Mimic an SDK tracer exposing a `_sampler` with shouldSample().
     const sampler =
@@ -590,25 +590,25 @@ describe("rootSamplingDecision", () => {
 
   it("returns RECORD_AND_SAMPLED when the configured sampler samples the root", () => {
     const tracer = tracerWithSampler(SamplingDecision.RECORD_AND_SAMPLED);
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.RECORD_AND_SAMPLED,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("returns NOT_RECORD when the configured sampler drops the root", () => {
     const tracer = tracerWithSampler(SamplingDecision.NOT_RECORD);
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.NOT_RECORD,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.NOT_RECORD);
   });
 
   it("defaults to sampled when no sampler is reachable", () => {
     // A proxy tracer with no _sampler field: the decision defaults to sampled
     // rather than being approximated, matching the documented fallback.
     const tracer = tracerWithSampler(undefined);
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.RECORD_AND_SAMPLED,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("defaults to sampled when a configured sampler throws", () => {
@@ -620,16 +620,16 @@ describe("rootSamplingDecision", () => {
         toString: () => "AlwaysOffSampler",
       },
     } as unknown as Tracer;
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.RECORD_AND_SAMPLED,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("evaluates a ParentBased sampler at the root policy, ignoring an unrelated ambient span", () => {
     // Reviewer case: an undecided execution must not inherit the sampled bit of
     // an unrelated ambient span. With ParentBased(root=alwaysOn), the root
     // policy samples; an unrelated UNSAMPLED ambient span active in the context
-    // must not flip that to dropped. rootSamplingDecision evaluates with ROOT_CONTEXT,
+    // must not flip that to dropped. configuredSamplingDecision evaluates with ROOT_CONTEXT,
     // so the ambient span is ignored.
     const realSampler = new ParentBasedSampler({ root: new AlwaysOnSampler() });
     const tracer = { _sampler: realSampler } as unknown as Tracer;
@@ -642,7 +642,12 @@ describe("rootSamplingDecision", () => {
 
     let decision = SamplingDecision.NOT_RECORD;
     context.with(trace.setSpanContext(ROOT_CONTEXT, unrelatedUnsampled), () => {
-      decision = rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {});
+      decision = configuredSamplingDecision(
+        tracer,
+        REMOTE_TRACE_ID,
+        "Workflow",
+        {},
+      );
     });
 
     // Root policy (alwaysOn) wins; the unrelated unsampled ambient span does not
@@ -668,9 +673,9 @@ describe("rootSamplingDecision", () => {
       },
     } as unknown as Tracer;
 
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.NOT_RECORD,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.NOT_RECORD);
     expect(calls).toBe(1);
   });
 
@@ -679,9 +684,9 @@ describe("rootSamplingDecision", () => {
       _sampler: new AlwaysOffSampler(),
     } as unknown as Tracer;
 
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.NOT_RECORD,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.NOT_RECORD);
   });
 
   it("honors TraceIdRatioBasedSampler decisions when its description uses exponent notation", () => {
@@ -689,9 +694,9 @@ describe("rootSamplingDecision", () => {
       _sampler: new TraceIdRatioBasedSampler(1e-7),
     } as unknown as Tracer;
 
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.NOT_RECORD,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.NOT_RECORD);
   });
 
   it("honors ParentBasedSampler root decisions when a nested ratio description uses exponent notation", () => {
@@ -701,8 +706,8 @@ describe("rootSamplingDecision", () => {
       }),
     } as unknown as Tracer;
 
-    expect(rootSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {})).toBe(
-      SamplingDecision.NOT_RECORD,
-    );
+    expect(
+      configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
+    ).toBe(SamplingDecision.NOT_RECORD);
   });
 });

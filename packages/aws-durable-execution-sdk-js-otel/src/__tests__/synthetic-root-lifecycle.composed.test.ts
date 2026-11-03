@@ -468,7 +468,7 @@ describe.each(
   });
 
   it.each(["SAMPLED", "NOT_SAMPLED"] as const)(
-    "preserves upstream %s without an extra sampler query",
+    "resolves the configured policy once per invocation despite upstream %s",
     async (sampling) => {
       const shouldSample = vi.fn(() => ({
         decision:
@@ -489,10 +489,12 @@ describe.each(
         await plugin.onInvocationStart(info);
         await plugin.onInvocationEnd(end(info, status));
       }
-      expect(shouldSample).not.toHaveBeenCalled();
-      expect(roots(exporter)).toHaveLength(sampling === "SAMPLED" ? 2 : 0);
-      expect(workflows(exporter)).toHaveLength(sampling === "SAMPLED" ? 1 : 0);
-      if (sampling === "NOT_SAMPLED")
+      expect(shouldSample).toHaveBeenCalledTimes(2);
+      expect(roots(exporter)).toHaveLength(sampling === "NOT_SAMPLED" ? 2 : 0);
+      expect(workflows(exporter)).toHaveLength(
+        sampling === "NOT_SAMPLED" ? 1 : 0,
+      );
+      if (sampling === "SAMPLED")
         expect(exporter.getFinishedSpans()).toHaveLength(0);
     },
   );

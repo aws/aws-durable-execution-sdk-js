@@ -140,7 +140,8 @@ deriveExecutionTraceId(environment, arn);
 (async () => {
   const exporter = new InMemorySpanExporter();
   let provider;
-  const config = { tracerProviderFactory: ids => provider = new NodeTracerProvider({ idGenerator: ids(), sampler: new AlwaysOnSampler(), spanProcessors: [new SimpleSpanProcessor(exporter)] }) };
+  const { ParentBasedSampler } = require('@opentelemetry/sdk-trace-node');
+  const config = { tracerProviderFactory: ids => provider = new NodeTracerProvider({ idGenerator: ids(), sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }), spanProcessors: [new SimpleSpanProcessor(exporter)] }) };
   const modern = typeof otel.create${view}Factory === 'function';
   const plugin = modern ? otel.create${view}Factory(config) : new otel.${view}(config);
   let seen;

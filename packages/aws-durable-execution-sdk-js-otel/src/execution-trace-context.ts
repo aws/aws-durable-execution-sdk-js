@@ -1,5 +1,5 @@
-import type { SpanContext, Tracer } from "@opentelemetry/api";
-import { TraceFlags, SpanKind, ROOT_CONTEXT } from "@opentelemetry/api";
+import type { Context, SpanContext, Tracer } from "@opentelemetry/api";
+import { trace, TraceFlags, SpanKind, ROOT_CONTEXT } from "@opentelemetry/api";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   deriveTraceIdFromArn,
@@ -48,12 +48,10 @@ export interface ExecutionTraceEnvironment {
  * The canonical trace ID follows the same precedence: the remote trace ID when
  * valid, else one derived from the ARN and start time.
  *
- * Sampling: an explicit upstream decision is preserved only when it belongs to
- * a valid extracted trace; when it is absent, the configured root decision
- * (`whenUndecided`) is applied to both a remote parent and a synthetic root.
- * Trace flags carry a single sampled bit with no "unset" state, so a
- * remote parent left unsampled would make a parent-based sampler drop every
- * child span.
+ * Sampling: the configured provider sampler receives the original complete
+ * remote parent, or no parent when none is usable. Its decision is applied to
+ * every SDK-created span; only the sampler decides whether to inherit upstream
+ * flags. An unset sampled bit on a valid parent is unsampled, not a root.
  *
  * The ancestor is a non-recording context used to force deterministic
  * parenting. It is either the external backend server span or an SDK-owned
@@ -129,28 +127,6 @@ export function deriveExecutionTraceId(
   );
 }
 
-/**
- * Flags for an explicit upstream decision, or the sampler's decision
- * (`whenUndecided`) when the upstream did not decide. The supplier is consulted
- * lazily, only for the `UNDECIDED` case, so an explicit decision never triggers
- * a (discarded) sampler query.
- */
-function explicitDecision(
-  extracted: ContextExtractorResult,
-  whenUndecided: () => SamplingDecision,
-): SamplingDecision {
-  const sampling = extracted ? resolveSampling(extracted) : "UNDECIDED";
-  switch (sampling) {
-    case "SAMPLED":
-      return SamplingDecision.RECORD_AND_SAMPLED;
-    case "NOT_SAMPLED":
-      return SamplingDecision.NOT_RECORD;
-    case "UNDECIDED":
-    default:
-      return whenUndecided();
-  }
-}
-
 function traceFlagsFromDecision(decision: SamplingDecision): number {
   return decision === SamplingDecision.RECORD_AND_SAMPLED
     ? TraceFlags.SAMPLED
@@ -171,54 +147,46 @@ function traceFlagsFromDecision(decision: SamplingDecision): number {
  * @param extracted the context parsed from the backend header, or undefined
  * @param canonical the trace ID the ancestor is anchored on
  * @param executionArn the durable execution ARN
- * @param rootSamplingDecision the configured root decision for this trace, applied
- *   to a remote parent or synthetic root when the header carries no explicit
- *   Sampled value
+ * @param sample evaluates the configured sampler on the canonical trace with
+ *   the original propagated parent context, before creating synthetic ancestors
  */
 export function resolveExecutionTraceContext(
   extracted: ContextExtractorResult,
   canonical: string,
   executionArn: string,
-  rootSamplingDecision: () => SamplingDecision,
+  sample: (parentContext: Context) => SamplingDecision,
 ): ExecutionTraceContext {
-  // A valid remote backend parent is the authoritative ancestor, regardless of
-  // whether Sampled is present.
-  if (hasCompleteRemoteParent(extracted)) {
-    const decision = explicitDecision(extracted, rootSamplingDecision);
-    const flags = traceFlagsFromDecision(decision);
-    const remoteParent: SpanContext = {
-      traceId: extracted.traceId,
-      spanId: extracted.parentSpanId,
-      traceFlags: flags,
-      isRemote: true,
-    };
-    return {
-      executionAncestor: remoteParent,
-      traceId: remoteParent.traceId,
-      traceFlags: flags,
-      samplingDecision: decision,
-    };
-  }
-
-  // No complete remote parent: synthesize an execution root on the canonical
-  // trace (the stable remote Root if one was provided, else the ARN-derived ID).
-  const samplingContext = hasValidTraceId(extracted) ? extracted : undefined;
-  const decision = explicitDecision(samplingContext, rootSamplingDecision);
+  const remoteParent: SpanContext | undefined = hasCompleteRemoteParent(
+    extracted,
+  )
+    ? {
+        traceId: extracted.traceId,
+        spanId: extracted.parentSpanId,
+        traceFlags:
+          resolveSampling(extracted) === "SAMPLED"
+            ? TraceFlags.SAMPLED
+            : TraceFlags.NONE,
+        isRemote: true,
+      }
+    : undefined;
+  // Never let an ambient span or a synthesized sampled ancestor choose the
+  // execution's policy. A valid parent with no sampled bit remains a parent.
+  const decision = sample(
+    remoteParent
+      ? trace.setSpanContext(ROOT_CONTEXT, remoteParent)
+      : ROOT_CONTEXT,
+  );
   const flags = traceFlagsFromDecision(decision);
-  // This synthetic root is created and exported by one durable execution,
-  // so its span identity must remain owned by that execution. Multiple
-  // executions may legitimately share a propagated trace ID, but reusing one
-  // span ID across independently timed/resource-scoped roots would create
-  // conflicting OpenTelemetry span identities.
-  const syntheticRootSpanId = deriveExecutionRootSpanId(executionArn);
-  const syntheticRoot: SpanContext = {
-    traceId: canonical,
-    spanId: syntheticRootSpanId,
-    traceFlags: flags,
-    isRemote: false,
-  };
   return {
-    executionAncestor: syntheticRoot,
+    executionAncestor: remoteParent
+      ? { ...remoteParent, traceFlags: flags }
+      : {
+          traceId: canonical,
+          // Several executions can share a trace; each owns its fallback root.
+          spanId: deriveExecutionRootSpanId(executionArn),
+          traceFlags: flags,
+          isRemote: false,
+        },
     traceId: canonical,
     traceFlags: flags,
     samplingDecision: decision,
@@ -226,44 +194,24 @@ export function resolveExecutionTraceContext(
 }
 
 /**
- * Decides how a root span on the given trace should be sampled, used only
- * when the propagated context carries no explicit decision.
- *
- * Sampling precedence, highest first:
- *
- * 1. the backend's explicit `Sampled` on the propagated header — handled by the
- *    caller before reaching here;
- * 2. the configured sampler is evaluated at its root policy (`ROOT_CONTEXT`, no
- *    parent) with the real trace ID. This honors custom samplers and avoids
- *    inheriting an unrelated ambient span's decision.
- *
- * The resolved decision is then enforced through DurableSampler for every
- * SDK-created span, so direct samplers that ignore parent flags cannot override
- * an explicit backend decision or the configured root decision.
- *
- * @param tracer the resolved SDK tracer
- * @param traceId the canonical trace ID to evaluate
- * @param spanName the span name passed to the sampler
- * @param attributes the attributes the span is started with
+ * Evaluates the provider's resolved sampler with the canonical trace ID and
+ * original propagated parent (or ROOT_CONTEXT). The existing DurableSampler
+ * bridge then enforces this decision only while creating SDK-owned spans.
  */
-export function rootSamplingDecision(
+export function configuredSamplingDecision(
   tracer: Tracer,
   traceId: string,
   spanName: string,
   attributes: Record<string, string | number | boolean>,
+  parentContext: Context = ROOT_CONTEXT,
 ): SamplingDecision {
   const sampler = getConfiguredSampler(tracer);
   if (!sampler) {
     return SamplingDecision.RECORD_AND_SAMPLED;
   }
   try {
-    // Evaluate with ROOT_CONTEXT (no parent), not the active context: a
-    // ParentBasedSampler must decide the execution root on its own root policy,
-    // not inherit the sampled bit of an unrelated ambient span that the resolver
-    // already rejected. Otherwise an unrelated unsampled ambient span could drop
-    // an execution whose root policy would sample it.
     const result = sampler.shouldSample(
-      ROOT_CONTEXT,
+      parentContext,
       traceId,
       spanName,
       SpanKind.INTERNAL,
