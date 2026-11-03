@@ -9,7 +9,8 @@ export type MicrovmApiOperation =
   | "GetMicrovm"
   | "ResumeMicrovm"
   | "CreateMicrovmAuthToken"
-  | "TerminateMicrovm";
+  | "TerminateMicrovm"
+  | "SuspendMicrovm";
 
 /**
  * Returns `true` when `error` is an error of the Lambda MicroVMs service.

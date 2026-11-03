@@ -47,6 +47,7 @@ export class FakeMicrovmsClient {
   readonly runInputs: RunMicrovmCommand["input"][] = [];
   readonly terminateInputs: TerminateMicrovmCommand["input"][] = [];
   readonly tokenInputs: CreateMicrovmAuthTokenCommand["input"][] = [];
+  readonly suspendInputs: SuspendMicrovmCommand["input"][] = [];
   runResponses: Handler[] = [];
   terminateResponses: Handler[] = [];
   getResponses: Handler[] = [];
@@ -87,6 +88,7 @@ export class FakeMicrovmsClient {
     }
     if (command instanceof SuspendMicrovmCommand) {
       this.events.push("suspend");
+      this.suspendInputs.push(command.input);
       const next = this.suspendResponses.shift();
       if (next) {
         return next(command.input);
