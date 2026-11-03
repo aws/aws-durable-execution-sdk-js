@@ -45,13 +45,13 @@ required:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { createExecutionOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
+import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
     return context.step("process", async () => process(event));
   },
-  { plugins: [createExecutionOtelPluginFactory()] },
+  { plugins: [OtelPlugin.factory()] },
 );
 ```
 
@@ -72,8 +72,19 @@ replace the original setup error reported to the core's hook-error isolation.
 This cannot reclaim a span that a throwing tracer never returned, or resources
 that a failing custom processor retains independently.
 
-Use `createInvocationOtelPluginFactory()` instead when operations should appear
-under each Lambda invocation rather than under the durable Workflow.
+`OtelPlugin.factory()` defaults to execution mode. Select invocation mode when
+operations should appear under each Lambda invocation:
+
+```typescript
+OtelPlugin.factory({ mode: "invocation" });
+OtelPlugin.factory({ mode: "execution", workflowSpanName: "MyWorkflow" });
+```
+
+The mode is selected once when the factory is created. All other options are
+passed to the existing implementation, including `tracerProviderFactory`.
+Unsupported modes throw `TypeError`. The existing
+`createExecutionOtelPluginFactory(config)` and
+`createInvocationOtelPluginFactory(config)` exports remain supported.
 
 Register one OTel view. The core rejects conflicting explicit, environment, or
 mixed factory registrations with `PluginLoadError` before constructing any plugin.
@@ -208,7 +219,7 @@ this module and its OpenTelemetry peer dependencies in a Lambda layer under
 `nodejs/node_modules`, then configure one entry point:
 
 ```text
-DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-execution
+DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel
 ```
 
 or:
@@ -216,6 +227,16 @@ or:
 ```text
 DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-invocation
 ```
+
+The bare package name selects execution mode. The existing `/otel-execution`
+path remains an equivalent explicit choice; `/otel-invocation` selects invocation
+mode. These entry points retain the same exclusive-view registration as the
+code-based factories.
+
+No handler-side OTel imports or registration are needed for environment loading.
+The package, its OpenTelemetry dependencies, and a configured provider/exporter
+(such as ADOT) must still be available. Installing or importing the package alone
+does not enable instrumentation, and importing it does not initialize a provider.
 
 Do not package `@aws/durable-execution-sdk-js` in the layer. The provider entry
 points use SDK types only, and the SDK peer dependency is optional so package
