@@ -98,6 +98,16 @@ describe("compute error hierarchy", () => {
     },
   );
 
+  // Error reads cause from any object, and a function is an object.
+  it("reads cause from a function as the second argument, as Error does", () => {
+    const cause = new Error("socket closed");
+    const options = Object.assign(() => undefined, { cause });
+    const args = ["unavailable", options] as unknown as [string];
+
+    expect(new Error(...args).cause).toBe(cause);
+    expect(new MicrovmEndpointUnavailableError(...args).cause).toBe(cause);
+  });
+
   it("keeps the HTTP status on the request errors", () => {
     expect(new MicrovmRequestRejectedError("rejected", 404).status).toBe(404);
     expect(
