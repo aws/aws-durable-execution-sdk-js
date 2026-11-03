@@ -231,7 +231,9 @@ DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-invocation
 The bare package name selects execution mode. The existing `/otel-execution`
 path remains an equivalent explicit choice; `/otel-invocation` selects invocation
 mode. These entry points retain the same exclusive-view registration as the
-code-based factories.
+code-based factories. Configure only one of them: the bare name and
+`/otel-execution` are the same view, so listing both fails with
+`Plugins 'ExecutionOtelPlugin' and 'ExecutionOtelPlugin' are mutually exclusive`.
 
 No handler-side OTel imports or registration are needed for environment loading.
 The package, its OpenTelemetry dependencies, and a configured provider/exporter
