@@ -47,9 +47,8 @@ export interface EnsureRunningOptions {
  * @remarks
  * The worker in a session MicroVM suspends its own MicroVM when no job has run
  * for the session's idle time. The durable function suspends it after a job
- * with `suspendAfter`. An idle
- * policy can also suspend it. So the next job can find the MicroVM in any of
- * these states:
+ * with `suspendAfter`. An idle policy can also suspend it. So the next job can
+ * find the MicroVM in any of these states:
  *
  * - `RUNNING`: the function returns at once.
  * - `PENDING`: the function returns at once. A new MicroVM reports `PENDING`
@@ -136,8 +135,9 @@ export class MicrovmResumeDeniedError extends Error {
  * The request step of a session without the resume mode calls it after a
  * sign that the MicroVM may be suspended: an HTTP 502 from the endpoint with
  * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer. The durable
- * function can suspend the MicroVM after a `suspendAfter` job. The session can lose the
- * record of that job on replay. So this check runs for every session job.
+ * function can suspend the MicroVM after a `suspendAfter` job. The session
+ * can lose the record of that job on replay. So this check runs for every
+ * session job.
  *
  * 1. GetMicrovm runs once. A failure other than `ResourceNotFoundException`
  *    throws {@link MicrovmStateCheckError}. The caller then keeps sending

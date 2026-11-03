@@ -313,13 +313,13 @@ interface SessionState {
   /** The resume mode that the launch recorded. */
   readonly resumeBeforeDelivery: boolean;
   /**
-   * Set after a `suspendAfter` job called SuspendMicrovm. Later jobs then
-   * check the state before delivery. It only changes from `false` to
-   * `true`.
+   * Set after the child context of a `suspendAfter` job returned or threw,
+   * also when a completed job replays. Later jobs then check the state
+   * before delivery. It only changes from `false` to `true`.
    *
-   * The flag lives in memory only. A replay of a completed job does not run
-   * its child context, so it does not set the flag. The check after a sign
-   * of a suspended MicroVM covers that case. See `resumeIfSuspended`.
+   * The flag lives in memory only. A new invocation sets it again when it
+   * replays the completed job. The check after a sign of a suspended
+   * MicroVM covers the other cases. See `resumeIfSuspended`.
    */
   maybeSuspended: boolean;
 }
@@ -365,7 +365,7 @@ function invokeJob<TOutput, TInput>(
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
 
-  return context.runInChildContext<TOutput>(
+  const job = context.runInChildContext<TOutput>(
     jobName,
     async (jobContext) => {
       const [result, callbackId] = await createJobCallback<TOutput>(
@@ -397,7 +397,6 @@ function invokeJob<TOutput, TInput>(
         // throws above, and the job did not run, so it does not suspend.
         if (suspendAfter) {
           await suspendMicrovm(jobContext, scope, jobName, launched.microvmId);
-          state.maybeSuspended = true;
         }
       }
     },
@@ -406,4 +405,17 @@ function invokeJob<TOutput, TInput>(
       errorMapper: microvmErrorMapper(jobName),
     },
   );
+  if (!suspendAfter) {
+    return job;
+  }
+  // The flag is set outside the child context. So it is also set when a
+  // completed job replays, because the child context does not run then. And
+  // the suspendAfter job does not check the state before its own delivery.
+  return new DurablePromise<TOutput>(async () => {
+    try {
+      return await job;
+    } finally {
+      state.maybeSuspended = true;
+    }
+  });
 }

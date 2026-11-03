@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { LambdaMicrovmsServiceException } from "@aws-sdk/client-lambda-microvms";
 import {
   type DurableContext,
   type DurableLogger,
@@ -55,15 +56,19 @@ function recordingEndpoint(client: FakeMicrovmsClient): FakeEndpoint {
 }
 
 /** Records the warnings that the operations log. */
-function recordingLogger(warnings: string[]): DurableLogger {
+function recordingLogger(
+  warnings: string[],
+  data: unknown[] = [],
+): DurableLogger {
   const ignore = (): void => {};
   return {
     log: ignore,
     error: ignore,
     info: ignore,
     debug: ignore,
-    warn: (message: string) => {
+    warn: (message: string, ...rest: unknown[]) => {
       warnings.push(message);
+      data.push(...rest);
     },
   };
 }
@@ -74,11 +79,14 @@ function runnerFor(
   handler: MicrovmSessionHandler<unknown>,
   overrides: Partial<MicrovmSessionConfig> = {},
   warnings: string[] = [],
+  warningData: unknown[] = [],
 ): Runner {
   return new LocalDurableTestRunner({
     handlerFunction: withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
-        context.configureLogger({ customLogger: recordingLogger(warnings) });
+        context.configureLogger({
+          customLogger: recordingLogger(warnings, warningData),
+        });
         return microvmSession(
           context,
           "pipeline",
@@ -295,15 +303,53 @@ describe("vm.invoke with suspendAfter", () => {
     expect(client.suspendInputs).toHaveLength(1);
   });
 
+  it("checks the state before the next job when a completed suspendAfter job replays", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const runner = runnerFor(client, endpoint, suspendThenWaitThenJob);
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "build", 1);
+    await complete(runner, "test", 2);
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    // The wait ends the invocation. The next invocation replays the
+    // completed build job without running its child context. It still
+    // records that the MicroVM may be suspended. So the test job checks the
+    // state and resumes before delivery.
+    expect(client.suspendInputs).toHaveLength(1);
+    expect(client.events).toEqual([
+      "request:/build",
+      "suspend",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/test",
+      "terminate",
+    ]);
+  });
+
   it("logs a warning and still returns the job's result when SuspendMicrovm fails, and the next job checks the state", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
-    const denied = Object.assign(new Error("not authorized: SuspendMicrovm"), {
+    const denied = new LambdaMicrovmsServiceException({
       name: "AccessDeniedException",
+      $fault: "client",
+      $metadata: { httpStatusCode: 403, requestId: "req-9" },
+      message: "not authorized: SuspendMicrovm",
     });
     client.suspendResponses = [throwing(denied)];
     const warnings: string[] = [];
-    const runner = runnerFor(client, endpoint, suspendThenJob, {}, warnings);
+    const warningData: unknown[] = [];
+    const runner = runnerFor(
+      client,
+      endpoint,
+      suspendThenJob,
+      {},
+      warnings,
+      warningData,
+    );
 
     const executionPromise = runner.run({ payload: {} });
     await complete(runner, "build", 1);
@@ -315,6 +361,16 @@ describe("vm.invoke with suspendAfter", () => {
     expect(
       warnings.filter((warning) => warning.startsWith(SUSPEND_WARNING_PREFIX)),
     ).toHaveLength(1);
+    // The logged error is the service error, with the request ID text.
+    expect(warningData).toEqual([
+      {
+        error: expect.objectContaining({
+          name: "AccessDeniedException",
+          message:
+            "not authorized: SuspendMicrovm. SuspendMicrovm request ID: req-9.",
+        }),
+      },
+    ]);
     // The failed call may still have suspended the MicroVM. So the next job
     // checks the state. It finds RUNNING here, and does not resume.
     expect(client.events).toEqual([

@@ -288,9 +288,10 @@ export interface SendJobOptions {
    * Resumes the MicroVM if it is suspended, and returns its current
    * endpoint.
    *
-   * A session job without {@link SendJobOptions.recheck} sets it. A worker
-   * can suspend the MicroVM after a `suspendAfter` job, and the session can
-   * lose the record of that job on replay. A suspended or suspending MicroVM
+   * A session job without {@link SendJobOptions.recheck} sets it. The durable
+   * function can suspend the MicroVM after a `suspendAfter` job, and the idle
+   * auto-suspend of the worker can suspend it. The session can lose the record
+   * of the first case on replay. A suspended or suspending MicroVM
    * gets no answer to a request, or its endpoint answers HTTP 502 with
    * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the next attempt calls
    * it after either sign, at most once per 2 seconds. A booting MicroVM gets
@@ -513,8 +514,8 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     // of a suspended MicroVM. A booting MicroVM gives no such sign, unless
     // the worker takes more than 10 seconds to start listening. The check
     // repeats after each such failure, at most once per 2 seconds. The
-    // worker can suspend after the job's first state check, and the last
-    // call to the service wins.
+    // worker can still suspend the MicroVM on idle after a state check, and
+    // the last call to the service wins.
     //
     // A session sets only one of the two checks. So when both are set, only
     // `recheck` runs.

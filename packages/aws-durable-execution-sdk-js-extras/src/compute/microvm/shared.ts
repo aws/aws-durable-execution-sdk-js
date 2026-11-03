@@ -18,7 +18,10 @@ import {
   DEFAULT_MICROVM_JOB_PATH,
   DEFAULT_MICROVM_PORT,
   DEFAULT_REQUEST_RETRY_WINDOW_MS,
+  MicrovmEndpointUnavailableError,
   assertTimeToDeliver,
+  callBeforeDeadline,
+  reserveStartsAt,
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
@@ -878,9 +881,23 @@ export async function suspendMicrovm(
   jobName: string,
   microvmId: string,
 ): Promise<void> {
+  // The call must end before the invocation reserve. A Lambda timeout during
+  // it would end the invocation with the job's result checkpointed but the
+  // child context not complete. An abort or an expired reserve is handled
+  // like any failed call.
+  const reserve = reserveStartsAt(remainingTime(child));
   try {
-    await getClient(scope.config, scope.region).send(
-      new SuspendMicrovmCommand({ microvmIdentifier: microvmId }),
+    await callBeforeDeadline(
+      (sendOptions) =>
+        getClient(scope.config, scope.region).send(
+          new SuspendMicrovmCommand({ microvmIdentifier: microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      () =>
+        new MicrovmEndpointUnavailableError(
+          `The SuspendMicrovm call for ${microvmId} had no time left before the invocation reserve.`,
+        ),
     );
   } catch (error) {
     child.logger.warn(

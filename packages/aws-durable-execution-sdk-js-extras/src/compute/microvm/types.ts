@@ -366,17 +366,22 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *    checkpoint limit makes the child context run again on replay, and
    *    each run suspends again.
    * 4. A retry after the Lambda invocation fails can send the suspend again.
-   *    Suspending a suspended MicroVM succeeds.
+   *    The invocation can also end while the call runs, when other
+   *    operations wait. The call is then sent again. Suspending a suspended
+   *    MicroVM succeeds.
    * 5. The function's execution role needs `lambda:SuspendMicrovm` on the
    *    MicroVM image. The MicroVM's role does not need it for this setting.
    * 6. Adding or removing `suspendAfter` changes what the session does on
    *    replay. Change it only through a new function version.
    *
-   * A failed SuspendMicrovm call logs a warning and does not fail the job.
-   * After the call, the next job of the handle checks the MicroVM state
-   * before delivery and resumes a suspended MicroVM. A replay of a completed
-   * job does not run again, so it sends no second suspend. The next job then
-   * checks the state after a sign of a suspended MicroVM: an HTTP 502 with
+   * The call stops at the invocation reserve, as the other calls of the
+   * session do. A failed or stopped SuspendMicrovm call logs a warning and
+   * does not fail the job. After the job, also when a completed job replays,
+   * the next job of the handle checks the MicroVM state before delivery and
+   * resumes a suspended MicroVM. A replay of a completed job sends no second
+   * suspend. A job after a failed call checks the state too, because the
+   * call may still have suspended the MicroVM. The check after a sign of a
+   * suspended MicroVM stays: an HTTP 502 with
    * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an
    * answer.
    *

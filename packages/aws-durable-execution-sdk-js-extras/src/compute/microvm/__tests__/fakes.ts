@@ -91,7 +91,7 @@ export class FakeMicrovmsClient {
       this.suspendInputs.push(command.input);
       const next = this.suspendResponses.shift();
       if (next) {
-        return next(command.input);
+        return next(command.input, options);
       }
       this.microvmState = "SUSPENDED";
       return {};

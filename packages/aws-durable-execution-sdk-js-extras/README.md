@@ -405,8 +405,9 @@ The durable function does not guard `suspendAfter`. These rules are yours to kee
 1. Use it only on the job before a long wait, such as a durable wait or a callback. Do not use it on back-to-back jobs, because each suspend writes a snapshot, and each resume adds about 1 second before the next job. Do not use it on the last job. The session terminates the MicroVM after its handler returns, so the snapshot is wasted.
 2. Do not use it on a job that runs next to other jobs of the session: `map`, `parallel`, and promise combinators. Those jobs freeze until the next job resumes the MicroVM, and can hit their heartbeat timeout.
 3. The suspend runs inside the job's child context, so it follows the child context replay rules. A result larger than the child context checkpoint limit makes the child context run again on replay, and each run suspends again.
-4. A retry after the Lambda invocation fails can send the suspend again. Suspending a suspended MicroVM succeeds.
-5. Add or remove `suspendAfter` only in a new function version. It changes what the session does on replay.
+4. A retry after the Lambda invocation fails can send the suspend again. The invocation can also end while the call runs, when other operations wait. The call is then sent again. Suspending a suspended MicroVM succeeds.
+5. A job that fails by `timeout` or `heartbeatTimeout` still runs the suspend. A job that still runs in the MicroVM is then frozen, not stopped.
+6. Add or remove `suspendAfter` only in a new function version. It changes what the session does on replay.
 
 It needs:
 
