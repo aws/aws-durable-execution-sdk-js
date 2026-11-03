@@ -50,8 +50,11 @@ function loadBedrockRuntime(): Promise<BedrockRuntime> {
   runtime ??= import("@aws-sdk/client-bedrock-runtime").catch(
     (cause: unknown) => {
       runtime = undefined;
+      const code = (cause as { code?: unknown } | null)?.code;
       throw new AiError(
-        "llm() needs the @aws-sdk/client-bedrock-runtime package. Install it next to this package.",
+        code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND"
+          ? "llm() needs the @aws-sdk/client-bedrock-runtime package. Install it next to this package."
+          : "llm() could not load the @aws-sdk/client-bedrock-runtime package. See the cause.",
         { cause },
       );
     },
