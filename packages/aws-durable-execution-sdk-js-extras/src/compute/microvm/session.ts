@@ -408,14 +408,13 @@ function invokeJob<TOutput, TInput>(
   if (!suspendAfter) {
     return job;
   }
-  // The flag is set outside the child context. So it is also set when a
+  // The flag is set outside the child context, when the child context
+  // settles, not when the caller awaits the result. So it is also set when a
   // completed job replays, because the child context does not run then. And
   // the suspendAfter job does not check the state before its own delivery.
-  return new DurablePromise<TOutput>(async () => {
-    try {
-      return await job;
-    } finally {
-      state.maybeSuspended = true;
-    }
-  });
+  const markMaybeSuspended = (): void => {
+    state.maybeSuspended = true;
+  };
+  job.then(markMaybeSuspended, markMaybeSuspended);
+  return job;
 }

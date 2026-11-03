@@ -23,8 +23,10 @@ import {
   baseConfig,
   FakeEndpoint,
   FakeMicrovmsClient,
+  hangUntilAborted,
   throwing,
 } from "./fakes";
+import { INVOCATION_RESERVE_MS } from "../request";
 
 type Runner = LocalDurableTestRunner<unknown>;
 
@@ -328,6 +330,123 @@ describe("vm.invoke with suspendAfter", () => {
       "request:/test",
       "terminate",
     ]);
+  });
+
+  it("checks the state before the next job when the suspendAfter job ended before it was awaited", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
+      const build = vm.invoke(
+        ctx,
+        "build",
+        1,
+        job("/build", { suspendAfter: true }),
+      );
+      await ctx.wait("pause", { seconds: 5 });
+      const test = await vm.invoke(ctx, "test", 2, job("/test"));
+      return [await build, test];
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "build", 1);
+    await complete(runner, "test", 2);
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toEqual([1, 2]);
+    // The build job ended and suspended the MicroVM while the handler
+    // waited. So the test job checks the state, although the handler
+    // awaits the build result only after the test job.
+    expect(client.events).toEqual([
+      "request:/build",
+      "suspend",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/test",
+      "terminate",
+    ]);
+  });
+
+  it("checks the state before the next job when the suspendAfter job failed", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
+      let failure = "none";
+      try {
+        await vm.invoke(ctx, "build", 1, job("/build", { suspendAfter: true }));
+      } catch (error) {
+        failure = (error as Error).name;
+      }
+      return [failure, await vm.invoke(ctx, "test", 2, job("/test"))];
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    await fail(runner, "build");
+    await complete(runner, "test", 2);
+    const execution = await executionPromise;
+
+    expect(execution.getResult()).toEqual(["MicrovmJobFailedError", 2]);
+    expect(client.events).toEqual([
+      "request:/build",
+      "suspend",
+      "get:SUSPENDED",
+      "resume",
+      "get:RUNNING",
+      "request:/test",
+      "terminate",
+    ]);
+  });
+
+  it("stops a stalled SuspendMicrovm call at the invocation reserve, using the Lambda context's remaining time", async () => {
+    const client = new FakeMicrovmsClient();
+    client.suspendResponses = [hangUntilAborted];
+    const endpoint = recordingEndpoint(client);
+    const warnings: string[] = [];
+    // The time the invocation ends. An hour away until the job's result
+    // arrives, then the reserve is 1.5 seconds away.
+    let endsAt = Date.now() + 3_600_000;
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          (
+            context.lambdaContext as { getRemainingTimeInMillis: () => number }
+          ).getRemainingTimeInMillis = () => endsAt - Date.now();
+          context.configureLogger({ customLogger: recordingLogger(warnings) });
+          return microvmSession(
+            context,
+            "pipeline",
+            {
+              ...baseConfig(client),
+              timeout: { hours: 1 },
+              fetch: endpoint.fetch,
+            },
+            async (vm, ctx) =>
+              vm.invoke(ctx, "build", 1, job("/build", { suspendAfter: true })),
+          );
+        },
+      ),
+    }) as Runner;
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    const reserveAt = Date.now() + 1_500;
+    endsAt = reserveAt + INVOCATION_RESERVE_MS;
+    await callback.sendCallbackSuccess(JSON.stringify(1));
+    const execution = await executionPromise;
+
+    // The job returns its result at the reserve, not when the call ends.
+    expect(Date.now()).toBeLessThan(reserveAt + 500);
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toBe(1);
+    expect(client.suspendInputs).toEqual([{ microvmIdentifier: "mvm-1" }]);
+    expect(
+      warnings.filter((warning) => warning.startsWith(SUSPEND_WARNING_PREFIX)),
+    ).toHaveLength(1);
   });
 
   it("logs a warning and still returns the job's result when SuspendMicrovm fails, and the next job checks the state", async () => {
