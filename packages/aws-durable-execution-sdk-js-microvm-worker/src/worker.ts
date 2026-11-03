@@ -321,8 +321,8 @@ export interface MicrovmWorkerListener {
    */
   idle(): Promise<void>;
   /**
-   * Stops the idle time, and drops a pending suspend after a job. The
-   * listener then never suspends the MicroVM again. Running jobs continue. A
+   * Stops the idle time. The listener then never suspends the MicroVM
+   * again. Running jobs continue. A
    * refusal that a suspend started still ends on the `resume` hook or after
    * 30 seconds.
    */
@@ -1463,9 +1463,8 @@ export interface MicrovmWorker {
    */
   idle(): Promise<void>;
   /**
-   * Stops accepting connections, stops the idle time, and drops a pending
-   * suspend after a job. Running jobs continue, and the worker no longer
-   * suspends the MicroVM.
+   * Stops accepting connections and stops the idle time. Running jobs
+   * continue, and the worker no longer suspends the MicroVM.
    */
   close(): Promise<void>;
 }
