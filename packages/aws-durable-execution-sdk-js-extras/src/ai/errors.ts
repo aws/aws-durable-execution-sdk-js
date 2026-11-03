@@ -47,6 +47,44 @@ export class DeciderInvalidResponseError extends AiError {
 }
 
 /**
+ * The request was cut off 10 seconds before the invocation runs out of time,
+ * so the step can record the failure. A later attempt runs in a new
+ * invocation, so the default retry strategy retries it.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class AiTimeoutError extends AiError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "AiTimeoutError";
+  }
+}
+
+/**
+ * The text model stopped for a reason other than the end of its reply, such
+ * as a guardrail that intervened or a filtered reply. The reply is not
+ * returned. A retry with the same input stops the same way.
+ *
+ * @public
+ *
+ * @experimental This class is experimental and may be changed or removed in future releases.
+ */
+export class LlmStoppedError extends AiError {
+  /** The Converse `stopReason`, such as `guardrail_intervened`. */
+  readonly stopReason: string;
+
+  constructor(stopReason: string) {
+    super(
+      `The model stopped with the reason "${stopReason}". The reply is not returned.`,
+    );
+    this.name = "LlmStoppedError";
+    this.stopReason = stopReason;
+  }
+}
+
+/**
  * The text model's reply stopped at the `maxTokens` limit. A retry with the
  * same limit stops at the same place, so raise `maxTokens`.
  *

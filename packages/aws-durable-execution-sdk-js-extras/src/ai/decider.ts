@@ -5,6 +5,7 @@ import {
 import { DeciderError } from "./errors";
 import { defaultAiRetryStrategy } from "./retry";
 import {
+  deadlineError,
   deadlineSignal,
   invalid,
   MAX_CLASSIFY_OPTIONS,
@@ -30,33 +31,73 @@ export const DEFAULT_DECIDER_MODEL = "strands-decider-latest";
 
 const ANSWER = "answer";
 
+/** Rounding room for a score at either end of the scale. */
+const SCORE_TOLERANCE = 0.01;
+
+/**
+ * Parses the endpoint URL.
+ *
+ * @throws \{TypeError\} When it is not an absolute `http:` or `https:` URL.
+ */
+function parseEndpoint(endpoint: string): URL {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new TypeError(
+      "The decider endpoint must be an absolute http: or https: URL.",
+    );
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new TypeError(
+      "The decider endpoint must be an absolute http: or https: URL.",
+    );
+  }
+  return url;
+}
+
 function httpTransport(
-  endpoint: string,
+  url: URL,
   headers: Record<string, string> | undefined,
 ): DeciderTransport {
+  // Errors are checkpointed. So they name the endpoint without its query,
+  // fragment, or credentials, which can hold a secret.
+  const where = `${url.origin}${url.pathname}`;
   return async (request, { abortSignal }) => {
     let response: Response;
     try {
-      response = await fetch(endpoint, {
+      response = await fetch(url.href, {
         method: "POST",
         headers: { "content-type": "application/json", ...headers },
         body: JSON.stringify(request),
         signal: abortSignal,
+        // A redirect would send the headers to another server.
+        redirect: "manual",
       });
     } catch (cause) {
       throw new DeciderError(
-        `The decision model at ${endpoint} could not be reached: ${(cause as Error).message}`,
+        `The decision model at ${where} could not be reached: ${(cause as Error).message}`,
         { cause },
+      );
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw new DeciderError(
+        `The decision model at ${where} answered HTTP ${response.status}. Redirects are not followed.`,
+        { status: response.status },
       );
     }
     if (!response.ok) {
       const body = (await response.text().catch(() => "")).slice(0, 200);
       throw new DeciderError(
-        `The decision model answered HTTP ${response.status}: ${body}`,
+        `The decision model at ${where} answered HTTP ${response.status}: ${body}`,
         { status: response.status },
       );
     }
-    return response.json();
+    try {
+      return await response.json();
+    } catch (cause) {
+      return invalid("The decision model's reply is not JSON.", cause);
+    }
   };
 }
 
@@ -135,7 +176,8 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  *
  * @param config - The decision model. Every field has a default.
  * @throws \{TypeError\} When the config names neither `endpoint` nor
- * `transport`, and `STRANDS_DECIDER_ENDPOINT` is not set. `decider()` usually
+ * `transport` and `STRANDS_DECIDER_ENDPOINT` is not set, or when the endpoint
+ * is not an absolute `http:` or `https:` URL. `decider()` usually
  * runs when the module loads, so the function then fails to initialize.
  * @throws \{RangeError\} When `threshold` is not between 0 and 1.
  *
@@ -147,7 +189,9 @@ export function decider(config: DeciderConfig = {}): Decider {
   const endpoint = config.endpoint ?? process.env.STRANDS_DECIDER_ENDPOINT;
   const transport =
     config.transport ??
-    (endpoint ? httpTransport(endpoint, config.headers) : undefined);
+    (endpoint
+      ? httpTransport(parseEndpoint(endpoint), config.headers)
+      : undefined);
   if (!transport) {
     throw new TypeError(
       "decider() needs an endpoint, a transport, or the STRANDS_DECIDER_ENDPOINT environment variable.",
@@ -168,7 +212,13 @@ export function decider(config: DeciderConfig = {}): Decider {
       state: serializeInput(input),
       questions,
     };
-    return answersOf(await send(request, { abortSignal: signal }));
+    let response: unknown;
+    try {
+      response = await send(request, { abortSignal: signal });
+    } catch (error) {
+      throw deadlineError(error, signal);
+    }
+    return answersOf(response);
   }
 
   function run<T>(
@@ -291,6 +341,12 @@ export function decider(config: DeciderConfig = {}): Decider {
         );
         // The model's score is the expected level index, from 0 to levels - 1.
         const position = numberField(answers[ANSWER], "score", "score");
+        const last = scale.length - 1;
+        if (position < -SCORE_TOLERANCE || position > last + SCORE_TOLERANCE) {
+          return invalid(
+            `The decision model's score ${position} is outside 0 to ${last}.`,
+          );
+        }
         return toUnitScore(position, scale.length);
       });
     },

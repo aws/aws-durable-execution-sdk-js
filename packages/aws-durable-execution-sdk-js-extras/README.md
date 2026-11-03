@@ -399,8 +399,8 @@ The `ai` subpath has two factories. Each returns operations that ask a model one
 | Operation | Returns |
 |---|---|
 | `check(ctx, question, input)` | `boolean` |
-| `classify(ctx, question, options, input)` | One entry of `options`, typed as their union |
-| `label(ctx, question, options, input)` | Every entry of `options` that applies, in the order of `options` |
+| `classify(ctx, question, choices, input)` | One entry of `choices`, typed as their union |
+| `label(ctx, question, choices, input)` | Every entry of `choices` that applies, in the order of `choices` |
 | `score(ctx, question, scale, input)` | A number from 0 (first entry of `scale`) to 1 (last entry) |
 | `ask(ctx, question, input?)` | `string` |
 
@@ -442,7 +442,8 @@ const decide = decider({
 ```
 
 - The model must serve the `POST /v1/systemone` route of Strands Decider. The default `endpoint` is the `STRANDS_DECIDER_ENDPOINT` environment variable. This package does not host the model.
-- `decider()` throws a `TypeError` when it has neither `endpoint`, `transport`, nor `STRANDS_DECIDER_ENDPOINT`.
+- `decider()` throws a `TypeError` when it has neither `endpoint`, `transport`, nor `STRANDS_DECIDER_ENDPOINT`, or when the endpoint is not an absolute `http:` or `https:` URL.
+- Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query or credentials, because errors are checkpointed.
 - Pass `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
 - `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
 
@@ -457,6 +458,7 @@ const model = llm({
 - The default model is Claude Haiku 5.5 (`global.anthropic.claude-haiku-5-5`, exported as `DEFAULT_LLM_MODEL_ID`). Bedrock has no alias that follows the newest model of a family. So the default is pinned, and a later release of this package moves it to a newer model. Set `modelId` to keep one model.
 - `destination` holds exactly one key. This release supports `bedrock` only.
 - `ask` sends a temperature only when you set one, because some newer models, such as Claude Haiku 5.5, reject it.
+- `system` adds your own instructions after the built-in system prompt. `guardrail` (`{ identifier, version }`) applies a Bedrock guardrail. `client` replaces the default `BedrockRuntimeClient`, for example to set a Region.
 - Pass `{ bedrock: { modelId, maxTokens, temperature } }` in the last argument of `ask` to change them for one call.
 
 ### Limits
@@ -464,11 +466,11 @@ const model = llm({
 | Operation | Limits |
 |---|---|
 | All | `question` is a non-empty string. `input` is a string or a value that `JSON.stringify` can encode. |
-| `decider()` operations | The model reads the question, the options, and the input in one context window: 4,096 tokens for Strands Decider 2B. The server cuts a longer input and keeps the question and the options, so put the part that decides the answer first. |
-| `classify` | 2 to 255 options (`MAX_CLASSIFY_OPTIONS`). Options are non-empty and differ after trimming and ignoring case. The model always picks one, so add an option such as `"other"` when none may fit. |
-| `label` | At least 2 options, with the same rules. Each option is one yes-or-no question, so each adds time. |
+| `decider()` operations | The model reads the input and each question, with its choices, in one context window: 4,096 tokens for Strands Decider 2B. A request that does not fit fails with `DeciderError` and HTTP 422, which is not retried. Shorten the input before the call. |
+| `classify` | 2 to 255 choices (`MAX_CLASSIFY_OPTIONS`). Choices are non-empty and differ after trimming and ignoring case. The model always picks one, so add a choice such as `"other"` when none may fit. |
+| `label` | At least 2 choices, with the same rules. Each choice is one yes-or-no question, so each adds time. |
 | `score` | 2 to 10 entries (`MAX_SCORE_LEVELS`), from lowest to highest. |
-| `ask` | The reply is at most `maxTokens`, 1024 by default. A reply at the limit fails with `LlmMaxTokensError`. The reply must fit the 256 KB checkpoint limit. |
+| `ask` | The reply is at most `maxTokens`, 1024 by default. The reply must fit the 256 KB checkpoint limit. |
 
 A call that breaks an argument limit creates no durable operation. The returned promise rejects with a `TypeError` or a `RangeError`.
 
@@ -487,11 +489,13 @@ Every error class extends `AiError`:
 
 | Error | When | Retried |
 |---|---|---|
-| `DeciderError` | The decision model cannot be reached, or answers with an HTTP error | On no answer, 408, 429, and 5xx |
-| `DeciderInvalidResponseError` | The decision model's answer has the wrong shape | No |
+| `AiTimeoutError` | A request is still running 10 seconds before the invocation runs out of time | Yes, in a new invocation |
+| `DeciderError` | The decision model cannot be reached, or answers with an HTTP error (including 422 for an input that is too long) | On no answer, 408, 429, and 5xx |
+| `DeciderInvalidResponseError` | The decision model's reply is not JSON, has the wrong shape, or has a score outside the scale | No |
 | `LlmMaxTokensError` | The `ask` reply stops at `maxTokens` | No |
+| `LlmStoppedError` | The `ask` reply stops for another reason, such as a guardrail that intervened. Its `stopReason` says why. | No |
 
-The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling, server errors, timeouts, and connection failures, up to 5 attempts. It does not retry access-denied, validation, or guardrail errors, because they repeat. Pass `retryStrategy` to `decider()` or `llm()` to replace it. Each request stops 10 seconds before the invocation runs out of time.
+The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling, server errors, and connection failures, up to 5 attempts. It does not retry access-denied or validation errors, because they repeat. Pass `retryStrategy` to `decider()` or `llm()` to replace it.
 
 ### Permissions
 

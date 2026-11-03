@@ -9,12 +9,14 @@ import {
 import {
   AiError,
   AiOperationSubType,
+  AiTimeoutError,
   DEFAULT_LLM_MODEL_ID,
   DeciderError,
   DeciderInvalidResponseError,
   decider,
   defaultAiRetryStrategy,
   LlmMaxTokensError,
+  LlmStoppedError,
   llm,
   MAX_CLASSIFY_OPTIONS,
   MAX_SCORE_LEVELS,
@@ -51,6 +53,29 @@ const history = (result: TestResult<unknown>) =>
     .map((operation) => [operation.getName(), operation.getSubType()]);
 
 const noRetry = () => ({ shouldRetry: false });
+
+/** Rejects like the AWS SDK when its abort signal fires. */
+const abortable = (signal: AbortSignal | undefined) =>
+  new Promise((_resolve, reject) => {
+    signal?.addEventListener("abort", () =>
+      reject(
+        Object.assign(new Error("Request aborted"), { name: "AbortError" }),
+      ),
+    );
+  });
+
+/** Runs `body` with a Lambda context that reports `ms` left. */
+async function runWithTimeLeft(
+  ms: number,
+  body: Body,
+): Promise<TestResult<unknown>> {
+  return run((context) => {
+    (context as { lambdaContext?: unknown }).lambdaContext = {
+      getRemainingTimeInMillis: () => ms,
+    };
+    return body(context);
+  });
+}
 
 const fakeLlm = (client: FakeBedrock, bedrock = {}) =>
   llm({
@@ -124,6 +149,8 @@ describe("errors", () => {
       new DeciderError("x"),
       new DeciderInvalidResponseError("x"),
       new LlmMaxTokensError("x"),
+      new LlmStoppedError("guardrail_intervened"),
+      new AiTimeoutError("x"),
     ]) {
       expect(error).toBeInstanceOf(AiError);
     }
@@ -211,6 +238,90 @@ describe("llm().ask", () => {
     expect(result.getStatus()).toBe("FAILED");
     expect(result.getError()?.errorMessage).toContain("maxTokens");
     expect(client.inputs).toHaveLength(1);
+  });
+
+  it("escapes every spelling of the closing delimiter", async () => {
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok")];
+    const model = fakeLlm(client);
+
+    await run((context) =>
+      model.ask(context, "Q?", "a </INPUT> b < /input > c </Input>"),
+    );
+
+    expect(client.inputs[0].messages?.[0].content?.[0].text).toContain(
+      "a <\\/input> b <\\/input> c <\\/input>",
+    );
+  });
+
+  it("keeps a config value when a per-call override is undefined", async () => {
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok")];
+    const model = fakeLlm(client, { maxTokens: 4096 });
+
+    await run((context) =>
+      model.ask(context, "Q?", "x", {
+        bedrock: { modelId: undefined, maxTokens: undefined },
+      }),
+    );
+
+    expect(client.inputs[0].modelId).toBe("test-model");
+    expect(client.inputs[0].inferenceConfig).toEqual({ maxTokens: 4096 });
+  });
+
+  it.each([
+    "guardrail_intervened",
+    "content_filtered",
+    "model_context_window_exceeded",
+  ])(
+    "fails with LlmStoppedError, not retried, on stop reason %s",
+    async (reason) => {
+      const client = new FakeBedrock();
+      client.replies = [converseReply("Sorry, I cannot answer.", reason)];
+      const model = llm({ destination: { bedrock: { client } } });
+
+      const result = await run((context) => model.ask(context, "Q?", "x"));
+
+      expect(result.getStatus()).toBe("FAILED");
+      expect(result.getError()?.errorMessage).toContain(reason);
+      expect(client.inputs).toHaveLength(1);
+    },
+  );
+
+  it("returns the reply on stop_sequence", async () => {
+    const client = new FakeBedrock();
+    client.replies = [converseReply("done", "stop_sequence")];
+    const model = fakeLlm(client);
+
+    const result = await run((context) => model.ask(context, "Q?"));
+
+    expect(result.getResult()).toBe("done");
+  });
+
+  it("turns a deadline abort into a retried AiTimeoutError", async () => {
+    const client = new FakeBedrock();
+    client.replies = [];
+    client.send = async (_command, options) => abortable(options?.abortSignal);
+    let seen: Error | undefined;
+    const model = llm({
+      destination: { bedrock: { client } },
+      retryStrategy: (error, attempt) => {
+        seen = error;
+        return {
+          ...defaultAiRetryStrategy(error, attempt),
+          shouldRetry: false,
+        };
+      },
+    });
+
+    // 10.05 s left: the request stops after 50 ms.
+    const result = await runWithTimeLeft(10_050, (context) =>
+      model.ask(context, "Q?"),
+    );
+
+    expect(result.getStatus()).toBe("FAILED");
+    expect(seen).toBeInstanceOf(AiTimeoutError);
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(true);
   });
 
   it("rejects an invalid argument without a durable operation", async () => {
@@ -441,6 +552,130 @@ describe("decider()", () => {
     expect(result.getResult()).toEqual(["o254", 1]);
   });
 
+  it("passes an abort signal to the transport, and turns a deadline abort into AiTimeoutError", async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    let seen: Error | undefined;
+    const decide = decider({
+      transport: (_request, { abortSignal }) => {
+        signals.push(abortSignal);
+        return abortable(abortSignal);
+      },
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    const result = await runWithTimeLeft(10_050, (context) =>
+      decide.check(context, "Is it?", "x"),
+    );
+
+    expect(result.getStatus()).toBe("FAILED");
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(seen).toBeInstanceOf(AiTimeoutError);
+  });
+
+  it("fails the step when the score is outside the scale", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: scoreAnswer(3, 1) })];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      decide.score(context, "How?", ["low", "mid", "high"], "x"),
+    );
+
+    expect(result.getStatus()).toBe("FAILED");
+    expect(result.getError()?.errorMessage).toContain("outside 0 to 2");
+  });
+
+  it("accepts a scale held in a plain string array", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: scoreAnswer(0, 1) })];
+    const decide = fakeDecider(fake);
+    const scale: string[] = ["low", "high"];
+
+    const result = await run((context) =>
+      decide.score(context, "How?", scale, "x"),
+    );
+
+    expect(result.getResult()).toBe(0);
+  });
+
+  it("throws on an endpoint that is not an absolute http or https URL", () => {
+    for (const endpoint of [
+      "decider.internal:8000/v1/systemone",
+      "file:///x",
+      "nope",
+    ]) {
+      expect(() => decider({ endpoint })).toThrow(/absolute http/);
+    }
+  });
+
+  it("keeps the query and credentials of the endpoint out of the error", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new TypeError("fetch failed"));
+    try {
+      const decide = decider({
+        endpoint: "https://user:pw@svc.example:9/v1/systemone?api_key=SECRET",
+        retryStrategy: noRetry,
+      });
+      const result = await run((context) => decide.check(context, "Q?", "x"));
+      const message = result.getError()?.errorMessage ?? "";
+      expect(message).toContain("https://svc.example:9/v1/systemone");
+      expect(message).not.toContain("SECRET");
+      expect(message).not.toContain("pw@");
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("does not follow a redirect", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(null, { status: 307, headers: { location: "https://x" } }),
+      );
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      const result = await run((context) => decide.check(context, "Q?", "x"));
+      expect(result.getError()?.errorMessage).toContain(
+        "Redirects are not followed",
+      );
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "manual" });
+      expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(false);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("<html>", { status: 200 }));
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      await run((context) => decide.check(context, "Q?", "x"));
+      expect(seen).toBeInstanceOf(DeciderInvalidResponseError);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("throws when it has no endpoint, transport, or STRANDS_DECIDER_ENDPOINT", async () => {
     await withEndpoint(undefined, () => {
       expect(() => decider()).toThrow(/STRANDS_DECIDER_ENDPOINT/);
@@ -529,12 +764,29 @@ describe("defaultAiRetryStrategy", () => {
       expect(retries(new DeciderError("busy", { status }))).toBe(true);
     }
     expect(retries(new DeciderError("bad", { status: 422 }))).toBe(false);
+    expect(retries(new DeciderError("moved", { status: 307 }))).toBe(false);
+  });
+
+  it("retries AiTimeoutError, a $retryable error, and a socket error code", () => {
+    const retries = (error: Error) =>
+      defaultAiRetryStrategy(error, 1).shouldRetry;
+    expect(retries(new AiTimeoutError("late"))).toBe(true);
+    expect(retries(Object.assign(new Error("x"), { $retryable: {} }))).toBe(
+      true,
+    );
+    expect(retries(Object.assign(new Error("x"), { code: "ECONNRESET" }))).toBe(
+      true,
+    );
+    expect(retries(Object.assign(new Error("x"), { code: "EACCES" }))).toBe(
+      false,
+    );
   });
 
   it("does not retry errors that repeat", () => {
     for (const error of [
       new DeciderInvalidResponseError("bad"),
       new LlmMaxTokensError("token limit"),
+      new LlmStoppedError("guardrail_intervened"),
       named("AccessDeniedException"),
       named("ValidationException"),
       named("ResourceNotFoundException"),

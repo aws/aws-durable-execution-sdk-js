@@ -1,5 +1,5 @@
-import { LlmMaxTokensError } from "./errors";
-import { serializeInput } from "./shared";
+import { LlmMaxTokensError, LlmStoppedError } from "./errors";
+import { deadlineError, serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
 /**
@@ -28,9 +28,25 @@ function userMessage(question: string, input: unknown): string {
   if (input === undefined) {
     return `Question: ${question}`;
   }
-  // The input cannot close its own delimiter.
-  const text = serializeInput(input).replaceAll("</input>", "<\\/input>");
+  // The input cannot close its own delimiter, in any case or spacing.
+  const text = serializeInput(input).replace(
+    /<\s*\/\s*input\s*>/gi,
+    "<\\/input>",
+  );
   return `Question: ${question}\n\n<input>\n${text}\n</input>`;
+}
+
+/** Stop reasons that end a complete reply. */
+const COMPLETE_STOP_REASONS: ReadonlySet<string> = new Set([
+  "end_turn",
+  "stop_sequence",
+]);
+
+/** Returns the defined fields of a per-call override. */
+function defined<T extends object>(value: T | undefined): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value ?? {}).filter(([, field]) => field !== undefined),
+  ) as Partial<T>;
 }
 
 /** Sends Converse requests. The client is created on first use. */
@@ -57,7 +73,7 @@ export class BedrockConverse {
     signal: AbortSignal | undefined,
   ): Promise<string> {
     const { ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
-    const merged = { ...this.config, ...override };
+    const merged = { ...this.config, ...defined(override) };
     const command = new ConverseCommand({
       modelId: merged.modelId ?? DEFAULT_LLM_MODEL_ID,
       system: [
@@ -85,17 +101,28 @@ export class BedrockConverse {
       }),
     });
     const client = await this.client();
-    const response = (await client.send(command, {
-      abortSignal: signal,
-    })) as {
+    let response: {
       output?: { message?: { content?: { text?: string }[] } };
       stopReason?: string;
     };
-    if (response.stopReason === "max_tokens") {
+    try {
+      response = (await client.send(command, {
+        abortSignal: signal,
+      })) as typeof response;
+    } catch (error) {
+      throw deadlineError(error, signal);
+    }
+    const { stopReason } = response;
+    if (stopReason === "max_tokens") {
       // A retry with the same limit stops at the same place.
       throw new LlmMaxTokensError(
         "The reply stopped at the token limit. Raise maxTokens.",
       );
+    }
+    if (stopReason !== undefined && !COMPLETE_STOP_REASONS.has(stopReason)) {
+      // A guardrail's message, a filtered reply, or a partial reply is not the
+      // model's answer. So it is not checkpointed as one.
+      throw new LlmStoppedError(stopReason);
     }
     return (response.output?.message?.content ?? [])
       .map((block) => block.text ?? "")

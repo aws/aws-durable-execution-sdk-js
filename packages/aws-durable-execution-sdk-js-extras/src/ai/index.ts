@@ -2,9 +2,11 @@ export { DEFAULT_LLM_MODEL_ID } from "./bedrock";
 export { decider } from "./decider";
 export {
   AiError,
+  AiTimeoutError,
   DeciderError,
   DeciderInvalidResponseError,
   LlmMaxTokensError,
+  LlmStoppedError,
 } from "./errors";
 export { llm } from "./llm";
 export { defaultAiRetryStrategy } from "./retry";

@@ -111,15 +111,18 @@ export interface DeciderConfig {
  *
  * - `question` must be a non-empty string.
  * - `input` must be a string or a value that `JSON.stringify` can encode.
- * - The decision model reads the question, the options, and the input in one
- *   context window. Strands Decider 2B has 4,096 tokens. The server cuts a
- *   longer input to fit and keeps the question and the options. So put the
- *   part of the input that decides the answer first.
+ * - The decision model reads the input and each question, with its choices,
+ *   in one context window: 4,096 tokens for Strands Decider 2B. A request
+ *   that does not fit fails with `DeciderError` and HTTP 422, which is not
+ *   retried. Shorten the input before the call.
  * - An invalid argument creates no durable operation. The returned promise
  *   rejects with a `TypeError` or a `RangeError`.
  * - A decision model that cannot be reached, or answers with HTTP 408, 429,
- *   or 5xx, fails the attempt with `DeciderError`, and the step retries. A
- *   4xx answer is not retried.
+ *   or 5xx, fails the attempt with `DeciderError`, and the step retries.
+ *   Another 3xx or 4xx is not retried, and redirects are not followed.
+ * - A request still running 10 seconds before the invocation runs out of
+ *   time stops with `AiTimeoutError`, and the step retries in a new
+ *   invocation.
  * - The answer is the step result, so a replay returns it without calling the
  *   model.
  *
@@ -151,60 +154,61 @@ export interface Decider {
   ): DurablePromise<boolean>;
 
   /**
-   * Returns exactly one of the options, in the caller's spelling. TypeScript
-   * types the result as the union of the options.
+   * Returns exactly one of the choices, in the caller's spelling. TypeScript
+   * types the result as the union of the choices.
    *
    * @remarks
    * Limits:
    *
-   * - 2 to {@link MAX_CLASSIFY_OPTIONS} options.
-   * - Every option is a non-empty string.
-   * - The options must differ after trimming whitespace and ignoring case.
-   * - The model always picks an option. Add an option such as `"other"` when
+   * - 2 to {@link MAX_CLASSIFY_OPTIONS} choices.
+   * - Every choice is a non-empty string.
+   * - The choices must differ after trimming whitespace and ignoring case.
+   * - The model always picks a choice. Add a choice such as `"other"` when
    *   none may fit.
+   * - Every choice counts toward the model's context window.
    *
    * @param context - The context to create the step in.
-   * @param question - The question that the options answer.
-   * @param options - The possible answers.
+   * @param question - The question that the choices answer.
+   * @param choices - The possible answers.
    * @param input - The text or data that the question is about.
-   * @param callOptions - The step name.
+   * @param options - The step name.
    */
   classify<const T extends readonly string[]>(
     context: DurableContext,
     question: string,
-    options: T,
+    choices: T,
     input: AiInput,
-    callOptions?: AiCallOptions,
+    options?: AiCallOptions,
   ): DurablePromise<T[number]>;
 
   /**
-   * Returns every option that applies, in the order of `options`. The result
+   * Returns every choice that applies, in the order of `choices`. The result
    * can be empty.
    *
    * @remarks
    * Limits:
    *
-   * - At least 2 options.
-   * - Every option is a non-empty string.
-   * - The options must differ after trimming whitespace and ignoring case.
-   * - Each option is one yes-or-no question to the decision model. The model
-   *   reads the input once, but each option adds time. So keep the list
+   * - At least 2 choices.
+   * - Every choice is a non-empty string.
+   * - The choices must differ after trimming whitespace and ignoring case.
+   * - Each choice is one yes-or-no question to the decision model. The model
+   *   reads the input once, but each choice adds time. So keep the list
    *   short.
-   * - An option applies when the model's probability of yes is at least
+   * - A choice applies when the model's probability of yes is at least
    *   `threshold`, 0.5 by default.
    *
    * @param context - The context to create the step in.
-   * @param question - The question that the options answer.
-   * @param options - The labels to test.
+   * @param question - The question that the choices answer.
+   * @param choices - The labels to test.
    * @param input - The text or data that the question is about.
-   * @param callOptions - The step name.
+   * @param options - The step name.
    */
   label<const T extends readonly string[]>(
     context: DurableContext,
     question: string,
-    options: T,
+    choices: T,
     input: AiInput,
-    callOptions?: AiCallOptions,
+    options?: AiCallOptions,
   ): DurablePromise<T[number][]>;
 
   /**
@@ -228,7 +232,7 @@ export interface Decider {
   score(
     context: DurableContext,
     question: string,
-    scale: readonly [string, string, ...string[]],
+    scale: readonly string[],
     input: AiInput,
     options?: AiCallOptions,
   ): DurablePromise<number>;
@@ -330,6 +334,11 @@ export interface Llm {
    * - The reply is at most `maxTokens` tokens, 1024 by default. A reply that
    *   reaches the limit fails the step with `LlmMaxTokensError` and is not
    *   retried. Raise `maxTokens` instead.
+   * - A reply that stops for another reason, such as a guardrail that
+   *   intervened, fails the step with `LlmStoppedError` and is not retried.
+   * - A request still running 10 seconds before the invocation runs out of
+   *   time stops with `AiTimeoutError`, and the step retries in a new
+   *   invocation.
    * - The reply is checkpointed, so it must fit the 256 KB checkpoint limit.
    * - An invalid argument creates no durable operation. The returned promise
    *   rejects with a `TypeError`.

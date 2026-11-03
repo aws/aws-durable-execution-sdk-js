@@ -2,7 +2,7 @@ import {
   type DurableContext,
   DurablePromise,
 } from "@aws/durable-execution-sdk-js";
-import { DeciderInvalidResponseError } from "./errors";
+import { AiTimeoutError, DeciderInvalidResponseError } from "./errors";
 
 /** Time that a request leaves for the step to record its outcome. */
 export const INVOCATION_RESERVE_MS = 10_000;
@@ -46,6 +46,24 @@ export function deadlineSignal(
     return undefined;
   }
   return AbortSignal.timeout(Math.max(remaining - INVOCATION_RESERVE_MS, 1));
+}
+
+/**
+ * Turns an abort caused by the invocation deadline into an
+ * {@link AiTimeoutError}, so the step retries in a new invocation. Any other
+ * error passes through.
+ */
+export function deadlineError(
+  error: unknown,
+  signal: AbortSignal | undefined,
+): unknown {
+  if (signal?.aborted && !(error instanceof AiTimeoutError)) {
+    return new AiTimeoutError(
+      "The request was stopped 10 seconds before the invocation runs out of time.",
+      { cause: error },
+    );
+  }
+  return error;
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { RetryDecision } from "@aws/durable-execution-sdk-js";
-import { DeciderError } from "./errors";
+import { AiTimeoutError, DeciderError } from "./errors";
 
 /** Error names that a later attempt can succeed after. */
 const RETRYABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
@@ -34,11 +34,12 @@ const MAX_DELAY_SECONDS = 60;
  * @remarks
  * It retries throttling, server errors, timeouts, and connection failures, up
  * to 5 attempts in total, with an exponential delay of 2, 4, 8, and 16
- * seconds. A decision model that cannot be reached counts, and so does its
- * HTTP 408, 429, or 5xx. It does not retry `DeciderInvalidResponseError`,
- * `LlmMaxTokensError`, another 4xx from the decision model, or access-denied,
- * validation, unknown-model, or guardrail errors. These repeat, so a later
- * attempt fails the same way.
+ * seconds. `AiTimeoutError` counts, and so does a decision model that cannot
+ * be reached or answers HTTP 408, 429, or 5xx. It does not retry
+ * `DeciderInvalidResponseError`, `LlmMaxTokensError`, `LlmStoppedError`,
+ * another 3xx or 4xx from the decision model (such as 422 for an input that is
+ * too long), or access-denied, validation, or unknown-model errors. These
+ * repeat, so a later attempt fails the same way.
  *
  * @public
  *
@@ -54,6 +55,7 @@ export const defaultAiRetryStrategy = (
   };
   const status = error instanceof DeciderError ? error.status : undefined;
   const retryable =
+    error instanceof AiTimeoutError ||
     RETRYABLE_ERROR_NAMES.has(error.name) ||
     (typeof code === "string" && RETRYABLE_ERROR_CODES.has(code)) ||
     $retryable !== undefined ||
