@@ -1,4 +1,4 @@
-import { LlmMaxTokensError, LlmStoppedError } from "./errors";
+import { AiError, LlmMaxTokensError, LlmStoppedError } from "./errors";
 import { deadlineError, serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
@@ -34,6 +34,31 @@ function userMessage(question: string, input: unknown): string {
   return `Question: ${question}\n\n<input>\n${text}\n</input>`;
 }
 
+type BedrockRuntime = typeof import("@aws-sdk/client-bedrock-runtime");
+
+let runtime: Promise<BedrockRuntime> | undefined;
+
+/**
+ * Loads `@aws-sdk/client-bedrock-runtime`, an optional peer dependency, on
+ * first use.
+ *
+ * The `.catch` on the `import()` lets a bundler such as esbuild leave a
+ * missing package to run time instead of failing the build. So `decider()`
+ * works without the package, and `ask` fails with a clear message.
+ */
+function loadBedrockRuntime(): Promise<BedrockRuntime> {
+  runtime ??= import("@aws-sdk/client-bedrock-runtime").catch(
+    (cause: unknown) => {
+      runtime = undefined;
+      throw new AiError(
+        "llm() needs the @aws-sdk/client-bedrock-runtime package. Install it next to this package.",
+        { cause },
+      );
+    },
+  );
+  return runtime;
+}
+
 /** Stop reasons that end a complete reply. */
 const COMPLETE_STOP_REASONS: ReadonlySet<string> = new Set([
   "end_turn",
@@ -57,7 +82,7 @@ export class BedrockConverse {
     if (this.config.client) {
       return Promise.resolve(this.config.client);
     }
-    this.clientPromise ??= import("@aws-sdk/client-bedrock-runtime").then(
+    this.clientPromise ??= loadBedrockRuntime().then(
       ({ BedrockRuntimeClient }) =>
         new BedrockRuntimeClient({}) as unknown as BedrockConverseClient,
     );
@@ -70,7 +95,7 @@ export class BedrockConverse {
     override: Partial<BedrockConfig> | undefined,
     signal: AbortSignal | undefined,
   ): Promise<string> {
-    const { ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
+    const { ConverseCommand } = await loadBedrockRuntime();
     const merged = { ...this.config, ...defined(override) };
     const command = new ConverseCommand({
       modelId: merged.modelId ?? DEFAULT_LLM_MODEL_ID,

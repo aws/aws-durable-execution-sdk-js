@@ -644,6 +644,31 @@ describe("decider()", () => {
     }
   });
 
+  it("names the system error code of a refused connection, from real fetch", async () => {
+    const http = await import("node:http");
+    // Bind, read the port, and close, so nothing listens on it.
+    const server = http.createServer();
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = server.address() as { port: number };
+    await new Promise((resolve) => server.close(resolve));
+    let seen: Error | undefined;
+    const decide = decider({
+      endpoint: `http://127.0.0.1:${port}/v1/systemone?api_key=SECRET`,
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(seen?.message).toBe(
+      `The decision model at http://127.0.0.1:${port}/v1/systemone could not be reached (TypeError, ECONNREFUSED).`,
+    );
+  });
+
   it("does not turn a real error that arrives after the deadline into AiTimeoutError", async () => {
     let seen: Error | undefined;
     const decide = decider({

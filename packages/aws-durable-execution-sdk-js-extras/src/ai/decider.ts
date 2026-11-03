@@ -5,6 +5,7 @@ import {
 import { DeciderError } from "./errors";
 import { defaultAiRetryStrategy } from "./retry";
 import {
+  causeChain,
   deadlineError,
   deadlineSignal,
   invalid,
@@ -62,6 +63,20 @@ function parseEndpoint(endpoint: string): URL {
   return url;
 }
 
+/** The cause's type, and the first system error code in its chain. */
+function reason(cause: unknown): string {
+  const name = (cause as { name?: unknown } | null)?.name;
+  const code = causeChain(cause)
+    .map((link) => (link as { code?: unknown } | null)?.code)
+    .find(
+      (value): value is string =>
+        typeof value === "string" && /^[A-Z][A-Z0-9_]*$/.test(value),
+    );
+  return [typeof name === "string" ? name : "Error", code]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function httpTransport(
   url: URL,
   headers: Record<string, string> | undefined,
@@ -82,9 +97,10 @@ function httpTransport(
       });
     } catch (cause) {
       throw new DeciderError(
-        // The cause's own message can repeat the full URL. So the message
-        // names only the cause's type, and the cause stays on the error.
-        `The decision model at ${where} could not be reached (${(cause as Error).name}).`,
+        // The cause's own message can repeat the full URL, and only the
+        // message is checkpointed. So the message names the cause's type and
+        // its system error code, such as ECONNREFUSED, which hold no URL.
+        `The decision model at ${where} could not be reached (${reason(cause)}).`,
         { cause },
       );
     }

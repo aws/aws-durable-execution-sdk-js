@@ -53,21 +53,26 @@ const ABORT_ERROR_NAMES: ReadonlySet<string> = new Set([
   "TimeoutError",
 ]);
 
-/** Whether `error`, or an error in its `cause` chain, is the abort itself. */
-function isAbort(error: unknown, signal: AbortSignal): boolean {
+/** The errors in the `cause` chain of `error`, starting with `error`. */
+export function causeChain(error: unknown): unknown[] {
+  const chain: unknown[] = [];
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current !== undefined; depth++) {
-    if (
-      current === signal.reason ||
-      ABORT_ERROR_NAMES.has(
-        (current as { name?: unknown } | null)?.name as string,
-      )
-    ) {
-      return true;
-    }
+    chain.push(current);
     current = (current as { cause?: unknown } | null)?.cause;
   }
-  return false;
+  return chain;
+}
+
+/**
+ * Whether `error`, or an error in its `cause` chain, is an abort. The
+ * deadline signal is an `AbortSignal.timeout`, whose reason is a
+ * `TimeoutError`, and clients report an abort as an `AbortError`.
+ */
+function isAbort(error: unknown): boolean {
+  return causeChain(error).some((link) =>
+    ABORT_ERROR_NAMES.has((link as { name?: unknown } | null)?.name as string),
+  );
 }
 
 /**
@@ -81,11 +86,7 @@ export function deadlineError(
   error: unknown,
   signal: AbortSignal | undefined,
 ): unknown {
-  if (
-    signal?.aborted &&
-    !(error instanceof AiTimeoutError) &&
-    isAbort(error, signal)
-  ) {
+  if (signal?.aborted && !(error instanceof AiTimeoutError) && isAbort(error)) {
     return new AiTimeoutError(
       "The request was stopped 10 seconds before the invocation runs out of time.",
       { cause: error },

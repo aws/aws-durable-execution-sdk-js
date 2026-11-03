@@ -499,7 +499,7 @@ The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling,
 
 ### Permissions
 
-`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. `decider()` needs no AWS permission.
+`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. Without it, `decider()` still works, a bundler such as esbuild still builds, and `ask` fails with an `AiError` that names the package. `decider()` needs no AWS permission.
 
 ### Testing
 
