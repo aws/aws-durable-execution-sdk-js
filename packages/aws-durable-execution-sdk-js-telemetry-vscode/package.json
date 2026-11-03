@@ -311,7 +311,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^20.19.43",
-    "@types/vscode": "^1.144.0",
+    "@types/vscode": "^1.140.0",
     "esbuild": "^0.28.2",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15",
