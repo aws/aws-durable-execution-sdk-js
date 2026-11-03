@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { Operation, CheckpointDurableExecutionResponse } from "../types/wire";
@@ -106,26 +107,26 @@ export function createTestDurableContext(options?: {
 
   // Create a mock DurableExecution with mock checkpoint for tests
   const mockCheckpoint: Checkpoint = {
-    checkpoint: jest.fn().mockResolvedValue(undefined),
-    forceCheckpoint: jest.fn().mockResolvedValue(undefined),
-    force: jest.fn().mockResolvedValue(undefined),
-    setTerminating: jest.fn(),
-    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
-    waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-    markAncestorFinished: jest.fn(),
+    checkpoint: vi.fn().mockResolvedValue(undefined),
+    forceCheckpoint: vi.fn().mockResolvedValue(undefined),
+    force: vi.fn().mockResolvedValue(undefined),
+    setTerminating: vi.fn(),
+    hasPendingAncestorCompletion: vi.fn().mockReturnValue(false),
+    waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+    markAncestorFinished: vi.fn(),
     // New lifecycle methods (stubs)
-    markOperationState: jest.fn(),
-    waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
-    waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-    markOperationAwaited: jest.fn(),
-    getOperationState: jest.fn().mockReturnValue(undefined),
-    getAllOperations: jest.fn().mockReturnValue(new Map()),
+    markOperationState: vi.fn(),
+    waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
+    waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+    markOperationAwaited: vi.fn(),
+    getOperationState: vi.fn().mockReturnValue(undefined),
+    getAllOperations: vi.fn().mockReturnValue(new Map()),
   };
 
   const mockDurableExecution = {
     checkpointManager: mockCheckpoint,
     stepDataEmitter: new EventEmitter(),
-    setTerminating: jest.fn(),
+    setTerminating: vi.fn(),
     plugin: options?.plugin,
   };
 

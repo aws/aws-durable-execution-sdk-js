@@ -1,4 +1,5 @@
-import yaml from "js-yaml";
+import { vi } from "vitest";
+import * as yaml from "js-yaml";
 import {
   toPascalCase,
   createFunctionResource,
@@ -7,45 +8,50 @@ import {
   serializeTemplate,
 } from "../generate-sam-template";
 
-jest.mock("fs", () => ({
-  existsSync: jest.fn(() => true),
-  readFileSync: jest.fn(() =>
-    JSON.stringify([
-      {
-        name: "hello-world",
-        description: "A simple hello world example with no durable operations",
-        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
-        handler: "hello-world.handler",
-        durableConfig: {
-          ExecutionTimeout: 60,
-          RetentionPeriodInDays: 7,
+vi.mock("fs", () => {
+  const fsMock = {
+    existsSync: vi.fn(() => true),
+    readFileSync: vi.fn(() =>
+      JSON.stringify([
+        {
+          name: "hello-world",
+          description:
+            "A simple hello world example with no durable operations",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
+          handler: "hello-world.handler",
+          durableConfig: {
+            ExecutionTimeout: 60,
+            RetentionPeriodInDays: 7,
+          },
         },
-      },
-      {
-        name: "steps-with-retry",
-        description: "An example demonstrating retry functionality with steps",
-        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
-        handler: "steps-with-retry.handler",
-        durableConfig: {
-          ExecutionTimeout: 60,
-          // Keep this different from log retention to verify they are independent.
-          RetentionPeriodInDays: 30,
+        {
+          name: "steps-with-retry",
+          description:
+            "An example demonstrating retry functionality with steps",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
+          handler: "steps-with-retry.handler",
+          durableConfig: {
+            ExecutionTimeout: 60,
+            // Keep this different from log retention to verify they are independent.
+            RetentionPeriodInDays: 30,
+          },
         },
-      },
-      {
-        name: "MicroVM Run Job",
-        description: "Runs one job in a Lambda MicroVM",
-        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts",
-        handler: "microvm-run-job.handler",
-        durableConfig: {
-          ExecutionTimeout: 900,
-          RetentionPeriodInDays: 7,
+        {
+          name: "MicroVM Run Job",
+          description: "Runs one job in a Lambda MicroVM",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts",
+          handler: "microvm-run-job.handler",
+          durableConfig: {
+            ExecutionTimeout: 900,
+            RetentionPeriodInDays: 7,
+          },
+          usesMicrovm: true,
         },
-        usesMicrovm: true,
-      },
-    ]),
-  ),
-}));
+      ]),
+    ),
+  };
+  return { ...fsMock, default: fsMock };
+});
 
 describe("generate-sam-template", () => {
   describe("toPascalCase", () => {

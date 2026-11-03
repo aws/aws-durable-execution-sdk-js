@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+} from "vitest";
 import { WorkerClientApiHandler } from "../worker-client-api-handler";
 import { Worker } from "node:worker_threads";
 import { randomUUID } from "node:crypto";
@@ -14,12 +23,12 @@ import {
 } from "../../../../checkpoint-server/worker-api/worker-api-request";
 
 // Mock dependencies
-jest.mock("node:worker_threads");
-jest.mock("node:crypto");
-jest.mock("../../../../logger");
+vi.mock("node:worker_threads");
+vi.mock("node:crypto");
+vi.mock("../../../../logger");
 
-const mockRandomUUID = randomUUID as jest.MockedFunction<typeof randomUUID>;
-const mockDefaultLogger = defaultLogger as jest.Mocked<typeof defaultLogger>;
+const mockRandomUUID = randomUUID as MockedFunction<typeof randomUUID>;
+const mockDefaultLogger = defaultLogger as Mocked<typeof defaultLogger>;
 
 // Predefined UUIDs for consistent testing
 const TEST_UUIDS = {
@@ -35,18 +44,18 @@ const TEST_UUIDS = {
 
 describe("WorkerClientApiHandler", () => {
   let handler: WorkerClientApiHandler;
-  let mockWorker: jest.Mocked<Worker>;
+  let mockWorker: Mocked<Worker>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create mock worker
     mockWorker = {
-      postMessage: jest.fn(),
-      terminate: jest.fn(),
-      on: jest.fn(),
-      off: jest.fn(),
-    } as unknown as jest.Mocked<Worker>;
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+    } as unknown as Mocked<Worker>;
 
     // Mock randomUUID to return predictable UUIDs
     mockRandomUUID.mockReturnValue(TEST_UUIDS.DEFAULT);

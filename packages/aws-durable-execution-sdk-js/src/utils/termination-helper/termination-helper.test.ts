@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import { terminateForUnrecoverableError } from "./termination-helper";
 import { ExecutionContext } from "../../types";
 import { UnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
@@ -13,12 +14,12 @@ class TestUnrecoverableError extends UnrecoverableError {
 }
 
 describe("termination helpers", () => {
-  let mockContext: jest.Mocked<ExecutionContext>;
+  let mockContext: Mocked<ExecutionContext>;
 
   beforeEach(() => {
     mockContext = {
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
   });

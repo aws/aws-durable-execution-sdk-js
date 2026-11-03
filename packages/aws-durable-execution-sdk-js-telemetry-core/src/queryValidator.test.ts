@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { assertReadOnly, type SqlEngine } from "./queryValidator";
 
 const ok = (q: string) =>

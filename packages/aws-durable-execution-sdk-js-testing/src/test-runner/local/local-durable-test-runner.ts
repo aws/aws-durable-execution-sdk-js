@@ -537,7 +537,7 @@ export class LocalDurableTestRunner<TResult = any>
    * ```
    *
    * @remarks
-   * - If fake timers are already installed (for example, if `jest.useFakeTimers()` was called previously),
+   * - If fake timers are already installed (for example, if `vi.useFakeTimers()` was called previously),
    *   this function will throw an error and setup will not succeed.
    * - Must be paired with {@link LocalDurableTestRunner.teardownTestEnvironment} to properly clean up resources
    *

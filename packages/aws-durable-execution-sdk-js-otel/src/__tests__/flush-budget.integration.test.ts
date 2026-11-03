@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { context, propagation, trace } from "@opentelemetry/api";
@@ -69,7 +78,7 @@ describe.each([
             spanProcessors: [processor],
           }));
       }
-      const step = jest.fn(async () => "done");
+      const step = vi.fn(async () => "done");
       const handler = withDurableExecution(
         async (_, durable) => durable.step("saved", step),
         { plugins: [Plugin(config)] },
@@ -77,7 +86,7 @@ describe.each([
       const runner = new LocalDurableTestRunner({ handlerFunction: handler });
       const execution = runner.run();
       let observationTimer: ReturnType<typeof setTimeout> | undefined;
-      const log = jest.spyOn(console, "error").mockImplementation(() => {});
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         await exporting.opened;
         const observed = await Promise.race([

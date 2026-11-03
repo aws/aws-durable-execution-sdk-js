@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { DescribeDBEngineVersionsCommand } from "@aws-sdk/client-rds";
 import {
   assertAuroraEngineVersionAvailable,
@@ -138,9 +147,9 @@ describe("assertAuroraEngineVersionAvailable", () => {
   );
 
   describe("when the RDS call fails", () => {
-    let warn: jest.SpyInstance;
+    let warn: MockInstance;
     beforeEach(() => {
-      warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     });
     afterEach(() => warn.mockRestore());
 

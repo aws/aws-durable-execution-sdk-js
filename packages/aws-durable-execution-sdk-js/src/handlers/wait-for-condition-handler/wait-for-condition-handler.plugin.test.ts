@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   ExecutionContext,
@@ -14,9 +24,9 @@ import {
 import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-jest.mock("../../utils/context-tracker/context-tracker");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/context-tracker/context-tracker");
 
 import {
   safeSerialize,
@@ -24,47 +34,45 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
-const mockRunWithContext = runWithContext as jest.MockedFunction<
+const mockRunWithContext = runWithContext as MockedFunction<
   typeof runWithContext
 >;
 
 describe("WaitForCondition Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let createStepId: Mock;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
-    createStepId = jest.fn().mockReturnValue("step-1");
+    createStepId = vi.fn().mockReturnValue("step-1");
 
     mockPlugin = {
-      onOperationAttemptStart: jest.fn(),
-      onOperationAttemptEnd: jest.fn(),
-      wrapOperationAttemptFn: jest.fn(),
+      onOperationAttemptStart: vi.fn(),
+      onOperationAttemptEnd: vi.fn(),
+      wrapOperationAttemptFn: vi.fn(),
     };
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
@@ -80,7 +88,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
   });
 
   it("should call onOperationAttemptStart and onOperationAttemptEnd with succeeded on condition met", async () => {
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
     );
 
@@ -95,7 +103,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("done");
     const config: WaitForConditionConfig<string> = {
@@ -112,7 +120,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     );
 
     // Verify startTimestamp is the current time, not from stepData
-    const attemptInfo = (mockPlugin.onOperationAttemptStart as jest.Mock).mock
+    const attemptInfo = (mockPlugin.onOperationAttemptStart as Mock).mock
       .calls[0][0];
     expect(attemptInfo.startTimestamp).toBeInstanceOf(Date);
     expect(attemptInfo.startTimestamp.getTime()).toBeGreaterThanOrEqual(
@@ -141,7 +149,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
   it("should call onOperationAttemptEnd with failed when check throws", async () => {
     const checkError = new Error("check blew up");
 
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
     );
 
@@ -161,7 +169,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
       .fn()
       .mockRejectedValue(checkError);
     const config: WaitForConditionConfig<string> = {
@@ -205,10 +213,9 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       return callCount;
     });
 
-    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> =
-      jest.fn();
+    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn();
     const config: WaitForConditionConfig<number> = {
-      waitStrategy: jest
+      waitStrategy: vi
         .fn()
         .mockReturnValueOnce({
           shouldContinue: true,
@@ -245,7 +252,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
   it("should propagate errors thrown within wrapOperationAttemptFn", async () => {
     const wrapError = new Error("wrapOperationAttemptFn exploded");
 
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => {
         fn();
         throw wrapError;
@@ -268,7 +275,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("done");
     const config: WaitForConditionConfig<string> = {
@@ -296,7 +303,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       emptyPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("done");
     const config: WaitForConditionConfig<string> = {
@@ -317,7 +324,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     // After RETRY checkpoint and re-entering executeCheckLogic via recursion:
     // subsequent calls return data with Attempt: 1 and status STARTED
     let getStepDataCallCount = 0;
-    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+    (mockContext.getStepData as Mock).mockImplementation(() => {
       getStepDataCallCount++;
       if (getStepDataCallCount <= 2) {
         // First attempt: no step data
@@ -335,10 +342,10 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       };
     });
 
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
     );
-    mockPlugin.onOperationStart = jest.fn();
+    mockPlugin.onOperationStart = vi.fn();
 
     let checkCallCount = 0;
     mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
@@ -356,10 +363,9 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> =
-      jest.fn();
+    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn();
     const config: WaitForConditionConfig<number> = {
-      waitStrategy: jest
+      waitStrategy: vi
         .fn()
         .mockReturnValueOnce({
           shouldContinue: true,

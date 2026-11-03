@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { durableExecutionTelemetry } from "./index";
 import type {
   TelemetryExporter,
@@ -505,11 +506,11 @@ describe("emittedAt", () => {
   // Exporters key on executionArn + emittedAt (the SQS FIFO deduplication id
   // and the default DynamoDB sort key). emittedAt has millisecond precision, so
   // two records built in the same millisecond must still get distinct values.
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it("strictly increases within one invocation when the clock does not move", async () => {
     const frozen = Date.parse("2026-10-23T18:42:46.123Z");
-    jest.spyOn(Date, "now").mockReturnValue(frozen);
+    vi.spyOn(Date, "now").mockReturnValue(frozen);
     const exporter = new CapturingExporter();
     const factory = durableExecutionTelemetry({
       exporters: [exporter],
@@ -545,7 +546,7 @@ describe("emittedAt", () => {
   });
 
   it("uses the current time when the clock has moved past the previous record", async () => {
-    const now = jest.spyOn(Date, "now");
+    const now = vi.spyOn(Date, "now");
     now.mockReturnValue(Date.parse("2026-10-23T18:42:46.123Z"));
     const exporter = new CapturingExporter();
     const factory = durableExecutionTelemetry({
@@ -675,7 +676,7 @@ describe("sampling", () => {
   });
 
   it("clamps out-of-range and non-numeric rates with a warning", async () => {
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       // > 1 clamps to 1 (all emit)
       const high = new CapturingExporter();
@@ -1352,8 +1353,8 @@ describe("exporter failure containment", () => {
   }, 60_000);
 
   it("falls back to the default exporter when exporters is not an array", async () => {
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
-    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       // Validated only for truthiness and `.length`, an array-like reached
       // `this.exporters.map` and made every fan-out throw a TypeError from
@@ -1859,7 +1860,7 @@ describe("flush serialization", () => {
   });
 
   it("releases every waiter when flush() throws, and logs each failure", async () => {
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       let flushes = 0;
       const exporter: TelemetryExporter = {

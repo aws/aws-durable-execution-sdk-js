@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import {
   CheckpointTokenData,
   decodeCheckpointToken,
@@ -85,7 +86,7 @@ describe("checkpoint-token", () => {
     it("should wrap non-Error exceptions in an Error object", () => {
       // Mock Buffer.from to throw a string instead of an Error object
       const originalFrom = Buffer.from;
-      Buffer.from = jest.fn().mockImplementation(() => {
+      Buffer.from = vi.fn().mockImplementation(() => {
         throw new Error("Test error");
       });
 

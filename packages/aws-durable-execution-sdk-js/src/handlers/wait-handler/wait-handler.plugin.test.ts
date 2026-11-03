@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { createWaitHandler } from "./wait-handler";
 import { OperationStatus } from "../../types/wire";
 import { ExecutionContext } from "../../types";
@@ -5,33 +14,33 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
+vi.mock("../../utils/logger/logger");
 
 describe("Wait Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let createStepId: Mock;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
-      terminationManager: { terminate: jest.fn() },
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      terminationManager: { terminate: vi.fn() },
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
-    createStepId = jest.fn().mockReturnValue("test-step-id");
+    createStepId = vi.fn().mockReturnValue("test-step-id");
     mockPlugin = {
-      onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationStart: vi.fn(),
+      onOperationEnd: vi.fn(),
     };
   });
 
@@ -41,7 +50,7 @@ describe("Wait Handler - plugin hooks", () => {
       Id: "test-step-id",
       Status: OperationStatus.SUCCEEDED,
     };
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       stepData[hashId("test-step-id")],
     );
 
@@ -50,7 +59,7 @@ describe("Wait Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       undefined,
-      jest.fn(),
+      vi.fn(),
       mockPlugin,
     );
 
@@ -66,7 +75,7 @@ describe("Wait Handler - plugin hooks", () => {
   it("should call onOperationEnd on phase 2 succeeded", async () => {
     // Phase 1: not completed, checkpoint START
     // Phase 2: waitForStatusChange resolves, then SUCCEEDED
-    (mockContext.getStepData as jest.Mock)
+    (mockContext.getStepData as Mock)
       .mockReturnValueOnce(null) // phase 1 initial check
       .mockReturnValueOnce(null) // after checkpoint (inside !stepData branch)
       .mockReturnValueOnce(null) // refresh stepData after checkpoint
@@ -80,7 +89,7 @@ describe("Wait Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       undefined,
-      jest.fn(),
+      vi.fn(),
       mockPlugin,
     );
 
@@ -102,7 +111,7 @@ describe("Wait Handler - plugin hooks", () => {
       Id: "test-step-id",
       Status: OperationStatus.SUCCEEDED,
     };
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       stepData[hashId("test-step-id")],
     );
 
@@ -111,7 +120,7 @@ describe("Wait Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       undefined,
-      jest.fn(),
+      vi.fn(),
       {},
     );
 

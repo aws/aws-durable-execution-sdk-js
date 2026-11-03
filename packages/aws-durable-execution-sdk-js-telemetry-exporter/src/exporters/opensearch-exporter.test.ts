@@ -1,6 +1,7 @@
 // Mock SigV4 signing + crypto + credential provider so no real credentials are
 // needed; capture the signed request shape. fetch is stubbed per test.
-const signMock = jest.fn().mockResolvedValue({
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+const signMock = vi.fn().mockResolvedValue({
   headers: {
     authorization: "AWS4-HMAC-SHA256 ...",
     host: "d.us-east-1.es.amazonaws.com",
@@ -8,12 +9,14 @@ const signMock = jest.fn().mockResolvedValue({
   },
 });
 
-jest.mock("@smithy/signature-v4", () => ({
-  SignatureV4: jest.fn().mockImplementation(() => ({ sign: signMock })),
+vi.mock("@smithy/signature-v4", () => ({
+  SignatureV4: vi.fn(function () {
+    return { sign: signMock };
+  }),
 }));
-jest.mock("@aws-crypto/sha256-js", () => ({ Sha256: jest.fn() }));
-jest.mock("@aws-sdk/credential-provider-node", () => ({
-  defaultProvider: jest.fn(() => jest.fn()),
+vi.mock("@aws-crypto/sha256-js", () => ({ Sha256: vi.fn() }));
+vi.mock("@aws-sdk/credential-provider-node", () => ({
+  defaultProvider: vi.fn(() => vi.fn()),
 }));
 
 import { OpenSearchExporter } from "./opensearch-exporter";
@@ -21,7 +24,7 @@ import { makeRecord } from "../test-utils/make-record";
 
 beforeEach(() => {
   signMock.mockClear();
-  global.fetch = jest.fn().mockResolvedValue({
+  global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
     statusText: "OK",
@@ -39,7 +42,7 @@ describe("OpenSearchExporter", () => {
     await exporter.export(makeRecord());
 
     expect(signMock).toHaveBeenCalledTimes(1);
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toBe(
       "https://d.us-east-1.es.amazonaws.com/durable-execution-telemetry/_doc/" +
         encodeURIComponent(
@@ -67,13 +70,13 @@ describe("OpenSearchExporter", () => {
     await exporter.export(makeRecord());
 
     expect(signMock).not.toHaveBeenCalled();
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toContain("/custom-index/_doc/");
     expect(init.headers.Authorization).toBe("Basic " + btoa("admin:secret"));
   });
 
   it("throws with detail on a non-ok response", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 403,
       statusText: "Forbidden",

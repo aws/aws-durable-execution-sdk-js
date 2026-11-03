@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { ResourceNotFoundException } from "@aws-sdk/client-lambda-microvms";
 import {
   type DurableContext,
@@ -662,7 +671,7 @@ function runnerAcrossDeploy(
  * the launch checkpoint that every replay reads.
  */
 function checkpointLaunchAs(fields: Record<string, unknown>): void {
-  jest.spyOn(shared, "launch").mockImplementation((child, scope) =>
+  vi.spyOn(shared, "launch").mockImplementation((child, scope) =>
     child.step(
       `${scope.name}.launch`,
       async () =>
@@ -684,7 +693,7 @@ const idlePolicy = {
 };
 
 describe("microvmSession resume mode", () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it.each<[string, Partial<MicrovmSessionConfig>, boolean]>([
     ["autoSuspendOnIdle is true", { autoSuspendOnIdle: true }, true],

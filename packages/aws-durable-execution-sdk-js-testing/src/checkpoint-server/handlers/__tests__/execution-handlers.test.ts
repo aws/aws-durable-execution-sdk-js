@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { EventType } from "@aws-sdk/client-lambda";
 import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import {
@@ -26,7 +27,7 @@ describe("execution handlers", () => {
 
   describe("processStartDurableExecution", () => {
     it("should delegate to execution manager startExecution with generated execution ID", () => {
-      const startExecutionSpy = jest.spyOn(executionManager, "startExecution");
+      const startExecutionSpy = vi.spyOn(executionManager, "startExecution");
 
       const payload = '{"test": "execution data"}';
       const invocationId = "mock-invocation-id";
@@ -64,10 +65,7 @@ describe("execution handlers", () => {
         payload,
       });
 
-      const startInvocationSpy = jest.spyOn(
-        executionManager,
-        "startInvocation",
-      );
+      const startInvocationSpy = vi.spyOn(executionManager, "startInvocation");
 
       const executionId = createExecutionId("test-execution-id");
       const invocationId = createInvocationId("test-invocation-id");
@@ -93,7 +91,7 @@ describe("execution handlers", () => {
     });
 
     it("should propagate errors when execution manager cannot find execution", () => {
-      const startInvocationSpy = jest
+      const startInvocationSpy = vi
         .spyOn(executionManager, "startInvocation")
         .mockImplementation(() => {
           throw new Error("Execution not found");
@@ -130,7 +128,7 @@ describe("execution handlers", () => {
         invocationId: createInvocationId(),
       });
 
-      const completeInvocationSpy = jest.spyOn(
+      const completeInvocationSpy = vi.spyOn(
         executionManager,
         "completeInvocation",
       );

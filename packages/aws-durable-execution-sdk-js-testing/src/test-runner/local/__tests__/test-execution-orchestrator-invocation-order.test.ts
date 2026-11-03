@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockInstance,
+} from "vitest";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import {
@@ -25,14 +34,17 @@ import { InvocationResult } from "../../../checkpoint-server/storage/execution-m
 import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 // Mock dependencies
-jest.mock("../operations/local-operation-storage");
+vi.mock("../operations/local-operation-storage");
 
-const mockInvoke = jest.fn();
+const mockInvoke = vi.fn();
 
-jest.mock("../invoke-handler", () => ({
-  InvokeHandler: jest.fn().mockImplementation(() => ({
-    invoke: mockInvoke,
-  })),
+vi.mock("../invoke-handler", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+  InvokeHandler: vi.fn().mockImplementation(function () {
+    return {
+      invoke: mockInvoke,
+    };
+  }),
 }));
 
 /**
@@ -41,7 +53,7 @@ jest.mock("../invoke-handler", () => ({
  * and prevents race conditions where execution completes before history is recorded.
  */
 describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
-  const mockHandlerFunction = jest.fn();
+  const mockHandlerFunction = vi.fn();
   const mockExecutionId = createExecutionId("test-execution-id");
   const mockCheckpointToken = createCheckpointToken("test-checkpoint-token");
 
@@ -65,16 +77,16 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   ];
 
   let orchestrator: TestExecutionOrchestrator;
-  let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
+  let mockOperationStorage: Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
   let mockDurableApiClient: DurableApiClient;
 
   // Tracking arrays for call order verification
   let callOrder: string[];
-  let addHistoryEventSpy: jest.SpyInstance;
-  let completeInvocationSpy: jest.SpyInstance<
-    Promise<CompleteInvocationResponse>
+  let addHistoryEventSpy: MockInstance;
+  let completeInvocationSpy: MockInstance<
+    typeof checkpointApi.completeInvocation
   >;
 
   const mockInvocationCompletedEvent: CompleteInvocationResponse = {
@@ -94,14 +106,14 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     callOrder = [];
     mockInvoke.mockReset();
 
     mockDurableApiClient = {
-      sendCallbackFailure: jest.fn(),
-      sendCallbackSuccess: jest.fn(),
-      sendCallbackHeartbeat: jest.fn(),
+      sendCallbackFailure: vi.fn(),
+      sendCallbackSuccess: vi.fn(),
+      sendCallbackHeartbeat: vi.fn(),
     };
 
     const indexedOperations = new IndexedOperations([]);
@@ -111,35 +123,35 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       new OperationWaitManager(indexedOperations),
       indexedOperations,
       mockDurableApiClient,
-      jest.fn(),
-    ) as jest.Mocked<LocalOperationStorage>;
+      vi.fn(),
+    ) as Mocked<LocalOperationStorage>;
 
-    mockOperationStorage.populateOperations = jest.fn();
+    mockOperationStorage.populateOperations = vi.fn();
 
     // Spy on addHistoryEvent to track when it's called
-    addHistoryEventSpy = jest
+    addHistoryEventSpy = vi
       .spyOn(mockOperationStorage, "addHistoryEvent")
       .mockImplementation(() => {
         callOrder.push("addHistoryEvent");
       });
 
     checkpointApi = {
-      pauseExecution: jest.fn().mockResolvedValue(undefined),
-      resumeExecution: jest.fn().mockResolvedValue(undefined),
-      startDurableExecution: jest.fn().mockResolvedValue({
+      pauseExecution: vi.fn().mockResolvedValue(undefined),
+      resumeExecution: vi.fn().mockResolvedValue(undefined),
+      startDurableExecution: vi.fn().mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
       }),
-      pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
-      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
-      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
-      startInvocation: jest.fn().mockResolvedValue({
+      pollCheckpointData: vi.fn().mockReturnValue(nonResolvingPromise),
+      drainCheckpointData: vi.fn().mockResolvedValue({ operations: [] }),
+      updateCheckpointData: vi.fn().mockResolvedValue(undefined),
+      startInvocation: vi.fn().mockResolvedValue({
         checkpointToken: mockCheckpointToken,
         executionId: mockExecutionId,
         operationEvents: [],
       }),
-      completeInvocation: jest.fn().mockImplementation(() => {
+      completeInvocation: vi.fn().mockImplementation(() => {
         callOrder.push("completeInvocation");
         return Promise.resolve({
           event: mockInvocationCompletedEvent,
@@ -150,8 +162,8 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
     // Create a mock factory for FunctionStorage
     const mockFactory: ILocalDurableTestRunnerFactory = {
-      createRunner: jest.fn().mockReturnValue({
-        run: jest.fn().mockResolvedValue({
+      createRunner: vi.fn().mockReturnValue({
+        run: vi.fn().mockResolvedValue({
           getStatus: () => "SUCCEEDED",
           getResult: () => ({}),
         }),
@@ -160,7 +172,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
 
-    completeInvocationSpy = jest.spyOn(checkpointApi, "completeInvocation");
+    completeInvocationSpy = vi.spyOn(checkpointApi, "completeInvocation");
 
     orchestrator = new TestExecutionOrchestrator(
       mockHandlerFunction,
@@ -354,6 +366,9 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         new Promise<DurableExecutionInvocationOutput>((_, reject) => {
           rejectHandler = reject;
         });
+      // The orchestrator may attach its handler after the rejection. Vitest
+      // reports that gap as an unhandled rejection, which Jest ignored.
+      delayedExceptionPromise.catch(() => undefined);
       mockInvoke.mockReturnValue(delayedExceptionPromise);
 
       // Start execution
@@ -397,7 +412,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
   describe("Race condition prevention", () => {
     it("does not admit callback wakeups while recording an invalid PENDING rejection", async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       mockInvoke.mockResolvedValue({ Status: InvocationStatus.PENDING });
       completeInvocationSpy.mockResolvedValue(mockInvocationCompletedEvent);
 
@@ -406,7 +421,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         failureWriteEntered = resolve;
       });
       let releaseFailureWrite!: () => void;
-      jest.spyOn(checkpointApi, "updateCheckpointData").mockImplementationOnce(
+      vi.spyOn(checkpointApi, "updateCheckpointData").mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {
             releaseFailureWrite = resolve;
@@ -416,7 +431,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       let deliverCallback!: (
         value: Awaited<ReturnType<CheckpointApiClient["pollCheckpointData"]>>,
       ) => void;
-      jest.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
+      vi.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
         new Promise((resolve) => {
           deliverCallback = resolve;
         }),
@@ -435,7 +450,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         ...callback,
         operation: { ...callback.operation, Id: "final-callback" },
       };
-      jest.spyOn(checkpointApi, "drainCheckpointData").mockResolvedValue({
+      vi.spyOn(checkpointApi, "drainCheckpointData").mockResolvedValue({
         operations: [finalCallback],
       });
       const execution = orchestrator.executeHandler().then(
@@ -443,7 +458,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         (error) => ({ value: undefined, error }),
       );
       try {
-        await jest.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(1);
         await recordingFailure;
         expect(checkpointApi.updateCheckpointData).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -451,7 +466,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
           }),
         );
         deliverCallback({ operations: [callback] });
-        await jest.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(1);
         expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
         expect(mockInvoke).toHaveBeenCalledTimes(1);
 
@@ -465,7 +480,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
           },
           status: OperationStatus.FAILED,
         });
-        await jest.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(1);
         expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
         expect(mockInvoke).toHaveBeenCalledTimes(1);
         expect(mockOperationStorage.populateOperations).toHaveBeenCalledWith([
@@ -474,14 +489,14 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       } finally {
         releaseFailureWrite?.();
         await execution;
-        jest.useRealTimers();
+        vi.useRealTimers();
       }
     });
 
     it.each(["SUCCEEDED", "FAILED", "THROWN"] as const)(
       "does not admit callback wakeups while recording a terminal %s response",
       async (outcome) => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         const failure = new Error("handler failed");
         if (outcome === "THROWN") mockInvoke.mockRejectedValue(failure);
         else
@@ -508,7 +523,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         let deliverCallback!: (
           value: Awaited<ReturnType<CheckpointApiClient["pollCheckpointData"]>>,
         ) => void;
-        jest.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
+        vi.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
           new Promise((resolve) => {
             deliverCallback = resolve;
           }),
@@ -529,25 +544,25 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         };
         // Notifications must still be collected during the final drain, but
         // neither those nor an already-queued wakeup may start another handler.
-        jest
-          .spyOn(checkpointApi, "drainCheckpointData")
-          .mockResolvedValue(update);
+        vi.spyOn(checkpointApi, "drainCheckpointData").mockResolvedValue(
+          update,
+        );
         const execution = orchestrator.executeHandler().then(
           (value) => ({ value, error: undefined }),
           (error) => ({ value: undefined, error }),
         );
         try {
-          await jest.advanceTimersByTimeAsync(1);
+          await vi.advanceTimersByTimeAsync(1);
           await completing;
           deliverCallback(update);
-          await jest.advanceTimersByTimeAsync(1);
+          await vi.advanceTimersByTimeAsync(1);
           expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
           expect(mockInvoke).toHaveBeenCalledTimes(1);
           releaseComplete(mockInvocationCompletedEvent);
           const result = await execution;
           if (outcome === "THROWN") expect(result.error).toBe(failure);
           else expect(result.value?.status).toBe(outcome);
-          await jest.advanceTimersByTimeAsync(1);
+          await vi.advanceTimersByTimeAsync(1);
           expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
           expect(mockInvoke).toHaveBeenCalledTimes(1);
           expect(mockOperationStorage.populateOperations).toHaveBeenCalledWith(
@@ -556,7 +571,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         } finally {
           releaseComplete?.(mockInvocationCompletedEvent);
           await execution;
-          jest.useRealTimers();
+          vi.useRealTimers();
         }
       },
     );
@@ -566,7 +581,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       let resolveStartInvocation: () => void;
 
       // Mock startInvocation to be delayed, allowing us to control when it resolves
-      const startInvocationSpy = jest
+      const startInvocationSpy = vi
         .spyOn(checkpointApi, "startInvocation")
         .mockImplementation(() => {
           startInvocationCallCount++;
@@ -594,8 +609,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         });
 
       // Set up polling to return multiple callback operations that would normally trigger multiple invocations
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockImplementationOnce(() => {
           return Promise.resolve({
             operations: [
@@ -664,7 +678,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       const secondInvocationId = createInvocationId("second-invocation");
 
       // Reset and setup for multiple invocations
-      jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
+      vi.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
@@ -672,7 +686,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         updatedOperationIds: [],
       });
 
-      jest.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
+      vi.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
         checkpointToken: createCheckpointToken("second-token"),
         executionId: mockExecutionId,
         invocationId: secondInvocationId,
@@ -711,8 +725,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
       // Mock polling to trigger second invocation
       let resolvePolling: () => void;
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockImplementationOnce(() => {
           return new Promise((resolve) => {
             resolvePolling = () => {

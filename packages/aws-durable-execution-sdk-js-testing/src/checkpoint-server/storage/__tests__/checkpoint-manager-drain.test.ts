@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { OperationAction, OperationType } from "@aws/durable-execution-sdk-js";
 import { CheckpointManager } from "../checkpoint-manager";
 import { ExecutionManager } from "../execution-manager";

@@ -2,6 +2,7 @@
  * The query examples in the Logs Insights system prompts must be queries the
  * service accepts, because the agent copies their shape.
  */
+import { describe, it, expect } from "vitest";
 import { buildSystemPrompt } from "./schema";
 
 /** The example queries: each prompt line that starts with "A: ". */

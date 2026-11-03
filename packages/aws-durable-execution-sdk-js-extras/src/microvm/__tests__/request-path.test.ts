@@ -1,6 +1,7 @@
 // The worker matches the raw request path. These tests send each kind of
 // path that validateRequest accepts with the real fetch to a local server, and
 // check that the server receives the path as written.
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { sendJob } from "../request";
@@ -52,7 +53,7 @@ describe("the request path on the wire", () => {
       port: 8080,
       body: "{}",
       retryWindowMs: 5_000,
-      log: jest.fn(),
+      log: vi.fn(),
     });
 
     expect(received).toEqual([path]);

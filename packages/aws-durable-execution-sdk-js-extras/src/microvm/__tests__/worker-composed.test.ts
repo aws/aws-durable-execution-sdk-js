@@ -11,6 +11,7 @@
 // The other tests check each side against scripted answers. These tests
 // connect the two sides. The fakes stand in for the MicroVMs service and the
 // endpoint only.
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
@@ -165,8 +166,15 @@ describe("the request step against the real worker listener", () => {
   beforeEach(() => {
     // The listener reads request bodies with nextTick and microtasks, which
     // stay real. Date.now and every timer are fake, on both sides.
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "Date",
+        "performance",
+      ],
     });
     service = new FakeService();
     ran = [];
@@ -209,9 +217,9 @@ describe("the request step against the real worker listener", () => {
     for (const release of releaseJob.values()) {
       release();
     }
-    await jest.runOnlyPendingTimersAsync();
+    await vi.runOnlyPendingTimersAsync();
     await listener.idle();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   /** The endpoint: a suspended MicroVM answers 502, a running one forwards. */
@@ -306,7 +314,7 @@ describe("the request step against the real worker listener", () => {
       done = true;
     });
     for (let waited = 0; !done && waited < maxMs; waited += 100) {
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
     }
     expect(done).toBe(true);
     return result;
@@ -317,13 +325,13 @@ describe("the request step against the real worker listener", () => {
     service.holdSuspend = true;
     // The idle time ends. The worker calls SuspendMicrovm, which the service
     // holds, and refuses jobs from now on.
-    await jest.advanceTimersByTimeAsync(IDLE_SECONDS * 1_000);
+    await vi.advanceTimersByTimeAsync(IDLE_SECONDS * 1_000);
     expect(service.calls).toEqual(["suspend"]);
 
     // The state check finds RUNNING, so the job goes to the worker, which
     // answers 503.
     const delivery = deliver("cb-1");
-    await jest.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(statuses.length).toBeGreaterThan(0);
     expect(new Set(statuses)).toEqual(new Set([503]));
     // The service suspends the MicroVM. The next state check after a 503
@@ -351,7 +359,7 @@ describe("the request step against the real worker listener", () => {
   it("delivers the job after the 30-second refusal when no resume hook arrives", async () => {
     service.sendResumeHook = false;
     await runHook();
-    await jest.advanceTimersByTimeAsync(IDLE_SECONDS * 1_000);
+    await vi.advanceTimersByTimeAsync(IDLE_SECONDS * 1_000);
     expect(service.state).toBe("SUSPENDED");
     const suspendedAt = Date.now();
 
@@ -398,7 +406,7 @@ describe("the request step against the real worker listener", () => {
     heldJobs.add("cb-1");
     loseNextAnswer = true;
     const delivery = deliver("cb-1");
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     expect(statuses).toEqual(["lost"]);
     expect(service.calls).toEqual(["get:RUNNING"]);
     suspendBeforeNextRequest = true;
@@ -418,7 +426,7 @@ describe("the request step against the real worker listener", () => {
 
     // The job continues after the resume, and completes once.
     releaseJob.get("cb-1")?.();
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     await listener.idle();
     expect(
       completions.filter(

@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createHash } from "node:crypto";
 import {
   type DurableContext,
@@ -543,8 +544,8 @@ describe("defaultMicrovmRetryStrategy", () => {
   ])("retries a socket error with code %s", (code) => {
     // The AWS SDK client throws the socket error itself when its own retries
     // end: named Error, with the code, and without $retryable. Plain Node
-    // shows this with a real client. A Jest test cannot: Jest runs the test
-    // in its own realm, and Node creates the socket error in the main realm.
+    // shows this with a real client. A test runner that runs the test
+    // in its own realm cannot: Node creates the socket error in the main realm.
     // So the SDK's `instanceof Error` check fails, and the SDK replaces the
     // error with a new one that has no code.
     const error = Object.assign(new Error("x"), { code });

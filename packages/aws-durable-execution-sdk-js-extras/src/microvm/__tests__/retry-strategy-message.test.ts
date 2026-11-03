@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createRetryStrategy,
   type DurableContext,
@@ -517,7 +518,7 @@ describe("the retry strategy of an operation scope", () => {
     const error = changed();
     const decision = { shouldRetry: true, delay: { seconds: 3 } };
     const calls: unknown[][] = [];
-    const retryStrategy = jest.fn(function (
+    const retryStrategy = vi.fn(function (
       this: unknown,
       e: Error,
       attemptCount: number,

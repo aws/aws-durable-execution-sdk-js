@@ -1,12 +1,21 @@
 // biome-ignore-all lint/suspicious/noConsole: spies on console to assert what the logger emits; these are assertions about console, not logging from the test.
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { Context } from "aws-lambda";
 import { hashId } from "../step-id-utils/step-id-utils";
 
 describe("Structured Logger Integration", () => {
-  let consoleSpy: jest.SpyInstance;
+  let consoleSpy: MockInstance;
 
   beforeEach(() => {
-    consoleSpy = jest.spyOn(console, "log").mockImplementation();
+    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -24,9 +33,9 @@ describe("Structured Logger Integration", () => {
       logGroupName: "test-log-group",
       logStreamName: "test-log-stream",
       getRemainingTimeInMillis: () => 30000,
-      done: jest.fn(),
-      fail: jest.fn(),
-      succeed: jest.fn(),
+      done: vi.fn(),
+      fail: vi.fn(),
+      succeed: vi.fn(),
     } as Context;
 
     // Simulate step execution with stepUtil

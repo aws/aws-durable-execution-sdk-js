@@ -1,21 +1,28 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { OperationStatus } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
 
@@ -23,31 +30,31 @@ describe("Invoke Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let createStepId: () => string;
-  let checkAndUpdateReplayMode: jest.Mock;
+  let checkAndUpdateReplayMode: Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
       durableExecutionArn: "test-arn",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    checkAndUpdateReplayMode = jest.fn();
+    checkAndUpdateReplayMode = vi.fn();
 
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
     mockSafeDeserialize.mockResolvedValue({ result: "success" });
@@ -76,7 +83,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should execute invoke logic again in phase 2 when awaited", async () => {
-    (mockContext.getStepData as jest.Mock)
+    (mockContext.getStepData as Mock)
       .mockReturnValueOnce(null)
       .mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
@@ -101,7 +108,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should work correctly with Promise.race", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: { Result: '{"result":"data1"}' },
     });
@@ -128,7 +135,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should return cached result without re-execution when stepData exists", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: {
         Result: '{"cached":"result"}',
@@ -163,7 +170,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should only checkpoint once when stepData doesn't exist", async () => {
-    (mockContext.getStepData as jest.Mock)
+    (mockContext.getStepData as Mock)
       .mockReturnValueOnce(null)
       .mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
@@ -188,7 +195,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should mark operation as completed in phase 1 when already succeeded", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: { Result: '{"result":"data"}' },
     });
@@ -218,7 +225,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should mark operation as completed in phase 1 when already failed", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.FAILED,
       ChainedInvokeDetails: {
         Error: { ErrorMessage: "Test error" },
@@ -245,7 +252,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
   });
 
   it("should not mark as awaited until phase 2 is triggered", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue(null);
+    (mockContext.getStepData as Mock).mockReturnValue(null);
 
     const invokeHandler = createInvokeHandler(
       mockContext,

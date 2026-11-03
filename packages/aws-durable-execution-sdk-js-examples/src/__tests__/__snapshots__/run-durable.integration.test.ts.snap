@@ -1,11 +1,11 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`run-durable CLI Integration Tests with format=cjs Core Error Cases should error when file does not exist 1`] = `
+exports[`run-durable CLI Integration Tests with format=cjs > Core Error Cases > should error when file does not exist 1`] = `
 "Error: File not found: nonexistent-file.js
 "
 `;
 
-exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution should successfully execute test handler end-to-end 1`] = `
+exports[`run-durable CLI Integration Tests with format=cjs > End-to-End Execution > should successfully execute test handler end-to-end 1`] = `
 [
   "Skip time: false, Verbose: false, Show history: false",
   "",
@@ -19,7 +19,7 @@ exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution 
 ]
 `;
 
-exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution should successfully execute with custom handler export 1`] = `
+exports[`run-durable CLI Integration Tests with format=cjs > End-to-End Execution > should successfully execute with custom handler export 1`] = `
 [
   "Skip time: false, Verbose: false, Show history: false",
   "",
@@ -33,12 +33,12 @@ exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution 
 ]
 `;
 
-exports[`run-durable CLI Integration Tests with format=mjs Core Error Cases should error when file does not exist 1`] = `
+exports[`run-durable CLI Integration Tests with format=mjs > Core Error Cases > should error when file does not exist 1`] = `
 "Error: File not found: nonexistent-file.js
 "
 `;
 
-exports[`run-durable CLI Integration Tests with format=mjs End-to-End Execution should successfully execute test handler end-to-end 1`] = `
+exports[`run-durable CLI Integration Tests with format=mjs > End-to-End Execution > should successfully execute test handler end-to-end 1`] = `
 [
   "Skip time: false, Verbose: false, Show history: false",
   "",
@@ -52,7 +52,7 @@ exports[`run-durable CLI Integration Tests with format=mjs End-to-End Execution 
 ]
 `;
 
-exports[`run-durable CLI Integration Tests with format=mjs End-to-End Execution should successfully execute with custom handler export 1`] = `
+exports[`run-durable CLI Integration Tests with format=mjs > End-to-End Execution > should successfully execute with custom handler export 1`] = `
 [
   "Skip time: false, Verbose: false, Show history: false",
   "",

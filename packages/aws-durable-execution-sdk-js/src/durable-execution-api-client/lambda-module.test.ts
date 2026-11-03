@@ -4,38 +4,45 @@
  * The loader clears its memo on failure so that a later call retries rather than caching
  * the failure for the lifetime of the process. Each test re-imports the module so it starts
  * with a fresh memo.
+ *
+ * Vitest wraps an error thrown by a mock factory in its own "error when mocking a module"
+ * error and keeps the original as `cause`, so the load failure is asserted through `cause`.
  */
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 describe("loadLambdaModule failure handling", () => {
   const fakeModule = {
     LambdaClient: class {
-      send = jest.fn();
+      send = vi.fn();
     },
     CheckpointDurableExecutionCommand: class {},
     GetDurableExecutionStateCommand: class {},
   };
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
   });
 
   afterEach(() => {
-    jest.dontMock("@aws-sdk/client-lambda");
-    jest.resetModules();
+    vi.doUnmock("@aws-sdk/client-lambda");
+    vi.resetModules();
   });
 
   it("propagates the load failure to the caller", async () => {
-    jest.doMock("@aws-sdk/client-lambda", () => {
+    vi.doMock("@aws-sdk/client-lambda", () => {
       throw new Error("module missing");
     });
 
     const { loadLambdaModule } = await import("./lambda-module");
 
-    await expect(loadLambdaModule()).rejects.toThrow("module missing");
+    await expect(loadLambdaModule()).rejects.toHaveProperty(
+      "cause.message",
+      "module missing",
+    );
   });
 
   it("does not cache the failure, so a later call retries", async () => {
     let attempts = 0;
-    jest.doMock("@aws-sdk/client-lambda", () => {
+    vi.doMock("@aws-sdk/client-lambda", () => {
       attempts += 1;
       if (attempts === 1) {
         throw new Error("transient failure");
@@ -45,7 +52,10 @@ describe("loadLambdaModule failure handling", () => {
 
     const { loadLambdaModule } = await import("./lambda-module");
 
-    await expect(loadLambdaModule()).rejects.toThrow("transient failure");
+    await expect(loadLambdaModule()).rejects.toHaveProperty(
+      "cause.message",
+      "transient failure",
+    );
 
     // The memo was cleared, so this call loads again rather than replaying the rejection.
     const module = await loadLambdaModule();
@@ -54,11 +64,11 @@ describe("loadLambdaModule failure handling", () => {
   });
 
   it("does not report an unhandled rejection when construction prefetches a failing load", async () => {
-    jest.doMock("@aws-sdk/client-lambda", () => {
+    vi.doMock("@aws-sdk/client-lambda", () => {
       throw new Error("module missing");
     });
 
-    const unhandled = jest.fn();
+    const unhandled = vi.fn();
     process.on("unhandledRejection", unhandled);
 
     try {
@@ -84,7 +94,7 @@ describe("loadLambdaModule failure handling", () => {
     // yield an ES module namespace whose only export is `default`. The `__esModule` marker
     // is what makes TypeScript's interop helper pass the namespace through untouched, which
     // is the situation this fallback handles.
-    jest.doMock("@aws-sdk/client-lambda", () => ({
+    vi.doMock("@aws-sdk/client-lambda", () => ({
       __esModule: true,
       default: fakeModule,
     }));
@@ -96,7 +106,7 @@ describe("loadLambdaModule failure handling", () => {
   });
 
   it("surfaces the load failure from a request rather than swallowing it", async () => {
-    jest.doMock("@aws-sdk/client-lambda", () => {
+    vi.doMock("@aws-sdk/client-lambda", () => {
       throw new Error("module missing");
     });
 
@@ -112,6 +122,6 @@ describe("loadLambdaModule failure handling", () => {
         CheckpointToken: "test-token",
         Updates: [],
       }),
-    ).rejects.toThrow("module missing");
+    ).rejects.toHaveProperty("cause.message", "module missing");
   });
 });

@@ -13,7 +13,7 @@ node_modules/**
 esbuild.mjs
 tsconfig.json
 tsconfig.test.json
-jest.config.*
+vitest.config.*
 **/*.map
 **/*.ts
 **/*.tsx

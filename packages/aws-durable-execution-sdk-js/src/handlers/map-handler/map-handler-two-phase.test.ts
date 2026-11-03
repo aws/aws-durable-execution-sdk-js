@@ -1,10 +1,11 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createMapHandler } from "./map-handler";
 import { DurableLogger, ExecutionContext, MapFunc } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Map Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
-  let mockExecuteConcurrently: jest.Mock;
+  let mockExecuteConcurrently: Mock;
   let executionStarted = false;
 
   beforeEach(() => {
@@ -13,7 +14,7 @@ describe("Map Handler Two-Phase Execution", () => {
       durableExecutionArn: "test-arn",
     } as any;
 
-    mockExecuteConcurrently = jest.fn().mockImplementation(async () => {
+    mockExecuteConcurrently = vi.fn().mockImplementation(async () => {
       executionStarted = true;
       return {
         totalCount: 1,
@@ -32,7 +33,7 @@ describe("Map Handler Two-Phase Execution", () => {
     const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
 
     const items = ["item1"];
-    const mapFunc: MapFunc<string, string, DurableLogger> = jest
+    const mapFunc: MapFunc<string, string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("processed");
 
@@ -58,7 +59,7 @@ describe("Map Handler Two-Phase Execution", () => {
     const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
 
     const items = ["item1"];
-    const mapFunc: MapFunc<string, string, DurableLogger> = jest
+    const mapFunc: MapFunc<string, string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("result");
 

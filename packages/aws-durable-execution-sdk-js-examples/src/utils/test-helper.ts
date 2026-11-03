@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { LambdaClient, Event, EventType } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
@@ -188,7 +189,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
   if (generateHistories && isTimeSkipping && !isIntegrationTest) {
     console.warn("Disabling skipTime since GENERATE_HISTORY is true");
-    jest.setTimeout(120000);
+    vi.setConfig({ testTimeout: 120000 });
   }
 
   const testFileName = getCallerFile();

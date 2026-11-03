@@ -176,11 +176,11 @@ jobs:
         working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
         run: node -p "'ESLint ' + require('eslint/package.json').version"
       - name: Lint with the plugin on ESLint ${{ matrix.eslint }}
-        # Jest only. The package's `npm test` also runs `npm run typecheck`, but
+        # Vitest only. The package's `npm test` also runs `npm run typecheck`, but
         # ESLint 8 ships no types, so tsc would fall back to the root ESLint 10
         # types and check nothing new here. The unit-tests job type-checks.
         working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
-        run: npx jest src/index.test.ts src/eslint-integration.test.ts
+        run: npx vitest run src/index.test.ts src/eslint-integration.test.ts
 
   # Runs off lint-commits rather than build: Biome needs only the sources, so
   # linting does not have to wait for compilation and reports failures earlier.

@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import type { Context } from "aws-lambda";
 import {
   withDurableExecution,
@@ -129,9 +138,9 @@ const invoke = async (_: unknown, ctx: DurableContext) =>
   ctx.invoke("call", "callee:1", { input: "original" }, { tenantId: "tenant" });
 
 describe("invoke START propagation through the public SDK", () => {
-  let warn: jest.SpyInstance;
+  let warn: MockInstance;
   beforeEach(() => {
-    warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
     warn.mockRestore();
@@ -139,7 +148,7 @@ describe("invoke START propagation through the public SDK", () => {
 
   it("collects the stable identity before serializing the START and preserves the request", async () => {
     const service = new InvokeService();
-    const provide = jest.fn((_input: PropagationInput) => ({
+    const provide = vi.fn((_input: PropagationInput) => ({
       xAmznTraceId: header,
     }));
     const result = await service.run(invoke, [
@@ -322,7 +331,7 @@ describe("invoke START propagation through the public SDK", () => {
             ? { Result: '{"stored":"outcome"}' }
             : { Error: { ErrorMessage: "stored failure" } },
       });
-      const provide = jest.fn((_input: PropagationInput) => ({
+      const provide = vi.fn((_input: PropagationInput) => ({
         xAmznTraceId: "must not run",
       }));
       const result = await service.run(invoke, [
@@ -346,7 +355,7 @@ describe("invoke START propagation through the public SDK", () => {
   it("does not recompute on a pending START replay, and resumes with the stored result", async () => {
     const service = new InvokeService();
     service.pending = true;
-    const provide = jest.fn((_input: PropagationInput) => ({
+    const provide = vi.fn((_input: PropagationInput) => ({
       xAmznTraceId: header,
     }));
     const plugins = [{ providePropagationMetadata: provide }];
@@ -371,7 +380,7 @@ describe("invoke START propagation through the public SDK", () => {
 
   it("recomputes after an uncommitted START failure with the same stable identity", async () => {
     const service = new InvokeService();
-    const provide = jest.fn((_input: PropagationInput) => ({
+    const provide = vi.fn((_input: PropagationInput) => ({
       xAmznTraceId: header,
     }));
     const plugins = [{ providePropagationMetadata: provide }];

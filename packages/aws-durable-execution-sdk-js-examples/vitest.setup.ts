@@ -1,4 +1,4 @@
-// Jest setup for the local example tests.
+// Vitest setup for the local example tests.
 //
 // CI runners on Lambda/CodeBuild compute inject `_X_AMZN_TRACE_ID`. The
 // Powertools Logger picks it up and adds an `xray_trace_id` field to every

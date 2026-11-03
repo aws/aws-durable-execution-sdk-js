@@ -20,6 +20,7 @@
  * Modelled on settingsKeys.test.ts, which does the same job for the settings
  * keys shared with the extension manifest.
  */
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { detectCapabilities } from "@aws/durable-execution-sdk-js-telemetry-core";

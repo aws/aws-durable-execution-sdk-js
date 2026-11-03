@@ -1,8 +1,13 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-eventbridge", () => ({
-  EventBridgeClient: jest.fn(() => ({ send: mockSend })),
-  PutEventsCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-eventbridge", () => ({
+  EventBridgeClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutEventsCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { EventBridgeExporter } from "./eventbridge-exporter";

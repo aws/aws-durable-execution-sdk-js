@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { HrTime } from "@opentelemetry/api";
 import type {
   InvocationInfo,
@@ -104,7 +105,7 @@ describe.each([
       const flushed: number[] = [];
       let activeFlushes = 0;
       let maximumActiveFlushes = 0;
-      const flush = jest
+      const flush = vi
         .spyOn(provider, "forceFlush")
         .mockImplementation(async () => {
           activeFlushes++;
@@ -166,7 +167,7 @@ describe.each([
     });
     const originalFlush = providers[0].forceFlush.bind(providers[0]);
     const flushed: number[] = [];
-    const flush = jest
+    const flush = vi
       .spyOn(providers[0], "forceFlush")
       .mockImplementation(async () => {
         flushed.push(completed().length);
@@ -444,7 +445,7 @@ describe.each([
       otperformance,
       "timeOrigin",
     );
-    const wallClock = jest.spyOn(Date, "now").mockReturnValue(fallbackMillis);
+    const wallClock = vi.spyOn(Date, "now").mockReturnValue(fallbackMillis);
     Object.defineProperty(otperformance, "now", {
       configurable: true,
       value: () => 100,

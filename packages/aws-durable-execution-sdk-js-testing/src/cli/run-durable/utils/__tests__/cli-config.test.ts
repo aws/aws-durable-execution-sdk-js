@@ -1,3 +1,4 @@
+import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
 import { createCliProgram, parseCliArgs } from "../cli-config";
 
 describe("CLI Configuration", () => {

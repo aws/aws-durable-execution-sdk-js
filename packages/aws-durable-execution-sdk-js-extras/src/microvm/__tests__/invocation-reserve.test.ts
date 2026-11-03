@@ -3,6 +3,7 @@
 // These tests use the real clock, because each stalled call ends only when
 // its abort signal fires. Each test keeps a budget of about 1.3 seconds
 // before the reserve, so each test takes about that long.
+import { vi, describe, it, expect } from "vitest";
 import { MicrovmEndpointUnavailableError } from "..";
 import { ensureRunning } from "../lifecycle";
 import { INVOCATION_RESERVE_MS, sendJob } from "../request";
@@ -35,7 +36,7 @@ const sendWith = (
     // can end the tier.
     retryWindowMs: 60_000,
     remainingTimeMs,
-    log: jest.fn(),
+    log: vi.fn(),
   });
 
 describe("sendJob near the invocation reserve", () => {
@@ -160,7 +161,7 @@ describe("ensureRunning near the invocation reserve", () => {
       microvmId: "mvm-1",
       maxWaitMs: 60_000,
       remainingTimeMs,
-      log: jest.fn(),
+      log: vi.fn(),
     });
 
   it("stops a stalled GetMicrovm at the reserve", async () => {

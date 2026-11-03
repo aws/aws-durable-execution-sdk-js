@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import type { Tracer } from "@opentelemetry/api";
 import {
   AlwaysOffSampler,
@@ -15,7 +16,7 @@ describe("installed durable sampler authority", () => {
 
   it("recognizes the installed bridge without evaluating a sampler", () => {
     const sampler = new AlwaysOnSampler();
-    const query = jest.spyOn(sampler, "shouldSample");
+    const query = vi.spyOn(sampler, "shouldSample");
     provider = new NodeTracerProvider({ sampler });
     const tracer = provider.getTracer("authority-unit");
     const bridge = tryInstallDurableSampler(tracer);
@@ -30,7 +31,7 @@ describe("installed durable sampler authority", () => {
     const tracer = provider.getTracer("authority-unit");
     const bridge = tryInstallDurableSampler(tracer);
     const replacement = new AlwaysOffSampler();
-    const query = jest.spyOn(replacement, "shouldSample");
+    const query = vi.spyOn(replacement, "shouldSample");
     Reflect.set(tracer, "_sampler", replacement);
     expect(isDurableSamplerInstalled(tracer, bridge)).toBe(false);
     expect(Reflect.get(tracer, "_sampler")).toBe(replacement);

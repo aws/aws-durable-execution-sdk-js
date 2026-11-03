@@ -18,6 +18,7 @@
  * If a change makes a case fail, the change breaks an invariant. Do not edit, skip or delete
  * the case to make the change pass. Change the ADR first.
  */
+import { describe, it, expect } from "vitest";
 
 import { withDurableExecution } from "../../with-durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../durable-execution-invocation-input/durable-execution-invocation-input";

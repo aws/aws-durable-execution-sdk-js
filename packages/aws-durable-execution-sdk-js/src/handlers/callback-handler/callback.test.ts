@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createCallback, createPassThroughSerdes } from "./callback";
 import {
   ExecutionContext,
@@ -14,41 +23,41 @@ import {
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
 
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
 
 describe("Callback Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
-  let checkAndUpdateReplayMode: jest.Mock;
+  let createStepId: Mock;
+  let checkAndUpdateReplayMode: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockContext = {
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
       _stepData: {},
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
       durableExecutionArn: "test-arn",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
 
-    createStepId = jest.fn().mockReturnValue("test-callback-id");
-    checkAndUpdateReplayMode = jest.fn();
+    createStepId = vi.fn().mockReturnValue("test-callback-id");
+    checkAndUpdateReplayMode = vi.fn();
 
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
@@ -68,7 +77,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -109,7 +118,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -149,7 +158,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -204,7 +213,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -225,8 +234,8 @@ describe("Callback Handler", () => {
 
     it("should use custom serdes for completed callback", async () => {
       const customSerdes = {
-        serialize: jest.fn(),
-        deserialize: jest.fn(),
+        serialize: vi.fn(),
+        deserialize: vi.fn(),
       };
 
       const stepId = "test-callback-id";
@@ -242,7 +251,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -324,7 +333,7 @@ describe("Callback Handler", () => {
           } as Operation,
         };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext.getStepData as Mock).mockReturnValue(
           (mockContext as any)._stepData[hashedStepId],
         );
 
@@ -370,7 +379,7 @@ describe("Callback Handler", () => {
           } as Operation,
         };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext.getStepData as Mock).mockReturnValue(
           (mockContext as any)._stepData[hashedStepId],
         );
 
@@ -402,7 +411,7 @@ describe("Callback Handler", () => {
           } as Operation,
         };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext.getStepData as Mock).mockReturnValue(
           (mockContext as any)._stepData[hashedStepId],
         );
 
@@ -434,7 +443,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -466,7 +475,7 @@ describe("Callback Handler", () => {
         } as Operation,
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -488,22 +497,20 @@ describe("Callback Handler", () => {
 
   describe("New Callback Creation Scenarios", () => {
     it("should create new callback and return callback promise", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "new-callback-789",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "new-callback-789",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -538,22 +545,20 @@ describe("Callback Handler", () => {
     });
 
     it("should create new callback with timeout configuration", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "timeout-callback-123",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "timeout-callback-123",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -593,22 +598,20 @@ describe("Callback Handler", () => {
     });
 
     it("should create new callback without name", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "unnamed-callback-456",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "unnamed-callback-456",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -643,22 +646,20 @@ describe("Callback Handler", () => {
     });
 
     it("should create callback with parentId when provided", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "child-callback-123",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "child-callback-123",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -685,22 +686,20 @@ describe("Callback Handler", () => {
 
   describe("Configuration Parameter Handling", () => {
     it("should handle string name as first parameter", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "string-param-callback",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "string-param-callback",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -732,22 +731,20 @@ describe("Callback Handler", () => {
     });
 
     it("should handle config object as first parameter", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "config-first-callback",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "config-first-callback",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });
@@ -780,22 +777,20 @@ describe("Callback Handler", () => {
     });
 
     it("should accept undefined as name parameter", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+      (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-      (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
-        async (stepId) => {
-          const hashedStepId = hashId(stepId);
-          (mockContext as any)._stepData[hashedStepId] = {
-            Id: hashedStepId,
-            Status: OperationStatus.STARTED,
-            CallbackDetails: {
-              CallbackId: "undefined-callback-123",
-            },
-          } as Operation;
-        },
-      );
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(async (stepId) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "undefined-callback-123",
+          },
+        } as Operation;
+      });
 
-      (mockContext.getStepData as jest.Mock).mockImplementation((stepId) => {
+      (mockContext.getStepData as Mock).mockImplementation((stepId) => {
         const hashedStepId = hashId(stepId);
         return (mockContext as any)._stepData[hashedStepId];
       });

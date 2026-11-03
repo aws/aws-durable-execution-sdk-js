@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   ExecutionContext,
@@ -12,9 +21,9 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-jest.mock("../../utils/context-tracker/context-tracker");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/context-tracker/context-tracker");
 
 import {
   safeSerialize,
@@ -22,41 +31,39 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
-const mockRunWithContext = runWithContext as jest.MockedFunction<
+const mockRunWithContext = runWithContext as MockedFunction<
   typeof runWithContext
 >;
 
 describe("WaitForCondition Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
+  let createStepId: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
-    createStepId = jest.fn().mockReturnValue("step-1");
+    createStepId = vi.fn().mockReturnValue("step-1");
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -81,7 +88,7 @@ describe("WaitForCondition Handler", () => {
         "parent-123",
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("ready");
       const config: WaitForConditionConfig<string> = {
@@ -111,7 +118,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("ready");
       const config: WaitForConditionConfig<string> = {
@@ -142,12 +149,12 @@ describe("WaitForCondition Handler", () => {
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> =
-        jest.fn();
+        vi.fn();
 
       // The error is thrown synchronously during handler call, not when awaiting
       try {
         handler(checkFunc, undefined as any);
-        fail("Should have thrown an error");
+        expect.fail("Should have thrown an error");
       } catch (error: any) {
         expect(error.message).toContain(
           "waitForCondition requires config with waitStrategy and initialState",
@@ -168,7 +175,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -180,7 +187,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("new-result");
       const config: WaitForConditionConfig<string> = {
@@ -195,9 +202,7 @@ describe("WaitForCondition Handler", () => {
       expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
       // The operation counts as EXECUTING while its cached result is
       // deserialized, then COMPLETED.
-      expect(
-        (mockCheckpoint.markOperationState as jest.Mock).mock.calls,
-      ).toEqual([
+      expect((mockCheckpoint.markOperationState as Mock).mock.calls).toEqual([
         [stepId, OperationLifecycleState.EXECUTING, expect.any(Object)],
         [stepId, OperationLifecycleState.COMPLETED],
       ]);
@@ -217,7 +222,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -230,7 +235,7 @@ describe("WaitForCondition Handler", () => {
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> =
-        jest.fn();
+        vi.fn();
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -250,7 +255,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi
         .fn()
         .mockResolvedValue(42);
       const config: WaitForConditionConfig<number> = {
@@ -275,14 +280,14 @@ describe("WaitForCondition Handler", () => {
       );
 
       let callCount = 0;
-      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi
         .fn()
         .mockImplementation(async () => {
           callCount++;
           return callCount;
         });
 
-      const waitStrategy = jest
+      const waitStrategy = vi
         .fn()
         .mockReturnValueOnce({
           shouldContinue: true,
@@ -315,7 +320,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("done");
       const config: WaitForConditionConfig<string> = {
@@ -337,10 +342,10 @@ describe("WaitForCondition Handler", () => {
         "parent-123",
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result");
-      const waitStrategy = jest.fn().mockReturnValue({ shouldContinue: false });
+      const waitStrategy = vi.fn().mockReturnValue({ shouldContinue: false });
       const config: WaitForConditionConfig<string> = {
         waitStrategy,
         initialState: "initial",
@@ -369,7 +374,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc = jest.fn().mockResolvedValue("result");
+      const checkFunc = vi.fn().mockResolvedValue("result");
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -397,7 +402,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -409,7 +414,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc = jest.fn().mockResolvedValue("result");
+      const checkFunc = vi.fn().mockResolvedValue("result");
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -434,7 +439,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -446,10 +451,10 @@ describe("WaitForCondition Handler", () => {
         "parent-123",
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("result");
-      const waitStrategy = jest.fn().mockReturnValue({ shouldContinue: false });
+      const waitStrategy = vi.fn().mockReturnValue({ shouldContinue: false });
       const config: WaitForConditionConfig<string> = {
         waitStrategy,
         initialState: "initial",
@@ -475,7 +480,7 @@ describe("WaitForCondition Handler", () => {
 
       // Track the retry cycle - first call has no step data, then subsequent calls have increasing attempt numbers
       let getStepDataCallCount = 0;
-      (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+      (mockContext.getStepData as Mock).mockImplementation(() => {
         getStepDataCallCount++;
 
         // First call - no step data (fresh execution)
@@ -509,11 +514,11 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi
         .fn()
         .mockResolvedValue(10);
 
-      const waitStrategy = jest
+      const waitStrategy = vi
         .fn()
         .mockReturnValueOnce({
           shouldContinue: true,
@@ -582,7 +587,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -601,7 +606,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("new-result");
       const config: WaitForConditionConfig<string> = {
@@ -642,7 +647,7 @@ describe("WaitForCondition Handler", () => {
         },
       };
 
-      (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext.getStepData as Mock).mockReturnValue(
         (mockContext as any)._stepData[hashedStepId],
       );
 
@@ -661,7 +666,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
         .fn()
         .mockResolvedValue("new-result");
       const config: WaitForConditionConfig<string> = {
@@ -701,7 +706,7 @@ describe("WaitForCondition Handler", () => {
       );
 
       const initialState = { count: 0, created: "now" };
-      const checkFunc = jest.fn().mockResolvedValue({ count: 1 });
+      const checkFunc = vi.fn().mockResolvedValue({ count: 1 });
       const config: WaitForConditionConfig<{ count: number }> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState,
@@ -737,7 +742,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc = jest.fn().mockResolvedValue("ready");
+      const checkFunc = vi.fn().mockResolvedValue("ready");
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -758,7 +763,7 @@ describe("WaitForCondition Handler", () => {
         undefined,
       );
 
-      const checkFunc = jest.fn().mockResolvedValue({ status: "done" });
+      const checkFunc = vi.fn().mockResolvedValue({ status: "done" });
       const config: WaitForConditionConfig<{ status: string }> = {
         waitStrategy: (state) => {
           state.status = "mutated";

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import { CheckpointManager } from "./checkpoint-manager";
 import {
@@ -22,12 +23,12 @@ describe("Checkpoint Error Classification", () => {
       _stepData: {},
       durableExecutionArn: "arn:test",
       state: {
-        checkpoint: jest.fn(),
-        getStepData: jest.fn(),
+        checkpoint: vi.fn(),
+        getStepData: vi.fn(),
       },
       terminationManager: {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn(),
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn(),
       },
     } as any;
     mockLogger = createDefaultLogger(mockContext);

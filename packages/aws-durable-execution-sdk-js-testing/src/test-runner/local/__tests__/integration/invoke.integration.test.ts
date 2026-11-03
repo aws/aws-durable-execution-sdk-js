@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 

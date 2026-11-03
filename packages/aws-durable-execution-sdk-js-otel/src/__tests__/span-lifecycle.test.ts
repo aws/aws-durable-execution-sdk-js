@@ -6,6 +6,7 @@
  * These run against BOTH plugins through the globally-registered provider,
  * matching the integration-test harness.
  */
+import { describe, it, expect, afterEach } from "vitest";
 import {
   AlwaysOffSampler,
   AlwaysOnSampler,

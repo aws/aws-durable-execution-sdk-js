@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   Event,
   EventType,
@@ -11,8 +12,8 @@ import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
 import { WaitingOperationStatus } from "../../types/durable-operation";
 
 describe("CloudDurableTestRunner history notifications", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it.each([false, true])(
     "resolves SUBMITTED from the first history batch (execution complete: %s)",
@@ -93,12 +94,12 @@ describe("CloudDurableTestRunner history notifications", () => {
         },
       ];
       let complete = completeInFirstBatch;
-      const getHistory = jest.fn(async () => ({
+      const getHistory = vi.fn(async () => ({
         $metadata: {},
         Events: complete ? [...events, ...completion] : events,
       }));
       const client = new LambdaClient({ region: "us-east-1" });
-      jest.spyOn(client, "send").mockImplementation(async (command) => {
+      vi.spyOn(client, "send").mockImplementation(async (command) => {
         if (command instanceof InvokeCommand) {
           return { DurableExecutionArn: executionArn, $metadata: {} };
         }
@@ -130,7 +131,7 @@ describe("CloudDurableTestRunner history notifications", () => {
         );
       try {
         // No second history response is available to rescue a missed notification.
-        await jest.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(1000);
         expect(getHistory).toHaveBeenCalledTimes(1);
         expect(outcome).toEqual({
           state: "submitted",
@@ -138,7 +139,7 @@ describe("CloudDurableTestRunner history notifications", () => {
         });
       } finally {
         complete = true;
-        await jest.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(1000);
         await execution;
         await submitted;
         client.destroy();

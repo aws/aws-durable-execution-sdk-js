@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import {
@@ -21,14 +22,17 @@ import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 // Mock dependencies
-jest.mock("../operations/local-operation-storage");
+vi.mock("../operations/local-operation-storage");
 
-const mockInvoke = jest.fn();
+const mockInvoke = vi.fn();
 
-jest.mock("../invoke-handler", () => ({
-  InvokeHandler: jest.fn().mockImplementation(() => ({
-    invoke: mockInvoke,
-  })),
+vi.mock("../invoke-handler", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+  InvokeHandler: vi.fn().mockImplementation(function () {
+    return {
+      invoke: mockInvoke,
+    };
+  }),
 }));
 
 /**
@@ -38,7 +42,7 @@ jest.mock("../invoke-handler", () => ({
  * continuing execution.
  */
 describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
-  const mockHandlerFunction = jest.fn();
+  const mockHandlerFunction = vi.fn();
   const mockExecutionId = createExecutionId("test-execution-id");
   const mockCheckpointToken = createCheckpointToken("test-checkpoint-token");
 
@@ -62,7 +66,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
   ];
 
   let orchestrator: TestExecutionOrchestrator;
-  let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
+  let mockOperationStorage: Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
   let mockDurableApiClient: DurableApiClient;
@@ -81,13 +85,13 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockInvoke.mockReset();
 
     mockDurableApiClient = {
-      sendCallbackFailure: jest.fn(),
-      sendCallbackSuccess: jest.fn(),
-      sendCallbackHeartbeat: jest.fn(),
+      sendCallbackFailure: vi.fn(),
+      sendCallbackSuccess: vi.fn(),
+      sendCallbackHeartbeat: vi.fn(),
     };
 
     const indexedOperations = new IndexedOperations([]);
@@ -97,29 +101,29 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       new OperationWaitManager(indexedOperations),
       indexedOperations,
       mockDurableApiClient,
-      jest.fn(),
-    ) as jest.Mocked<LocalOperationStorage>;
+      vi.fn(),
+    ) as Mocked<LocalOperationStorage>;
 
-    mockOperationStorage.populateOperations = jest.fn();
-    mockOperationStorage.addHistoryEvent = jest.fn();
+    mockOperationStorage.populateOperations = vi.fn();
+    mockOperationStorage.addHistoryEvent = vi.fn();
 
     checkpointApi = {
-      pauseExecution: jest.fn().mockResolvedValue(undefined),
-      resumeExecution: jest.fn().mockResolvedValue(undefined),
-      startDurableExecution: jest.fn().mockResolvedValue({
+      pauseExecution: vi.fn().mockResolvedValue(undefined),
+      resumeExecution: vi.fn().mockResolvedValue(undefined),
+      startDurableExecution: vi.fn().mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operationEvents: mockExecutionOperationEvents,
       }),
-      pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
-      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
-      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
-      startInvocation: jest.fn().mockResolvedValue({
+      pollCheckpointData: vi.fn().mockReturnValue(nonResolvingPromise),
+      drainCheckpointData: vi.fn().mockResolvedValue({ operations: [] }),
+      updateCheckpointData: vi.fn().mockResolvedValue(undefined),
+      startInvocation: vi.fn().mockResolvedValue({
         checkpointToken: mockCheckpointToken,
         executionId: mockExecutionId,
         operationEvents: [],
       }),
-      completeInvocation: jest.fn().mockResolvedValue({
+      completeInvocation: vi.fn().mockResolvedValue({
         hasDirtyOperations: false,
         event: mockInvocationCompletedEvent,
       }),
@@ -127,8 +131,8 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
 
     // Create a mock factory for FunctionStorage
     const mockFactory: ILocalDurableTestRunnerFactory = {
-      createRunner: jest.fn().mockReturnValue({
-        run: jest.fn().mockResolvedValue({
+      createRunner: vi.fn().mockReturnValue({
+        run: vi.fn().mockResolvedValue({
           getStatus: () => "SUCCEEDED",
           getResult: () => ({}),
         }),
@@ -153,8 +157,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const invokeOperationId = "pending-invoke-op";
 
       // Set up complete polling sequence upfront
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -203,7 +206,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
         .mockReturnValue(nonResolvingPromise);
 
       // Mock function storage to complete the invoke
-      jest.spyOn(mockFunctionStorage, "runHandler").mockResolvedValue({
+      vi.spyOn(mockFunctionStorage, "runHandler").mockResolvedValue({
         result: JSON.stringify({ invoke: "success" }),
         error: undefined,
       });
@@ -233,8 +236,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const callbackOperationId = "pending-callback-op";
 
       // Set up complete polling sequence upfront
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -295,9 +297,9 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
 
     it("should reject when handler returns PENDING with no operations", async () => {
       // Set up empty polling response - no operations
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
-        .mockReturnValue(nonResolvingPromise);
+      vi.spyOn(checkpointApi, "pollCheckpointData").mockReturnValue(
+        nonResolvingPromise,
+      );
 
       // Handler returns PENDING but there are no pending operations or scheduled functions
       mockInvoke.mockResolvedValue({
@@ -320,12 +322,12 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
 
     it("should not reject when there are pending operations, but dirty operations exist", async () => {
       // Set up empty polling response - no operations
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
-        .mockReturnValue(nonResolvingPromise);
+      vi.spyOn(checkpointApi, "pollCheckpointData").mockReturnValue(
+        nonResolvingPromise,
+      );
 
       // Set up dirty operations
-      jest.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
+      vi.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
         hasDirtyOperations: true,
         event: mockInvocationCompletedEvent,
       });
@@ -354,8 +356,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const waitOperationId = "scheduled-wait-op";
       const futureTimestamp = new Date(Date.now() + 100);
 
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -421,12 +422,12 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
 
     it("should not immediately re-invoke when there are dirty operations but scheduled functions exist", async () => {
       // Set up empty polling response - no operations
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
-        .mockReturnValue(nonResolvingPromise);
+      vi.spyOn(checkpointApi, "pollCheckpointData").mockReturnValue(
+        nonResolvingPromise,
+      );
 
       // Set up dirty operations
-      jest.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
+      vi.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
         hasDirtyOperations: true,
         event: mockInvocationCompletedEvent,
       });
@@ -456,8 +457,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const completedCallbackId = "completed-callback-op";
 
       // Mock polling to return already completed operations
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -518,8 +518,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const callbackOperationId = "completing-callback-op";
 
       // First polling returns pending callback
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -584,8 +583,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const callbackOperationId = "pending-callback-op";
 
       // First polling: both operations pending, then complete both
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -643,7 +641,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
         .mockReturnValue(nonResolvingPromise);
 
       // Mock function storage to complete invoke quickly
-      jest.spyOn(mockFunctionStorage, "runHandler").mockResolvedValue({
+      vi.spyOn(mockFunctionStorage, "runHandler").mockResolvedValue({
         result: JSON.stringify({ invoke: "completed" }),
         error: undefined,
       });
@@ -674,8 +672,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const secondCallbackId = "second-callback-op";
 
       // First polling: one callback, then first completes and second starts, then second completes
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {
@@ -797,15 +794,15 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       });
 
       // Hold the WAIT completion checkpoint open to pin the race window.
-      jest
-        .spyOn(checkpointApi, "updateCheckpointData")
-        .mockImplementation(async (params) => {
+      vi.spyOn(checkpointApi, "updateCheckpointData").mockImplementation(
+        async (params) => {
           if (params.operationId !== waitOperationId) {
             return;
           }
           signalWaitCheckpointStarted?.();
           await waitCheckpointReleased;
-        });
+        },
+      );
 
       let signalCompleteInvocationCalled: (() => void) | undefined;
       const completeInvocationCalled = new Promise<void>((resolve) => {
@@ -821,7 +818,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
         },
       );
 
-      jest.spyOn(checkpointApi, "completeInvocation").mockImplementation(() => {
+      vi.spyOn(checkpointApi, "completeInvocation").mockImplementation(() => {
         signalCompleteInvocationCalled?.();
         return completeInvocationResult;
       });
@@ -836,8 +833,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
         }
       });
 
-      jest
-        .spyOn(checkpointApi, "pollCheckpointData")
+      vi.spyOn(checkpointApi, "pollCheckpointData")
         .mockResolvedValueOnce({
           operations: [
             {

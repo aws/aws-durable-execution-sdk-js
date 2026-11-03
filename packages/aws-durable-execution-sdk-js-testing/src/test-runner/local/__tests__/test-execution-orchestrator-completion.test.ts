@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import {
@@ -23,25 +32,28 @@ import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { defaultLogger } from "../../../logger";
 import { realSetTimeout } from "../real-timers/real-timers";
 
-jest.mock("../operations/local-operation-storage");
+vi.mock("../operations/local-operation-storage");
 
-const mockInvoke = jest.fn();
+const mockInvoke = vi.fn();
 
-jest.mock("../invoke-handler", () => ({
-  InvokeHandler: jest.fn().mockImplementation(() => ({
-    invoke: mockInvoke,
-  })),
+vi.mock("../invoke-handler", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+  InvokeHandler: vi.fn().mockImplementation(function () {
+    return {
+      invoke: mockInvoke,
+    };
+  }),
 }));
 
 // Record every real-timer delay the orchestrator asks for, while keeping the real timer.
 // Asserting on the requested delays, not on elapsed time, keeps the tests stable under load.
-jest.mock("../real-timers/real-timers", () => {
-  const actual = jest.requireActual<
+vi.mock("../real-timers/real-timers", async () => {
+  const actual = await vi.importActual<
     typeof import("../real-timers/real-timers")
   >("../real-timers/real-timers");
   return {
     ...actual,
-    realSetTimeout: jest.fn(
+    realSetTimeout: vi.fn(
       (callback: () => void, ms?: number): ReturnType<typeof setTimeout> =>
         actual.realSetTimeout(callback, ms),
     ),
@@ -49,7 +61,7 @@ jest.mock("../real-timers/real-timers", () => {
 });
 
 function requestedRealDelays(): (number | undefined)[] {
-  return (realSetTimeout as unknown as jest.Mock).mock.calls.map(
+  return (realSetTimeout as unknown as Mock).mock.calls.map(
     (call: unknown[]) => call[1] as number | undefined,
   );
 }
@@ -96,27 +108,27 @@ describe("TestExecutionOrchestrator completion", () => {
     // never resolve
   });
 
-  let operationStorage: jest.Mocked<LocalOperationStorage>;
+  let operationStorage: Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient & {
-    drainCheckpointData: jest.Mock;
+    drainCheckpointData: Mock;
   };
 
   function createOrchestrator(
     api: CheckpointApiClient = checkpointApi,
   ): TestExecutionOrchestrator {
     return new TestExecutionOrchestrator(
-      jest.fn(),
+      vi.fn(),
       operationStorage,
       api,
       new FunctionStorage({
-        createRunner: jest.fn(),
+        createRunner: vi.fn(),
       } as unknown as ILocalDurableTestRunnerFactory),
       { enabled: false },
     );
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockInvoke.mockReset();
 
     const indexedOperations = new IndexedOperations([]);
@@ -124,31 +136,31 @@ describe("TestExecutionOrchestrator completion", () => {
       new OperationWaitManager(indexedOperations),
       indexedOperations,
       {
-        sendCallbackFailure: jest.fn(),
-        sendCallbackSuccess: jest.fn(),
-        sendCallbackHeartbeat: jest.fn(),
+        sendCallbackFailure: vi.fn(),
+        sendCallbackSuccess: vi.fn(),
+        sendCallbackHeartbeat: vi.fn(),
       },
-      jest.fn(),
-    ) as jest.Mocked<LocalOperationStorage>;
-    operationStorage.populateOperations = jest.fn();
+      vi.fn(),
+    ) as Mocked<LocalOperationStorage>;
+    operationStorage.populateOperations = vi.fn();
 
     checkpointApi = {
-      pauseExecution: jest.fn().mockResolvedValue(undefined),
-      resumeExecution: jest.fn().mockResolvedValue(undefined),
-      startDurableExecution: jest.fn().mockResolvedValue({
+      pauseExecution: vi.fn().mockResolvedValue(undefined),
+      resumeExecution: vi.fn().mockResolvedValue(undefined),
+      startDurableExecution: vi.fn().mockResolvedValue({
         executionId,
         checkpointToken: createCheckpointToken("token"),
         operationEvents: initialOperationEvents,
         invocationId: createInvocationId(),
         updatedOperationIds: [],
       }),
-      pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
-      drainCheckpointData: jest
+      pollCheckpointData: vi.fn().mockReturnValue(nonResolvingPromise),
+      drainCheckpointData: vi
         .fn()
         .mockResolvedValue({ operations: [drainedOperation] }),
-      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
-      startInvocation: jest.fn(),
-      completeInvocation: jest.fn().mockResolvedValue({
+      updateCheckpointData: vi.fn().mockResolvedValue(undefined),
+      startInvocation: vi.fn(),
+      completeInvocation: vi.fn().mockResolvedValue({
         event: {
           EventType: EventType.InvocationCompleted,
           InvocationCompletedDetails: {
@@ -174,7 +186,7 @@ describe("TestExecutionOrchestrator completion", () => {
     expect(checkpointApi.drainCheckpointData).toHaveBeenCalledTimes(1);
     expect(checkpointApi.drainCheckpointData).toHaveBeenCalledWith(executionId);
     // The drain must follow the final update, or it could miss what that update produced.
-    const updateOrder = (checkpointApi.updateCheckpointData as jest.Mock).mock
+    const updateOrder = (checkpointApi.updateCheckpointData as Mock).mock
       .invocationCallOrder[0];
     expect(
       checkpointApi.drainCheckpointData.mock.invocationCallOrder[0],
@@ -186,7 +198,7 @@ describe("TestExecutionOrchestrator completion", () => {
 
   it("stops polling before draining, and aborts the poll signal only after", async () => {
     let signal: AbortSignal | undefined;
-    (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
+    (checkpointApi.pollCheckpointData as Mock).mockImplementation(
       (_id: unknown, s: AbortSignal) => {
         signal = s;
         return nonResolvingPromise;
@@ -211,7 +223,7 @@ describe("TestExecutionOrchestrator completion", () => {
     // A client may reject its in-flight poll once the signal aborts. Here the poll that
     // carries the last update is answered just before the drain, as the worker does.
     let resolveInFlightPoll: (() => void) | undefined;
-    (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
+    (checkpointApi.pollCheckpointData as Mock).mockImplementation(
       (_id: unknown, s: AbortSignal) =>
         new Promise((resolve, reject) => {
           resolveInFlightPoll = () =>
@@ -293,7 +305,7 @@ describe("TestExecutionOrchestrator completion", () => {
   });
 
   it("keeps the execution's own error when the drain also fails, and logs the drain error", async () => {
-    const warn = jest
+    const warn = vi
       .spyOn(defaultLogger, "warn")
       .mockImplementation(() => undefined);
     mockInvoke.mockRejectedValue(new Error("handler crashed"));
@@ -308,7 +320,7 @@ describe("TestExecutionOrchestrator completion", () => {
   });
 
   it("does not drain when the execution never started", async () => {
-    (checkpointApi.startDurableExecution as jest.Mock).mockRejectedValue(
+    (checkpointApi.startDurableExecution as Mock).mockRejectedValue(
       new Error("start failed"),
     );
 

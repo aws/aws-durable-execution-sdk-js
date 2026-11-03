@@ -20,6 +20,7 @@
  *   5. It cross-checks tool names both ways: every tool `SKILL.md` mentions
  *      exists in `TOOL_DESCRIPTIONS`, and all five tools are mentioned.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { buildSystemPrompt } from "@aws/durable-execution-sdk-js-telemetry-core";

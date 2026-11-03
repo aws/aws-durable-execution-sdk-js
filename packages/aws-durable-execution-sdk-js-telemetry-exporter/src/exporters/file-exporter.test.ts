@@ -1,8 +1,9 @@
-const mockAppendFile = jest.fn();
-const mockWriteFile = jest.fn();
-const mockMkdir = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockAppendFile = vi.fn();
+const mockWriteFile = vi.fn();
+const mockMkdir = vi.fn();
 
-jest.mock("node:fs/promises", () => ({
+vi.mock("node:fs/promises", () => ({
   appendFile: (...args: unknown[]): unknown => mockAppendFile(...args),
   writeFile: (...args: unknown[]): unknown => mockWriteFile(...args),
   mkdir: (...args: unknown[]): unknown => mockMkdir(...args),

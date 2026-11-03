@@ -10,7 +10,7 @@ This package provides testing tools for durable functions both locally and in th
   - **Time-skipping support** - Skip wait operations and delays for faster test execution
   - **Function registration** - Register additional functions for chained invoke testing
   - **Full operation inspection** - Access detailed information about steps, waits, callbacks, and more
-  - **Mock-friendly** - Works seamlessly with Jest and other mocking frameworks
+  - **Mock-friendly** - Works seamlessly with Vitest and other mocking frameworks
 
 - **CloudDurableTestRunner** - Test against deployed AWS Lambda functions
   - **Real environment testing** - Validate behavior against actual your actual deployed AWS Lambda function
@@ -200,24 +200,25 @@ await LocalDurableTestRunner.teardownTestEnvironment();
 
 ### Mocking
 
-Mock external dependencies using Jest or your preferred testing framework:
+Mock external dependencies using Vitest or your preferred testing framework:
 
 ```typescript
+import { vi, describe, beforeAll, afterAll, beforeEach, type MockedFunction } from "vitest";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 
 // Mock external functions
-jest.mock("../services/userService", () => ({
-  fetchUserFromDB: jest.fn(),
-  processUser: jest.fn(),
+vi.mock("../services/userService", () => ({
+  fetchUserFromDB: vi.fn(),
+  processUser: vi.fn(),
 }));
 
 import { fetchUserFromDB, processUser } from "../services/userService";
 import { lambdaHandler } from "./lambdaHandler";
 
-const mockFetchUser = fetchUserFromDB as jest.MockedFunction<
+const mockFetchUser = fetchUserFromDB as MockedFunction<
   typeof fetchUserFromDB
 >;
-const mockProcessUser = processUser as jest.MockedFunction<typeof processUser>;
+const mockProcessUser = processUser as MockedFunction<typeof processUser>;
 
 describe("Mocked Dependencies", () => {
   let runner: LocalDurableTestRunner;

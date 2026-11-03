@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { MessageChannel } from "node:worker_threads";
 import { LambdaServiceException } from "@aws-sdk/client-lambda";
 import {

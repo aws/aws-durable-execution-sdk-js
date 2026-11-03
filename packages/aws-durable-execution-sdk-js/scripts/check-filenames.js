@@ -58,8 +58,8 @@ rl.on("line", (filePath) => {
     const dirPath = parts.slice(0, i + 1).join("/");
     const dirName = parts[i];
 
-    // Skip already processed directories, `src`, and Jest's manual-mock folders.
-    // `__mocks__` is a fixed name Jest requires, so it cannot be kebab-case. The
+    // Skip already processed directories, `src`, and manual-mock folders.
+    // `__mocks__` is a fixed name the test runner requires, so it cannot be kebab-case. The
     // deleted ESLint config carried the same exemption, and so does the
     // useFilenamingConvention override in biome.jsonc -- this check exists to cover
     // the DIRECTORY segments that Biome's rule does not look at, so the two must

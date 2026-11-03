@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, type Mocked } from "vitest";
 import { DurableLoggingContext } from "../../types/durable-logger";
 import { DurableLogData } from "../../types/logger";
 import {
@@ -8,12 +9,12 @@ import {
 
 const METHODS = ["info", "warn", "error", "debug"] as const;
 
-function createStubLogger(): jest.Mocked<PowertoolsLoggerLike> {
+function createStubLogger(): Mocked<PowertoolsLoggerLike> {
   return {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
   };
 }
 

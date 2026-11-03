@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import { OperationAction, OperationType } from "@aws/durable-execution-sdk-js";
 import { validateValidActionsByOperationType } from "../valid-actions-by-operation-type-validator";

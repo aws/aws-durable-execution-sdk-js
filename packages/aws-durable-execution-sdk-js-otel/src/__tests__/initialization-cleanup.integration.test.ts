@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { context, propagation, trace, type Span } from "@opentelemetry/api";
@@ -74,7 +75,7 @@ it.each([
           ],
         })),
     });
-    const work = jest.fn(async () => "saved result");
+    const work = vi.fn(async () => "saved result");
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
         async (_, ctx) => ctx.step("after-failed-initialization", work),

@@ -7,6 +7,7 @@
  * the folder's values there; from then on they applied in every folder,
  * untrusted ones included. These tests use a fake host with the same two layers.
  */
+import { describe, it, expect } from "vitest";
 import { normalizeConfig, type TelemetryConfig } from "./configCore";
 import { ExplorerSession } from "./explorerSession";
 import type { HostPort, SettingValue } from "./hostPort";

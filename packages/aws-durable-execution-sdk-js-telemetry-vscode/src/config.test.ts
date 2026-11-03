@@ -5,6 +5,8 @@
  * .vscode/settings.json, trusted or not, must not be able to accept the AI
  * notice for the user. Every other setting keeps VS Code's normal resolution.
  */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 type Inspect = {
   defaultValue?: unknown;
   globalValue?: unknown;
@@ -24,19 +26,15 @@ function effective(i: Inspect | undefined): unknown {
   );
 }
 
-jest.mock(
-  "vscode",
-  () => ({
-    workspace: {
-      getConfiguration: () => ({
-        get: (k: string) => effective(layers[k]),
-        inspect: (k: string) =>
-          layers[k] ? { key: k, ...layers[k] } : undefined,
-      }),
-    },
-  }),
-  { virtual: true },
-);
+vi.mock("vscode", () => ({
+  workspace: {
+    getConfiguration: () => ({
+      get: (k: string) => effective(layers[k]),
+      inspect: (k: string) =>
+        layers[k] ? { key: k, ...layers[k] } : undefined,
+    }),
+  },
+}));
 
 import { readConfig } from "./config";
 

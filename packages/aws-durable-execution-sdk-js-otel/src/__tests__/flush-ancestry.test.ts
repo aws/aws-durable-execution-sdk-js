@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import type {
   InvocationInfo,
   OperationInfo,
@@ -77,7 +78,7 @@ describe("execution view ancestry received during flush", () => {
       let plugin = factory.createPlugin(info);
       const entered = gate(),
         release = gate();
-      const flush = jest
+      const flush = vi
         .spyOn(provider, "forceFlush")
         .mockImplementationOnce(async () => {
           entered.open();
@@ -178,7 +179,7 @@ it.each(["SUCCEEDED", "FAILED", "PENDING"] as const)(
     const plugin = factory.createPlugin(info);
     const entered = gate(),
       release = gate();
-    const flush = jest
+    const flush = vi
       .spyOn(provider, "forceFlush")
       .mockImplementation(async () => {
         entered.open();

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { noNestedDurableOperations } from "./no-nested-durable-operations";
 
 describe("no-nested-durable-operations", () => {
@@ -16,7 +17,7 @@ describe("no-nested-durable-operations", () => {
 
   it("should create rule function", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNestedDurableOperations.create(mockContext as any);
@@ -27,7 +28,7 @@ describe("no-nested-durable-operations", () => {
 
   it("should handle variable shadowing correctly", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNestedDurableOperations.create(mockContext as any);
@@ -97,7 +98,7 @@ describe("no-nested-durable-operations", () => {
 
   it("should detect same context reuse", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNestedDurableOperations.create(mockContext as any);

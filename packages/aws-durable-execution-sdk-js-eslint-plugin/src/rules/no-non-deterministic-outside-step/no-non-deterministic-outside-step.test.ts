@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { noNonDeterministicOutsideStep } from "./no-non-deterministic-outside-step";
 
 describe("no-non-deterministic-outside-step", () => {
@@ -9,7 +10,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should detect Math.random() outside step", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -35,7 +36,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should detect Date.now() outside step", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -61,7 +62,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should detect new Date() outside step", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -83,7 +84,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should detect UUID generation outside step", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -108,7 +109,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should not report when inside step function", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -143,7 +144,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should report again once the step function has been exited", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -181,7 +182,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should not throw at Program:exit when no scope information is available", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
@@ -198,7 +199,7 @@ describe("no-non-deterministic-outside-step", () => {
 
   it("should detect destructured methods", () => {
     const mockContext = {
-      report: jest.fn(),
+      report: vi.fn(),
     };
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);

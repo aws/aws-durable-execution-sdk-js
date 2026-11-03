@@ -1,5 +1,6 @@
-// Fakes and request helpers that the listener tests share. Jest runs only
+// Fakes and request helpers that the listener tests share. Vitest runs only
 // files named *.test.ts, so this file is not a suite.
+import { vi, type Mock } from "vitest";
 import type {
   IncomingHttpHeaders,
   IncomingMessage,
@@ -29,7 +30,7 @@ const SUSPEND_CALL_TIMEOUT_MS = 10_000;
  * With `hold`, each call stays pending until `finish()`. `maxRunning` is the
  * largest number of calls that ran at the same time.
  *
- * Jest's fake timers do not drive `AbortSignal.timeout`, so the worker's
+ * Vitest's fake timers do not drive `AbortSignal.timeout`, so the worker's
  * 10-second abort never fires in a test. With `hold` and `deadline`, a held
  * call that `finish()` did not release rejects with a TimeoutError after 10
  * fake seconds. So a test can end a call at its deadline.
@@ -41,7 +42,7 @@ export class FakeMicrovmsClient {
   deadline = false;
   maxRunning = 0;
   /** The worker must never call it, because the test owns this client. */
-  readonly destroy = jest.fn();
+  readonly destroy: Mock<() => void> = vi.fn();
   private pending: (() => void)[] = [];
   private running = 0;
 
@@ -130,7 +131,7 @@ export const call = (
 
 /** Advances fake time, and lets the promises that it releases settle. */
 export const advance = (ms: number): Promise<void> =>
-  jest.advanceTimersByTimeAsync(ms);
+  vi.advanceTimersByTimeAsync(ms).then(() => undefined);
 
 /**
  * Sends one request to the listener, and resolves with the status and the

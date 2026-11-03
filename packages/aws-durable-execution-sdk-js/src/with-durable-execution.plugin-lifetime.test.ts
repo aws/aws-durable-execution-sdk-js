@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -21,22 +30,28 @@ import {
   PLUGIN_PROVIDER_EXPORT,
 } from "./utils/plugin/plugin-loader";
 
-jest.mock("./context/execution-context/execution-context");
-jest.mock("./context/durable-context/durable-context");
-jest.mock("./utils/checkpoint/checkpoint-manager");
-jest.mock("./utils/logger/logger", () => ({ log: jest.fn() }));
-jest.mock("./utils/plugin/plugin-loader", () => {
-  const actual = jest.requireActual("./utils/plugin/plugin-loader");
-  return { ...actual, loadConfiguredPlugins: jest.fn() };
+vi.mock("./context/execution-context/execution-context");
+vi.mock("./context/durable-context/durable-context");
+vi.mock("./utils/checkpoint/checkpoint-manager");
+vi.mock("./utils/logger/logger", () => ({ log: vi.fn() }));
+const pluginLoaderActual = vi.hoisted(() => ({
+  loadConfiguredPlugins:
+    undefined as unknown as typeof import("./utils/plugin/plugin-loader").loadConfiguredPlugins,
+}));
+
+vi.mock("./utils/plugin/plugin-loader", async () => {
+  const actual = await vi.importActual<
+    typeof import("./utils/plugin/plugin-loader")
+  >("./utils/plugin/plugin-loader");
+  pluginLoaderActual.loadConfiguredPlugins = actual.loadConfiguredPlugins;
+  return { ...actual, loadConfiguredPlugins: vi.fn() };
 });
 
-const mockedLoadConfiguredPlugins =
-  loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>;
-const actualLoadConfiguredPlugins = (
-  jest.requireActual("./utils/plugin/plugin-loader") as {
-    loadConfiguredPlugins: typeof loadConfiguredPlugins;
-  }
-).loadConfiguredPlugins;
+const mockedLoadConfiguredPlugins = loadConfiguredPlugins as MockedFunction<
+  typeof loadConfiguredPlugins
+>;
+const actualLoadConfiguredPlugins: typeof loadConfiguredPlugins = (...args) =>
+  pluginLoaderActual.loadConfiguredPlugins(...args);
 
 const mockEvent: DurableExecutionInvocationInput = {
   CheckpointToken: "token",
@@ -58,8 +73,8 @@ const executionContextFor = (
   requestId: `req-for-${executionArn}`,
   terminationManager: {
     getTerminationPromise: () => new Promise(() => {}),
-    terminate: jest.fn(),
-    setCheckpointTerminatingCallback: jest.fn(),
+    terminate: vi.fn(),
+    setCheckpointTerminatingCallback: vi.fn(),
   },
 });
 
@@ -96,12 +111,12 @@ function recordingFactory(): DurableInstrumentationPluginFactory<RecordingPlugin
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   let nextExecution = 0;
   mockedLoadConfiguredPlugins.mockImplementation(async (plugins) => [
     ...(plugins ?? []),
   ]);
-  (initializeExecutionContext as jest.Mock).mockImplementation(async () => {
+  (initializeExecutionContext as Mock).mockImplementation(async () => {
     nextExecution += 1;
     return {
       executionContext: executionContextFor(`arn:exec:${nextExecution}`),
@@ -109,21 +124,24 @@ beforeEach(() => {
       durableExecutionMode: DurableExecutionMode.ExecutionMode,
     };
   });
-  (createDurableContext as jest.Mock).mockReturnValue({});
-  (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-    checkpoint: jest.fn().mockResolvedValue(undefined),
-    setTerminating: jest.fn(),
-    isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-    checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
-    dispose: jest.fn(),
-    waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-  }));
+  (createDurableContext as Mock).mockReturnValue({});
+  // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+  (CheckpointManager as unknown as Mock).mockImplementation(function () {
+    return {
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      setTerminating: vi.fn(),
+      isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+      checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
+      dispose: vi.fn(),
+      waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+    };
+  });
 });
 
 describe("plugins get one instance per invocation", () => {
   it("creates a fresh instance for each invocation", async () => {
     const factory = recordingFactory();
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
 
@@ -152,7 +170,7 @@ describe("plugins get one instance per invocation", () => {
       },
     };
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
     await handler(mockEvent, mockContext);
@@ -174,7 +192,7 @@ describe("plugins get one instance per invocation", () => {
       },
     };
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
     await handler(mockEvent, mockContext);
@@ -193,7 +211,7 @@ describe("plugins get one instance per invocation", () => {
     const factory = recordingFactory();
     const releases: Array<() => void> = [];
     const handler = withDurableExecution(
-      jest.fn().mockImplementation(
+      vi.fn().mockImplementation(
         () =>
           new Promise<Record<string, never>>((resolve) => {
             releases.push(() => resolve({}));
@@ -238,7 +256,7 @@ describe("plugins get one instance per invocation", () => {
       },
     };
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
     await handler(mockEvent, mockContext);
@@ -278,7 +296,7 @@ describe("plugins get one instance per invocation", () => {
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
       { plugins: [throwingFactory, first, second] },
     );
 
@@ -297,7 +315,7 @@ describe("plugins get one instance per invocation", () => {
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
       { plugins: [throwingFactory, { createPlugin: () => other }] },
     );
 
@@ -311,7 +329,7 @@ describe("plugins get one instance per invocation", () => {
   it("keeps failing a handler's own error while a factory throws", async () => {
     const handlerError = new Error("handler error");
     const handler = withDurableExecution(
-      jest.fn().mockRejectedValue(handlerError),
+      vi.fn().mockRejectedValue(handlerError),
       {
         plugins: [
           {
@@ -349,7 +367,7 @@ describe("environment-configured providers", () => {
       },
     });
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
     await handler(mockEvent, mockContext);
     await handler(mockEvent, mockContext);
 
@@ -370,7 +388,7 @@ describe("environment-configured providers", () => {
       },
     });
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [configFactory],
     });
     await handler(mockEvent, mockContext);
@@ -388,7 +406,7 @@ describe("environment-configured providers", () => {
     });
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
     );
 
     await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
@@ -402,7 +420,7 @@ describe("environment-configured providers", () => {
     // fails the invocation before any execution state is read.
     loadFromProvider(() => new RecordingPlugin());
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
 
     await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
@@ -418,7 +436,7 @@ describe("environment-configured providers", () => {
         throw new Error("async provider factory bug");
       },
     });
-    const userHandler = jest.fn().mockResolvedValue({ ok: true });
+    const userHandler = vi.fn().mockResolvedValue({ ok: true });
     const handler = withDurableExecution(userHandler);
 
     for (let invocation = 0; invocation < 2; invocation++) {
@@ -443,7 +461,7 @@ describe("explicit plugins entries are validated like providers", () => {
   });
 
   it("fails the invocation for a plugin instance passed instead of a factory", async () => {
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [
         new RecordingPlugin() as unknown as DurableInstrumentationPluginFactory,
       ],
@@ -457,7 +475,7 @@ describe("explicit plugins entries are validated like providers", () => {
   });
 
   it("reports the same failure on every invocation, not only the first", async () => {
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [
         new RecordingPlugin() as unknown as DurableInstrumentationPluginFactory,
       ],
@@ -473,7 +491,7 @@ describe("explicit plugins entries are validated like providers", () => {
 
   it("runs the invocation normally when every entry is a factory", async () => {
     const factory = recordingFactory();
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
 
@@ -498,7 +516,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
   });
 
   it("fails with PluginLoadError rather than running with the plugin absent", async () => {
-    const handlerFn = jest.fn().mockResolvedValue({ ok: true });
+    const handlerFn = vi.fn().mockResolvedValue({ ok: true });
     const handler = withDurableExecution(handlerFn, {
       plugins: [
         RecordingPlugin as unknown as DurableInstrumentationPluginFactory,
@@ -530,7 +548,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
       }),
     );
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
 
     await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
@@ -546,7 +564,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
 
   it("still runs the invocation for the factory form of the same class", async () => {
     const created: RecordingPlugin[] = [];
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [
         {
           createPlugin: () => {
@@ -570,7 +588,7 @@ describe("SDK 3.x rejects legacy providers before user execution", () => {
   it.each(["explicit", "environment"] as const)(
     "returns PluginLoadError for %s v1 registration",
     async (registration) => {
-      const createPlugin = jest.fn(() => new RecordingPlugin());
+      const createPlugin = vi.fn(() => new RecordingPlugin());
       const legacy = {
         pluginApiVersion: 1,
         pluginType: RecordingPlugin,
@@ -585,7 +603,7 @@ describe("SDK 3.x rejects legacy providers before user execution", () => {
           importModule: async () => ({ [PLUGIN_PROVIDER_EXPORT]: legacy }),
         }),
       );
-      const handlerFn = jest.fn(async () => ({ ok: true }));
+      const handlerFn = vi.fn(async () => ({ ok: true }));
       const handler = withDurableExecution(handlerFn, {
         plugins: registration === "explicit" ? [legacy] : [],
       });

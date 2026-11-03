@@ -1,15 +1,22 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-cloudwatch-logs", () => ({
-  CloudWatchLogsClient: jest.fn(() => ({ send: mockSend })),
-  PutLogEventsCommand: jest.fn((input: unknown) => ({
-    __type: "put",
-    __input: input,
-  })),
-  CreateLogStreamCommand: jest.fn((input: unknown) => ({
-    __type: "create",
-    __input: input,
-  })),
+vi.mock("@aws-sdk/client-cloudwatch-logs", () => ({
+  CloudWatchLogsClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutLogEventsCommand: vi.fn(function (input: unknown) {
+    return {
+      __type: "put",
+      __input: input,
+    };
+  }),
+  CreateLogStreamCommand: vi.fn(function (input: unknown) {
+    return {
+      __type: "create",
+      __input: input,
+    };
+  }),
   ResourceAlreadyExistsException: class ResourceAlreadyExistsException extends Error {},
 }));
 

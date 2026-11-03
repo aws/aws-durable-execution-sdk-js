@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   DurableExecutionInvocationInputWithClient,
@@ -25,7 +26,7 @@ it("retains the real context when an earlier callback completion arrives with it
   let runner!: LocalDurableTestRunner;
   let completedCallback = false;
   let childCalls = 0;
-  const saved = jest.fn(async () => "saved");
+  const saved = vi.fn(async () => "saved");
   let parentEnded!: () => void;
   const parentEnd = new Promise<void>((resolve) => {
     parentEnded = resolve;

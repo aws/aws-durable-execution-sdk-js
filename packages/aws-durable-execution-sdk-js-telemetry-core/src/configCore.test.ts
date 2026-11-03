@@ -3,9 +3,10 @@
  * this suite importing it without one is itself the assertion that the module
  * stays importable from the desktop host.
  */
-jest.mock("@aws-sdk/credential-providers", () => ({
-  fromIni: jest.fn(),
-  fromNodeProviderChain: jest.fn(),
+import { vi, describe, it, expect } from "vitest";
+vi.mock("@aws-sdk/credential-providers", () => ({
+  fromIni: vi.fn(),
+  fromNodeProviderChain: vi.fn(),
 }));
 
 import {

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
@@ -9,11 +10,11 @@ import { TestExecutionResult } from "../../common/test-execution-state";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 
 // Mock OperationStorage
-jest.mock("../operations/local-operation-storage");
+vi.mock("../operations/local-operation-storage");
 
 describe("ResultFormatter", () => {
   let resultFormatter: ResultFormatter<{ success: boolean }>;
-  let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
+  let mockOperationStorage: Mocked<LocalOperationStorage>;
   let mockWaitManager: OperationWaitManager;
   let mockOperationIndex: IndexedOperations;
   let mockApiClient: DurableApiClient;
@@ -24,8 +25,8 @@ describe("ResultFormatter", () => {
       new OperationWaitManager(mockOperationIndex),
       mockOperationIndex,
       mockApiClient,
-      jest.fn(),
-    ) as jest.Mocked<LocalOperationStorage>;
+      vi.fn(),
+    ) as Mocked<LocalOperationStorage>;
     resultFormatter = new ResultFormatter<{ success: boolean }>();
     mockWaitManager = new OperationWaitManager(mockOperationIndex);
     mockApiClient = {} as DurableApiClient;

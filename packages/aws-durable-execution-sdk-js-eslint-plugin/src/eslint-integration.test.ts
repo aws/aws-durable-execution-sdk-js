@@ -9,6 +9,7 @@
  * The "eslint-plugin-compat" job in .github/workflows/build.yml installs the
  * latest ESLint 8 (8.57) and the latest 9 and runs this file against each.
  */
+import { describe, it, expect } from "vitest";
 import * as path from "node:path";
 import * as typescriptParser from "@typescript-eslint/parser";
 import plugin from "./index";

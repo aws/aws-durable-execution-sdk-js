@@ -19,21 +19,19 @@
     "build": "node esbuild.mjs",
     "start": "npm run build && electron .",
     "clean": "rm -rf dist release",
-    "test": "jest"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0",
     "node-llama-cpp": "^3.22.2"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.43",
     "electron": "^44.9.1",
     "electron-builder": "26.15.3",
     "esbuild": "^0.28.2",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.15",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "build": {
     "appId": "com.amazon.aws.durable-execution-sdk-js-telemetry-desktop",
@@ -82,23 +80,6 @@
           "arch": [
             "x64"
           ]
-        }
-      ]
-    }
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/src/**/*.test.ts"
-    ],
-    "transform": {
-      "^.+\\.ts$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.test.json",
-          "diagnostics": false,
-          "isolatedModules": true
         }
       ]
     }

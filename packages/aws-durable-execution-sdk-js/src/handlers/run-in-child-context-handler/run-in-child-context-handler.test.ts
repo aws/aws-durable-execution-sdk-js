@@ -1,3 +1,14 @@
+import {
+  vi,
+  describe,
+  it,
+  test,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createRunInChildContextHandler } from "./run-in-child-context-handler";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
@@ -17,52 +28,54 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurableExecutionMode } from "../../types/core";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
-jest.mock("../../utils/context-tracker/context-tracker", () => ({
-  ...jest.requireActual("../../utils/context-tracker/context-tracker"),
+vi.mock("../../utils/context-tracker/context-tracker", async () => ({
+  ...(await vi.importActual<
+    typeof import("../../utils/context-tracker/context-tracker")
+  >("../../utils/context-tracker/context-tracker")),
 }));
 
 describe("Run In Child Context Handler", () => {
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockCheckpoint: MockedFunction<CheckpointFunction>;
   let mockParentContext: any;
-  let createStepId: jest.Mock;
+  let createStepId: Mock;
   let runInChildContextHandler: ReturnType<
     typeof createRunInChildContextHandler
   >;
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     mockExecutionContext = {
       state: {
-        getStepData: jest.fn(),
-        checkpoint: jest.fn(),
+        getStepData: vi.fn(),
+        checkpoint: vi.fn(),
       },
       _stepData: {},
       terminationManager: {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn(),
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn(),
       },
       mutex: {
-        lock: jest.fn((fn) => fn()),
+        lock: vi.fn((fn) => fn()),
       },
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
-    } as unknown as jest.Mocked<ExecutionContext>;
+    } as unknown as Mocked<ExecutionContext>;
 
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
-    createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
-    const mockGetLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+    createStepId = vi.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
+    const mockGetLogger = vi.fn().mockReturnValue({
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
     });
-    const mockCreateChildContext = jest.fn().mockReturnValue({
+    const mockCreateChildContext = vi.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
     const mockParentDurableContext = "parent-step-123";
@@ -83,20 +96,19 @@ describe("Run In Child Context Handler", () => {
       // after fn returns, before the safeSerialize await. Otherwise an in-flight
       // child of a map/parallel that completed early could settle during
       // serialization and checkpoint SUCCEEDED after the batch completed.
-      const childFn = jest
+      const childFn = vi
         .fn()
         .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
       let markedWhenSerializeRan: boolean | undefined;
       const orderTrackingSerdes = {
-        serialize: jest.fn(async (value: unknown) => {
+        serialize: vi.fn(async (value: unknown) => {
           // Capture whether the gate was already closed at serialize time.
           markedWhenSerializeRan =
-            (mockCheckpoint.markAncestorFinished as jest.Mock).mock.calls
-              .length > 0;
+            (mockCheckpoint.markAncestorFinished as Mock).mock.calls.length > 0;
           return JSON.stringify(value);
         }),
-        deserialize: jest.fn(async (data?: string) =>
+        deserialize: vi.fn(async (data?: string) =>
           data ? JSON.parse(data) : undefined,
         ),
       };
@@ -122,7 +134,7 @@ describe("Run In Child Context Handler", () => {
 
   describe("Virtual Context", () => {
     test("should not checkpoint when virtualContext is true", async () => {
-      const childFn = jest
+      const childFn = vi
         .fn()
         .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -140,7 +152,7 @@ describe("Run In Child Context Handler", () => {
     });
 
     test("should pass parent's parentId to child context when virtualContext is true", async () => {
-      const mockCreateChildContext = jest.fn().mockReturnValue({
+      const mockCreateChildContext = vi.fn().mockReturnValue({
         _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
       });
       const parentId = "parent-step-123";
@@ -150,12 +162,12 @@ describe("Run In Child Context Handler", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        vi.fn().mockReturnValue({ log: vi.fn() }),
         mockCreateChildContext,
         parentId,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
 
       await virtualHandler("test-virtual", childFn, { virtualContext: true });
 
@@ -172,7 +184,7 @@ describe("Run In Child Context Handler", () => {
     });
 
     test("should use entityId as parentId for normal context", async () => {
-      const mockCreateChildContext = jest.fn().mockReturnValue({
+      const mockCreateChildContext = vi.fn().mockReturnValue({
         _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
       });
       const parentId = "parent-step-123";
@@ -182,12 +194,12 @@ describe("Run In Child Context Handler", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        vi.fn().mockReturnValue({ log: vi.fn() }),
         mockCreateChildContext,
         parentId,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
 
       await normalHandler(
         "test-normal",
@@ -209,7 +221,7 @@ describe("Run In Child Context Handler", () => {
 
     test("should still wrap errors in ChildContextError for virtual contexts", async () => {
       const testError = new Error("Test error");
-      const childFn = jest.fn().mockRejectedValue(testError);
+      const childFn = vi.fn().mockRejectedValue(testError);
 
       await expect(
         runInChildContextHandler("test-virtual-error", childFn, {
@@ -223,7 +235,7 @@ describe("Run In Child Context Handler", () => {
   });
 
   test("should execute child context function with child context", async () => {
-    const childFn = jest
+    const childFn = vi
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -270,7 +282,7 @@ describe("Run In Child Context Handler", () => {
   });
 
   test("should checkpoint at start and finish", async () => {
-    const childFn = jest
+    const childFn = vi
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -309,7 +321,7 @@ describe("Run In Child Context Handler", () => {
   });
 
   test("should handle small payloads normally", async () => {
-    const childFn = jest.fn().mockResolvedValue("small-result");
+    const childFn = vi.fn().mockResolvedValue("small-result");
 
     await runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
 
@@ -344,7 +356,7 @@ describe("Run In Child Context Handler", () => {
   test("should checkpoint empty string for large payloads", async () => {
     // Create a large payload (over 256KB)
     const largePayload = "x".repeat(300 * 1024); // 300KB string
-    const childFn = jest.fn().mockResolvedValue(largePayload);
+    const childFn = vi.fn().mockResolvedValue(largePayload);
 
     await runInChildContextHandler(
       TEST_CONSTANTS.CHILD_CONTEXT_NAME,
@@ -392,8 +404,8 @@ describe("Run In Child Context Handler", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
-        jest
+        vi.fn().mockReturnValue({ log: vi.fn() }),
+        vi
           .fn()
           .mockReturnValue({ _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID }),
         "parent-step-123",
@@ -411,7 +423,7 @@ describe("Run In Child Context Handler", () => {
     test.each([1, 2, Infinity])(
       "forces ReplayChildren and keeps the full payload when the budget is %p",
       async (depth) => {
-        const childFn = jest
+        const childFn = vi
           .fn()
           .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -429,7 +441,7 @@ describe("Run In Child Context Handler", () => {
     test.each([0, -1])(
       "does not set ReplayChildren when the budget is %p",
       async (depth) => {
-        const childFn = jest
+        const childFn = vi
           .fn()
           .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -440,7 +452,7 @@ describe("Run In Child Context Handler", () => {
     );
 
     test("does not set ReplayChildren by default (no budget passed)", async () => {
-      const childFn = jest
+      const childFn = vi
         .fn()
         .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -460,7 +472,7 @@ describe("Run In Child Context Handler", () => {
       )?.[1] as { ContextOptions?: unknown } | undefined;
 
     test("forces ReplayChildren on a FAILED context when the budget is >= 1", async () => {
-      const childFn = jest.fn().mockRejectedValue(new Error("boom"));
+      const childFn = vi.fn().mockRejectedValue(new Error("boom"));
 
       await expect(
         makeHandler(1)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
@@ -472,7 +484,7 @@ describe("Run In Child Context Handler", () => {
     });
 
     test("does not set ReplayChildren on a FAILED context when the budget is 0", async () => {
-      const childFn = jest.fn().mockRejectedValue(new Error("boom"));
+      const childFn = vi.fn().mockRejectedValue(new Error("boom"));
 
       await expect(
         makeHandler(0)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
@@ -494,7 +506,7 @@ describe("Run In Child Context Handler", () => {
       },
     } as any;
 
-    const childFn = jest.fn().mockResolvedValue("new-result");
+    const childFn = vi.fn().mockResolvedValue("new-result");
 
     const result = await runInChildContextHandler(
       TEST_CONSTANTS.CHILD_CONTEXT_NAME,
@@ -507,7 +519,7 @@ describe("Run In Child Context Handler", () => {
 
   test("should checkpoint failure when child context function throws Error object", async () => {
     const error = new Error("child-context-error");
-    const childFn = jest.fn().mockRejectedValue(error);
+    const childFn = vi.fn().mockRejectedValue(error);
 
     await expect(
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
@@ -543,7 +555,7 @@ describe("Run In Child Context Handler", () => {
 
   test('should checkpoint failure with "Unknown error" when child context function throws non-Error object', async () => {
     const nonErrorObject = "string error";
-    const childFn = jest.fn().mockRejectedValue(nonErrorObject);
+    const childFn = vi.fn().mockRejectedValue(nonErrorObject);
 
     await expect(
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
@@ -578,7 +590,7 @@ describe("Run In Child Context Handler", () => {
   });
 
   test("should support unnamed child contexts", async () => {
-    const childFn = jest
+    const childFn = vi
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -614,7 +626,7 @@ describe("Run In Child Context Handler", () => {
   });
 
   test("should accept undefined as name parameter", async () => {
-    const childFn = jest
+    const childFn = vi
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -661,7 +673,7 @@ describe("Run In Child Context Handler", () => {
       },
     } as any;
 
-    const childFn = jest
+    const childFn = vi
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
 
@@ -698,34 +710,34 @@ describe("runInChildContext with custom serdes", () => {
   }
 
   let mockExecutionContext: ExecutionContext;
-  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockCheckpoint: MockedFunction<CheckpointFunction>;
   let mockParentContext: any;
-  let mockCreateStepId: jest.Mock;
+  let mockCreateStepId: Mock;
   let runInChildContext: ReturnType<typeof createRunInChildContextHandler>;
 
   beforeEach(() => {
     mockExecutionContext = {
       _stepData: {},
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
     } as any;
 
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { getRemainingTimeInMillis: (): number => 30000 };
-    mockCreateStepId = jest.fn().mockReturnValue("test-step-id");
-    const mockGetLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+    mockCreateStepId = vi.fn().mockReturnValue("test-step-id");
+    const mockGetLogger = vi.fn().mockReturnValue({
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
     });
 
-    const mockCreateChildContext = jest.fn().mockReturnValue({
+    const mockCreateChildContext = vi.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
     const mockParentDurableContext = "parent-step-123";
@@ -744,7 +756,7 @@ describe("runInChildContext with custom serdes", () => {
     const customSerdes = createClassSerdesWithDates(TestResult, ["timestamp"]);
     const testResult = new TestResult("test-value", new Date("2023-01-01"));
 
-    const childFunction = jest.fn().mockResolvedValue(testResult);
+    const childFunction = vi.fn().mockResolvedValue(testResult);
 
     // Execute the child context with custom serdes
     const result = await runInChildContext(
@@ -781,7 +793,7 @@ describe("runInChildContext with custom serdes", () => {
       ): Promise<string | undefined> => data,
     };
 
-    const childFunction = jest.fn().mockResolvedValue("hello");
+    const childFunction = vi.fn().mockResolvedValue("hello");
 
     const result = await runInChildContext("serdes-child", childFunction, {
       serdes: asymmetricSerdes,
@@ -801,7 +813,7 @@ describe("runInChildContext with custom serdes", () => {
       ): Promise<string | undefined> => data,
     };
 
-    const childFunction = jest.fn().mockResolvedValue("hello");
+    const childFunction = vi.fn().mockResolvedValue("hello");
 
     await runInChildContext("serdes-child", childFunction, {
       serdes: asymmetricSerdes,
@@ -833,7 +845,7 @@ describe("runInChildContext with custom serdes", () => {
       ): Promise<string | undefined> => data,
     };
 
-    const childFunction = jest.fn().mockResolvedValue("hello");
+    const childFunction = vi.fn().mockResolvedValue("hello");
 
     const result = await runInChildContext(
       "virtual-serdes-child",
@@ -865,7 +877,7 @@ describe("runInChildContext with custom serdes", () => {
 
     // 300KB string exceeds the 256KB checkpoint limit.
     const largeValue = "x".repeat(300 * 1024);
-    const childFunction = jest.fn().mockResolvedValue(largeValue);
+    const childFunction = vi.fn().mockResolvedValue(largeValue);
 
     const result = await runInChildContext("large-payload", childFunction, {
       serdes: asymmetricSerdes,
@@ -892,7 +904,7 @@ describe("runInChildContext with custom serdes", () => {
       },
     } as any;
 
-    const childFunction = jest.fn();
+    const childFunction = vi.fn();
 
     // Execute the child context - should return cached result
     const result = await runInChildContext(
@@ -924,7 +936,7 @@ describe("runInChildContext with custom serdes", () => {
       },
     };
 
-    const childFn = jest.fn(); // Should not be called for failed context
+    const childFn = vi.fn(); // Should not be called for failed context
 
     // Execute the child context - should throw the stored error
     await expect(runInChildContext("test-child", childFn)).rejects.toThrow(
@@ -946,7 +958,7 @@ describe("runInChildContext with custom serdes", () => {
       ContextDetails: {}, // No Error field (legacy data)
     };
 
-    const childFn = jest.fn();
+    const childFn = vi.fn();
 
     await expect(runInChildContext("test-child", childFn)).rejects.toThrow(
       "Child context failed",
@@ -959,46 +971,46 @@ describe("runInChildContext with custom serdes", () => {
 
 // Test cases for runWithContext logic - verifying the different modes and parameters
 describe("runWithContext Integration", () => {
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockCheckpoint: MockedFunction<CheckpointFunction>;
   let mockParentContext: any;
-  let createStepId: jest.Mock;
+  let createStepId: Mock;
   let runInChildContextHandler: ReturnType<
     typeof createRunInChildContextHandler
   >;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     mockExecutionContext = {
       state: {
-        getStepData: jest.fn(),
-        checkpoint: jest.fn(),
+        getStepData: vi.fn(),
+        checkpoint: vi.fn(),
       },
       _stepData: {},
       terminationManager: {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn(),
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn(),
       },
       mutex: {
-        lock: jest.fn((fn) => fn()),
+        lock: vi.fn((fn) => fn()),
       },
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
-    } as unknown as jest.Mocked<ExecutionContext>;
+    } as unknown as Mocked<ExecutionContext>;
 
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
-    createStepId = jest.fn().mockReturnValue("child-context-id");
-    const mockGetLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+    createStepId = vi.fn().mockReturnValue("child-context-id");
+    const mockGetLogger = vi.fn().mockReturnValue({
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
     });
-    const mockCreateChildContext = jest.fn().mockReturnValue({
+    const mockCreateChildContext = vi.fn().mockReturnValue({
       _stepPrefix: "child-context-id",
     });
     const mockParentDurableContext = "parent-step-123";
@@ -1014,8 +1026,8 @@ describe("runWithContext Integration", () => {
     );
 
     // Setup runWithContext mock to return the function result
-    // biome-ignore lint/suspicious/noImportAssign: GENUINE DEFECT, not stylistic -- assigning to an imported binding is invalid ESM and only works because ts-jest transpiles to CJS. Needs a real fix (jest.mock or a mutable indirection), tracked as follow-up; suppressed here so the toolchain migration does not also rewrite test mocking.
-    (runWithContext as jest.Mock) = jest
+    // biome-ignore lint/suspicious/noImportAssign: GENUINE DEFECT, not stylistic -- assigning to an imported binding is invalid ESM and only works because the module is replaced by a plain-object vi.mock factory, so the rewritten import is a writable property. Needs a real fix (vi.mock or a mutable indirection), tracked as follow-up; suppressed here so the toolchain migration does not also rewrite test mocking.
+    (runWithContext as Mock) = vi
       .fn()
       .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {
         try {
@@ -1027,7 +1039,7 @@ describe("runWithContext Integration", () => {
   });
 
   it("should call runWithContext with ExecutionMode for new child context", async () => {
-    const childFn = jest.fn().mockResolvedValue("child-result");
+    const childFn = vi.fn().mockResolvedValue("child-result");
 
     await runInChildContextHandler("test-child", childFn);
 
@@ -1053,7 +1065,7 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = jest.fn();
+    const childFn = vi.fn();
 
     const result = await runInChildContextHandler("test-child", childFn);
 
@@ -1075,7 +1087,7 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = jest.fn().mockResolvedValue("replayed-result");
+    const childFn = vi.fn().mockResolvedValue("replayed-result");
 
     const result = await runInChildContextHandler("test-child", childFn);
 
@@ -1102,7 +1114,7 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = jest.fn();
+    const childFn = vi.fn();
 
     await expect(
       runInChildContextHandler("test-child", childFn),
@@ -1114,11 +1126,11 @@ describe("runWithContext Integration", () => {
   });
 
   it("should pass the child function through runWithContext correctly", async () => {
-    const childFn = jest.fn().mockResolvedValue("child-result");
+    const childFn = vi.fn().mockResolvedValue("child-result");
     let capturedFunction: (() => Promise<unknown>) | undefined;
 
     // Capture the function passed to runWithContext
-    (runWithContext as jest.Mock).mockImplementation(
+    (runWithContext as Mock).mockImplementation(
       async (stepId, parentId, fn, _attempt, _mode) => {
         capturedFunction = fn;
         return await fn();
@@ -1149,7 +1161,7 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = jest.fn().mockResolvedValue("replayed-result");
+    const childFn = vi.fn().mockResolvedValue("replayed-result");
 
     await runInChildContextHandler("test-child", childFn);
 
@@ -1166,7 +1178,7 @@ describe("runWithContext Integration", () => {
 
   it("should use determineChildReplayMode logic correctly", async () => {
     // Test ExecutionMode for new context (no existing step data)
-    const childFn1 = jest.fn().mockResolvedValue("result1");
+    const childFn1 = vi.fn().mockResolvedValue("result1");
     await runInChildContextHandler("test-child-1", childFn1);
 
     expect(runWithContext).toHaveBeenLastCalledWith(
@@ -1179,14 +1191,14 @@ describe("runWithContext Integration", () => {
     );
 
     // Reset and test with STARTED status (should still be ExecutionMode)
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     createStepId.mockReturnValue("child-context-id-2");
     mockExecutionContext._stepData[hashId("child-context-id-2")] = {
       Id: "child-context-id-2",
       Status: OperationStatus.STARTED,
     } as any;
 
-    const childFn2 = jest.fn().mockResolvedValue("result2");
+    const childFn2 = vi.fn().mockResolvedValue("result2");
     await runInChildContextHandler("test-child-2", childFn2);
 
     expect(runWithContext).toHaveBeenLastCalledWith(
@@ -1211,7 +1223,7 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = jest.fn();
+    const childFn = vi.fn();
     const result = await runInChildContextHandler("test-replay", childFn);
 
     // Should return cached result without calling runWithContext

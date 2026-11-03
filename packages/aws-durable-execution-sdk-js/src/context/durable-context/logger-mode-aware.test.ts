@@ -1,3 +1,4 @@
+import { vi, describe, test, expect, beforeEach } from "vitest";
 import { createDurableContext, DurableExecution } from "./durable-context";
 import { DurableExecutionMode, ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
@@ -10,10 +11,10 @@ describe("DurableContext logger modeAware configuration", () => {
   beforeEach(() => {
     mockDurableExecution = {
       checkpointManager: {
-        checkpoint: jest.fn(),
-        force: jest.fn(),
-        setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
+        checkpoint: vi.fn(),
+        force: vi.fn(),
+        setTerminating: vi.fn(),
+        hasPendingAncestorCompletion: vi.fn(),
       },
     } as any;
   });
@@ -21,17 +22,17 @@ describe("DurableContext logger modeAware configuration", () => {
   // Helper to create a mock logger that respects shouldLog
   const createMockLogger = (): any => {
     let _loggingContext: any = null;
-    const infoMock = jest.fn();
+    const infoMock = vi.fn();
 
     return {
-      log: jest.fn(),
-      info: jest.fn((...args: any[]) => {
+      log: vi.fn(),
+      info: vi.fn((...args: any[]) => {
         infoMock(...args);
       }),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-      configureDurableLoggingContext: jest.fn((ctx: any) => {
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      configureDurableLoggingContext: vi.fn((ctx: any) => {
         _loggingContext = ctx;
       }),
       _getInfoMock: () => infoMock,
@@ -43,13 +44,13 @@ describe("DurableContext logger modeAware configuration", () => {
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn().mockResolvedValue({ reason: "test" }),
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn().mockResolvedValue({ reason: "test" }),
       },
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
       state: {
-        getStepData: jest.fn(),
-        checkpoint: jest.fn(),
+        getStepData: vi.fn(),
+        checkpoint: vi.fn(),
       },
     }) as any;
 

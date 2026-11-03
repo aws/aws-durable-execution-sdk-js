@@ -101,7 +101,7 @@ wins in-repo. Consumers pin the exact version rather than using `*`.
 ## Working on it
 
 ```bash
-npm test      -w packages/aws-durable-execution-sdk-js-telemetry-core   # jest
+npm test      -w packages/aws-durable-execution-sdk-js-telemetry-core   # vitest
 npm run typecheck -w packages/aws-durable-execution-sdk-js-telemetry-core
 ```
 
@@ -109,8 +109,8 @@ npm run typecheck -w packages/aws-durable-execution-sdk-js-telemetry-core
 hosts together, which is what CI runs.
 
 Note that `tsconfig.json` excludes `*.test.ts`, so `typecheck` does not cover test
-files — `ts-jest` compiles those when the suite runs. It also sets `noEmit`, because
-this package has no build step; running `tsc` here should not leave a `dist/`.
+files — Vitest only transpiles those when the suite runs, without type-checking
+them. It also sets `noEmit`, because this package has no build step; running `tsc` here should not leave a `dist/`.
 
 `biome.jsonc` additionally restricts these packages from importing `vscode` (in core)
 or reaching a sibling package by relative path (in all three). Those rules now run on

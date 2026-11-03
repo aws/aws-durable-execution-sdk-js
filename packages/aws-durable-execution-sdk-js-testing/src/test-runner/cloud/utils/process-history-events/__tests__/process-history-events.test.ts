@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { Event, EventType } from "@aws-sdk/client-lambda";
 import {
   OperationType,

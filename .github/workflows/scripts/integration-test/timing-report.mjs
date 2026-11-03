@@ -2,13 +2,13 @@
 // Reports how long the integration tests took, per test file and in total,
 // and flags files that got much slower than on recent runs.
 //
-// It reads Jest's --json output from this run, and the same output saved as
+// It reads Vitest's JSON reporter output from this run, and the same output saved as
 // an artifact by recent successful Build runs, and writes a table to the job
 // summary. Files that are slower than their recent median by both
 // OUTLIER_RATIO and OUTLIER_MIN_EXTRA_SECONDS get a warning annotation.
 // It never fails the job: timings vary from run to run.
 //
-// Usage: node timing-report.mjs <jest-json-file> <artifact-name>
+// Usage: node timing-report.mjs <vitest-json-file> <artifact-name>
 // Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY
 
 import { execFileSync } from "node:child_process";
@@ -33,7 +33,7 @@ const { GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY } =
 
 /**
  * Per-file wall time in seconds, keyed by path relative to the examples
- * package, from Jest's --json output.
+ * package, from Vitest's JSON reporter output.
  * @param {any} results
  * @returns {{ total: number, files: Record<string, number>, slowestTests: [string, number][] }}
  */
@@ -45,7 +45,9 @@ export function summarize(results) {
   let start = Number.POSITIVE_INFINITY;
   let end = 0;
   for (const file of results.testResults ?? []) {
-    const { start: fileStart, end: fileEnd } = file.perfStats ?? {};
+    // Vitest's JSON reporter has startTime/endTime per file (Jest used perfStats).
+    const fileStart = file.perfStats?.start ?? file.startTime;
+    const fileEnd = file.perfStats?.end ?? file.endTime;
     if (typeof fileStart !== "number" || typeof fileEnd !== "number") continue;
     const name = relative(process.cwd(), file.name).replace(
       /^.*?src\/examples\//,
@@ -160,7 +162,7 @@ const fmt = (seconds) => `${seconds.toFixed(1)}s`;
 
 async function main() {
   if (!jsonPath || !existsSync(jsonPath)) {
-    console.log(`No Jest results at ${jsonPath}; nothing to report.`);
+    console.log(`No Vitest results at ${jsonPath}; nothing to report.`);
     return;
   }
   const current = summarize(JSON.parse(readFileSync(jsonPath, "utf8")));

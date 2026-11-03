@@ -1,6 +1,7 @@
 // The check after a sign of a suspended MicroVM, for a session job without
 // the resume mode. The sign is an HTTP 502 with `x-aws-proxy-error:
 // MICROVM_CONNECT_FAILED`, or a request without an answer.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
   type DurableLogger,

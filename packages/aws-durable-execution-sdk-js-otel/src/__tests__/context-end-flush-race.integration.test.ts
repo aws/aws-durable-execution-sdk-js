@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -67,7 +68,7 @@ it.each([1, 8, 16])(
           spanProcessors: [processor],
         })),
     });
-    const body = jest.fn(async () => {
+    const body = vi.fn(async () => {
       rootLive.open();
       await releaseRoot.opened;
       return "saved";

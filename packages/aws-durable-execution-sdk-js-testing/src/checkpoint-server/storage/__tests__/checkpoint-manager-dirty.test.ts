@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { CheckpointManager } from "../checkpoint-manager";
 import {
   createExecutionId,
@@ -12,8 +13,8 @@ import {
 import { CompleteCallbackStatus } from "../callback-manager";
 
 // Mock crypto's randomUUID function
-jest.mock("node:crypto", () => ({
-  randomUUID: jest.fn().mockReturnValue("mocked-uuid"),
+vi.mock("node:crypto", () => ({
+  randomUUID: vi.fn().mockReturnValue("mocked-uuid"),
 }));
 
 describe("CheckpointManager dirty operation tracking", () => {
@@ -21,7 +22,7 @@ describe("CheckpointManager dirty operation tracking", () => {
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {

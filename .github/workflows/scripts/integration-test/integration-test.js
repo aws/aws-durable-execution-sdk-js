@@ -72,7 +72,7 @@ function classifyOutcome(/** @type {unknown} */ error) {
     /failed to enter successful state|failed to settle|State.*Failed/i.test(msg)
   )
     return "runtime";
-  if (/jest|test.*failed|assertion/i.test(msg)) return "assertion";
+  if (/jest|vitest|test.*failed|assertion/i.test(msg)) return "assertion";
   return "unknown";
 }
 
@@ -984,28 +984,29 @@ class IntegrationTestRunner {
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
     // Build test command with optional pattern
-    const jestArgs = [];
+    const vitestArgs = [];
     // CI sets this so timing-report.mjs can report how long each test took.
     if (process.env.INTEG_TIMINGS_FILE) {
-      jestArgs.push(
-        "--json",
-        `--outputFile=${shellQuote(process.env.INTEG_TIMINGS_FILE)}`,
+      vitestArgs.push(
+        "--reporter=default",
+        "--reporter=json",
+        `--outputFile.json=${shellQuote(process.env.INTEG_TIMINGS_FILE)}`,
       );
     }
     if (testPattern) {
-      jestArgs.push(testPattern);
+      vitestArgs.push(testPattern);
       log.info(`Running tests with pattern: ${testPattern}`);
     }
     let testCommand = "npm run test:integration";
-    if (jestArgs.length > 0) {
-      testCommand += ` -- ${jestArgs.join(" ")}`;
+    if (vitestArgs.length > 0) {
+      testCommand += ` -- ${vitestArgs.join(" ")}`;
     }
 
     this.execCommand(testCommand, {
       cwd: examplesDir,
       env,
     });
-    log.success("Jest integration tests passed");
+    log.success("Vitest integration tests passed");
   }
 
   /**

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { truncateRecord } from "./truncation";
 import type { OperationRecord, DurableExecutionTelemetryRecord } from "./types";
 

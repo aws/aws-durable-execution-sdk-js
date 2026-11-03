@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { PassThrough } from "node:stream";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
 import {
@@ -60,20 +69,20 @@ describe("suspend after a job", () => {
   let releases: Map<string, (fail?: boolean) => void>;
   let microvms: FakeMicrovmsClient;
   let lambda: FakeLambda;
-  let info: jest.Mock;
-  let warn: jest.Mock;
+  let info: Mock;
+  let warn: Mock;
 
   beforeEach(() => {
     // The requests go straight to the listener, so no socket timer runs.
     // Stream reads use nextTick and microtasks, which stay real.
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
     });
     releases = new Map();
     microvms = new FakeMicrovmsClient();
     lambda = new FakeLambda();
-    info = jest.fn();
-    warn = jest.fn();
+    info = vi.fn();
+    warn = vi.fn();
   });
 
   afterEach(async () => {
@@ -83,10 +92,10 @@ describe("suspend after a job", () => {
     for (const release of releases.values()) {
       release();
     }
-    await jest.runOnlyPendingTimersAsync();
+    await vi.runOnlyPendingTimersAsync();
     await target?.idle();
     target = undefined;
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   const start = (): MicrovmWorkerListener => {

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   OperationType,
   OperationStatus,
@@ -7,8 +8,8 @@ import {
 import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
-jest.mock("node:crypto", () => ({
-  randomUUID: jest.fn().mockReturnValue("mocked-uuid"),
+vi.mock("node:crypto", () => ({
+  randomUUID: vi.fn().mockReturnValue("mocked-uuid"),
 }));
 
 describe("checkpoint-manager updateOperation", () => {
@@ -16,7 +17,7 @@ describe("checkpoint-manager updateOperation", () => {
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -935,12 +936,12 @@ describe("checkpoint-manager updateOperation", () => {
 
   describe("retry operations", () => {
     beforeEach(() => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date("2023-01-01T00:00:00.000Z"));
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2023-01-01T00:00:00.000Z"));
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it("should process retry operation during initial registration", () => {

@@ -3,8 +3,8 @@
  *
  * This file is not a Jest test and is never run. `npm run typecheck` compiles
  * it with tsc, and the compile fails if the plugin stops type-checking in the
- * ways a TypeScript `eslint.config.ts` uses it. Jest cannot catch these
- * errors, because ts-jest runs with type diagnostics off (jest.config.js).
+ * ways a TypeScript `eslint.config.ts` uses it. Vitest cannot catch these
+ * errors, because it transpiles without type checking.
  *
  * The types come from the ESLint version the repository installs (10). Each
  * assignment below is one setup from the README.

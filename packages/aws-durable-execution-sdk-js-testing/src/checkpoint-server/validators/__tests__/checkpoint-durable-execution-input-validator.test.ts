@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from "vitest";
 import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   OperationAction,
@@ -178,7 +179,7 @@ describe("validateCheckpointUpdates", () => {
         }).toThrow(
           new InvalidParameterValueException({
             message: `${description} size must be less than or equal to ${maxBytes} bytes.`,
-            $metadata: {},
+            $metadata: { httpStatusCode: 400 },
           }),
         );
       },
@@ -304,7 +305,7 @@ describe("validateCheckpointUpdates", () => {
         }).toThrow(
           new InvalidParameterValueException({
             message: `${field} value in OperationUpdate is inconsistent with existing operation. Check for non-determinism.`,
-            $metadata: {},
+            $metadata: { httpStatusCode: 400 },
           }),
         );
       },

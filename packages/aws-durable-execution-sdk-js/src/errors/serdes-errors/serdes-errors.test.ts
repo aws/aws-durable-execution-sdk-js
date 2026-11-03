@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import {
   safeSerialize,
   safeDeserialize,
@@ -10,18 +11,18 @@ import { TEST_CONSTANTS } from "../../testing/test-constants";
 describe("Serdes Errors", () => {
   describe("safeSerialize", () => {
     const mockSerdes = {
-      serialize: jest.fn(),
-      deserialize: jest.fn(),
+      serialize: vi.fn(),
+      deserialize: vi.fn(),
     };
-    let mockTerminationManager: jest.Mocked<TerminationManager>;
+    let mockTerminationManager: Mocked<TerminationManager>;
 
     beforeEach(() => {
       mockTerminationManager = {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn(),
-      } as unknown as jest.Mocked<TerminationManager>;
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn(),
+      } as unknown as Mocked<TerminationManager>;
 
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it("should return serialized value when successful", async () => {
@@ -206,18 +207,18 @@ describe("Serdes Errors", () => {
 
   describe("safeDeserialize", () => {
     const mockSerdes = {
-      serialize: jest.fn(),
-      deserialize: jest.fn(),
+      serialize: vi.fn(),
+      deserialize: vi.fn(),
     };
-    let mockTerminationManager: jest.Mocked<TerminationManager>;
+    let mockTerminationManager: Mocked<TerminationManager>;
 
     beforeEach(() => {
       mockTerminationManager = {
-        terminate: jest.fn(),
-        getTerminationPromise: jest.fn(),
-      } as unknown as jest.Mocked<TerminationManager>;
+        terminate: vi.fn(),
+        getTerminationPromise: vi.fn(),
+      } as unknown as Mocked<TerminationManager>;
 
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it("should return deserialized value when successful", async () => {

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { otperformance } from "@opentelemetry/core";
 import {
   captureInvocationClock,
@@ -11,7 +12,7 @@ describe("per-invocation wall origin and monotonic elapsed time", () => {
   beforeEach(() => {
     wall = 1_700_000_000_000;
     monotonic = 100;
-    jest.spyOn(Date, "now").mockImplementation(() => wall);
+    vi.spyOn(Date, "now").mockImplementation(() => wall);
     descriptor = Object.getOwnPropertyDescriptor(otperformance, "now");
     Object.defineProperty(otperformance, "now", {
       configurable: true,
@@ -19,7 +20,7 @@ describe("per-invocation wall origin and monotonic elapsed time", () => {
     });
   });
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     if (descriptor) Object.defineProperty(otperformance, "now", descriptor);
     else Reflect.deleteProperty(otperformance, "now");
   });

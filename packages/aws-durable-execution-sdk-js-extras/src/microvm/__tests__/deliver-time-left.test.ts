@@ -3,6 +3,7 @@
 // before sendJob, so the step must check the time before that call too. The
 // local test runner always reports 900 seconds left. So these tests call
 // deliverJob directly with a stub context.
+import { vi, describe, it, expect } from "vitest";
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
 import { MicrovmEndpointUnavailableError } from "../request";
 import { deliverJob, type OperationScope } from "../shared";
@@ -15,7 +16,7 @@ function stubContext(remainingMs: number): DurableContext {
     step: async (
       _name: string,
       fn: (stepContext: unknown) => Promise<unknown>,
-    ): Promise<unknown> => fn({ logger: { info: jest.fn() } }),
+    ): Promise<unknown> => fn({ logger: { info: vi.fn() } }),
   } as unknown as DurableContext;
 }
 

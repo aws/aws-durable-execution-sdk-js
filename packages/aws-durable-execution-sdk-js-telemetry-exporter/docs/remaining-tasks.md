@@ -112,8 +112,8 @@
 
 ## Testing
 
-> Jest is set up for the package (`jest.config.js` + `npm test`), mirroring the
-> core SDK's ts-jest configuration. Tests drive the public `durableExecutionTelemetry`
+> Vitest is set up for the package (`vitest.config.ts` + `npm test`).
+> Tests drive the public `durableExecutionTelemetry`
 > plugin via a capturing exporter.
 
 - [x] Unit tests for `toOperationRecord` and `buildOperationRecords` — covered via

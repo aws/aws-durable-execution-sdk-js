@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { Context } from "aws-lambda";
 import {
   DurableExecutionInvocationInput,
@@ -9,8 +10,8 @@ import { HandlerParameters, InvokeHandler } from "../invoke-handler";
 import { LocalRunnerClient } from "../local-runner-storage";
 
 // Mock crypto
-jest.mock("node:crypto", () => ({
-  randomUUID: jest.fn().mockReturnValue("00000000-0000-0000-0000-000000000000"),
+vi.mock("node:crypto", () => ({
+  randomUUID: vi.fn().mockReturnValue("00000000-0000-0000-0000-000000000000"),
 }));
 
 describe("invoke-handler", () => {
@@ -26,10 +27,11 @@ describe("invoke-handler", () => {
     });
 
     it("should call handler with proper parameters", async () => {
-      const mockHandler = jest
+      const mockHandler = vi
         .fn<
-          Promise<DurableExecutionInvocationOutput>,
-          [DurableExecutionInvocationInput]
+          (
+            event: DurableExecutionInvocationInput,
+          ) => Promise<DurableExecutionInvocationOutput>
         >()
         .mockResolvedValue({
           Status: InvocationStatus.SUCCEEDED,
@@ -80,7 +82,7 @@ describe("invoke-handler", () => {
     });
 
     it("should merge custom context values with default context", async () => {
-      const mockHandler = jest.fn().mockResolvedValue({
+      const mockHandler = vi.fn().mockResolvedValue({
         Status: InvocationStatus.SUCCEEDED,
         Result: "test-result",
       });
@@ -126,7 +128,7 @@ describe("invoke-handler", () => {
       };
 
       const customInvokeHandler = new InvokeHandler(customDefaults);
-      const mockHandler = jest.fn().mockResolvedValue({
+      const mockHandler = vi.fn().mockResolvedValue({
         Status: InvocationStatus.SUCCEEDED,
         Result: "test-result",
       });
@@ -150,7 +152,7 @@ describe("invoke-handler", () => {
 
     it("should throw error if handler throws", async () => {
       const mockError = new Error("Handler error");
-      const mockHandler = jest.fn().mockRejectedValue(mockError);
+      const mockHandler = vi.fn().mockRejectedValue(mockError);
 
       const params: HandlerParameters = {
         durableExecutionArn: "test-arn",
@@ -217,7 +219,7 @@ describe("invoke-handler", () => {
     });
 
     it("should override function implementations in context", () => {
-      const customGetRemainingTime = jest.fn().mockReturnValue(5000);
+      const customGetRemainingTime = vi.fn().mockReturnValue(5000);
 
       const customContextValues: Partial<Context> = {
         getRemainingTimeInMillis: customGetRemainingTime,

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { Context } from "aws-lambda";
 import {
   DurableExecutionInvocationInputWithClient,
@@ -123,7 +124,7 @@ describe("optional runtime trace carrier through the real public wrapper", () =>
                 },
               ]
             : [];
-      const body = jest.fn(async (event: { value: string }) => event.value);
+      const body = vi.fn(async (event: { value: string }) => event.value);
       const handler =
         registration === "none"
           ? withDurableExecution(body)

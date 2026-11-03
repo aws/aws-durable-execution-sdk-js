@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
 import { CallbackReporter } from "../callback-reporter";
 import {
@@ -66,10 +67,10 @@ describe("heartbeatCallTimeoutMs", () => {
 
 describe("startHeartbeats worst gap", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   // The test above adds the timings by hand. This one runs the real
@@ -88,7 +89,7 @@ describe("startHeartbeats worst gap", () => {
     const callMs = heartbeatCallTimeoutMs(intervalMs);
     const received: number[] = [];
     let calls = 0;
-    const send = jest.fn(() => {
+    const send = vi.fn(() => {
       calls++;
       if (calls === 1) {
         received.push(Date.now());
@@ -119,7 +120,7 @@ describe("startHeartbeats worst gap", () => {
       { info: () => {}, warn: () => {}, error: () => {} },
     );
 
-    await jest.advanceTimersByTimeAsync(5 * intervalMs);
+    await vi.advanceTimersByTimeAsync(5 * intervalMs);
     await heartbeats.stop();
 
     expect(received).toHaveLength(2);
@@ -173,7 +174,7 @@ describe("jitterSource", () => {
   });
 
   it("does not read Math.random", () => {
-    const spy = jest.spyOn(Math, "random");
+    const spy = vi.spyOn(Math, "random");
     try {
       take(jitterSource("cb-a"), 10);
       expect(spy).not.toHaveBeenCalled();

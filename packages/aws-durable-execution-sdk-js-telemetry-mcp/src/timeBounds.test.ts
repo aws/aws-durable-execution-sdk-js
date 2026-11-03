@@ -7,6 +7,7 @@
  * rewritten to the stored format before it is compared, and Athena, whose time
  * columns are `timestamp`, gets a typed literal.
  */
+import { describe, it, expect } from "vitest";
 import {
   configFromWireSettings,
   type TelemetryConfig,
