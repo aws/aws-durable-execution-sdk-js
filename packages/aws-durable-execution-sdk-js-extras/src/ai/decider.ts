@@ -53,6 +53,12 @@ function parseEndpoint(endpoint: string): URL {
       "The decider endpoint must be an absolute http: or https: URL.",
     );
   }
+  if (url.username || url.password) {
+    // fetch() refuses such a URL, and its error repeats the password.
+    throw new TypeError(
+      "The decider endpoint must not contain credentials. Pass them in headers instead.",
+    );
+  }
   return url;
 }
 
@@ -76,7 +82,9 @@ function httpTransport(
       });
     } catch (cause) {
       throw new DeciderError(
-        `The decision model at ${where} could not be reached: ${(cause as Error).message}`,
+        // The cause's own message can repeat the full URL. So the message
+        // names only the cause's type, and the cause stays on the error.
+        `The decision model at ${where} could not be reached (${(cause as Error).name}).`,
         { cause },
       );
     }
@@ -177,7 +185,8 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  * @param config - The decision model. Every field has a default.
  * @throws \{TypeError\} When the config names neither `endpoint` nor
  * `transport` and `STRANDS_DECIDER_ENDPOINT` is not set, or when the endpoint
- * is not an absolute `http:` or `https:` URL. `decider()` usually
+ * is not an absolute `http:` or `https:` URL or contains a user name or
+ * password. `decider()` usually
  * runs when the module loads, so the function then fails to initialize.
  * @throws \{RangeError\} When `threshold` is not between 0 and 1.
  *

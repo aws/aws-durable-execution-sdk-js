@@ -28,11 +28,9 @@ function userMessage(question: string, input: unknown): string {
   if (input === undefined) {
     return `Question: ${question}`;
   }
-  // The input cannot close its own delimiter, in any case or spacing.
-  const text = serializeInput(input).replace(
-    /<\s*\/\s*input\s*>/gi,
-    "<\\/input>",
-  );
+  // The input cannot close its own delimiter, in any case, spacing, or
+  // ending. So every "</input" prefix is escaped.
+  const text = serializeInput(input).replace(/<\s*\/\s*input/gi, "<\\/input");
   return `Question: ${question}\n\n<input>\n${text}\n</input>`;
 }
 

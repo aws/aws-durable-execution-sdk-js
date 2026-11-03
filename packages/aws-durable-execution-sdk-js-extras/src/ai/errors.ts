@@ -65,7 +65,9 @@ export class AiTimeoutError extends AiError {
 /**
  * The text model stopped for a reason other than the end of its reply, such
  * as a guardrail that intervened or a filtered reply. The reply is not
- * returned. A retry with the same input stops the same way.
+ * returned. The default retry strategy retries `malformed_model_output` and
+ * `malformed_tool_use`, because a new reply can succeed. It does not retry
+ * the other reasons, because the same input stops the same way.
  *
  * @public
  *

@@ -84,7 +84,8 @@ export interface DeciderConfig {
   /**
    * The full URL of the model's `POST /v1/systemone` route, such as
    * `http://127.0.0.1:8000/v1/systemone`. The default is the
-   * `STRANDS_DECIDER_ENDPOINT` environment variable.
+   * `STRANDS_DECIDER_ENDPOINT` environment variable. It must not contain a
+   * user name or password: pass credentials in `headers`.
    */
   endpoint?: string;
   /** Extra HTTP headers, such as an authorization header. */
@@ -335,7 +336,8 @@ export interface Llm {
    *   reaches the limit fails the step with `LlmMaxTokensError` and is not
    *   retried. Raise `maxTokens` instead.
    * - A reply that stops for another reason, such as a guardrail that
-   *   intervened, fails the step with `LlmStoppedError` and is not retried.
+   *   intervened, fails the step with `LlmStoppedError`. Only
+   *   `malformed_model_output` and `malformed_tool_use` are retried.
    * - A request still running 10 seconds before the invocation runs out of
    *   time stops with `AiTimeoutError`, and the step retries in a new
    *   invocation.

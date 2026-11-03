@@ -443,7 +443,7 @@ const decide = decider({
 
 - The model must serve the `POST /v1/systemone` route of Strands Decider. The default `endpoint` is the `STRANDS_DECIDER_ENDPOINT` environment variable. This package does not host the model.
 - `decider()` throws a `TypeError` when it has neither `endpoint`, `transport`, nor `STRANDS_DECIDER_ENDPOINT`, or when the endpoint is not an absolute `http:` or `https:` URL.
-- Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query or credentials, because errors are checkpointed.
+- An endpoint with a user name or password is refused: pass credentials in `headers`. Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query, because errors are checkpointed.
 - Pass `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
 - `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
 
@@ -493,7 +493,7 @@ Every error class extends `AiError`:
 | `DeciderError` | The decision model cannot be reached, or answers with an HTTP error (including 422 for an input that is too long) | On no answer, 408, 429, and 5xx |
 | `DeciderInvalidResponseError` | The decision model's reply is not JSON, has the wrong shape, or has a score outside the scale | No |
 | `LlmMaxTokensError` | The `ask` reply stops at `maxTokens` | No |
-| `LlmStoppedError` | The `ask` reply stops for another reason, such as a guardrail that intervened. Its `stopReason` says why. | No |
+| `LlmStoppedError` | The `ask` reply stops for another reason, such as a guardrail that intervened. Its `stopReason` says why. | Only `malformed_model_output` and `malformed_tool_use` |
 
 The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling, server errors, and connection failures, up to 5 attempts. It does not retry access-denied or validation errors, because they repeat. Pass `retryStrategy` to `decider()` or `llm()` to replace it.
 

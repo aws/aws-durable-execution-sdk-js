@@ -48,16 +48,44 @@ export function deadlineSignal(
   return AbortSignal.timeout(Math.max(remaining - INVOCATION_RESERVE_MS, 1));
 }
 
+const ABORT_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "AbortError",
+  "TimeoutError",
+]);
+
+/** Whether `error`, or an error in its `cause` chain, is the abort itself. */
+function isAbort(error: unknown, signal: AbortSignal): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined; depth++) {
+    if (
+      current === signal.reason ||
+      ABORT_ERROR_NAMES.has(
+        (current as { name?: unknown } | null)?.name as string,
+      )
+    ) {
+      return true;
+    }
+    current = (current as { cause?: unknown } | null)?.cause;
+  }
+  return false;
+}
+
 /**
  * Turns an abort caused by the invocation deadline into an
  * {@link AiTimeoutError}, so the step retries in a new invocation. Any other
- * error passes through.
+ * error passes through, also when it arrives after the deadline, so a
+ * permanent failure such as HTTP 401 keeps its own message and is not
+ * retried.
  */
 export function deadlineError(
   error: unknown,
   signal: AbortSignal | undefined,
 ): unknown {
-  if (signal?.aborted && !(error instanceof AiTimeoutError)) {
+  if (
+    signal?.aborted &&
+    !(error instanceof AiTimeoutError) &&
+    isAbort(error, signal)
+  ) {
     return new AiTimeoutError(
       "The request was stopped 10 seconds before the invocation runs out of time.",
       { cause: error },

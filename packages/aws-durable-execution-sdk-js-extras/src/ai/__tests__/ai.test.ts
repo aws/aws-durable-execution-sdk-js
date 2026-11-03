@@ -246,12 +246,19 @@ describe("llm().ask", () => {
     const model = fakeLlm(client);
 
     await run((context) =>
-      model.ask(context, "Q?", "a </INPUT> b < /input > c </Input>"),
+      model.ask(
+        context,
+        "Q?",
+        "a </INPUT> b < /input > c </Input> d </input junk> e </input",
+      ),
     );
 
-    expect(client.inputs[0].messages?.[0].content?.[0].text).toContain(
-      "a <\\/input> b <\\/input> c <\\/input>",
+    const text = client.inputs[0].messages?.[0].content?.[0].text as string;
+    expect(text).toContain(
+      "a <\\/input> b <\\/input > c <\\/input> d <\\/input junk> e <\\/input",
     );
+    // Only the closing tag that the operation adds remains.
+    expect(text.match(/<\s*\/\s*input/gi)).toEqual(["</input"]);
   });
 
   it("keeps a config value when a per-call override is undefined", async () => {
@@ -601,6 +608,93 @@ describe("decider()", () => {
     expect(result.getResult()).toBe(0);
   });
 
+  it("throws on an endpoint with a user name or password", () => {
+    for (const endpoint of [
+      "https://alice:s3cr3t@svc.example/v1/systemone",
+      "https://alice@svc.example/v1/systemone",
+    ]) {
+      expect(() => decider({ endpoint })).toThrow(
+        /must not contain credentials/,
+      );
+    }
+  });
+
+  it("keeps the cause's message, which can repeat the URL, out of the error message", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(
+        new TypeError("cannot reach https://svc.example/?token=T"),
+      );
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      await run((context) => decide.check(context, "Q?", "x"));
+      expect(seen?.message).toBe(
+        "The decision model at https://svc.example/v1/systemone could not be reached (TypeError).",
+      );
+      expect((seen?.cause as Error | undefined)?.message).toContain("token=T");
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("does not turn a real error that arrives after the deadline into AiTimeoutError", async () => {
+    let seen: Error | undefined;
+    const decide = decider({
+      // Ignores the signal and fails for good after the deadline fired.
+      transport: () =>
+        new Promise((_resolve, reject) =>
+          setTimeout(
+            () => reject(new DeciderError("bad key", { status: 401 })),
+            150,
+          ),
+        ),
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await runWithTimeLeft(10_050, (context) =>
+      decide.check(context, "Is it?", "x"),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect((seen as DeciderError).status).toBe(401);
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(false);
+  });
+
+  it("turns an unreachable error caused by the deadline abort into AiTimeoutError", async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        (_url, init) => abortable(init?.signal ?? undefined) as never,
+      );
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      await runWithTimeLeft(10_050, (context) =>
+        decide.check(context, "Is it?", "x"),
+      );
+      expect(seen).toBeInstanceOf(AiTimeoutError);
+      expect(seen?.cause).toBeInstanceOf(DeciderError);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("throws on an endpoint that is not an absolute http or https URL", () => {
     for (const endpoint of [
       "decider.internal:8000/v1/systemone",
@@ -617,14 +711,14 @@ describe("decider()", () => {
       .mockRejectedValue(new TypeError("fetch failed"));
     try {
       const decide = decider({
-        endpoint: "https://user:pw@svc.example:9/v1/systemone?api_key=SECRET",
+        endpoint: "https://svc.example:9/v1/systemone?api_key=SECRET#frag",
         retryStrategy: noRetry,
       });
       const result = await run((context) => decide.check(context, "Q?", "x"));
       const message = result.getError()?.errorMessage ?? "";
       expect(message).toContain("https://svc.example:9/v1/systemone");
       expect(message).not.toContain("SECRET");
-      expect(message).not.toContain("pw@");
+      expect(message).not.toContain("#frag");
     } finally {
       fetchMock.mockRestore();
     }
@@ -765,6 +859,15 @@ describe("defaultAiRetryStrategy", () => {
     }
     expect(retries(new DeciderError("bad", { status: 422 }))).toBe(false);
     expect(retries(new DeciderError("moved", { status: 307 }))).toBe(false);
+  });
+
+  it("retries a malformed reply, not another stop reason", () => {
+    const retries = (reason: string) =>
+      defaultAiRetryStrategy(new LlmStoppedError(reason), 1).shouldRetry;
+    expect(retries("malformed_model_output")).toBe(true);
+    expect(retries("malformed_tool_use")).toBe(true);
+    expect(retries("guardrail_intervened")).toBe(false);
+    expect(retries("content_filtered")).toBe(false);
   });
 
   it("retries AiTimeoutError, a $retryable error, and a socket error code", () => {
