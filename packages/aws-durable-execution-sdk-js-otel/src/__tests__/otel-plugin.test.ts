@@ -62,9 +62,12 @@ describe("OtelPlugin.factory", () => {
   it.each([null, "", "EXECUTION", "unknown", 0, false, {}])(
     "rejects invalid explicit mode %j",
     (mode) => {
-      expect(() =>
-        OtelPlugin.factory({ mode } as OtelPluginFactoryOptions),
-      ).toThrow('OTel plugin mode must be "execution" or "invocation".');
+      const createFactory = () =>
+        OtelPlugin.factory({ mode } as OtelPluginFactoryOptions);
+      expect(createFactory).toThrow(TypeError);
+      expect(createFactory).toThrow(
+        'OTel plugin mode must be "execution" or "invocation".',
+      );
     },
   );
 
