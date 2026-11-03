@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { TraceFlags, context, trace, ROOT_CONTEXT } from "@opentelemetry/api";
-import type { SpanContext, Tracer } from "@opentelemetry/api";
+import type { Context, SpanContext, Tracer } from "@opentelemetry/api";
 import {
   SamplingDecision,
   ParentBasedSampler,
@@ -199,7 +199,56 @@ describe("deriveExecutionTraceId", () => {
 });
 
 describe("resolveExecutionTraceContext", () => {
-  it("uses a complete remote parent as the ancestor and preserves Sampled=1", () => {
+  it.each([
+    [{ sampling: "SAMPLED" as const }, TraceFlags.SAMPLED],
+    [{ sampling: "NOT_SAMPLED" as const }, TraceFlags.NONE],
+    [{ sampling: "UNDECIDED" as const }, TraceFlags.NONE],
+    [{}, TraceFlags.NONE],
+    [{ traceFlags: TraceFlags.SAMPLED }, TraceFlags.SAMPLED],
+    [{ traceFlags: TraceFlags.NONE }, TraceFlags.NONE],
+  ])(
+    "supplies the original complete parent flags %j to the sampler",
+    (flags, expected) => {
+      const sample = vi.fn<(_parentContext?: Context) => SamplingDecision>(
+        () => SamplingDecision.NOT_RECORD,
+      );
+      resolve(
+        { traceId: REMOTE_TRACE_ID, parentSpanId: REMOTE_PARENT_ID, ...flags },
+        REMOTE_TRACE_ID,
+        sample,
+      );
+      expect(sample).toHaveBeenCalledExactlyOnceWith(expect.anything());
+      expect(trace.getSpanContext(sample.mock.calls[0][0]!)).toEqual({
+        traceId: REMOTE_TRACE_ID,
+        spanId: REMOTE_PARENT_ID,
+        traceFlags: expected,
+        isRemote: true,
+      });
+    },
+  );
+
+  it.each([
+    undefined,
+    { traceId: REMOTE_TRACE_ID, sampling: "NOT_SAMPLED" as const },
+    {
+      traceId: REMOTE_TRACE_ID,
+      parentSpanId: ALL_ZERO_SPAN_ID,
+      sampling: "SAMPLED" as const,
+    },
+    {
+      traceId: ALL_ZERO_TRACE_ID,
+      parentSpanId: REMOTE_PARENT_ID,
+      sampling: "SAMPLED" as const,
+    },
+  ])("supplies no parent for an incomplete context %j", (extracted) => {
+    const sample = vi.fn<(_parentContext?: Context) => SamplingDecision>(
+      () => SamplingDecision.RECORD_AND_SAMPLED,
+    );
+    resolve(extracted, canonical(extracted), sample);
+    expect(sample).toHaveBeenCalledExactlyOnceWith(ROOT_CONTEXT);
+  });
+
+  it("uses a complete remote parent but lets the sampler override Sampled=1", () => {
     const extracted = {
       traceId: REMOTE_TRACE_ID,
       parentSpanId: REMOTE_PARENT_ID,
@@ -214,11 +263,11 @@ describe("resolveExecutionTraceContext", () => {
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(REMOTE_PARENT_ID);
     expect(execCtx.executionAncestor.isRemote).toBe(true);
-    expect(execCtx.traceFlags & 1).toBe(1); // explicit Sampled=1 wins over supplier
-    expect(execCtx.samplingDecision).toBe(SamplingDecision.RECORD_AND_SAMPLED);
+    expect(execCtx.traceFlags).toBe(TraceFlags.NONE);
+    expect(execCtx.samplingDecision).toBe(SamplingDecision.NOT_RECORD);
   });
 
-  it("uses a complete remote parent and preserves Sampled=0", () => {
+  it("uses a complete remote parent but lets the sampler override Sampled=0", () => {
     const extracted = {
       traceId: REMOTE_TRACE_ID,
       parentSpanId: REMOTE_PARENT_ID,
@@ -231,8 +280,8 @@ describe("resolveExecutionTraceContext", () => {
     );
 
     expect(execCtx.executionAncestor.spanId).toBe(REMOTE_PARENT_ID);
-    expect(execCtx.traceFlags & 1).toBe(0); // explicit Sampled=0 wins over supplier
-    expect(execCtx.samplingDecision).toBe(SamplingDecision.NOT_RECORD);
+    expect(execCtx.traceFlags).toBe(TraceFlags.SAMPLED);
+    expect(execCtx.samplingDecision).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("defers an undecided remote parent to the sampler", () => {
@@ -330,7 +379,7 @@ describe("resolveExecutionTraceContext", () => {
     },
   );
 
-  it("adopts a valid extracted remote parent as the ancestor and preserves its sampling", () => {
+  it("adopts a valid extracted remote parent while applying the configured decision", () => {
     const extracted = {
       traceId: REMOTE_TRACE_ID,
       parentSpanId: REMOTE_PARENT_ID,
@@ -349,9 +398,9 @@ describe("resolveExecutionTraceContext", () => {
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(REMOTE_PARENT_ID);
     expect(execCtx.executionAncestor.isRemote).toBe(true);
-    // Explicit upstream Sampled=0 wins over the supplier.
-    expect(execCtx.traceFlags).toBe(TraceFlags.NONE);
-    expect(execCtx.samplingDecision).toBe(SamplingDecision.NOT_RECORD);
+    // The sampler decides independently of the ancestor identity.
+    expect(execCtx.traceFlags).toBe(TraceFlags.SAMPLED);
+    expect(execCtx.samplingDecision).toBe(SamplingDecision.RECORD_AND_SAMPLED);
   });
 
   it("keeps the ARN-derived trace stable across calls when no context is extracted", () => {
@@ -393,7 +442,7 @@ describe("resolveExecutionTraceContext", () => {
     expect(execCtx.traceFlags & 1).toBe(1); // supplier decides for a synthetic root
   });
 
-  it("preserves an explicit Sampled decision on a synthetic root over the supplier", () => {
+  it("uses the configured decision for a synthetic root despite Sampled=1", () => {
     const extracted = {
       traceId: REMOTE_TRACE_ID,
       sampling: "SAMPLED" as const,
@@ -407,7 +456,7 @@ describe("resolveExecutionTraceContext", () => {
     expect(execCtx.executionAncestor.spanId).toBe(
       deriveExecutionRootSpanId(ARN),
     );
-    expect(execCtx.traceFlags & 1).toBe(1);
+    expect(execCtx.traceFlags).toBe(TraceFlags.NONE);
   });
 
   it("keeps synthetic root identities execution-scoped when executions share a propagated Root", () => {
