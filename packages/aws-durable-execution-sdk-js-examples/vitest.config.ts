@@ -32,6 +32,11 @@ export default defineConfig({
           "scripts/__tests__/**/*.test.ts",
         ],
     setupFiles: ["./vitest.setup.ts"],
+    // With the default `forks` pool, about 1 run in 4 never finished: every
+    // file had reported, but the main process and one idle child waited on
+    // each other forever (a CI job hit the 1h timeout). Worker threads have
+    // no child process IPC, and 16 runs in a row finished in ~21s.
+    pool: "threads",
     ...(isIntegration
       ? {
           // Each integration test spends most of its time waiting on Lambda,
