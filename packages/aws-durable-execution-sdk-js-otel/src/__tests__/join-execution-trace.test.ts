@@ -553,23 +553,24 @@ describe("Execution trace joining", () => {
       {
         sampler: new AlwaysOnSampler(),
         sampling: "NOT_SAMPLED" as const,
-        sampled: true,
+        expectedSpans: ["Invocation"],
       },
       {
         sampler: new AlwaysOffSampler(),
         sampling: "SAMPLED" as const,
-        sampled: false,
+        expectedSpans: [],
       },
       ...[new AlwaysOnSampler(), new AlwaysOffSampler()].flatMap((root) =>
         (["SAMPLED", "NOT_SAMPLED"] as const).map((sampling) => ({
           sampler: new ParentBasedSampler({ root }),
           sampling,
-          sampled: sampling === "SAMPLED",
+          expectedSpans:
+            sampling === "SAMPLED" ? ["Invocation", "Workflow"] : [],
         })),
       ),
     ])(
       "preserves parent inheritance with opaque $sampler and $sampling",
-      async ({ sampler, sampling, sampled }) => {
+      async ({ sampler, sampling, expectedSpans }) => {
         const opaqueExporter = new InMemorySpanExporter();
         let opaqueProvider: NodeTracerProvider | undefined;
         const plugin = makePlugin({
@@ -603,13 +604,14 @@ describe("Execution trace joining", () => {
         await plugin.onInvocationEnd(makeInvocationEndInfo());
 
         // A hidden sampler retains its normal per-span behavior. ParentBased
-        // must see the propagated bit; direct policies may ignore it.
+        // must see the propagated bit; direct policies may ignore it for live
+        // spans. As before, an unsampled fallback does not materialize Workflow.
         expect(
           opaqueExporter
             .getFinishedSpans()
             .map((span) => span.name)
             .sort(),
-        ).toEqual(sampled ? ["Invocation", "Workflow"] : []);
+        ).toEqual(expectedSpans);
 
         await opaqueProvider?.shutdown();
       },

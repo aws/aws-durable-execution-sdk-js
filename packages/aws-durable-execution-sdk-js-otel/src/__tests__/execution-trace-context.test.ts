@@ -682,7 +682,7 @@ describe("configuredSamplingDecision", () => {
       traceFlags: TraceFlags.NONE, // unsampled, unrelated trace
     };
 
-    let decision = SamplingDecision.NOT_RECORD;
+    let decision: SamplingDecision | undefined = SamplingDecision.NOT_RECORD;
     context.with(trace.setSpanContext(ROOT_CONTEXT, unrelatedUnsampled), () => {
       decision = configuredSamplingDecision(
         tracer,

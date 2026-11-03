@@ -601,11 +601,14 @@ resolved SDK tracer, using the existing `DurableSampler` bridge. An opaque or
 custom tracer returned by a factory can retain its provider's ordinary per-span
 sampling, but coordinated execution sampling is **not guaranteed**. A global
 tracer without compatible deterministic-ID support disables durable telemetry
-for that invocation. The existing best-effort fallback when a sampler cannot be
-read or throws is not an additional supported sampling mode. It gives the
-plugin's non-recording ancestor a sampled bit; an opaque ParentBased provider
-can therefore export even when the propagated parent has `Sampled=0`. Use a
-compatible SDK tracer when execution-wide sampling controls are required.
+for that invocation. When a sampler cannot be read or throws, the plugin keeps
+an explicit upstream `Sampled=0/1` on a valid propagated trace, including a
+partial header without a usable parent. Only an absent or unusable decision
+uses the existing sampled fallback. This preserves opaque ParentBased
+providers' inheritance of explicit parent flags; direct samplers still make
+their own per-span decisions. This compatibility fallback is not an additional
+supported sampling mode. Use a compatible SDK tracer when execution-wide
+sampling controls are required.
 
 Local tests verify provider configuration, exported spans, parent selection,
 retries, and replay. They do not qualify an ADOT Lambda deployment or X-Ray

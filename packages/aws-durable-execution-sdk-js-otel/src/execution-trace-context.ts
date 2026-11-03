@@ -154,7 +154,7 @@ export function resolveExecutionTraceContext(
   extracted: ContextExtractorResult,
   canonical: string,
   executionArn: string,
-  sample: (parentContext: Context) => SamplingDecision,
+  sample: (parentContext: Context) => SamplingDecision | undefined,
 ): ExecutionTraceContext {
   const remoteParent: SpanContext | undefined = hasCompleteRemoteParent(
     extracted,
@@ -171,11 +171,17 @@ export function resolveExecutionTraceContext(
     : undefined;
   // Never let an ambient span or a synthesized sampled ancestor choose the
   // execution's policy. A valid parent with no sampled bit remains a parent.
-  const decision = sample(
-    remoteParent
-      ? trace.setSpanContext(ROOT_CONTEXT, remoteParent)
-      : ROOT_CONTEXT,
-  );
+  // An unavailable sampler is not a sampled decision. Preserve the previous
+  // upstream fallback for opaque providers, which still sample their own spans.
+  const decision =
+    sample(
+      remoteParent
+        ? trace.setSpanContext(ROOT_CONTEXT, remoteParent)
+        : ROOT_CONTEXT,
+    ) ??
+    (hasValidTraceId(extracted) && resolveSampling(extracted) === "NOT_SAMPLED"
+      ? SamplingDecision.NOT_RECORD
+      : SamplingDecision.RECORD_AND_SAMPLED);
   const flags = traceFlagsFromDecision(decision);
   return {
     executionAncestor: remoteParent
@@ -197,6 +203,8 @@ export function resolveExecutionTraceContext(
  * Evaluates the provider's resolved sampler with the canonical trace ID and
  * original propagated parent (or ROOT_CONTEXT). The existing DurableSampler
  * bridge then enforces this decision only while creating SDK-owned spans.
+ * Returns undefined when no decision is available, leaving the propagated
+ * sampling fallback to the resolver.
  */
 export function configuredSamplingDecision(
   tracer: Tracer,
@@ -204,10 +212,10 @@ export function configuredSamplingDecision(
   spanName: string,
   attributes: Record<string, string | number | boolean>,
   parentContext: Context = ROOT_CONTEXT,
-): SamplingDecision {
+): SamplingDecision | undefined {
   const sampler = getConfiguredSampler(tracer);
   if (!sampler) {
-    return SamplingDecision.RECORD_AND_SAMPLED;
+    return undefined;
   }
   try {
     const result = sampler.shouldSample(
@@ -220,6 +228,6 @@ export function configuredSamplingDecision(
     );
     return result.decision;
   } catch {
-    return SamplingDecision.RECORD_AND_SAMPLED;
+    return undefined;
   }
 }
