@@ -18,7 +18,7 @@ import {
   type MicrovmWorkerLogger,
   parseRunHookRequest,
 } from "..";
-import { advance, call, FakeMicrovmsClient } from "./helpers";
+import { advance, call, callWithStream, FakeMicrovmsClient } from "./helpers";
 
 /** Completes every callback call, and records nothing. */
 const lambdaClient = {
@@ -203,8 +203,6 @@ describe("auto-suspend when idle", () => {
     terminating: boolean;
     closed: boolean;
     refusingJobs: boolean;
-    /** Defaults to `idle`, the trigger of every test in this suite. */
-    trigger?: "idle" | "job";
   }
 
   /**
@@ -223,7 +221,6 @@ describe("auto-suspend when idle", () => {
         microvmId: "mvm-1",
         error: expect.anything(),
         ...state,
-        trigger: state.trigger ?? "idle",
       },
     ]);
   };
@@ -286,6 +283,35 @@ describe("auto-suspend when idle", () => {
     await runHook(worker);
     await advance(IDLE_MS * 10);
 
+    expect(microvms.suspended).toEqual([]);
+  });
+
+  it("ignores a suspendAfter field in a job request: no header, no suspend", async () => {
+    const microvms = new FakeMicrovmsClient();
+    const worker = start(microvms);
+
+    await runHook(worker);
+    const { status, headers } = await callWithStream(
+      worker,
+      "/job",
+      Readable.from([
+        Buffer.from(
+          JSON.stringify({
+            version: 1,
+            region: "us-east-1",
+            callbackId: "cb-1",
+            suspendAfter: true,
+            input: {},
+          }),
+        ),
+      ]),
+    );
+    await finishJob("cb-1");
+    await advance(IDLE_MS * 10);
+
+    expect(status).toBe(202);
+    expect(headers["X-Microvm-Suspend-After"]).toBeUndefined();
+    expect(started).toEqual(["cb-1"]);
     expect(microvms.suspended).toEqual([]);
   });
 
@@ -1031,8 +1057,6 @@ describe("auto-suspend when idle", () => {
         error: { name: "AccessDeniedException", message: "not authorized" },
       }),
     );
-    // The Python worker logs the same fields in the same order. `trigger`
-    // comes last.
     expect(Object.keys(warn.mock.calls[0][1])).toEqual([
       "microvmId",
       "error",
@@ -1041,7 +1065,6 @@ describe("auto-suspend when idle", () => {
       "terminating",
       "closed",
       "refusingJobs",
-      "trigger",
     ]);
     expect(await job(worker, "cb-1")).toBe(202);
   });
@@ -1352,7 +1375,6 @@ describe("auto-suspend when idle", () => {
         "terminating",
         "closed",
         "refusingJobs",
-        "trigger",
       ]);
       expect(line).toEqual({
         level: "WARN",
@@ -1367,7 +1389,6 @@ describe("auto-suspend when idle", () => {
         terminating: false,
         closed: false,
         refusingJobs: false,
-        trigger: "idle",
       });
     } finally {
       warnLine.mockRestore();
