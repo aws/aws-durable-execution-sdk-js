@@ -56,7 +56,7 @@ describe("template handler references", () => {
     .map((file) => file.replace(/\.ts$/, ""));
 
   it("finds a reference in every template function", () => {
-    expect(references).toHaveLength(1);
+    expect(references).toHaveLength(2);
   });
 
   it.each([
@@ -80,7 +80,7 @@ describe("template handler references", () => {
 
 describe("requirement coverage", () => {
   it("covers the telemetry suite", () => {
-    expect(requirementIds(template)).toEqual(["telemetry-1"]);
+    expect(requirementIds(template)).toEqual(["telemetry-1", "telemetry-2"]);
   });
 });
 
@@ -100,8 +100,10 @@ describe("TelemetryLogGroupName contract", () => {
     expect(template).toContain(
       "TELEMETRY_LOG_GROUP_NAME: !Ref TelemetryLogGroupName",
     );
-    expect(handlerSource("telemetry_1_success")).toContain(
-      "process.env.TELEMETRY_LOG_GROUP_NAME",
-    );
+    for (const module of ["telemetry_1_success", "telemetry_2_failure"]) {
+      expect(handlerSource(module)).toContain(
+        "process.env.TELEMETRY_LOG_GROUP_NAME",
+      );
+    }
   });
 });
