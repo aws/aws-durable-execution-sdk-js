@@ -24,7 +24,7 @@ it.each(["require", "import"])(
   const execution = await load('@aws/durable-execution-sdk-js-otel/otel-execution');
   const invocation = await load('@aws/durable-execution-sdk-js-otel/otel-invocation');
   const registration = Symbol.for('aws.lambda.durable.instrumentation.plugin-registration');
-  const factories = [root.OtelPlugin.factory(), root.OtelPlugin.factory({mode:'invocation'}), execution.durableExecutionPluginProvider, invocation.durableExecutionPluginProvider];
+  const factories = [root.createOtelPluginFactory(), root.createOtelPluginFactory({mode:'invocation'}), execution.durableExecutionPluginProvider, invocation.durableExecutionPluginProvider];
   process.stdout.write(JSON.stringify({names: factories.map(f => f[registration].name), oldFactories: typeof root.createExecutionOtelPluginFactory === 'function' && typeof root.createInvocationOtelPluginFactory === 'function', defaultName: root.durableExecutionPluginProvider[registration].name}));
 })().catch(e => { console.error(e); process.exitCode = 1; });`);
     expect(result).toEqual({
@@ -71,15 +71,15 @@ it.each([false, true])(
     const result = fixture.typecheckConsumer(
       `
 import { withDurableExecution } from '@aws/durable-execution-sdk-js';
-import { OtelPlugin, type OtelPluginFactoryOptions, createExecutionOtelPluginFactory, createInvocationOtelPluginFactory } from '@aws/durable-execution-sdk-js-otel';
+import { createOtelPluginFactory, type OtelPluginFactoryOptions, createExecutionOtelPluginFactory, createInvocationOtelPluginFactory } from '@aws/durable-execution-sdk-js-otel';
 const options: OtelPluginFactoryOptions = { mode: 'invocation', workflowSpanName: 'workflow', enrichLogger: false };
-for (const factory of [OtelPlugin.factory(), OtelPlugin.factory(options), createExecutionOtelPluginFactory(), createInvocationOtelPluginFactory()]) {
+for (const factory of [createOtelPluginFactory(), createOtelPluginFactory(options), createExecutionOtelPluginFactory(), createInvocationOtelPluginFactory()]) {
   withDurableExecution(async () => 'ok', { plugins: [factory] });
 }
 // @ts-expect-error Unsupported modes must not compile.
-OtelPlugin.factory({ mode: 'other' });
+createOtelPluginFactory({ mode: 'other' });
 // @ts-expect-error Null is not an omitted mode.
-OtelPlugin.factory({ mode: null });
+createOtelPluginFactory({ mode: null });
 `,
       exactOptionalPropertyTypes,
       // Core logger declarations have pre-existing exact-optional errors. Check

@@ -1,5 +1,5 @@
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { createOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 import type { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
@@ -10,8 +10,8 @@ export const config: ExampleConfig = {
 };
 
 // Uses the provider configured by ADOT or the application. To parent operations
-// under each invocation, use OtelPlugin.factory({ mode: "invocation" }).
-const tracing = OtelPlugin.factory();
+// under each invocation, use createOtelPluginFactory({ mode: "invocation" }).
+const tracing = createOtelPluginFactory();
 
 export const handler = withDurableExecution(
   async (_, context) => {

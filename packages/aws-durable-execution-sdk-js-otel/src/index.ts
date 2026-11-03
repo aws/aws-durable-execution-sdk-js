@@ -47,6 +47,6 @@ export { deriveExecutionTraceId } from "./execution-trace-context";
 export type { ExecutionTraceEnvironment } from "./execution-trace-context";
 
 // Unified factory and default environment-loading entry point
-export { OtelPlugin } from "./otel-plugin";
+export { createOtelPluginFactory } from "./otel-plugin";
 export type { OtelPluginFactoryOptions } from "./otel-plugin";
 export { durableExecutionPluginProvider } from "./execution-plugin-provider";

@@ -1,6 +1,9 @@
 import { expect, it, vi } from "vitest";
 import type * as PluginLoader from "../../../aws-durable-execution-sdk-js/dist-types/utils/plugin/plugin-loader";
-import { OtelPlugin, durableExecutionPluginProvider } from "../index";
+import {
+  createOtelPluginFactory,
+  durableExecutionPluginProvider,
+} from "../index";
 import { createExecutionOtelPluginFactory } from "../execution-plugin";
 import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
@@ -12,7 +15,7 @@ it.each(["execution", "invocation"] as const)(
   "retains exclusivity between unified %s and existing factory registrations",
   async (mode) => {
     const createProvider = vi.fn();
-    const unified = OtelPlugin.factory({
+    const unified = createOtelPluginFactory({
       mode,
       tracerProviderFactory: createProvider,
     });
@@ -51,7 +54,7 @@ it.each(["execution", "invocation"] as const)(
 
 it("rejects the default package provider combined with an explicit invocation view", async () => {
   await expect(
-    loadConfiguredPlugins([OtelPlugin.factory({ mode: "invocation" })], {
+    loadConfiguredPlugins([createOtelPluginFactory({ mode: "invocation" })], {
       environment: {
         DURABLE_EXECUTION_PLUGINS: "@aws/durable-execution-sdk-js-otel",
       },

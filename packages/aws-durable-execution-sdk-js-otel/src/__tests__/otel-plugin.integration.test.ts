@@ -8,7 +8,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { OtelPlugin, type IdGeneratorFactory } from "../index";
+import { createOtelPluginFactory, type IdGeneratorFactory } from "../index";
 
 beforeAll(() =>
   LocalDurableTestRunner.setupTestEnvironment({ skipTime: false }),
@@ -30,7 +30,7 @@ it.each(["execution", "invocation"] as const)(
       });
       return provider;
     });
-    const factory = OtelPlugin.factory({
+    const factory = createOtelPluginFactory({
       mode,
       contextExtractor: () => undefined,
       workflowSpanName: "custom-workflow",

@@ -9,26 +9,23 @@ export interface OtelPluginFactoryOptions extends OtelPluginConfig {
   mode?: "execution" | "invocation";
 }
 
-/** A single entry point for creating either durable OpenTelemetry factory. */
-export const OtelPlugin = {
-  /**
-   * Select a view once and register the returned factory in `plugins`.
-   * The SDK creates a fresh plugin for every invocation. Provider setup remains
-   * lazy, and the selected factory retains its exclusive-view registration.
-   */
-  factory(
-    options: OtelPluginFactoryOptions = {},
-  ): DurableInstrumentationPluginFactory {
-    const { mode = "execution", ...config } = options;
-    switch (mode) {
-      case "execution":
-        return createExecutionOtelPluginFactory(config);
-      case "invocation":
-        return createInvocationOtelPluginFactory(config);
-      default:
-        throw new TypeError(
-          'OTel plugin mode must be "execution" or "invocation".',
-        );
-    }
-  },
-};
+/**
+ * Create a factory for either durable OpenTelemetry view and register it in
+ * `plugins`. The SDK creates a fresh plugin for every invocation. Provider setup
+ * remains lazy, and the selected factory retains its exclusive-view registration.
+ */
+export function createOtelPluginFactory(
+  options: OtelPluginFactoryOptions = {},
+): DurableInstrumentationPluginFactory {
+  const { mode = "execution", ...config } = options;
+  switch (mode) {
+    case "execution":
+      return createExecutionOtelPluginFactory(config);
+    case "invocation":
+      return createInvocationOtelPluginFactory(config);
+    default:
+      throw new TypeError(
+        'OTel plugin mode must be "execution" or "invocation".',
+      );
+  }
+}

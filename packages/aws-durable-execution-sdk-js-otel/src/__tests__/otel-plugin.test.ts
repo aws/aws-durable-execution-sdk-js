@@ -4,7 +4,7 @@ import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 import * as execution from "../execution-plugin";
 import * as invocation from "../invocation-plugin";
 import {
-  OtelPlugin,
+  createOtelPluginFactory,
   type OtelPluginFactoryOptions,
   durableExecutionPluginProvider,
 } from "../index";
@@ -17,12 +17,12 @@ vi.mock("@aws/durable-execution-sdk-js", () => {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("OtelPlugin.factory", () => {
+describe("createOtelPluginFactory", () => {
   it.each([undefined, {}, { mode: undefined }, { mode: "execution" }] as const)(
     "defaults to the original execution factory for %j",
     (options) => {
       const create = vi.spyOn(execution, "createExecutionOtelPluginFactory");
-      const factory = OtelPlugin.factory(options);
+      const factory = createOtelPluginFactory(options);
       expect(factory).toBe(create.mock.results[0].value);
       expect(Reflect.get(factory, PLUGIN_REGISTRATION)).toMatchObject({
         name: "ExecutionOtelPlugin",
@@ -47,7 +47,7 @@ describe("OtelPlugin.factory", () => {
         flushTimeoutMillis: 123,
       };
       const options = { mode, ...config };
-      const factory = OtelPlugin.factory(options);
+      const factory = createOtelPluginFactory(options);
       expect(create).toHaveBeenCalledExactlyOnceWith(config);
       expect(factory).toBe(create.mock.results[0].value);
       expect(Reflect.get(factory, PLUGIN_REGISTRATION).name).toBe(
@@ -63,7 +63,7 @@ describe("OtelPlugin.factory", () => {
     "rejects invalid explicit mode %j",
     (mode) => {
       const createFactory = () =>
-        OtelPlugin.factory({ mode } as OtelPluginFactoryOptions);
+        createOtelPluginFactory({ mode } as OtelPluginFactoryOptions);
       expect(createFactory).toThrow(TypeError);
       expect(createFactory).toThrow(
         'OTel plugin mode must be "execution" or "invocation".',
@@ -73,7 +73,7 @@ describe("OtelPlugin.factory", () => {
 
   it("selects the view once, before callers can mutate their options", () => {
     const options: OtelPluginFactoryOptions = { mode: "invocation" };
-    const factory = OtelPlugin.factory(options);
+    const factory = createOtelPluginFactory(options);
     options.mode = "execution";
     const info: InvocationInfo = {
       executionArn: "arn:execution:unified",

@@ -45,13 +45,13 @@ required:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { createOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
     return context.step("process", async () => process(event));
   },
-  { plugins: [OtelPlugin.factory()] },
+  { plugins: [createOtelPluginFactory()] },
 );
 ```
 
@@ -72,12 +72,12 @@ replace the original setup error reported to the core's hook-error isolation.
 This cannot reclaim a span that a throwing tracer never returned, or resources
 that a failing custom processor retains independently.
 
-`OtelPlugin.factory()` defaults to execution mode. Select invocation mode when
+`createOtelPluginFactory()` defaults to execution mode. Select invocation mode when
 operations should appear under each Lambda invocation:
 
 ```typescript
-OtelPlugin.factory({ mode: "invocation" });
-OtelPlugin.factory({ mode: "execution", workflowSpanName: "MyWorkflow" });
+createOtelPluginFactory({ mode: "invocation" });
+createOtelPluginFactory({ mode: "execution", workflowSpanName: "MyWorkflow" });
 ```
 
 The mode is selected once when the factory is created. All other options are
