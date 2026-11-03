@@ -40,7 +40,7 @@ function canonical(extracted: ContextExtractorResult): string {
 function resolve(
   extracted: ContextExtractorResult,
   canonicalId: string,
-  configuredSamplingDecision: () => SamplingDecision,
+  configuredSamplingDecision: () => SamplingDecision | undefined,
 ) {
   return resolveExecutionTraceContext(
     extracted,
@@ -199,6 +199,49 @@ describe("deriveExecutionTraceId", () => {
 });
 
 describe("resolveExecutionTraceContext", () => {
+  it.each([
+    [undefined, SamplingDecision.RECORD_AND_SAMPLED],
+    [
+      {
+        traceId: REMOTE_TRACE_ID,
+        parentSpanId: REMOTE_PARENT_ID,
+        sampling: "NOT_SAMPLED" as const,
+      },
+      SamplingDecision.NOT_RECORD,
+    ],
+    [
+      { traceId: REMOTE_TRACE_ID, sampling: "NOT_SAMPLED" as const },
+      SamplingDecision.NOT_RECORD,
+    ],
+    [
+      { traceId: REMOTE_TRACE_ID, traceFlags: TraceFlags.NONE },
+      SamplingDecision.NOT_RECORD,
+    ],
+    [
+      { traceId: REMOTE_TRACE_ID, sampling: "SAMPLED" as const },
+      SamplingDecision.RECORD_AND_SAMPLED,
+    ],
+    [
+      { traceId: REMOTE_TRACE_ID, parentSpanId: REMOTE_PARENT_ID },
+      SamplingDecision.RECORD_AND_SAMPLED,
+    ],
+    [
+      { traceId: ALL_ZERO_TRACE_ID, sampling: "NOT_SAMPLED" as const },
+      SamplingDecision.RECORD_AND_SAMPLED,
+    ],
+  ])(
+    "preserves the legacy upstream fallback when no provider decision is available: %j",
+    (extracted, decision) => {
+      const result = resolve(extracted, canonical(extracted), () => undefined);
+      expect(result.samplingDecision).toBe(decision);
+      expect(result.traceFlags).toBe(
+        decision === SamplingDecision.RECORD_AND_SAMPLED
+          ? TraceFlags.SAMPLED
+          : TraceFlags.NONE,
+      );
+    },
+  );
+
   it.each([
     [{ sampling: "SAMPLED" as const }, TraceFlags.SAMPLED],
     [{ sampling: "NOT_SAMPLED" as const }, TraceFlags.NONE],
@@ -602,16 +645,15 @@ describe("configuredSamplingDecision", () => {
     ).toBe(SamplingDecision.NOT_RECORD);
   });
 
-  it("defaults to sampled when no sampler is reachable", () => {
-    // A proxy tracer with no _sampler field: the decision defaults to sampled
-    // rather than being approximated, matching the documented fallback.
+  it("returns no decision when no sampler is reachable", () => {
+    // Leave the fallback to the resolver, which still has the upstream decision.
     const tracer = tracerWithSampler(undefined);
     expect(
       configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
-    ).toBe(SamplingDecision.RECORD_AND_SAMPLED);
+    ).toBeUndefined();
   });
 
-  it("defaults to sampled when a configured sampler throws", () => {
+  it("returns no decision when a configured sampler throws", () => {
     const tracer = {
       _sampler: {
         shouldSample: () => {
@@ -622,7 +664,7 @@ describe("configuredSamplingDecision", () => {
     } as unknown as Tracer;
     expect(
       configuredSamplingDecision(tracer, REMOTE_TRACE_ID, "Workflow", {}),
-    ).toBe(SamplingDecision.RECORD_AND_SAMPLED);
+    ).toBeUndefined();
   });
 
   it("evaluates a ParentBased sampler at the root policy, ignoring an unrelated ambient span", () => {

@@ -550,11 +550,26 @@ describe("Execution trace joining", () => {
     });
 
     it.each([
-      new AlwaysOnSampler(),
-      new ParentBasedSampler({ root: new AlwaysOffSampler() }),
+      {
+        sampler: new AlwaysOnSampler(),
+        sampling: "NOT_SAMPLED" as const,
+        sampled: true,
+      },
+      {
+        sampler: new AlwaysOffSampler(),
+        sampling: "SAMPLED" as const,
+        sampled: false,
+      },
+      ...[new AlwaysOnSampler(), new AlwaysOffSampler()].flatMap((root) =>
+        (["SAMPLED", "NOT_SAMPLED"] as const).map((sampling) => ({
+          sampler: new ParentBasedSampler({ root }),
+          sampling,
+          sampled: sampling === "SAMPLED",
+        })),
+      ),
     ])(
-      "uses best-effort sampled ancestors when an opaque tracer hides %s",
-      async (sampler) => {
+      "preserves parent inheritance with opaque $sampler and $sampling",
+      async ({ sampler, sampling, sampled }) => {
         const opaqueExporter = new InMemorySpanExporter();
         let opaqueProvider: NodeTracerProvider | undefined;
         const plugin = makePlugin({
@@ -580,22 +595,21 @@ describe("Execution trace joining", () => {
           contextExtractor: () => ({
             traceId: "3".repeat(32),
             parentSpanId: "4".repeat(16),
-            sampling: "NOT_SAMPLED",
+            sampling,
           }),
         });
 
         await plugin.onInvocationStart(makeInvocationInfo());
         await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-        // Without the bridge, the provider sees the best-effort sampled ancestor.
-        // Even ParentBased(AlwaysOff) can export despite propagated Sampled=0:
-        // opaque providers cannot guarantee coordinated execution sampling.
+        // A hidden sampler retains its normal per-span behavior. ParentBased
+        // must see the propagated bit; direct policies may ignore it.
         expect(
           opaqueExporter
             .getFinishedSpans()
             .map((span) => span.name)
             .sort(),
-        ).toEqual(["Invocation", "Workflow"]);
+        ).toEqual(sampled ? ["Invocation", "Workflow"] : []);
 
         await opaqueProvider?.shutdown();
       },
