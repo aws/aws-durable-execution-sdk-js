@@ -10,6 +10,18 @@ Ready-made custom operations for the [AWS Durable Execution SDK](../aws-durable-
 npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras
 ```
 
+Each group of operations has its own subpath, and needs its own AWS SDK client. The clients are optional peer dependencies, so npm does not install them for you. Install only the clients of the subpaths you import:
+
+| Subpath | Operations | Install too |
+|---|---|---|
+| `@aws/durable-execution-sdk-js-extras/compute/microvm` | `microvm`, `microvmSession` | `@aws-sdk/client-lambda-microvms` |
+
+```bash
+npm install @aws-sdk/client-lambda-microvms
+```
+
+An import of a subpath without its client fails with `Cannot find module '@aws-sdk/client-lambda-microvms'`. The package root, `@aws/durable-execution-sdk-js-extras`, exports only `ComputeError` and needs no client.
+
 This package needs `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier versions have no `subType` option on steps and callbacks. They would drop the subtypes that these operations record, and replay after an upgrade would then fail.
 
 ## `microvm`: run a job in an AWS Lambda MicroVM
@@ -18,7 +30,7 @@ This package needs `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier versi
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvm } from "@aws/durable-execution-sdk-js-extras/microvm";
+import { microvm } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
 
 export const handler = withDurableExecution(async (event, context) =>
   microvm<{ passed: boolean }>(
@@ -117,7 +129,23 @@ A route that answers another 4xx status fails the operation without a retry. So 
 
 ### Errors
 
-Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them, or a subclass for one kind:
+Every MicroVM failure is a `MicrovmError`, and every `MicrovmError` is a `ComputeError`. Catch `ComputeError` for a failure of any compute type, `MicrovmError` for every MicroVM failure, or a subclass for one kind:
+
+```
+DurableOperationError            (core SDK)
+└── ComputeError                 (any compute type)
+    └── MicrovmError
+        ├── MicrovmLaunchError
+        ├── MicrovmDeliveryError
+        │   ├── MicrovmNotRunningError
+        │   ├── MicrovmRequestRejectedError       (request step only)
+        │   ├── MicrovmRequestUnauthorizedError   (request step only)
+        │   └── MicrovmEndpointUnavailableError   (request step only)
+        ├── MicrovmJobFailedError
+        └── MicrovmTimeoutError
+```
+
+The three errors marked "request step only" are thrown inside the request step, so only a step `retryStrategy` sees them. When the step fails, the operation reports `MicrovmDeliveryError` or `MicrovmNotRunningError`, and `cause.name` keeps the name of the step's error.
 
 | Error | When |
 |---|---|
@@ -138,7 +166,7 @@ A failed AWS call keeps its request ID in the error message, in the form `<Opera
 import {
   MicrovmError,
   MicrovmTimeoutError,
-} from "@aws/durable-execution-sdk-js-extras/microvm";
+} from "@aws/durable-execution-sdk-js-extras/compute/microvm";
 
 try {
   await microvm(context, "build", input, config);
@@ -231,7 +259,7 @@ The code in the MicroVM must:
 `microvmSession` launches one MicroVM and runs a handler that sends it jobs over HTTP. The jobs share the MicroVM's files and processes, so a later job can use what an earlier job wrote. The session terminates the MicroVM when the handler returns or throws, and returns the handler's value.
 
 ```typescript
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
 
 const result = await microvmSession(
   context,

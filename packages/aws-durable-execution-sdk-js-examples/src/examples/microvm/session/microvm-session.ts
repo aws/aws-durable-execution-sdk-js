@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
 import { ExampleConfig } from "../../../types";
 import { requireMicrovmEnv } from "../../shared/microvm-env";
 

@@ -4,6 +4,7 @@ import {
   type LambdaMicrovmsClient,
 } from "@aws-sdk/client-lambda-microvms";
 import { addRequestId, microvmNotFound, withRequestId } from "./aws-errors";
+import { MicrovmDeliveryError } from "./errors";
 
 /**
  * The MicroVM endpoint forwards to this port when no port header is sent.
@@ -136,12 +137,23 @@ export async function callBeforeDeadline<T>(
  * `fetch` followed, and `status` is then the status of the final response.
  * The default step retry strategy does not retry it.
  *
+ * @remarks
+ * This error and {@link MicrovmRequestUnauthorizedError} and
+ * {@link MicrovmEndpointUnavailableError} are thrown inside the request step.
+ * Only the step retry strategy sees them. When the step fails, the operation
+ * reports a {@link MicrovmDeliveryError} or a `MicrovmNotRunningError`,
+ * and `cause.name` keeps the name of this error.
+ *
+ * Each of them extends {@link MicrovmDeliveryError}, and records its own name
+ * as its checkpointed type, as it did before it extended it.
+ *
  * @public
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
-export class MicrovmRequestRejectedError extends Error {
+export class MicrovmRequestRejectedError extends MicrovmDeliveryError {
   override readonly name = "MicrovmRequestRejectedError";
+  readonly errorType: string = "MicrovmRequestRejectedError";
 
   constructor(
     message: string,
@@ -160,8 +172,9 @@ export class MicrovmRequestRejectedError extends Error {
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
-export class MicrovmRequestUnauthorizedError extends Error {
+export class MicrovmRequestUnauthorizedError extends MicrovmDeliveryError {
   override readonly name = "MicrovmRequestUnauthorizedError";
+  readonly errorType: string = "MicrovmRequestUnauthorizedError";
 
   constructor(
     message: string,
@@ -179,8 +192,26 @@ export class MicrovmRequestUnauthorizedError extends Error {
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
-export class MicrovmEndpointUnavailableError extends Error {
+export class MicrovmEndpointUnavailableError extends MicrovmDeliveryError {
   override readonly name = "MicrovmEndpointUnavailableError";
+  readonly errorType: string = "MicrovmEndpointUnavailableError";
+
+  /**
+   * Takes the same arguments as the `Error` constructor, which this class
+   * extended before it extended {@link MicrovmDeliveryError}.
+   */
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message ?? "");
+    // As in Error: a second argument that is not an object is ignored.
+    const value: unknown = options;
+    if (
+      value !== null &&
+      (typeof value === "object" || typeof value === "function") &&
+      "cause" in value
+    ) {
+      this.cause = (value as ErrorOptions).cause as Error;
+    }
+  }
 }
 
 /**

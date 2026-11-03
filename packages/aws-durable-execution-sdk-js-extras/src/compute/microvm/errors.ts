@@ -3,6 +3,7 @@ import {
   ChildContextError,
   DurableOperationError,
 } from "@aws/durable-execution-sdk-js";
+import { ComputeError } from "../errors";
 
 /**
  * The base class of every error that {@link microvm} and
@@ -19,6 +20,9 @@ import {
  *   reports it, when CreateMicrovmAuthToken reports the MicroVM removed.
  * - {@link MicrovmJobFailedError}: the job handler in the MicroVM failed.
  * - {@link MicrovmTimeoutError}: no result or no heartbeat arrived in time.
+ *
+ * It extends {@link ComputeError}. So code that catches `ComputeError`
+ * handles a MicroVM failure and a failure of any other compute type alike.
  *
  * The message names the operation and keeps the underlying message. For a
  * failed job, `errorData` is the `ErrorData` that the MicroVM reported.
@@ -38,7 +42,7 @@ import {
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
-export class MicrovmError extends DurableOperationError {
+export class MicrovmError extends ComputeError {
   readonly errorType: string = "MicrovmError";
 }
 

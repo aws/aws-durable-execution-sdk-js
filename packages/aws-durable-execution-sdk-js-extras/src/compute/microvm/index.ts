@@ -1,3 +1,4 @@
+export { ComputeError } from "../errors";
 export { microvm } from "./microvm";
 export {
   MicrovmDeliveryError,
