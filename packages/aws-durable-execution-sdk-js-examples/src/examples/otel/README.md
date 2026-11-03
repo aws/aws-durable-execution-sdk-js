@@ -15,23 +15,28 @@ With a compatible global provider, this follows a complete propagated parent's
 sampled bit and samples 10% of root traces. An explicitly configured provider
 sampler takes precedence over these environment settings.
 
-```typescript
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { createInvocationOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
+The runnable [sampling example](sampling/otel-sampling.ts) configures an
+application-owned `NodeTracerProvider` with `AlwaysOffSampler`. It checkpoints
+active sampling observations before and after a durable wait. The completed
+first step is skipped on resume, and both observations remain unsampled even
+when the incoming header has `Sampled=1`.
 
-export const handler = withDurableExecution(
-  async (_, context) => {
-    const result = await context.step("prepare-result", async () => "ready");
-    await context.wait("pause", { seconds: 1 });
-    return result;
-  },
-  { plugins: [createInvocationOtelPluginFactory()] },
-);
+Its [integration test](sampling/otel-sampling.test.ts) supplies a sampled parent
+to the local runner and checks the configured decision, stable trace ID,
+preserved first observation, and execution history. The same test can run
+against a deployed example with the real Lambda carrier.
+
+Run it from the repository root after building the SDK, testing, and OTel
+packages:
+
+```sh
+npm run test --workspace packages/aws-durable-execution-sdk-js-examples -- otel-sampling
 ```
 
-The completed step is skipped on resume. Durable spans use the same canonical
-trace ID and sampling policy across both invocations. Keep the provider policy
-unchanged during an execution. The Execution view uses the same rules.
+The example's explicit `AlwaysOffSampler` overrides the environment settings
+above. Remove the explicit sampler to let `NodeTracerProvider` resolve them.
+Keep the provider policy unchanged during an execution. The Execution view
+uses the same rules.
 
 Use `traceidratio` to apply the ratio regardless of parent flags, or `always_off`
 to suppress every durable span even with upstream `Sampled=1`. A valid parent

@@ -1,0 +1,115 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "cf21d5db-4737-4e9c-8709-bca0d7d25c64",
+    "EventTimestamp": "2026-11-03T22:22:35.784Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "observe-initial-sampling",
+    "EventTimestamp": "2026-11-03T22:22:35.925Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "observe-initial-sampling",
+    "EventTimestamp": "2026-11-03T22:22:35.925Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"requestId\":\"sampling-request-1\",\"traceId\":\"5759e988bd862e3fe1be46a994272793\",\"sampled\":false}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "resume-with-same-sampler",
+    "EventTimestamp": "2026-11-03T22:22:35.930Z",
+    "WaitStartedDetails": {
+      "Duration": 10,
+      "ScheduledEndTimestamp": "2026-11-03T22:22:45.930Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-11-03T22:22:35.935Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-03T22:22:35.784Z",
+      "EndTimestamp": "2026-11-03T22:22:35.935Z",
+      "Error": {},
+      "RequestId": "0aab0021-8c42-48a4-89ca-f9395a56bedc"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "resume-with-same-sampler",
+    "EventTimestamp": "2026-11-03T22:22:45.931Z",
+    "WaitSucceededDetails": {
+      "Duration": 10
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "observe-resumed-sampling",
+    "EventTimestamp": "2026-11-03T22:22:45.936Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "observe-resumed-sampling",
+    "EventTimestamp": "2026-11-03T22:22:45.936Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"requestId\":\"sampling-request-2\",\"traceId\":\"5759e988bd862e3fe1be46a994272793\",\"sampled\":false}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-11-03T22:22:45.937Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-03T22:22:45.932Z",
+      "EndTimestamp": "2026-11-03T22:22:45.937Z",
+      "Error": {},
+      "RequestId": "f60114b6-ec54-42bf-8159-84214fe9d4d1"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "cf21d5db-4737-4e9c-8709-bca0d7d25c64",
+    "EventTimestamp": "2026-11-03T22:22:45.937Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"first\":{\"requestId\":\"sampling-request-1\",\"traceId\":\"5759e988bd862e3fe1be46a994272793\",\"sampled\":false},\"resumed\":{\"requestId\":\"sampling-request-2\",\"traceId\":\"5759e988bd862e3fe1be46a994272793\",\"sampled\":false}}"
+      }
+    }
+  }
+]
