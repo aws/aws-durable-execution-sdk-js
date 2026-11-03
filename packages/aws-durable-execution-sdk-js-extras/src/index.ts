@@ -1,2 +1,2 @@
 export * from "./microvm";
-export * from "./llm";
+export * from "./ai";

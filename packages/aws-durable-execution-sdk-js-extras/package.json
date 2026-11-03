@@ -39,10 +39,10 @@
       "import": "./dist/microvm.mjs",
       "require": "./dist-cjs/microvm.js"
     },
-    "./llm": {
-      "types": "./dist-types/llm/index.d.ts",
-      "import": "./dist/llm.mjs",
-      "require": "./dist-cjs/llm.js"
+    "./ai": {
+      "types": "./dist-types/ai/index.d.ts",
+      "import": "./dist/ai.mjs",
+      "require": "./dist-cjs/ai.js"
     }
   },
   "files": [

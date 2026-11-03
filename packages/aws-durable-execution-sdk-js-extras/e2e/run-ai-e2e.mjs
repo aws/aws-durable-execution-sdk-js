@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-// End-to-end test for the llm operations.
+// End-to-end test for the ai operations.
 //
-//   node e2e/run-llm-e2e.mjs deploy   Deploys a durable function that runs ask
-//                                     against Amazon Bedrock, invokes it, and
-//                                     checks the result and the execution
-//                                     history. The function has no decision
-//                                     model, so it also checks that check
-//                                     rejects.
-//   node e2e/run-llm-e2e.mjs cleanup  Deletes the function and its role.
+//   node e2e/run-ai-e2e.mjs deploy   Deploys a durable function that runs
+//                                    llm().ask against Amazon Bedrock, invokes
+//                                    it, and checks the result and the
+//                                    execution history. The function has no
+//                                    decision model, so it also checks that
+//                                    decider() throws without an endpoint.
+//   node e2e/run-ai-e2e.mjs cleanup  Deletes the function and its role.
 //
-// The decision operations run against a live decision model server in the
-// local test runner: see src/llm/__tests__/live.test.ts.
+// The decider operations run against a live decision model server in the
+// local test runner: see src/ai/__tests__/live.test.ts.
 //
-// Every resource is named with the "dex-llm-e2e" prefix.
+// Every resource is named with the "dex-ai-e2e" prefix.
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
 // workspace (npm run build in the SDK and extras packages).
 
@@ -23,9 +23,9 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const OUT = join(HERE, "build-llm");
+const OUT = join(HERE, "build-ai");
 const REGION = process.env.AWS_REGION ?? "us-east-1";
-const PREFIX = "dex-llm-e2e";
+const PREFIX = "dex-ai-e2e";
 const MODEL = "global.anthropic.claude-haiku-5-5";
 const log = (message) =>
   console.log(`[${new Date().toISOString()}] ${message}`);
@@ -131,7 +131,7 @@ async function bundle() {
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(join(OUT, "function"), { recursive: true });
   await build({
-    entryPoints: [join(HERE, "llm-function.ts")],
+    entryPoints: [join(HERE, "ai-function.ts")],
     outfile: join(OUT, "function", "index.js"),
     bundle: true,
     platform: "node",
@@ -197,7 +197,7 @@ async function deploy() {
   const functionArn = version.FunctionArn;
   log(`published ${functionArn}`);
 
-  const executionName = `llm-${Date.now()}`;
+  const executionName = `ai-${Date.now()}`;
   const payloadFile = join(OUT, "payload.json");
   writeFileSync(
     payloadFile,
@@ -241,7 +241,10 @@ async function deploy() {
   assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
 
   const result = JSON.parse(execution.Result);
-  assert(result.checkError === "TypeError", `check gave ${result.checkError}`);
+  assert(
+    result.deciderError === "TypeError",
+    `decider() gave ${result.deciderError}`,
+  );
   for (const field of ["summary", "team"]) {
     assert(
       typeof result[field] === "string" && result[field].length > 0,
@@ -265,7 +268,10 @@ async function deploy() {
     subTypes["llm.ask"] === "LlmAsk" && subTypes["llm.ask.team"] === "LlmAsk",
     `subtypes ${JSON.stringify(subTypes)}`,
   );
-  assert(!("llm.check" in subTypes), "check created a durable operation");
+  assert(
+    !Object.keys(subTypes).some((name) => name.startsWith("decider.")),
+    "decider() created a durable operation",
+  );
   // The wait made the handler replay. Each step still ran once.
   for (const stepName of ["llm.ask", "llm.ask.team"]) {
     const started = events.filter(
@@ -310,6 +316,6 @@ if (mode === "deploy") {
 } else if (mode === "cleanup") {
   cleanup();
 } else {
-  console.error("usage: run-llm-e2e.mjs deploy|cleanup");
+  console.error("usage: run-ai-e2e.mjs deploy|cleanup");
   process.exit(2);
 }

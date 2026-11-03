@@ -1,23 +1,26 @@
-// The durable function that the llm end-to-end test deploys. It has no
-// decision model, so it runs ask against the default Bedrock text model, with a
-// durable wait in the middle so the execution replays. It also records that
-// check rejects without a decision model.
+// The durable function that the ai end-to-end test deploys. It runs llm().ask
+// against the default Bedrock model, with a durable wait in the middle so the
+// execution replays. It has no decision model, so it also records that
+// decider() throws without an endpoint.
 import {
   type DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { llm } from "@aws/durable-execution-sdk-js-extras/llm";
+import { decider, llm } from "@aws/durable-execution-sdk-js-extras/ai";
 
 const model = llm();
 
+function deciderError(): string | undefined {
+  try {
+    decider();
+    return undefined;
+  } catch (error) {
+    return (error as Error).name;
+  }
+}
+
 export const handler = withDurableExecution(
   async (event: { body: string }, context: DurableContext) => {
-    const checkError = await model
-      .check(context, "Does the writer sound urgent?", event.body)
-      .then(
-        () => undefined,
-        (error: unknown) => (error as Error).name,
-      );
     const summary = await model.ask(
       context,
       "Summarize the message in one short sentence.",
@@ -30,6 +33,6 @@ export const handler = withDurableExecution(
       event.body,
       { name: "llm.ask.team" },
     );
-    return { checkError, summary, team };
+    return { deciderError: deciderError(), summary, team };
   },
 );

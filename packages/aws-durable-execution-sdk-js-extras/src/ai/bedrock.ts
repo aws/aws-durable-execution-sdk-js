@@ -1,4 +1,4 @@
-import { LlmError } from "./errors";
+import { LlmMaxTokensError } from "./errors";
 import { serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
@@ -8,13 +8,14 @@ import type { BedrockConfig, BedrockConverseClient } from "./types";
  *
  * Bedrock has no alias that follows the newest model of a family. So this
  * value is pinned, and a later release of this package moves it to a newer
- * model. Set `generate.destination.bedrock.modelId` to keep one model.
+ * model. Set `destination.bedrock.modelId` in the `llm()` config to keep one
+ * model.
  *
  * @public
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */
-export const DEFAULT_GENERATE_MODEL_ID = "global.anthropic.claude-haiku-5-5";
+export const DEFAULT_LLM_MODEL_ID = "global.anthropic.claude-haiku-5-5";
 
 /** The reply limit of `ask` when the caller sets none. */
 export const DEFAULT_ASK_MAX_TOKENS = 1024;
@@ -33,7 +34,7 @@ function userMessage(question: string, input: unknown): string {
 }
 
 /** Sends Converse requests. The client is created on first use. */
-export class BedrockGenerator {
+export class BedrockConverse {
   private clientPromise: Promise<BedrockConverseClient> | undefined;
 
   constructor(private readonly config: BedrockConfig) {}
@@ -58,7 +59,7 @@ export class BedrockGenerator {
     const { ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
     const merged = { ...this.config, ...override };
     const command = new ConverseCommand({
-      modelId: merged.modelId,
+      modelId: merged.modelId ?? DEFAULT_LLM_MODEL_ID,
       system: [
         {
           text: merged.system
@@ -92,7 +93,7 @@ export class BedrockGenerator {
     };
     if (response.stopReason === "max_tokens") {
       // A retry with the same limit stops at the same place.
-      throw new LlmError(
+      throw new LlmMaxTokensError(
         "The reply stopped at the token limit. Raise maxTokens.",
       );
     }

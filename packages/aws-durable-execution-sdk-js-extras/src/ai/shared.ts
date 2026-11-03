@@ -1,7 +1,10 @@
-import type { DurableContext } from "@aws/durable-execution-sdk-js";
-import { LlmInvalidResponseError } from "./errors";
+import {
+  type DurableContext,
+  DurablePromise,
+} from "@aws/durable-execution-sdk-js";
+import { DeciderInvalidResponseError } from "./errors";
 
-/** Time that the first retry tier leaves for the step to record its outcome. */
+/** Time that a request leaves for the step to record its outcome. */
 export const INVOCATION_RESERVE_MS = 10_000;
 
 /**
@@ -168,5 +171,13 @@ export function toUnitScore(zeroBasedPosition: number, levels: number): number {
 }
 
 export function invalid(message: string, cause?: unknown): never {
-  throw new LlmInvalidResponseError(message, { cause });
+  throw new DeciderInvalidResponseError(message, { cause });
+}
+
+/**
+ * Returns a promise that rejects with `error` and creates no durable
+ * operation.
+ */
+export function rejected<T>(error: unknown): DurablePromise<T> {
+  return new DurablePromise<T>(() => Promise.reject(error));
 }

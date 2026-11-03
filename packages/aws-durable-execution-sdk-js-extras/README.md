@@ -387,101 +387,119 @@ It needs:
 
 A suspend that the service refuses for now, such as a throttle or expired credentials, is not retried without `autoSuspendOnIdle`. The MicroVM then keeps running until a later suspend. With `autoSuspendOnIdle`, the worker tries again after the idle time, as it does for an idle suspend.
 
-## `llm`: ask a model one question and get a typed answer
+## `ai`: ask a model one question and get a typed answer
 
-`llm()` returns five operations. Each one is one durable step. It asks one question and returns a typed answer. Four of them use a decision model, and `ask` uses a text model. A replay returns the checkpointed answer and does not call a model.
+The `ai` subpath has two factories. Each returns operations that ask a model one question in one durable step. A replay returns the checkpointed answer and does not call a model.
+
+| Factory | Operations | Model |
+|---|---|---|
+| `decider()` | `check`, `classify`, `label`, `score` | A decision model, such as [Strands Decider](https://github.com/strands-labs/strands-decider) |
+| `llm()` | `ask` | A large language model on Amazon Bedrock |
 
 | Operation | Returns |
 |---|---|
-| `ask(ctx, question, input?)` | `string` |
 | `check(ctx, question, input)` | `boolean` |
 | `classify(ctx, question, options, input)` | One entry of `options`, typed as their union |
 | `label(ctx, question, options, input)` | Every entry of `options` that applies, in the order of `options` |
 | `score(ctx, question, scale, input)` | A number from 0 (first entry of `scale`) to 1 (last entry) |
+| `ask(ctx, question, input?)` | `string` |
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { llm } from "@aws/durable-execution-sdk-js-extras/llm";
+import { decider, llm } from "@aws/durable-execution-sdk-js-extras/ai";
 
+const decide = decider();
 const model = llm();
 
 export const handler = withDurableExecution(async (ticket, context) => {
-  if (await model.check(context, "Is the customer asking for a human?", ticket.body)) {
+  if (await decide.check(context, "Is the customer asking for a human?", ticket.body)) {
     return escalate(ticket);
   }
-  const team = await model.classify(
+  const team = await decide.classify(
     context,
     "Which team should handle this?",
     ["returns", "shipping", "billing"],
     ticket.body,
   );
   // team has the type "returns" | "shipping" | "billing".
-  return route(team);
+  const summary = await model.ask(context, "Summarize in one sentence.", ticket.body);
+  return route(team, summary);
 });
 ```
 
-The first argument is the context that the call runs in. Inside a child context or a `map` item, pass that context.
+The first argument is the context that the call runs in. Inside a child context or a `map` item, pass that context. Call the factories once, when the module loads.
 
-### Two models
+### `decider()`
 
-| Operations | Model |
-|---|---|
-| `check`, `classify`, `label`, `score` | A decision model. Without one, these calls reject with a `TypeError`. |
-| `ask` | A text model on Amazon Bedrock. A decision model cannot write text. |
+A decision model is not a large language model. It does not write text. It picks one of your options or rates on a scale, so its answer is always one of the options or a number in range.
 
-A decision model, such as [Strands Decider](https://github.com/strands-labs/strands-decider), does not write text. It picks an option or rates on a scale, so its answer is always one of your options. The default is a Strands Decider at the URL in the `STRANDS_DECIDER_ENDPOINT` environment variable. This package does not host the model.
+```typescript
+const decide = decider({
+  endpoint: "https://decider.example.com/v1/systemone",
+  headers: { authorization: `Bearer ${token}` },
+  threshold: 0.7,
+});
+```
 
-The text model is Claude Haiku 5.5 (`global.anthropic.claude-haiku-5-5`, exported as `DEFAULT_GENERATE_MODEL_ID`). Bedrock has no alias that follows the newest model of a family. So the default is pinned, and a later release of this package moves it to a newer model. Set `modelId` to keep one model.
+- The model must serve the `POST /v1/systemone` route of Strands Decider. The default `endpoint` is the `STRANDS_DECIDER_ENDPOINT` environment variable. This package does not host the model.
+- `decider()` throws a `TypeError` when it has neither `endpoint`, `transport`, nor `STRANDS_DECIDER_ENDPOINT`.
+- Pass `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
+- `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
+
+### `llm()`
 
 ```typescript
 const model = llm({
-  decide: {
-    destination: { decider: { endpoint: "https://decider.example.com/v1/systemone" } },
-  },
-  generate: {
-    destination: { bedrock: { modelId: "global.anthropic.claude-sonnet-5-5" } },
-  },
+  destination: { bedrock: { modelId: "global.anthropic.claude-sonnet-5-5", maxTokens: 2048 } },
 });
 ```
 
-- The decision model must serve the `POST /v1/systemone` route of Strands Decider. Pass `headers` for an authorization header, or `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
-- `check` and `label` answer yes when the model's probability of yes is at least `decide.threshold`, 0.5 by default.
+- The default model is Claude Haiku 5.5 (`global.anthropic.claude-haiku-5-5`, exported as `DEFAULT_LLM_MODEL_ID`). Bedrock has no alias that follows the newest model of a family. So the default is pinned, and a later release of this package moves it to a newer model. Set `modelId` to keep one model.
+- `destination` holds exactly one key. This release supports `bedrock` only.
 - `ask` sends a temperature only when you set one, because some newer models, such as Claude Haiku 5.5, reject it.
+- Pass `{ bedrock: { modelId, maxTokens, temperature } }` in the last argument of `ask` to change them for one call.
 
 ### Limits
 
 | Operation | Limits |
 |---|---|
 | All | `question` is a non-empty string. `input` is a string or a value that `JSON.stringify` can encode. |
-| `check`, `classify`, `label`, `score` | Need a decision model. The model reads the question, the options, and the input in one context window: 4,096 tokens for Strands Decider 2B. The server cuts a longer input and keeps the question and the options, so put the part that decides the answer first. |
+| `decider()` operations | The model reads the question, the options, and the input in one context window: 4,096 tokens for Strands Decider 2B. The server cuts a longer input and keeps the question and the options, so put the part that decides the answer first. |
 | `classify` | 2 to 255 options (`MAX_CLASSIFY_OPTIONS`). Options are non-empty and differ after trimming and ignoring case. The model always picks one, so add an option such as `"other"` when none may fit. |
 | `label` | At least 2 options, with the same rules. Each option is one yes-or-no question, so each adds time. |
 | `score` | 2 to 10 entries (`MAX_SCORE_LEVELS`), from lowest to highest. |
-| `ask` | The reply is at most `maxTokens`, 1024 by default. A reply at the limit fails with `LlmError`. The reply must fit the 256 KB checkpoint limit. |
+| `ask` | The reply is at most `maxTokens`, 1024 by default. A reply at the limit fails with `LlmMaxTokensError`. The reply must fit the 256 KB checkpoint limit. |
 
 A call that breaks an argument limit creates no durable operation. The returned promise rejects with a `TypeError` or a `RangeError`.
 
 ### What a call does
 
 1. The call checks its arguments against the limits above.
-2. One step named `llm.<operation>` sends one request. Pass `{ name }` in the last argument to rename it. Renaming an existing call breaks executions in flight. The step has the subtype `LlmAsk`, `LlmCheck`, `LlmClassify`, `LlmLabel`, or `LlmScore`.
-3. The step result is the answer. The input is not checkpointed.
+2. One step sends one request. The step is named `decider.<operation>` or `llm.ask`. Pass `{ name }` in the last argument to rename it. Renaming an existing call breaks executions in flight.
+3. The step has a subtype from `AiOperationSubType`: `DeciderCheck`, `DeciderClassify`, `DeciderLabel`, `DeciderScore`, or `LlmAsk`.
+4. The step result is the answer. The input is not checkpointed.
 
-`ask` sends the input inside `<input>` tags, and its system prompt says that the input is data, not instructions. The decision operations can only return one of your options or a number in range. An instruction in the input can still change the answer. So do not use an answer alone to authorize an action.
+`ask` sends the input inside `<input>` tags, and its system prompt says that the input is data, not instructions. The decider operations can only return one of your options or a number in range. An instruction in the input can still change the answer. So do not use an answer alone to authorize an action.
 
-### Retries
+### Errors and retries
 
-The AWS SDK client retries throttling inside the step attempt. Each request stops 10 seconds before the invocation runs out of time.
+Every error class extends `AiError`:
 
-The step retry strategy is `defaultLlmRetryStrategy`. It retries throttling, server errors, timeouts, connection failures, and a decision model that cannot be reached or answers HTTP 408, 429, or 5xx, up to 5 attempts. It does not retry an invalid reply (`LlmInvalidResponseError`), a reply at the token limit, another 4xx, or access-denied, validation, or guardrail errors, because they repeat. Pass `retryStrategy` to `llm()` to replace it.
+| Error | When | Retried |
+|---|---|---|
+| `DeciderError` | The decision model cannot be reached, or answers with an HTTP error | On no answer, 408, 429, and 5xx |
+| `DeciderInvalidResponseError` | The decision model's answer has the wrong shape | No |
+| `LlmMaxTokensError` | The `ask` reply stops at `maxTokens` | No |
+
+The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling, server errors, timeouts, and connection failures, up to 5 attempts. It does not retry access-denied, validation, or guardrail errors, because they repeat. Pass `retryStrategy` to `decider()` or `llm()` to replace it. Each request stops 10 seconds before the invocation runs out of time.
 
 ### Permissions
 
-`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `ask`.
+`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. `decider()` needs no AWS permission.
 
 ### Testing
 
-Pass a fake as `generate.destination.bedrock.client` and `decide.destination.decider.transport`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/llm/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `LLM_LIVE=1`. `e2e/run-llm-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
+Pass a fake as `transport` to `decider()` and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
 
 ## Best practices for MicroVM operations
 
