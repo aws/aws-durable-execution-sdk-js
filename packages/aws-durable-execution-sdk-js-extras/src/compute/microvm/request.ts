@@ -202,8 +202,14 @@ export class MicrovmEndpointUnavailableError extends MicrovmDeliveryError {
    */
   constructor(message?: string, options?: ErrorOptions) {
     super(message ?? "");
-    if (options !== undefined && "cause" in options) {
-      this.cause = options.cause as Error;
+    // As in Error: a second argument that is not an object is ignored.
+    const value: unknown = options;
+    if (
+      value !== null &&
+      (typeof value === "object" || typeof value === "function") &&
+      "cause" in value
+    ) {
+      this.cause = (value as ErrorOptions).cause as Error;
     }
   }
 }

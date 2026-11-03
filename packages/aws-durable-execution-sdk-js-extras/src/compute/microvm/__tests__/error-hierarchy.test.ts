@@ -1,4 +1,5 @@
 import { DurableOperationError } from "@aws/durable-execution-sdk-js";
+import { describe, expect, it } from "vitest";
 import { ComputeError as RootComputeError } from "../../..";
 import {
   ComputeError,
@@ -80,6 +81,22 @@ describe("compute error hierarchy", () => {
       new MicrovmEndpointUnavailableError("unavailable", { cause }).cause,
     ).toBe(cause);
   });
+
+  // Error ignores a second argument that is not an object.
+  it.each([null, 1, "text", true])(
+    "ignores %s as the second argument, as Error does",
+    (options) => {
+      const args = ["unavailable", options] as unknown as [string];
+
+      expect(new Error(...args).cause).toBeUndefined();
+      expect(
+        new MicrovmEndpointUnavailableError(...args).cause,
+      ).toBeUndefined();
+      expect(new MicrovmEndpointUnavailableError(...args).message).toBe(
+        "unavailable",
+      );
+    },
+  );
 
   it("keeps the HTTP status on the request errors", () => {
     expect(new MicrovmRequestRejectedError("rejected", 404).status).toBe(404);
