@@ -25,6 +25,7 @@ import {
   answers,
   choice,
   converseReply,
+  FakeAgentCore,
   FakeBedrock,
   FakeDecider,
   noul,
@@ -853,6 +854,176 @@ describe("decider()", () => {
       );
       expect(result.getStatus()).toBe("FAILED");
       expect(result.getError()?.errorMessage).toContain("HTTP 422");
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+});
+
+describe("decider({ agentCore })", () => {
+  const ARN =
+    "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/strands-decider-abc";
+
+  it("sends the request through InvokeAgentRuntime and answers from the reply", async () => {
+    const client = new FakeAgentCore();
+    client.replies = [
+      { body: JSON.stringify(answers({ answer: noul(0.9) })) },
+      {
+        body: JSON.stringify(
+          answers({
+            answer: choice("billing", { billing: 0.9, sales: 0.1 }, 0.8),
+          }),
+        ),
+      },
+    ];
+    const decide = decider({
+      agentCore: { runtimeArn: ARN, qualifier: "prod", client },
+      retryStrategy: noRetry,
+    });
+
+    const result = await run(async (context) => [
+      await decide.check(context, "Is it urgent?", "help"),
+      await decide.classify(
+        context,
+        "Which team?",
+        ["billing", "sales"],
+        "help",
+      ),
+    ]);
+
+    expect(result.getResult()).toEqual([true, "billing"]);
+    expect(history(result)).toEqual([
+      ["decider.check", "DeciderCheck"],
+      ["decider.classify", "DeciderClassify"],
+    ]);
+    expect(client.inputs[0]).toMatchObject({
+      agentRuntimeArn: ARN,
+      qualifier: "prod",
+      contentType: "application/json",
+      accept: "application/json",
+    });
+    expect(client.request(0)).toEqual({
+      model: "strands-decider-latest",
+      state: "help",
+      questions: { answer: { type: "noul", instructions: "Is it urgent?" } },
+    });
+    // The deadline signal reaches the AWS SDK call.
+    expect(client.signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("omits the qualifier when the config sets none", async () => {
+    const client = new FakeAgentCore();
+    client.replies = [{ body: JSON.stringify(answers({ answer: noul(0.1) })) }];
+    const decide = decider({ agentCore: { runtimeArn: ARN, client } });
+
+    const result = await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(result.getResult()).toBe(false);
+    expect(client.inputs[0]).not.toHaveProperty("qualifier");
+  });
+
+  it("reports a non-2xx status from the server as DeciderError with its status", async () => {
+    const client = new FakeAgentCore();
+    client.replies = [
+      { body: '{"detail":"exceeds the context window"}', statusCode: 422 },
+    ];
+    let seen: Error | undefined;
+    const decide = decider({
+      agentCore: { runtimeArn: ARN, client },
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect((seen as DeciderError).status).toBe(422);
+    expect(seen?.message).toContain("context window");
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(false);
+  });
+
+  it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
+    const client = new FakeAgentCore();
+    client.replies = [{ body: "<html>" }];
+    let seen: Error | undefined;
+    const decide = decider({
+      agentCore: { runtimeArn: ARN, client },
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(seen).toBeInstanceOf(DeciderInvalidResponseError);
+  });
+
+  it("passes an AWS SDK error through to the retry strategy", async () => {
+    const client = new FakeAgentCore();
+    const throttled = Object.assign(new Error("Rate exceeded"), {
+      name: "ThrottlingException",
+    });
+    client.replies = [throttled];
+    let seen: Error | undefined;
+    const decide = decider({
+      agentCore: { runtimeArn: ARN, client },
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(seen).toBe(throttled);
+    expect(defaultAiRetryStrategy(throttled, 1).shouldRetry).toBe(true);
+  });
+
+  it("turns a deadline abort into AiTimeoutError", async () => {
+    const client = new FakeAgentCore();
+    client.send = async (_command, options) => abortable(options?.abortSignal);
+    let seen: Error | undefined;
+    const decide = decider({
+      agentCore: { runtimeArn: ARN, client },
+      retryStrategy: (error) => {
+        seen = error;
+        return { shouldRetry: false };
+      },
+    });
+
+    await runWithTimeLeft(10_050, (context) =>
+      decide.check(context, "Q?", "x"),
+    );
+
+    expect(seen).toBeInstanceOf(AiTimeoutError);
+  });
+
+  it("takes only one of agentCore, endpoint, and transport", () => {
+    const fake = new FakeDecider();
+    for (const config of [
+      { agentCore: { runtimeArn: ARN }, endpoint: "https://x.example/v1" },
+      { agentCore: { runtimeArn: ARN }, transport: fake.transport },
+      { endpoint: "https://x.example/v1", transport: fake.transport },
+    ]) {
+      expect(() => decider(config)).toThrow(/only one of/);
+    }
+  });
+
+  it("is used instead of STRANDS_DECIDER_ENDPOINT", async () => {
+    const client = new FakeAgentCore();
+    client.replies = [{ body: JSON.stringify(answers({ answer: noul(0.9) })) }];
+    const fetchMock = jest.spyOn(globalThis, "fetch");
+    try {
+      await withEndpoint("https://env.example/v1/systemone", async () => {
+        const decide = decider({ agentCore: { runtimeArn: ARN, client } });
+        const result = await run((context) => decide.check(context, "Q?", "x"));
+        expect(result.getResult()).toBe(true);
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(client.inputs).toHaveLength(1);
     } finally {
       fetchMock.mockRestore();
     }

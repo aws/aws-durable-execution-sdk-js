@@ -13,6 +13,8 @@ export { defaultAiRetryStrategy } from "./retry";
 export { MAX_CLASSIFY_OPTIONS, MAX_SCORE_LEVELS } from "./shared";
 export { AiOperationSubType } from "./subtypes";
 export type {
+  AgentCoreConfig,
+  AgentCoreInvokeClient,
   AiCallOptions,
   AiInput,
   AiRetryStrategy,

@@ -433,16 +433,34 @@ The first argument is the context that the call runs in. Inside a child context 
 
 A decision model is not a large language model. It does not write text. It picks one of your options or rates on a scale, so its answer is always one of the options or a number in range.
 
+`decider()` assumes you already deployed a Strands Decider and it is ready. It does not host or check the model. Name the model one of three ways:
+
+| Option | How the call goes | Needs |
+|---|---|---|
+| `agentCore` | AWS SDK `InvokeAgentRuntime` to [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/), signed with the function's credentials | `@aws-sdk/client-bedrock-agentcore`, and `bedrock-agentcore:InvokeAgentRuntime` on the runtime |
+| `endpoint` | `fetch` to the server's `POST /v1/systemone` route | A URL the function can reach |
+| `transport` | Your own function | Nothing |
+
 ```typescript
+// A Strands Decider on AgentCore Runtime.
 const decide = decider({
+  agentCore: {
+    runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/strands-decider-abc",
+  },
+});
+
+// A Strands Decider at a URL.
+const decideHttp = decider({
   endpoint: "https://decider.example.com/v1/systemone",
   headers: { authorization: `Bearer ${token}` },
   threshold: 0.7,
 });
 ```
 
-- The model must serve the `POST /v1/systemone` route of Strands Decider. The default `endpoint` is the `STRANDS_DECIDER_ENDPOINT` environment variable. This package does not host the model.
-- `decider()` throws a `TypeError` when it has neither `endpoint`, `transport`, nor `STRANDS_DECIDER_ENDPOINT`, or when the endpoint is not an absolute `http:` or `https:` URL.
+- Pass only one of `agentCore`, `endpoint`, and `transport`. Without any, `decider()` uses the `STRANDS_DECIDER_ENDPOINT` environment variable, and throws a `TypeError` when it is not set.
+- On AgentCore Runtime, the call reaches the server's `POST /invocations` route, which the Strands Decider server answers like `/v1/systemone`. The 0.2.0 release on PyPI has no `/invocations` route, so deploy a later version. `agentCore.qualifier` names a runtime endpoint, and `agentCore.client` replaces the default `BedrockAgentCoreClient`, for example to set a Region.
+- `@aws-sdk/client-bedrock-agentcore` is an optional peer dependency. Without it, `endpoint` and `transport` still work, and an `agentCore` call fails with an `AiError` that names the package.
+- `decider()` throws a `TypeError` when the endpoint is not an absolute `http:` or `https:` URL.
 - An endpoint with a user name or password is refused: pass credentials in `headers`. Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query, because errors are checkpointed.
 - Pass `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
 - `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
@@ -499,11 +517,11 @@ The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling,
 
 ### Permissions
 
-`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. Without it, `decider()` still works, a bundler such as esbuild still builds, and `ask` fails with an `AiError` that names the package. `decider()` needs no AWS permission.
+`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. Without it, `decider()` still works, a bundler such as esbuild still builds, and `ask` fails with an `AiError` that names the package. `decider()` with `agentCore` needs `bedrock-agentcore:InvokeAgentRuntime` on the runtime. With `endpoint` or `transport` it needs no AWS permission.
 
 ### Testing
 
-Pass a fake as `transport` to `decider()` and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
+Pass a fake as `transport` or `agentCore.client` to `decider()`, and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
 
 ## Best practices for MicroVM operations
 

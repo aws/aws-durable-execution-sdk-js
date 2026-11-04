@@ -74,6 +74,37 @@ export type DeciderTransport = (
 ) => Promise<unknown>;
 
 /**
+ * The part of `BedrockAgentCoreClient` that the AgentCore transport uses.
+ * Pass a fake in a test, or your own client to set a Region.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentCoreInvokeClient {
+  send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown>;
+}
+
+/**
+ * A Strands Decider deployed on Amazon Bedrock AgentCore Runtime.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentCoreConfig {
+  /** The ARN of the AgentCore Runtime that serves the model. */
+  runtimeArn: string;
+  /** The runtime endpoint name. The default is the runtime's default endpoint. */
+  qualifier?: string;
+  /** A `BedrockAgentCoreClient`. The default client uses the function's Region and credentials. */
+  client?: AgentCoreInvokeClient;
+}
+
+/**
  * The configuration of {@link decider}.
  *
  * @public
@@ -82,17 +113,28 @@ export type DeciderTransport = (
  */
 export interface DeciderConfig {
   /**
+   * A Strands Decider on Amazon Bedrock AgentCore Runtime. The call goes
+   * through `InvokeAgentRuntime` with the function's credentials, so the
+   * function's role needs `bedrock-agentcore:InvokeAgentRuntime` on the
+   * runtime. Needs the `@aws-sdk/client-bedrock-agentcore` package. Do not
+   * combine it with `endpoint` or `transport`.
+   */
+  agentCore?: AgentCoreConfig;
+  /**
    * The full URL of the model's `POST /v1/systemone` route, such as
    * `http://127.0.0.1:8000/v1/systemone`. The default is the
    * `STRANDS_DECIDER_ENDPOINT` environment variable. It must not contain a
    * user name or password: pass credentials in `headers`.
    */
   endpoint?: string;
-  /** Extra HTTP headers, such as an authorization header. */
+  /** Extra HTTP headers for `endpoint`, such as an authorization header. */
   headers?: Record<string, string>;
   /** The value of the request's `model` field. The default is `strands-decider-latest`. */
   model?: string;
-  /** Replaces the HTTP request. `endpoint` and `headers` do not apply then. */
+  /**
+   * Your own function that sends the request. Do not combine it with
+   * `agentCore` or `endpoint`.
+   */
   transport?: DeciderTransport;
   /**
    * The probability at or above which `check` and `label` answer yes. From 0

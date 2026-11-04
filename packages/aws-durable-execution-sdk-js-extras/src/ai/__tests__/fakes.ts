@@ -87,3 +87,37 @@ export const answers = (value: Record<string, unknown>) => ({
   answers: value,
   usage: { input_tokens: 1, output_tokens: 1 },
 });
+
+/** Records every InvokeAgentRuntime command and answers from a queue. */
+export class FakeAgentCore {
+  readonly inputs: Record<string, unknown>[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
+  replies: ({ body: string; statusCode?: number } | Error)[] = [];
+
+  async send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown> {
+    this.inputs.push((command as { input: Record<string, unknown> }).input);
+    this.signals.push(options?.abortSignal);
+    const next = this.replies.shift();
+    if (next instanceof Error) {
+      throw next;
+    }
+    if (next === undefined) {
+      throw new Error("FakeAgentCore has no reply queued");
+    }
+    return {
+      contentType: "application/json",
+      statusCode: next.statusCode ?? 200,
+      response: { transformToString: async () => next.body },
+    };
+  }
+
+  /** The JSON request in the payload of call `i`. */
+  request(i: number): unknown {
+    return JSON.parse(
+      new TextDecoder().decode(this.inputs[i].payload as Uint8Array),
+    );
+  }
+}

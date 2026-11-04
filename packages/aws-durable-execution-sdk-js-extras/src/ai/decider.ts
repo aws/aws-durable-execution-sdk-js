@@ -2,6 +2,7 @@ import {
   type DurableContext,
   DurablePromise,
 } from "@aws/durable-execution-sdk-js";
+import { agentCoreTransport } from "./agentcore";
 import { DeciderError } from "./errors";
 import { defaultAiRetryStrategy } from "./retry";
 import {
@@ -181,9 +182,16 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  * It does not write text. It picks one of the caller's options or rates on a
  * scale. So its answer is always one of the options, or a number in range.
  *
- * The model must serve the `POST /v1/systemone` route of Strands Decider. The
- * default URL is the `STRANDS_DECIDER_ENDPOINT` environment variable. This
- * package does not host the model.
+ * The model is a Strands Decider that you deployed. Name it one of three ways:
+ *
+ * 1. `agentCore`: the ARN of its Amazon Bedrock AgentCore Runtime. The call
+ *    goes through the AWS SDK, signed with the function's credentials.
+ * 2. `endpoint`: the URL of its `POST /v1/systemone` route. The default is
+ *    the `STRANDS_DECIDER_ENDPOINT` environment variable.
+ * 3. `transport`: your own function that sends the request.
+ *
+ * This package does not host or check the model. It assumes the model is
+ * deployed and ready.
  *
  * The step result is the answer. A replay returns it from the checkpoint and
  * does not call the model.
@@ -199,8 +207,9 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  * ```
  *
  * @param config - The decision model. Every field has a default.
- * @throws \{TypeError\} When the config names neither `endpoint` nor
- * `transport` and `STRANDS_DECIDER_ENDPOINT` is not set, or when the endpoint
+ * @throws \{TypeError\} When the config names more than one of `agentCore`,
+ * `endpoint`, and `transport`, or none of them and `STRANDS_DECIDER_ENDPOINT`
+ * is not set, or when the endpoint
  * is not an absolute `http:` or `https:` URL or contains a user name or
  * password. `decider()` usually
  * runs when the module loads, so the function then fails to initialize.
@@ -211,15 +220,24 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function decider(config: DeciderConfig = {}): Decider {
+  const given = [config.transport, config.agentCore, config.endpoint].filter(
+    (value) => value !== undefined,
+  ).length;
+  if (given > 1) {
+    throw new TypeError(
+      "decider() takes only one of transport, agentCore, and endpoint.",
+    );
+  }
   const endpoint = config.endpoint ?? process.env.STRANDS_DECIDER_ENDPOINT;
   const transport =
     config.transport ??
+    (config.agentCore ? agentCoreTransport(config.agentCore) : undefined) ??
     (endpoint
       ? httpTransport(parseEndpoint(endpoint), config.headers)
       : undefined);
   if (!transport) {
     throw new TypeError(
-      "decider() needs an endpoint, a transport, or the STRANDS_DECIDER_ENDPOINT environment variable.",
+      "decider() needs agentCore, an endpoint, a transport, or the STRANDS_DECIDER_ENDPOINT environment variable.",
     );
   }
   const send: DeciderTransport = transport;
