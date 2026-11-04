@@ -58,6 +58,9 @@ describe("suspendMicrovm near the invocation reserve", () => {
     expect(warn.mock.calls[0][0]).toContain(
       'MicroVM "build": suspend after the job failed for mvm-1.',
     );
+    // The call may have reached the service, so the warning does not claim
+    // that the MicroVM runs.
+    expect(warn.mock.calls[0][0]).toContain("The MicroVM may still be running");
     expect(warn.mock.calls[0][1].error.name).toBe(
       "MicrovmEndpointUnavailableError",
     );

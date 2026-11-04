@@ -903,7 +903,7 @@ export async function suspendMicrovm(
     );
   } catch (error) {
     child.logger.warn(
-      `MicroVM "${jobName}": suspend after the job failed for ${microvmId}. The MicroVM keeps running, and is billed, until it suspends on idle or the session terminates it. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in the function's execution role.`,
+      `MicroVM "${jobName}": suspend after the job failed for ${microvmId}. The MicroVM may still be running, and is billed while it runs, until it suspends on idle or the session terminates it. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in the function's execution role.`,
       { error: addRequestId("SuspendMicrovm", error) },
     );
   }
