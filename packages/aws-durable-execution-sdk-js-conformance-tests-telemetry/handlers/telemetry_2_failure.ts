@@ -32,10 +32,11 @@ const pluginFactory = durableExecutionTelemetry({
 
 /**
  * The step fails once with no retry. The handler rethrows with the step error
- * as `cause`. So the exported record carries a cause chain on the execution
- * `error` and an `error` on `operationsByName.charge`. The messages
- * "card declined" and "payment failed" are pinned by telemetry-2. Do not
- * change them.
+ * as `cause`. So the exported record carries an `error` on the execution and
+ * on `operationsByName.charge`. Error names and cause depth differ per SDK by
+ * design, so telemetry-2 asserts only that each error is an object. The
+ * messages "card declined" and "payment failed" are pinned by its core
+ * execution-result and history sections. Do not change them.
  */
 export const handler = withDurableExecution(
   async (_event: Event, context) => {

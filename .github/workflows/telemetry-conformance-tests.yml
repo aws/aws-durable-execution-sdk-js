@@ -51,7 +51,7 @@ jobs:
     # aws-durable-execution-conformance-tests PR #179, which adds telemetry-2. The pin makes
     # this PR's run exercise telemetry-2 before #179 merges. Bump it to the #179 merge commit
     # on that repository's main branch before merging this PR.
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@31d436342fd12a093fa4a6b8eac4170f01236eed
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@121e832ec6d28f2daae48ce9d8ca92b2d3f20c12
     with:
       language: js
       resource_prefix: js
