@@ -318,8 +318,10 @@ interface SessionState {
    * before delivery. It only changes from `false` to `true`.
    *
    * The flag lives in memory only. A new invocation sets it again when it
-   * replays the completed job. The check after a sign of a suspended
-   * MicroVM covers the other cases. See `resumeIfSuspended`.
+   * replays the completed `invoke`. A replayed completed `map` item,
+   * `parallel` branch, or containing child context can skip the `invoke`
+   * call, and so the flag. The check after a sign of a suspended MicroVM
+   * covers those cases. See `resumeIfSuspended`.
    */
   maybeSuspended: boolean;
 }

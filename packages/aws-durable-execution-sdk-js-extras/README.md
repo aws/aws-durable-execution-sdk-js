@@ -389,7 +389,7 @@ What happens:
 
 The setting works with or without `autoSuspendOnIdle`. With both, the idle time applies after each resume.
 
-The record that a job suspended the MicroVM is kept in memory only. A replay of a completed `vm.invoke` does not run its child context, so it does not set the record. So the next job can skip the state check of a suspended MicroVM. For that case, every session job checks the state after a sign of a suspended MicroVM:
+The record that a job suspended the MicroVM is kept in memory only. The session sets it outside the job's child context, when the child context returns or throws. So a completed `vm.invoke` sets the record again when it replays. A replayed completed `map` item, `parallel` branch, or containing child context does not run its code again. So it can skip the `vm.invoke` call, and the record. The next job can then skip the state check of a suspended MicroVM. For that case, every session job checks the state after a sign of a suspended MicroVM:
 
 1. The sign is an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer. The endpoint of a booting MicroVM holds the request until the worker listens. A boot gives no such sign, unless the worker takes more than 10 seconds to start listening. Then the first delivery gets no answer, and the operation makes one GetMicrovm call. So a session that never suspends makes no extra call, except in that case.
 2. The request step calls GetMicrovm once. It resumes a `SUSPENDING` or `SUSPENDED` MicroVM, waits for `RUNNING`, and sends the job again. A resume that the service rejects with a conflict while the MicroVM is still suspending is sent again once the MicroVM is suspended.
