@@ -7,7 +7,8 @@ import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
  * "do not sample". Extractors use `SAMPLED` / `NOT_SAMPLED` only for explicit
  * upstream values (for example X-Ray `Sampled=1` / `Sampled=0`, or a W3C
  * `traceparent` sampled bit); anything absent or unusable is `UNDECIDED`, which
- * lets the configured sampler decide.
+ * is an unset sampled bit when a complete parent is supplied to the sampler.
+ * Without a complete parent, the sampler receives no parent.
  */
 export type Sampling = "SAMPLED" | "NOT_SAMPLED" | "UNDECIDED";
 

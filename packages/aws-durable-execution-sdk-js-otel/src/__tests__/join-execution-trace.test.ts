@@ -5,6 +5,7 @@ import {
   NodeTracerProvider,
   AlwaysOffSampler,
   AlwaysOnSampler,
+  ParentBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
 import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
 import { resourceFromAttributes } from "@opentelemetry/resources";
@@ -222,13 +223,13 @@ describe("Execution trace joining", () => {
       ).toHaveLength(2);
     });
 
-    it("does not emit a stray synthetic root for explicit Sampled=0 fallback", async () => {
+    it("does not emit a synthetic root when the configured sampler drops the fallback", async () => {
       const dropExporter = new InMemorySpanExporter();
       let dropProvider: NodeTracerProvider | undefined;
       const plugin = makePlugin({
         tracerProviderFactory: (createIdGenerator) => {
           dropProvider = new NodeTracerProvider({
-            sampler: new AlwaysOnSampler(),
+            sampler: new AlwaysOffSampler(),
             spanProcessors: [new SimpleSpanProcessor(dropExporter)],
             idGenerator: createIdGenerator(),
           });
@@ -236,7 +237,7 @@ describe("Execution trace joining", () => {
         },
         contextExtractor: () => ({
           traceId: "9".repeat(32),
-          sampling: "NOT_SAMPLED" as const,
+          sampling: "SAMPLED" as const,
         }),
       });
 
@@ -491,7 +492,7 @@ describe("Execution trace joining", () => {
       expect(dropExporter.getFinishedSpans()).toHaveLength(0);
     });
 
-    it("enforces explicit Sampled=1 even when a direct AlwaysOff sampler is configured", async () => {
+    it("honors direct AlwaysOff even with upstream Sampled=1", async () => {
       const forcedExporter = new InMemorySpanExporter();
       let forcedProvider: NodeTracerProvider | undefined;
       const plugin = makePlugin({
@@ -513,11 +514,11 @@ describe("Execution trace joining", () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      expect(forcedExporter.getFinishedSpans().length).toBeGreaterThan(0);
+      expect(forcedExporter.getFinishedSpans()).toHaveLength(0);
       await forcedProvider?.shutdown();
     });
 
-    it("enforces explicit Sampled=0 even when a direct AlwaysOn sampler is configured", async () => {
+    it("honors direct AlwaysOn even with upstream Sampled=0", async () => {
       const forcedExporter = new InMemorySpanExporter();
       let forcedProvider: NodeTracerProvider | undefined;
       const plugin = makePlugin({
@@ -539,47 +540,82 @@ describe("Execution trace joining", () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      expect(forcedExporter.getFinishedSpans()).toHaveLength(0);
+      expect(
+        forcedExporter
+          .getFinishedSpans()
+          .map((span) => span.name)
+          .sort(),
+      ).toEqual(["Invocation", "Workflow"]);
       await forcedProvider?.shutdown();
     });
 
-    it("preserves normal tracing when an opaque forwarding tracer hides the sampler", async () => {
-      const opaqueExporter = new InMemorySpanExporter();
-      let opaqueProvider: NodeTracerProvider | undefined;
-      const plugin = makePlugin({
-        tracerProviderFactory: (createIdGenerator) => {
-          opaqueProvider = new NodeTracerProvider({
-            sampler: new AlwaysOnSampler(),
-            spanProcessors: [new SimpleSpanProcessor(opaqueExporter)],
-            idGenerator: createIdGenerator(),
-          });
-          return {
-            getTracer: (
-              ...args: Parameters<NodeTracerProvider["getTracer"]>
-            ) => {
-              const realTracer = opaqueProvider!.getTracer(...args);
-              return {
-                startSpan: realTracer.startSpan.bind(realTracer),
-                startActiveSpan: realTracer.startActiveSpan.bind(realTracer),
-              };
-            },
-            forceFlush: () => opaqueProvider!.forceFlush(),
-          };
-        },
-        contextExtractor: () => ({
-          traceId: "3".repeat(32),
-          parentSpanId: "4".repeat(16),
-          sampling: "NOT_SAMPLED",
-        }),
-      });
+    it.each([
+      {
+        sampler: new AlwaysOnSampler(),
+        sampling: "NOT_SAMPLED" as const,
+        expectedSpans: ["Invocation"],
+      },
+      {
+        sampler: new AlwaysOffSampler(),
+        sampling: "SAMPLED" as const,
+        expectedSpans: [],
+      },
+      ...[new AlwaysOnSampler(), new AlwaysOffSampler()].flatMap((root) =>
+        (["SAMPLED", "NOT_SAMPLED"] as const).map((sampling) => ({
+          sampler: new ParentBasedSampler({ root }),
+          sampling,
+          expectedSpans:
+            sampling === "SAMPLED" ? ["Invocation", "Workflow"] : [],
+        })),
+      ),
+    ])(
+      "preserves parent inheritance with opaque $sampler and $sampling",
+      async ({ sampler, sampling, expectedSpans }) => {
+        const opaqueExporter = new InMemorySpanExporter();
+        let opaqueProvider: NodeTracerProvider | undefined;
+        const plugin = makePlugin({
+          tracerProviderFactory: (createIdGenerator) => {
+            opaqueProvider = new NodeTracerProvider({
+              sampler,
+              spanProcessors: [new SimpleSpanProcessor(opaqueExporter)],
+              idGenerator: createIdGenerator(),
+            });
+            return {
+              getTracer: (
+                ...args: Parameters<NodeTracerProvider["getTracer"]>
+              ) => {
+                const realTracer = opaqueProvider!.getTracer(...args);
+                return {
+                  startSpan: realTracer.startSpan.bind(realTracer),
+                  startActiveSpan: realTracer.startActiveSpan.bind(realTracer),
+                };
+              },
+              forceFlush: () => opaqueProvider!.forceFlush(),
+            };
+          },
+          contextExtractor: () => ({
+            traceId: "3".repeat(32),
+            parentSpanId: "4".repeat(16),
+            sampling,
+          }),
+        });
 
-      await plugin.onInvocationStart(makeInvocationInfo());
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      expect(opaqueExporter.getFinishedSpans().length).toBeGreaterThan(0);
+        // A hidden sampler retains its normal per-span behavior. ParentBased
+        // must see the propagated bit; direct policies may ignore it for live
+        // spans. As before, an unsampled fallback does not materialize Workflow.
+        expect(
+          opaqueExporter
+            .getFinishedSpans()
+            .map((span) => span.name)
+            .sort(),
+        ).toEqual(expectedSpans);
 
-      await opaqueProvider?.shutdown();
-    });
+        await opaqueProvider?.shutdown();
+      },
+    );
 
     it("uses w3cClientContextExtractor as a valid remote parent", async () => {
       const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
