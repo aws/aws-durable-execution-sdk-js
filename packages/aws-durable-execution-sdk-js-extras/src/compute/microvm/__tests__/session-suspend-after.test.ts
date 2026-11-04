@@ -449,6 +449,88 @@ describe("vm.invoke with suspendAfter", () => {
     ).toHaveLength(1);
   });
 
+  it.each<["succeeds" | "fails", unknown]>([
+    ["succeeds", 1],
+    ["fails", "MicrovmJobFailedError"],
+  ])(
+    "keeps the job's outcome when the job %s and the remaining-time reader throws before SuspendMicrovm, and logs one warning",
+    async (outcome, expected) => {
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const warnings: string[] = [];
+      // The reader works for the delivery. It throws once the job's result
+      // is sent, as when a replay makes the suspend the first read.
+      let readerThrows = false;
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: withDurableExecution(
+          async (_event: unknown, context: DurableContext) => {
+            (
+              context.lambdaContext as {
+                getRemainingTimeInMillis: () => number;
+              }
+            ).getRemainingTimeInMillis = () => {
+              if (readerThrows) {
+                throw new Error("deadline reader failed");
+              }
+              return 3_600_000;
+            };
+            context.configureLogger({
+              customLogger: recordingLogger(warnings),
+            });
+            return microvmSession(
+              context,
+              "pipeline",
+              {
+                ...baseConfig(client),
+                timeout: { hours: 1 },
+                fetch: endpoint.fetch,
+              },
+              async (vm, ctx) => {
+                try {
+                  return await vm.invoke(
+                    ctx,
+                    "build",
+                    1,
+                    job("/build", { suspendAfter: true }),
+                  );
+                } catch (error) {
+                  return (error as Error).name;
+                }
+              },
+            );
+          },
+        ),
+      }) as Runner;
+
+      const executionPromise = runner.run({ payload: {} });
+      const callback = runner.getOperation("build.callback");
+      await callback.waitForData(WaitingOperationStatus.STARTED);
+      await runner
+        .getOperation("build.request")
+        .waitForData(WaitingOperationStatus.COMPLETED);
+      readerThrows = true;
+      if (outcome === "succeeds") {
+        await callback.sendCallbackSuccess(JSON.stringify(1));
+      } else {
+        await callback.sendCallbackFailure({
+          ErrorType: "BuildError",
+          ErrorMessage: "3 tests failed",
+        });
+      }
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toBe(expected);
+      // The reader threw before the call, so no call was sent.
+      expect(client.suspendInputs).toHaveLength(0);
+      expect(
+        warnings.filter((warning) =>
+          warning.startsWith(SUSPEND_WARNING_PREFIX),
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
   it("logs a warning and still returns the job's result when SuspendMicrovm fails, and the next job checks the state", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);

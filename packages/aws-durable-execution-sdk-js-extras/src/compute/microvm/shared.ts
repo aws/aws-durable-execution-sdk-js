@@ -881,12 +881,14 @@ export async function suspendMicrovm(
   jobName: string,
   microvmId: string,
 ): Promise<void> {
-  // The call must end before the invocation reserve. A Lambda timeout during
-  // it would end the invocation with the job's result checkpointed but the
-  // child context not complete. An abort or an expired reserve is handled
-  // like any failed call.
-  const reserve = reserveStartsAt(remainingTime(child));
   try {
+    // The call must end before the invocation reserve. A Lambda timeout
+    // during it would end the invocation with the job's result checkpointed
+    // but the child context not complete. An abort or an expired reserve is
+    // handled like any failed call. A replay can make this the first read of
+    // the remaining time. So the read is inside the try: a reader that throws
+    // logs the warning and does not replace the job's outcome.
+    const reserve = reserveStartsAt(remainingTime(child));
     await callBeforeDeadline(
       (sendOptions) =>
         getClient(scope.config, scope.region).send(
