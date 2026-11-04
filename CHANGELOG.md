@@ -646,8 +646,7 @@ below describe each change in detail.
   inside the job's child context, so a replay of a completed job does not send it again. A
   failed call logs a warning and does not fail the job. The session handle then records that the
   MicroVM may be suspended, so each later job checks the state before delivery and resumes a
-  suspended MicroVM. The job request has no `suspendAfter` field, and the worker sends no
-  `X-Microvm-Suspend-After` header. `microvm` rejects `suspendAfter` in `config.request` with a
+  suspended MicroVM. `microvm` rejects `suspendAfter` in `config.request` with a
   `TypeError`, and both operations reject a value that is not a boolean, before any durable
   operation starts. The function's role needs `lambda:SuspendMicrovm` on the image, plus
   `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. The MicroVM's role needs `lambda:SuspendMicrovm`

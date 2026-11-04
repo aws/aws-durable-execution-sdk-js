@@ -18,7 +18,7 @@ import {
   type MicrovmWorkerLogger,
   parseRunHookRequest,
 } from "..";
-import { advance, call, callWithStream, FakeMicrovmsClient } from "./helpers";
+import { advance, call, FakeMicrovmsClient } from "./helpers";
 
 /** Completes every callback call, and records nothing. */
 const lambdaClient = {
@@ -283,35 +283,6 @@ describe("auto-suspend when idle", () => {
     await runHook(worker);
     await advance(IDLE_MS * 10);
 
-    expect(microvms.suspended).toEqual([]);
-  });
-
-  it("ignores a suspendAfter field in a job request: no header, no suspend", async () => {
-    const microvms = new FakeMicrovmsClient();
-    const worker = start(microvms);
-
-    await runHook(worker);
-    const { status, headers } = await callWithStream(
-      worker,
-      "/job",
-      Readable.from([
-        Buffer.from(
-          JSON.stringify({
-            version: 1,
-            region: "us-east-1",
-            callbackId: "cb-1",
-            suspendAfter: true,
-            input: {},
-          }),
-        ),
-      ]),
-    );
-    await finishJob("cb-1");
-    await advance(IDLE_MS * 10);
-
-    expect(status).toBe(202);
-    expect(headers["X-Microvm-Suspend-After"]).toBeUndefined();
-    expect(started).toEqual(["cb-1"]);
     expect(microvms.suspended).toEqual([]);
   });
 

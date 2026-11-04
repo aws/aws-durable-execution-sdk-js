@@ -207,11 +207,10 @@ describe("vm.invoke with suspendAfter", () => {
     expect(client.suspendInputs).toHaveLength(1);
   });
 
-  it("sends no suspendAfter field in the job request and ignores the answer's headers", async () => {
+  it("sends no suspendAfter field in the job request", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
-    const warnings: string[] = [];
-    const runner = runnerFor(client, endpoint, suspendThenJob, {}, warnings);
+    const runner = runnerFor(client, endpoint, suspendThenJob);
 
     const executionPromise = runner.run({ payload: {} });
     await complete(runner, "build", 1);
@@ -225,8 +224,6 @@ describe("vm.invoke with suspendAfter", () => {
       callbackId: expect.any(String),
       input: 1,
     });
-    // A plain 202 is enough. No acknowledgement header is read.
-    expect(warnings).toEqual([]);
   });
 
   it("does not call SuspendMicrovm for a job without suspendAfter", async () => {

@@ -95,7 +95,7 @@ The worker counts only jobs. It cannot see background processes, or inbound traf
 
 ### Suspend after a job
 
-The worker does not suspend the MicroVM after a job. A session job with `suspendAfter: true` makes the durable function call `SuspendMicrovm` itself, with the session's MicroVM ID, after the job's result arrives. So the MicroVM's role needs no permission for it, and the job request has no `suspendAfter` field. The worker ignores an unknown field. See the [extras README](../aws-durable-execution-sdk-js-extras#suspending-after-a-job).
+The worker does not suspend the MicroVM after a job. A session job with `suspendAfter: true` makes the durable function call `SuspendMicrovm` itself, with the session's MicroVM ID, after the job's result arrives. So the MicroVM's role needs no permission for it. See the [extras README](../aws-durable-execution-sdk-js-extras#suspending-after-a-job).
 
 Enable the `resume` hook in the image. The worker refuses jobs from the moment the `suspend` hook arrives until the `resume` hook arrives. Without the hook, the next job waits up to 30 seconds of 503 answers.
 

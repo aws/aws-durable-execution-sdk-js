@@ -381,7 +381,7 @@ const result = await microvmSession(context, "pipeline", config, async (vm, ctx)
 
 What happens:
 
-1. The job runs as any other job. Its request has no `suspendAfter` field, and the worker does nothing extra.
+1. The job runs as any other job. The worker does nothing extra.
 2. When the job's result arrives, the durable function calls `SuspendMicrovm` with the session's MicroVM ID. The call runs inside the job's child context (subtype `MicrovmSessionJob`), before the child context returns. It happens for a job that succeeds and for a job that fails.
 3. The call is not a step and has no checkpoint of its own. The child context's completion checkpoint covers it. A replay of a completed job does not run the child context again, so it sends no second suspend.
 4. A failed `SuspendMicrovm` call logs a warning and does not fail the job. The job returns its result.
@@ -415,8 +415,6 @@ It needs:
 2. `lambda:GetMicrovm` and `lambda:ResumeMicrovm` in the function's role. Every session needs them for the check after a sign of a suspended MicroVM.
 3. The `resume` hook in the image. Without it, the worker refuses the next job with HTTP 503 for up to 30 seconds after a suspend.
 4. A `heartbeatTimeout` on the next job of at least its `retryWindow` plus 30 seconds. The heartbeat timeout starts before delivery, so it includes the resume and the refusal.
-
-The worker version does not matter for `suspendAfter`. The worker ignores a `suspendAfter` field and sends no `X-Microvm-Suspend-After` header. Both were part of an earlier protocol of this experimental package.
 
 ## Best practices for MicroVM operations
 
