@@ -9,7 +9,7 @@ import { requireMicrovmEnv } from "../../shared/microvm-env";
 export const config: ExampleConfig = {
   name: "MicroVM Session",
   description:
-    "Runs two jobs in one Lambda MicroVM, with a durable wait between them",
+    "Runs two jobs in one Lambda MicroVM, and suspends the MicroVM during the durable wait between them",
   durableConfig: {
     ExecutionTimeout: 900,
     RetentionPeriodInDays: 7,
@@ -41,12 +41,20 @@ export const handler = withDurableExecution(
             path: "/write",
             timeout: { minutes: 5 },
             heartbeatTimeout: { seconds: 30 },
+            // The durable function suspends the MicroVM after this job's
+            // result arrives. The function's role needs
+            // lambda:SuspendMicrovm on the MicroVM image.
+            suspendAfter: true,
           },
         );
 
-        // The wait ends this invocation. The MicroVM keeps running, so the
-        // next job finds the file that the first job wrote.
-        await sessionContext.wait("pause", { seconds: 5 });
+        // The wait ends this invocation. The MicroVM stays suspended during
+        // the wait, and keeps its memory and files.
+        await sessionContext.wait("pause", { seconds: 30 });
+
+        // The session checks the MicroVM state before this job and resumes
+        // the suspended MicroVM. So this job finds the file that the first
+        // job wrote.
 
         const read = await vm.invoke<{ microvmId: string; value: string }>(
           sessionContext,
@@ -55,7 +63,10 @@ export const handler = withDurableExecution(
           {
             path: "/read",
             timeout: { minutes: 5 },
-            heartbeatTimeout: { seconds: 30 },
+            // The heartbeat timeout starts before the resume. After a
+            // resume, the worker can refuse the job for up to 30 seconds. So
+            // it is the default 60-second retryWindow plus 30 seconds.
+            heartbeatTimeout: { seconds: 90 },
           },
         );
 
