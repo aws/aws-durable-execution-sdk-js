@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { InvocationType } from "@aws-sdk/client-lambda";
 import {
   ExecutionStatus,
   WaitingOperationStatus,
@@ -12,9 +13,15 @@ import { handler } from "./microvm-session";
 
 createTests({
   handler,
+  // The test waits for the data of the write operation. The cloud runner
+  // can wait for operation data only for an Event invocation.
+  invocationType: InvocationType.Event,
   // The local runner cannot launch a MicroVM.
   cloudOnly: true,
   tests: (runner, { assertEventSignatures }) => {
+    // The launch, the suspend, the 30-second wait, the resume and the
+    // terminate can take longer than the 120-second default timeout. So the
+    // test sets its own timeout of 240 seconds.
     it("suspends the MicroVM between the jobs, and resumes it with the file of the first job", async () => {
       const key = randomUUID();
 
@@ -58,6 +65,6 @@ createTests({
       assertEventSignatures(execution, undefined, {
         invocationCompletedDifference: 1,
       });
-    });
+    }, 240_000);
   },
 });
