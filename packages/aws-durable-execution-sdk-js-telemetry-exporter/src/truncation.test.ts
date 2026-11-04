@@ -88,6 +88,83 @@ describe("truncateRecord", () => {
     expect(bytes(out)).toBeLessThanOrEqual(limit);
   });
 
+  it("measures the rendered record a logarithmic number of times, not once per operation", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+      }),
+    );
+    const r = record({ operations: ops });
+    let renders = 0;
+    const render = (value: DurableExecutionTelemetryRecord) => {
+      renders++;
+      return value;
+    };
+
+    const out = truncateRecord(r, Math.floor(bytes(r) / 2), render);
+
+    expect(out.truncated).toBe(true);
+    expect(renders).toBeLessThan(100);
+  });
+
+  it("bounds renders when dropping many results, not once per result", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+        result: "R".repeat(200),
+      }),
+    );
+    const r = record({ operations: ops });
+    const limit = Math.floor(bytes(r) / 2);
+    let renders = 0;
+    const render = (value: DurableExecutionTelemetryRecord) => {
+      renders++;
+      return value;
+    };
+
+    const out = truncateRecord(r, limit, render);
+
+    expect(out.truncated).toBe(true);
+    expect(out.droppedOperations).toBeUndefined();
+    expect(bytes(out)).toBeLessThanOrEqual(limit);
+    expect(renders).toBeLessThan(100);
+  });
+
+  it("drops the same number of operations as a one-at-a-time first fit", () => {
+    const ops = Array.from({ length: 300 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+      }),
+    );
+    const r = record({ operations: ops });
+    // Reference: drop the oldest operation one at a time until the record fits.
+    const linearDrops = (limit: number): number => {
+      for (let n = 1; n <= ops.length; n++) {
+        const candidate = {
+          ...r,
+          operations: ops.slice(n),
+          truncated: true,
+          droppedOperations: n,
+        };
+        if (bytes(candidate) <= limit) return n;
+      }
+      throw new Error("no prefix fits");
+    };
+
+    for (const fraction of [0.9, 0.5, 0.1]) {
+      const limit = Math.floor(bytes(r) * fraction);
+      expect(truncateRecord(r, limit).droppedOperations).toBe(
+        linearDrops(limit),
+      );
+    }
+  });
+
   it("drops whole operations oldest-first after results are exhausted", () => {
     const ops = Array.from({ length: 5 }, (_, i) =>
       op({

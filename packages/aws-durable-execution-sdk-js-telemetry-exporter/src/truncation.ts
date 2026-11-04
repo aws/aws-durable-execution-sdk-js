@@ -128,24 +128,48 @@ export function truncateRecord(
     return size !== undefined && size <= maxBytes;
   };
 
+  // Smallest `n` in [0, count] for which `apply(n)` fits, where `apply(n)` sets
+  // the state for the first `n` drops, or `count` when none fits. Each drop
+  // normally shrinks the record, so a binary search finds the same `n` as
+  // dropping one at a time, with O(log count) renders instead of one each.
+  // A drop can grow the record when the removed JSON is smaller than its
+  // marker; then the search may drop more than the linear first-fit did.
+  const firstFitting = (count: number, apply: (n: number) => void): number => {
+    apply(0);
+    if (count === 0 || fits()) return 0;
+    let lo = 1;
+    let hi = count;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      apply(mid);
+      if (fits()) hi = mid;
+      else lo = mid + 1;
+    }
+    apply(lo);
+    return lo;
+  };
+
   // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx] && ops[idx].result !== undefined) {
-      ops[idx] = { ...ops[idx], result: undefined, truncated: true };
-      anyResultDropped = true;
-    }
-  }
+  const withResults = order.filter((idx) => ops[idx].result !== undefined);
+  const base = ops.slice();
+  firstFitting(withResults.length, (n) => {
+    withResults.forEach((idx, j) => {
+      ops[idx] =
+        j < n
+          ? { ...base[idx], result: undefined, truncated: true }
+          : base[idx];
+    });
+    anyResultDropped = n > 0;
+  });
 
   // Phase 3: drop whole operations, oldest first.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx]) {
-      kept[idx] = false;
-      droppedOperations++;
-    }
-  }
+  firstFitting(order.length, (n) => {
+    order.forEach((idx, j) => {
+      kept[idx] = j >= n;
+    });
+    droppedOperations = n;
+  });
 
   // Phase 4 (last resort): drop execution input, then output. Only reached once
   // every operation is gone and the record is still over the limit.
