@@ -48,12 +48,12 @@ function handlerSource(module: string): string {
 }
 
 const template = readFileSync(join(PACKAGE_ROOT, "template.yaml"), "utf8");
+const handlerModules = readdirSync(HANDLERS_ROOT)
+  .filter((file) => /^telemetry_\d+.*\.ts$/.test(file))
+  .map((file) => file.replace(/\.ts$/, ""));
 
 describe("template handler references", () => {
   const references = handlerReferences(template);
-  const handlerModules = readdirSync(HANDLERS_ROOT)
-    .filter((file) => /^telemetry_\d+.*\.ts$/.test(file))
-    .map((file) => file.replace(/\.ts$/, ""));
 
   it("finds a reference in every template function", () => {
     expect(references).toHaveLength(2);
@@ -100,7 +100,7 @@ describe("TelemetryLogGroupName contract", () => {
     expect(template).toContain(
       "TELEMETRY_LOG_GROUP_NAME: !Ref TelemetryLogGroupName",
     );
-    for (const module of ["telemetry_1_success", "telemetry_2_failure"]) {
+    for (const module of handlerModules) {
       expect(handlerSource(module)).toContain(
         "process.env.TELEMETRY_LOG_GROUP_NAME",
       );
