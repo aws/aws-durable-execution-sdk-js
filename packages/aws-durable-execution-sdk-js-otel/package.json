@@ -1,7 +1,7 @@
 {
   "name": "@aws/durable-execution-sdk-js-otel",
   "description": "OpenTelemetry instrumentation plugin for AWS Durable Execution SDK",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
