@@ -235,10 +235,6 @@ function ensureInfrastructure(account) {
           "lambda:CreateMicrovmAuthToken",
           // A session resumes a MicroVM that suspended between jobs.
           "lambda:ResumeMicrovm",
-          // A session job with suspendAfter suspends the MicroVM from the
-          // function. No e2e scenario uses suspendAfter yet. The permission
-          // is here for that path of sessions.
-          "lambda:SuspendMicrovm",
         ],
         Resource: "*",
       },
