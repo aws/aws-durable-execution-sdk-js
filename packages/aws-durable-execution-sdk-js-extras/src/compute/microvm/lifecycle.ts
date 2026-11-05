@@ -95,9 +95,10 @@ export async function ensureRunning(
  *
  * The request step of a job without the resume mode runs that check only
  * after a sign that the MicroVM does not run. The job may never have needed
- * the check, and `microvm` did not need `lambda:GetMicrovm` before it ran
- * the check. So the step logs one warning per job, and keeps sending the
- * job. `cause` is the error of the call.
+ * the check. Roles of `microvm` from before this check may not have
+ * `lambda:GetMicrovm`. So the step logs one warning per step attempt, and
+ * keeps sending the job. With the default retry strategy, that is up to 5
+ * warnings. `cause` is the error of the call.
  *
  * @internal
  */
@@ -257,17 +258,20 @@ export async function resumeIfSuspended(
 /**
  * Throws {@link MicrovmStateError} for a terminating or terminated MicroVM.
  * The GetMicrovm output carries the request ID in `$metadata`. The state
- * fails the step, so the message names that request ID.
+ * fails the step, so the message names that request ID. The service's
+ * `stateReason` can end with a period, such as `Success.`. The message adds
+ * its own period, so one trailing period of `stateReason` is removed.
  */
 function throwIfEnded(
   microvmId: string,
   current: { state?: string; stateReason?: string },
 ): void {
-  const { state, stateReason } = current;
+  const { state } = current;
+  const reason = current.stateReason?.replace(/\.$/, "");
   if (state === "TERMINATING" || state === "TERMINATED") {
     throw new MicrovmStateError(
       withRequestId(
-        `MicroVM ${microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
+        `MicroVM ${microvmId} is ${state}${reason ? `: ${reason}` : ""}.`,
         "GetMicrovm",
         current,
       ),

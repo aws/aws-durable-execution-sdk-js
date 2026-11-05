@@ -112,9 +112,10 @@ export class MicrovmDeliveryError extends MicrovmError {
  * 2. Any job that goes over HTTP, from {@link microvm} or from a session,
  *    after a request without an answer, or after an HTTP 502 with
  *    `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step then
- *    calls GetMicrovm once. The endpoint of a terminated MicroVM answers
- *    that 502, measured in us-east-1. So a MicroVM that ends before its job
- *    arrives fails the job after one request.
+ *    calls GetMicrovm after each such answer, at most once per 2 seconds.
+ *    The endpoint of a terminated MicroVM answers that 502, measured in
+ *    us-east-1. So a MicroVM that ends before its job arrives fails the job
+ *    after one request.
  * 3. Any job that goes over HTTP. The request step calls
  *    CreateMicrovmAuthToken before the first request, and again after a 401
  *    or 403. The API model lists `ResourceNotFoundException` for that call.

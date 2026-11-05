@@ -523,8 +523,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     // worker can still suspend the MicroVM on idle after a state check, and
     // the last call to the service wins.
     //
-    // A session sets only one of the two checks. So when both are set, only
-    // `recheck` runs.
+    // `deliverJob` sets only one of the two checks.
     if (
       options.recheck &&
       (status === undefined || (status >= 502 && status <= 504))

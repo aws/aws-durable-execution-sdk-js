@@ -675,7 +675,10 @@ const SCENARIOS = [
         `error message ${message}`,
       );
       // One request gets the 502, and the state check after it ends the job.
-      assert(requests.length <= 2, `${requests.length} requests`);
+      assert(
+        requests.length >= 1 && requests.length <= 2,
+        `${requests.length} requests`,
+      );
     },
   },
   {
