@@ -661,8 +661,9 @@ export interface DeliverJobOptions {
 }
 
 /**
- * The warning, once per job, after a failed state check of an attempt
- * without the resume mode.
+ * The warning, once per step attempt (so up to 5 with the default retry
+ * strategy), after a failed state check of an attempt without the resume
+ * mode.
  */
 const STATE_CHECK_WARNING =
   "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
@@ -691,8 +692,9 @@ const GET_DENIED_NOTE =
  * 2. A session MicroVM can also give that sign while it is suspended. The
  *    check then resumes it.
  *
- * A failed GetMicrovm call in the check logs one warning per job, and the
- * attempt keeps sending the job.
+ * A failed GetMicrovm call in the check logs one warning per step attempt,
+ * so up to 5 with the default retry strategy. The attempt keeps sending the
+ * job.
  */
 export async function deliverJob(
   child: DurableContext,
@@ -715,8 +717,8 @@ export async function deliverJob(
     "input",
     job.inputJson,
   );
-  // One warning per job for a failed state check. The attempts of the step
-  // in this invocation share it.
+  // One warning per step attempt for a failed state check. The requests of
+  // the attempt in this invocation share it.
   let checkWarned = false;
   await child.step(
     `${jobName}.request`,

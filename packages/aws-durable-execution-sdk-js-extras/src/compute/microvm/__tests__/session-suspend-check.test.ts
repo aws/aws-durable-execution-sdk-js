@@ -272,7 +272,7 @@ describe("a session job without the resume mode", () => {
     expect(warnings.filter((w) => w === STATE_CHECK_WARNING)).toHaveLength(1);
   });
 
-  it("logs one warning per job for a GetMicrovm that fails otherwise, without the denial note", async () => {
+  it("logs one warning per step attempt for a GetMicrovm that fails otherwise, without the denial note", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
     const endpoint = suspendableEndpoint(client);

@@ -1,8 +1,9 @@
 // The state check of a microvm() job over HTTP. After an HTTP 502 with
 // `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an
-// answer, the request step calls GetMicrovm once. The endpoint of a
-// terminated MicroVM answers that 502, measured in us-east-1. So a MicroVM
-// that ended fails the job at once, instead of after both retry tiers.
+// answer, the request step calls GetMicrovm after each such answer, at most
+// once per 2 seconds. The endpoint of a terminated MicroVM answers that 502,
+// measured in us-east-1. So a MicroVM that ended fails the job at once,
+// instead of after both retry tiers.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
