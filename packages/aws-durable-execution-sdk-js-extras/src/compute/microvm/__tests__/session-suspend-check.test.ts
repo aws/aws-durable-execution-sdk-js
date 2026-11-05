@@ -18,7 +18,6 @@ import {
   MicrovmNotRunningError,
   type MicrovmSessionConfig,
   type MicrovmSessionHandler,
-  microvm,
   microvmSession,
 } from "..";
 import {
@@ -366,30 +365,4 @@ describe("a session job without the resume mode", () => {
       ]);
     },
   );
-});
-
-describe("microvm over HTTP", () => {
-  it("makes no GetMicrovm call after a 502 with MICROVM_CONNECT_FAILED", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = [connectFailed()];
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: withDurableExecution(
-        async (event: unknown, context: DurableContext) =>
-          microvm(context, "build", event, {
-            ...baseConfig(client),
-            fetch: endpoint.fetch,
-            request: { path: "/build" },
-          }),
-      ),
-    }) as Runner;
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "build", "done");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(endpoint.requests).toHaveLength(2);
-    expect(client.events).toEqual(["terminate"]);
-  });
 });

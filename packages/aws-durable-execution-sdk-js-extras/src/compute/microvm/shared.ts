@@ -278,8 +278,8 @@ export interface LaunchResult {
    * suspended MicroVM, before delivery. Replay reads it from the checkpoint.
    * So every replay follows the mode that the launch prepared the MicroVM
    * for. A session launch always records it. A `microvm()` launch does not
-   * record it, because a single job never resumes its MicroVM. So the field
-   * is optional.
+   * record it, because a single job never checks the state before delivery.
+   * So the field is optional.
    */
   resumeBeforeDelivery?: boolean;
 }
@@ -658,17 +658,10 @@ export interface DeliverJobOptions {
    * session's flag, see the current value.
    */
   resume?: boolean | (() => boolean);
-  /**
-   * Turns on the check after a sign of a suspended MicroVM, for an attempt
-   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
-   * every job. A failed GetMicrovm call in that check logs one warning per
-   * job, and the attempt keeps sending the job.
-   */
-  suspendCheck?: boolean;
 }
 
 /**
- * The warning, once per job, after a failed state check of a session
+ * The warning, once per job, after a failed state check of an attempt
  * without the resume mode.
  */
 const STATE_CHECK_WARNING =
@@ -684,6 +677,22 @@ const GET_DENIED_NOTE =
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
+ *
+ * An attempt without `resume` checks the MicroVM state once after a sign
+ * that the MicroVM does not run: an HTTP 502 with `x-aws-proxy-error:
+ * MICROVM_CONNECT_FAILED`, or no answer. See {@link resumeIfSuspended}.
+ * Every job over HTTP runs this check, from `microvm` and from a session:
+ *
+ * 1. The endpoint of a terminated MicroVM answers that 502, measured in
+ *    us-east-1. Without the check, the request step retries the 502 as a
+ *    MicroVM that is still starting, in both retry tiers. With the check, a
+ *    terminating, terminated, or removed MicroVM fails the job at once with
+ *    `MicrovmNotRunningError`.
+ * 2. A session MicroVM can also give that sign while it is suspended. The
+ *    check then resumes it.
+ *
+ * A failed GetMicrovm call in the check logs one warning per job, and the
+ * attempt keeps sending the job.
  */
 export async function deliverJob(
   child: DurableContext,
@@ -797,9 +806,7 @@ export async function deliverJob(
         windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(resume && { recheck: running }),
-        ...(!resume &&
-          options.suspendCheck === true && { suspendCheck: checkState }),
+        ...(resume ? { recheck: running } : { suspendCheck: checkState }),
         unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
       });
     },

@@ -9,6 +9,11 @@ import {
   microvm,
   microvmSession,
 } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import {
+  GetMicrovmCommand,
+  LambdaMicrovmsClient,
+  TerminateMicrovmCommand,
+} from "@aws-sdk/client-lambda-microvms";
 
 export interface E2eJob {
   /** What the job in the MicroVM does. See microvm-app.ts. */
@@ -37,6 +42,11 @@ export interface E2eEvent {
   paddingLength?: number;
   /** The padding character. The default is "x". */
   paddingChar?: string;
+  /**
+   * Terminates the MicroVM as soon as RunMicrovm returns, and waits until
+   * GetMicrovm reports TERMINATED. So the job finds a dead MicroVM.
+   */
+  terminateAfterLaunch?: boolean;
   /** The session idle policy, for the idle-session scenario. */
   idlePolicy?: {
     autoResumeEnabled: boolean;
@@ -56,6 +66,10 @@ export const handler = withDurableExecution(
       }),
       ...(event.requestPath !== undefined && {
         request: { path: event.requestPath },
+      }),
+      ...(event.terminateAfterLaunch === true && {
+        client: terminatingClient(),
+        fetch: loggingFetch(context.executionContext.durableExecutionArn),
       }),
     };
     const job = event.paddingLength
@@ -174,6 +188,72 @@ export const handler = withDurableExecution(
     return microvm(context, "job", job, config);
   },
 );
+
+/**
+ * Returns a client that terminates each MicroVM that RunMicrovm returns, and
+ * waits up to 60 seconds for TERMINATED. The launch step then records a dead
+ * MicroVM, as when a MicroVM fails right after its launch.
+ */
+function terminatingClient(): LambdaMicrovmsClient {
+  const client = new LambdaMicrovmsClient({});
+  const other = new LambdaMicrovmsClient({});
+  client.middlewareStack.add(
+    (next, middlewareContext) => async (args) => {
+      const output = await next(args);
+      const microvmId = (output.output as { microvmId?: string }).microvmId;
+      if (middlewareContext.commandName === "RunMicrovmCommand" && microvmId) {
+        await other.send(
+          new TerminateMicrovmCommand({ microvmIdentifier: microvmId }),
+        );
+        for (let i = 0; i < 30; i++) {
+          const vm = await other.send(
+            new GetMicrovmCommand({ microvmIdentifier: microvmId }),
+          );
+          if (vm.state === "TERMINATED") {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2_000));
+        }
+        console.log(JSON.stringify({ e2e: "terminated", microvmId }));
+      }
+      return output;
+    },
+    { step: "initialize", name: "e2eTerminateAfterLaunch" },
+  );
+  return client;
+}
+
+/**
+ * Returns the global fetch with one log line per request: the status, the
+ * proxy error header, and the time. The end-to-end runner counts the lines.
+ */
+function loggingFetch(executionArn: string): typeof fetch {
+  return async (input, init) => {
+    const started = Date.now();
+    const base = { e2e: "fetch", execution: executionArn.split("/").at(-2) };
+    try {
+      const response = await fetch(input, init);
+      console.log(
+        JSON.stringify({
+          ...base,
+          status: response.status,
+          proxyError: response.headers.get("x-aws-proxy-error"),
+          ms: Date.now() - started,
+        }),
+      );
+      return response;
+    } catch (error) {
+      console.log(
+        JSON.stringify({
+          ...base,
+          error: (error as Error).name,
+          ms: Date.now() - started,
+        }),
+      );
+      throw error;
+    }
+  };
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];

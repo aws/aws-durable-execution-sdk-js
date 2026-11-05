@@ -285,21 +285,23 @@ export interface SendJobOptions {
    */
   recheck?: (maxWaitMs: number) => Promise<string | undefined>;
   /**
-   * Resumes the MicroVM if it is suspended, and returns its current
-   * endpoint.
+   * Checks the MicroVM state once. It throws for a MicroVM that has ended,
+   * resumes a suspended MicroVM, and returns the current endpoint.
    *
-   * A session job without {@link SendJobOptions.recheck} sets it. The durable
-   * function can suspend the MicroVM after a `suspendAfter` job, and the idle
-   * auto-suspend of the worker can suspend it. The session can lose the record
-   * of the first case on replay. A suspended or suspending MicroVM
-   * gets no answer to a request, or its endpoint answers HTTP 502 with
-   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the next attempt calls
-   * it after either sign, at most once per 2 seconds. A booting MicroVM gets
+   * Every job without {@link SendJobOptions.recheck} sets it, from
+   * `microvm` and from a session. A suspended, suspending, or terminated
+   * MicroVM gets no answer to a request, or its endpoint answers HTTP 502
+   * with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The answer of a
+   * terminated MicroVM was measured in us-east-1. The durable function can
+   * suspend a session MicroVM after a `suspendAfter` job, and the idle
+   * auto-suspend of the worker can suspend it. The session can lose the
+   * record of the first case on replay. So the next attempt calls it after
+   * either sign, at most once per 2 seconds. A booting MicroVM gets
    * neither sign, because its endpoint holds the request until the worker
    * listens. That holds unless the worker takes more than 10 seconds to
    * start listening. Then the first delivery gets no answer, and the
-   * operation makes one GetMicrovm call. So a session that never suspends
-   * makes no extra call, except in that case. It receives what remains of
+   * operation makes one GetMicrovm call. So a job whose MicroVM runs makes
+   * no extra call, except in that case. It receives what remains of
    * the retry window, in milliseconds. `undefined` from it keeps the current
    * endpoint. When {@link SendJobOptions.recheck} is set too, only `recheck`
    * runs.
@@ -362,12 +364,15 @@ export interface SendJobOptions {
  * request for a callback ID that runs or recently ended, so the job still
  * runs once.
  *
- * A session job checks the MicroVM state in one of two ways. With
+ * A job checks the MicroVM state in one of two ways. With
  * {@link SendJobOptions.recheck}, it checks after any 502, 503, 504, or
  * request without an answer. With {@link SendJobOptions.suspendCheck}, it
  * checks only after a 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`
- * or a request without an answer, at most once per 2 seconds. The function
- * then sends the job again to the endpoint that the check reports.
+ * or a request without an answer, at most once per 2 seconds. A check that
+ * finds the MicroVM terminating, terminated, or removed throws
+ * `MicrovmStateError`, and the job fails with `MicrovmNotRunningError`.
+ * Otherwise the function sends the job again to the endpoint that the check
+ * reports.
  *
  * @returns The status that accepted the job.
  */
@@ -507,11 +512,12 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     await sleep(delay);
     delay = Math.min(delay * 2, MAX_DELAY_MS);
     // A failed request or a gateway error can mean that the MicroVM
-    // suspended itself. So a session checks the state, and resumes the
-    // MicroVM, before it retries.
+    // suspended itself, or that it ended. So the job checks the state
+    // before it retries. The check resumes a suspended MicroVM, and throws
+    // for one that ended.
     //
-    // A session without the resume mode checks the state only after a sign
-    // of a suspended MicroVM. A booting MicroVM gives no such sign, unless
+    // A job without the resume mode checks the state only after a sign
+    // that the MicroVM does not run. A booting MicroVM gives no such sign, unless
     // the worker takes more than 10 seconds to start listening. The check
     // repeats after each such failure, at most once per 2 seconds. The
     // worker can still suspend the MicroVM on idle after a state check, and

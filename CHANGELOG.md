@@ -161,6 +161,21 @@ below describe each change in detail.
 
 ### Fixed
 
+- A `microvm` job over HTTP in `@aws/durable-execution-sdk-js-extras` kept retrying a MicroVM
+  that had ended. The endpoint of a terminated MicroVM answers HTTP 502 with
+  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, measured in us-east-1. The request step retried
+  that 502 as a MicroVM that is still starting. The launch uses a client token, so every retry
+  reached the same dead MicroVM. So the job failed with `MicrovmDeliveryError` only after both
+  retry tiers, several minutes later. A session job already checked the state after that answer.
+  Every job over HTTP now runs the same check: after that 502, or a request without an answer,
+  the request step calls GetMicrovm once. A terminating, terminated, or removed MicroVM fails
+  the job at once with `MicrovmNotRunningError`. The message names the `stateReason` and ends
+  with `GetMicrovm request ID: <id>.`. Grant `lambda:GetMicrovm` to the function's role of
+  `microvm`. Without it, the check logs one warning, and the job keeps its retries. A `microvm`
+  MicroVM that something outside the operation suspended is resumed, as in a session. That needs
+  `lambda:ResumeMicrovm`. Without it, the job fails at once with `MicrovmDeliveryError`. A job in the
+  `run` hook has no request step, so it still fails with `MicrovmTimeoutError` at its
+  `heartbeatTimeout`.
 - After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
   fail to suspend the invocation. The same held after any child context returned while a step
   it started was still running. A step still running in an abandoned item tries to checkpoint

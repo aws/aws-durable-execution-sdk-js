@@ -648,6 +648,52 @@ const SCENARIOS = [
     },
   },
   {
+    // The function terminates the MicroVM as soon as RunMicrovm returns, so
+    // the job goes over HTTP to a dead MicroVM. Its endpoint answers 502
+    // with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step
+    // must then check the state once and fail with MicrovmNotRunningError,
+    // instead of retrying the dead endpoint in both retry tiers.
+    id: "dead-microvm",
+    countRequests: true,
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "dead" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 60,
+      requestPath: "/job",
+      terminateAfterLaunch: true,
+    },
+    expect: ({ execution, requests }) => {
+      assert(execution.Status === "FAILED", `status ${execution.Status}`);
+      assert(
+        execution.Error?.ErrorType === "MicrovmNotRunningError",
+        `error type ${execution.Error?.ErrorType}`,
+      );
+      const message = execution.Error?.ErrorMessage ?? "";
+      assert(
+        /is TERMINATED/.test(message) && /GetMicrovm request ID/.test(message),
+        `error message ${message}`,
+      );
+      // One request gets the 502, and the state check after it ends the job.
+      assert(requests.length <= 2, `${requests.length} requests`);
+    },
+  },
+  {
+    // The same dead MicroVM with a small input, which goes in the run hook.
+    // No request step runs, so only the heartbeat timeout ends the job.
+    // The scenario records the outcome and checks nothing.
+    id: "dead-microvm-run-hook",
+    optional: true,
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "dead-run-hook" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 30,
+      terminateAfterLaunch: true,
+    },
+    expect: () => {},
+  },
+  {
     id: "session",
     event: {
       scenario: "session",
@@ -898,6 +944,9 @@ async function runScenario(functionArn, scenario, runId) {
   const operationNames = [
     ...new Set(events.map((e) => e.Name).filter(Boolean)),
   ];
+  const requests = scenario.countRequests
+    ? await loggedRequests(functionArn, name, started)
+    : undefined;
   // Every event of one operation carries the same subtype.
   const subTypes = Object.fromEntries(
     events.filter((e) => e.Name).map((e) => [e.Name, e.SubType]),
@@ -914,7 +963,59 @@ async function runScenario(functionArn, scenario, runId) {
     terminatedAfterSeconds,
     operationNames,
     subTypes,
+    requests,
   };
+}
+
+/**
+ * Returns the job requests that the function logged for one execution. The
+ * function logs one line per request when the event sets
+ * terminateAfterLaunch. CloudWatch Logs can show a line some seconds late,
+ * so the runner waits for the count to stop growing.
+ */
+async function loggedRequests(functionArn, executionName, startedAt) {
+  const group = `/aws/lambda/${functionArn.split(":")[6]}`;
+  let lines = [];
+  for (let i = 0; i < 6; i++) {
+    await sleep(10_000);
+    const found = aws([
+      "logs",
+      "filter-log-events",
+      "--log-group-name",
+      group,
+      "--start-time",
+      String(startedAt),
+      "--filter-pattern",
+      `"${executionName}"`,
+    ]);
+    // With the JSON log format, the console line is the `message` field of
+    // the log event. With the text format, it follows the tab-separated
+    // prefix.
+    const parse = (text) => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return undefined;
+      }
+    };
+    const next = (found.events ?? [])
+      .flatMap((e) => {
+        const event = parse(e.message);
+        const line =
+          typeof event?.message === "string"
+            ? parse(event.message)
+            : parse(e.message.slice(e.message.indexOf("{")));
+        return line ? [line] : [];
+      })
+      .filter(
+        (line) => line.e2e === "fetch" && line.execution === executionName,
+      );
+    if (next.length > 0 && next.length === lines.length) {
+      break;
+    }
+    lines = next;
+  }
+  return lines;
 }
 
 /** Returns the ID of the execution's launched MicroVM, once it has one. */
@@ -1059,6 +1160,7 @@ for (const outcome of outcomes) {
         operations: outcome.operationNames,
         subTypes: outcome.subTypes,
         observedStates: outcome.observedStates,
+        requests: outcome.requests,
         microvms: outcome.microvmStates,
         executionArn: outcome.executionArn,
       },

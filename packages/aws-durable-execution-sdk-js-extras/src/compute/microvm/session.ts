@@ -386,10 +386,7 @@ function invokeJob<TOutput, TInput>(
           // The request sends the input's JSON text from
           // validateJobInput. So `input` is encoded once per call.
           measuredJob(callbackId, inputJson, options.heartbeatTimeout),
-          {
-            resume: () => resumeMode(state),
-            suspendCheck: true,
-          },
+          { resume: () => resumeMode(state) },
         ),
       );
       try {

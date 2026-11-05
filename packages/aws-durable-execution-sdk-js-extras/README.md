@@ -151,7 +151,7 @@ The three errors marked "request step only" are thrown inside the request step, 
 |---|---|
 | `MicrovmLaunchError` | `RunMicrovm` failed after all retries. A MicroVM can still run the job. The list below the table says when. |
 | `MicrovmDeliveryError` | HTTP delivery failed after all retries, or the route answered a 4xx status such as 404, or a redirect. |
-| `MicrovmNotRunningError` | A `MicrovmDeliveryError`: the MicroVM is terminating, terminated, or removed. It is not retried. A session that checks the MicroVM state before each job reports it, and so does a session job that checks the state after a sign of a suspended MicroVM. Any job over HTTP also reports it when `CreateMicrovmAuthToken` reports the MicroVM removed. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs) and [Suspending after a job](#suspending-after-a-job). |
+| `MicrovmNotRunningError` | A `MicrovmDeliveryError`: the MicroVM is terminating, terminated, or removed. It is not retried. A session that checks the MicroVM state before each job reports it. Any job over HTTP, from `microvm` or a session, reports it after an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED` or a request without an answer: the request step then calls GetMicrovm once. The endpoint of a terminated MicroVM answers that 502, measured in us-east-1. The message names the state, the `stateReason`, and the GetMicrovm request ID. Any job over HTTP also reports it when `CreateMicrovmAuthToken` reports the MicroVM removed. A job in the `run` hook has no request step, so a MicroVM that ends before the job runs fails it with `MicrovmTimeoutError`. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs) and [Suspending after a job](#suspending-after-a-job). |
 | `MicrovmJobFailedError` | The job handler in the MicroVM failed. The message includes the job's error type, and `errorData` is the data that the MicroVM reported. |
 | `MicrovmTimeoutError` | No result arrived within `timeout`, or no heartbeat within `heartbeatTimeout`. A MicroVM that crashed ends this way. |
 
@@ -208,7 +208,7 @@ The function's execution role needs:
 - `lambda:CreateMicrovmAuthToken`, for HTTP delivery. Grant it unless every input is small.
 - `lambda:PassNetworkConnector` on the connectors the MicroVM uses. RunMicrovm authorizes each connector separately. With the defaults, that is `arn:aws:lambda:<region>:aws:network-connector:aws-network-connector:*`.
 - `iam:PassRole` on the MicroVM execution role.
-- `lambda:GetMicrovm` and `lambda:ResumeMicrovm`, for `microvmSession`. A session job checks the MicroVM state after a sign of a suspended MicroVM. See [Suspending after a job](#suspending-after-a-job).
+- `lambda:GetMicrovm` and `lambda:ResumeMicrovm`, for HTTP delivery, from `microvm` and from `microvmSession`. A job over HTTP checks the MicroVM state after an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED` or a request without an answer. Without `lambda:GetMicrovm`, the check logs a warning, and a job whose MicroVM has ended fails only after both retry tiers. Without `lambda:ResumeMicrovm`, a job that finds the MicroVM suspended fails at once. See [Suspending after a job](#suspending-after-a-job).
 - `lambda:SuspendMicrovm` on the MicroVM image, for a job with `suspendAfter`. The function calls it after the job. The MicroVM's role needs it only for `autoSuspendOnIdle`.
 
 The MicroVM execution role (`executionRoleArn`) needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
@@ -354,8 +354,8 @@ The worker reads its idle time once, from the run hook payload of the launch. Ru
 A session MicroVM lives at most its session `timeout` plus 5 minutes, and never longer than 8 hours. What the next `vm.invoke` reports after the MicroVM ends depends on the state check:
 
 - For a session that launched with `autoSuspendOnIdle: true`, or with an `idlePolicy` set, the request step calls GetMicrovm before each job. A MicroVM that no longer exists, or that is terminating, then fails the job at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried. The message ends with the request ID of the call that reported the state, for example `GetMicrovm request ID: <id>.`
-- By default, a session launches with neither. Such a session makes no GetMicrovm call before delivery, unless an earlier job of the handle suspended the MicroVM with `suspendAfter`. A terminated MicroVM's endpoint answers 502, measured in us-east-1. Whether that 502 carries `x-aws-proxy-error: MICROVM_CONNECT_FAILED` is not verified. With that header, the check of [Suspending after a job](#suspending-after-a-job) reports the state, and the job fails with a `MicrovmNotRunningError`. Without it, the request step treats a 502 as a MicroVM that is still starting. So the job fails with a plain `MicrovmDeliveryError`, only after both retry tiers: 5 step attempts with the default retry strategy, each up to the 60-second `retryWindow`. Each attempt bills Lambda compute while it retries.
-- Every session, and every `microvm` job over HTTP, calls CreateMicrovmAuthToken before the first request, and again after a 401 or 403. The API model lists `ResourceNotFoundException` for that call. That answer fails the job at once with a `MicrovmNotRunningError`, whose message ends with `CreateMicrovmAuthToken request ID: <id>.`. The live service's answer for a removed MicroVM is not verified.
+- By default, a session launches with neither. Such a session makes no GetMicrovm call before delivery, unless an earlier job of the handle suspended the MicroVM with `suspendAfter`. A terminated MicroVM's endpoint answers HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, measured in us-east-1. After that answer, the check of [Suspending after a job](#suspending-after-a-job) reports the state, and the job fails with a `MicrovmNotRunningError` after one request. A `microvm` job over HTTP runs the same check. When GetMicrovm is denied or fails, the request step treats the 502 as a MicroVM that is still starting. So the job then fails with a plain `MicrovmDeliveryError`, only after both retry tiers: 5 step attempts with the default retry strategy, each up to the 60-second `retryWindow`. Each attempt bills Lambda compute while it retries.
+- Every session, and every `microvm` job over HTTP, calls CreateMicrovmAuthToken before the first request, and again after a 401 or 403. The API model lists `ResourceNotFoundException` for that call. That answer fails the job at once with a `MicrovmNotRunningError`, whose message ends with `CreateMicrovmAuthToken request ID: <id>.`. For a terminated MicroVM whose record still exists, the call issues a token, measured in us-east-1. The live service's answer for a removed MicroVM is not verified.
 
 The session needs the same permissions as `microvm` with HTTP delivery, including `lambda:CreateMicrovmAuthToken`. A session that launched with `autoSuspendOnIdle: true` or an `idlePolicy` also needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. A later deploy that turns them off does not change the resume mode of such a session. So keep `lambda:GetMicrovm` and `lambda:ResumeMicrovm` until every such session has ended. Grant `lambda:GetMicrovm` and `lambda:ResumeMicrovm` to the function's role of every session, because every session job checks the state after a sign of a suspended MicroVM. Without `lambda:GetMicrovm`, that check logs a warning, and the job keeps its retries. Without `lambda:ResumeMicrovm`, a job that finds the MicroVM suspended fails at once.
 
@@ -530,7 +530,7 @@ The operations retry network and service failures. They launch and terminate the
 
 ## End-to-end test
 
-`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs thirteen scenarios by default:
+`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs fourteen scenarios by default:
 
 - A job that succeeds with heartbeats. Its small input goes in the `run` hook.
 - A job that fails.
@@ -542,10 +542,13 @@ The operations retry network and service failures. They launch and terminate the
 - Two jobs with 3,400 code points of CJK and of emoji input, about 10.6 KB and 13.9 KB. They must go in the `run` hook and reach the MicroVM unchanged.
 - A job with 4,200 code points of CJK input. It must go over HTTP.
 - A failing job over HTTP.
+- A job over HTTP whose MicroVM the function terminates as soon as RunMicrovm returns. The job must fail with `MicrovmNotRunningError` after at most two requests. The runner counts the requests from the function's log.
 - A session whose second job reads a file that its first job wrote, with a durable wait between them.
 - A session whose last job reads a value that its first job kept in memory, with two durable waits between them. Its idle time is 10 seconds, so the worker suspends the MicroVM during the first wait. The runner polls the MicroVM state and requires `SUSPENDED`.
 
-It checks the execution status, the operation history, and that every MicroVM ends `TERMINATED`. Two more scenarios, `long-job` and `idle-probe`, take minutes and answer design questions. They run only when `E2E_SCENARIOS` names them.
+It checks the execution status, the operation history, and that every MicroVM ends `TERMINATED`. Three more scenarios run only when `E2E_SCENARIOS` names them. `long-job` and `idle-probe` take minutes and answer design questions. `dead-microvm-run-hook` terminates the MicroVM of a small job right after its launch, and only reports the outcome.
+
+`PROBES=dead node e2e/probe-service.mjs` records what the endpoint and CreateMicrovmAuthToken answer for a running, a terminating, and a terminated MicroVM. It needs `MICROVM_IMAGE_ARN` set to an image with a worker on port 8080, such as the end-to-end image.
 
 `e2e/probe-lifecycle.mjs` records when Lambda calls the `suspend` and `terminate` hooks, and which headers the hook calls and forwarded requests carry. It needs the roles and the bucket that `run-e2e.mjs` creates, so run that first.
 
