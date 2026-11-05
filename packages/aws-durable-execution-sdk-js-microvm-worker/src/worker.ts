@@ -823,8 +823,7 @@ export function createMicrovmWorkerListener<
         }
       }
       // The worker has acted on the outcome. So the fields show the state
-      // that follows from the outcome. `trigger` comes last, so the order
-      // of the other fields stays as documented before it existed.
+      // that follows from the outcome.
       logger.warn(FAILED_SUSPEND_MESSAGES[outcome], {
         microvmId: target,
         error: describe(error),
