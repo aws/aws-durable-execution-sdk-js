@@ -11,13 +11,17 @@ import {
   LambdaMicrovmsClient,
   RunMicrovmCommand,
   type RunMicrovmCommandInput,
+  SuspendMicrovmCommand,
   TerminateMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 import {
   DEFAULT_MICROVM_JOB_PATH,
   DEFAULT_MICROVM_PORT,
   DEFAULT_REQUEST_RETRY_WINDOW_MS,
+  MicrovmEndpointUnavailableError,
   assertTimeToDeliver,
+  callBeforeDeadline,
+  reserveStartsAt,
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
@@ -111,12 +115,10 @@ export function fitsRunHook(payload: string): boolean {
  *
  * 1. The worker refuses a job request body over 6 MiB.
  * 2. The body holds the input's JSON and fixed fields: the version, the
- *    Region, the MicroVM ID, the suspend-after flag, the callback ID, and the
- *    heartbeat timeout.
+ *    Region, the MicroVM ID, the callback ID, and the heartbeat timeout.
  * 3. The callback ID has at most 1,024 base64 characters. The MicroVM ID has
  *    at most 256 characters, so at most 1,536 bytes as JSON. The other
- *    fields take less than 200 bytes. The suspend-after flag,
- *    `,"suspendAfter":true`, takes 20 of them.
+ *    fields take less than 200 bytes.
  * 4. So the fixed fields take less than 3 KiB. So 8 KiB covers them.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
@@ -663,13 +665,6 @@ export interface DeliverJobOptions {
    * job, and the attempt keeps sending the job.
    */
   suspendCheck?: boolean;
-  /** Adds `"suspendAfter": true` to the job request. */
-  suspendAfter?: boolean;
-  /**
-   * Returns `true` when the job may log the warning about a worker that
-   * ignores `suspendAfter`. The session returns `true` once per session.
-   */
-  claimSuspendAfterWarning?: () => boolean;
 }
 
 /**
@@ -700,14 +695,12 @@ export async function deliverJob(
   options: DeliverJobOptions = {},
 ): Promise<void> {
   // The body ends with the input's measured JSON text. So it has the size
-  // that validateJobInput checked. The field `suspendAfter` is present only
-  // when it is true, so other jobs keep the same body.
+  // that validateJobInput checked.
   const body = withJsonMember(
     {
       version: 1,
       region: scope.region,
       microvmId: launched.microvmId,
-      ...(options.suspendAfter === true && { suspendAfter: true }),
       ...job.fields,
     } satisfies Omit<MicrovmJobRequest, "input">,
     "input",
@@ -808,16 +801,6 @@ export async function deliverJob(
         ...(!resume &&
           options.suspendCheck === true && { suspendCheck: checkState }),
         unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
-        ...(options.suspendAfter === true && {
-          onSuspendAfterIgnored: () => {
-            if (options.claimSuspendAfterWarning?.() === true) {
-              stepContext.logger.warn(
-                `the worker in MicroVM ${launched.microvmId} does not support suspendAfter. The MicroVM keeps running after the job.`,
-                { microvmId: launched.microvmId },
-              );
-            }
-          },
-        }),
       });
     },
     {
@@ -875,6 +858,53 @@ export async function terminate(
     child.logger.error(
       `MicroVM "${scope.name}": terminate failed for ${microvmId}. The MicroVM keeps running, and is billed, until the platform ends it at maximumDurationInSeconds, the operation timeout plus 5 minutes, at most 8 hours. A missing permission needs lambda:TerminateMicrovm in the function's execution role.`,
       { error },
+    );
+  }
+}
+
+/**
+ * Suspends the MicroVM and logs, instead of throwing, a failure.
+ *
+ * @remarks
+ * A session job with `suspendAfter` calls it in the job's child context,
+ * after the job's outcome arrived. The call is not a step and has no
+ * checkpoint of its own. The child context's completion checkpoint covers
+ * it, so a replay of a completed job does not call it again.
+ *
+ * A failed call must not fail the job, which has an outcome already. The next
+ * job checks the MicroVM state and resumes it when needed. SuspendMicrovm
+ * succeeds for a MicroVM that is suspending or suspended.
+ */
+export async function suspendMicrovm(
+  child: DurableContext,
+  scope: OperationScope,
+  jobName: string,
+  microvmId: string,
+): Promise<void> {
+  try {
+    // The call must end before the invocation reserve. A Lambda timeout
+    // during it would end the invocation with the job's result checkpointed
+    // but the child context not complete. An abort or an expired reserve is
+    // handled like any failed call. A replay can make this the first read of
+    // the remaining time. So the read is inside the try: a reader that throws
+    // logs the warning and does not replace the job's outcome.
+    const reserve = reserveStartsAt(remainingTime(child));
+    await callBeforeDeadline(
+      (sendOptions) =>
+        getClient(scope.config, scope.region).send(
+          new SuspendMicrovmCommand({ microvmIdentifier: microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      () =>
+        new MicrovmEndpointUnavailableError(
+          `The SuspendMicrovm call for ${microvmId} had no time left before the invocation reserve.`,
+        ),
+    );
+  } catch (error) {
+    child.logger.warn(
+      `MicroVM "${jobName}": suspend after the job failed for ${microvmId}. The MicroVM may still be running, and is billed while it runs, until it suspends on idle or the session terminates it. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in the function's execution role.`,
+      { error: addRequestId("SuspendMicrovm", error) },
     );
   }
 }

@@ -641,23 +641,22 @@ below describe each change in detail.
   that the MicroVM endpoint forwarded to one of these hook paths.
 
 - `MicrovmInvokeOptions.suspendAfter` in `@aws/durable-execution-sdk-js-extras`. A session job
-  with `suspendAfter: true` asks the worker to suspend the MicroVM after the job, with or
-  without `autoSuspendOnIdle`. The job request then carries `"suspendAfter": true`, and stays at
-  version 1. The session sets the flag before the job starts. So the job itself and each later
-  job of the session handle check the MicroVM state before delivery, and resume a suspended
-  MicroVM. A request from a job that ends before the first accepted run hook waits for that
-  hook. The worker acknowledges the field with the header
-  `X-Microvm-Suspend-After: accepted`. Without that header, the session logs a warning once per
-  session in each execution environment: `the worker in MicroVM <id> does not support
-  suspendAfter. The MicroVM keeps running after the job.` `microvm` rejects `suspendAfter` in
-  `config.request` with a `TypeError`, and both operations reject a value that is not a
-  boolean, before any durable operation starts. The function's role needs `lambda:GetMicrovm`
-  and `lambda:ResumeMicrovm`, and the MicroVM's role needs `lambda:SuspendMicrovm` on the image.
-  The handle keeps that record in memory only. So every session job also checks the state after
-  an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer,
-  at most once per 2 seconds. It resumes a suspending or suspended MicroVM, and sends the job
-  again. A denied GetMicrovm logs one warning per job, and the job keeps its retries. A denied
-  ResumeMicrovm for a suspended MicroVM fails the job at once with `MicrovmDeliveryError`.
+  with `suspendAfter: true` makes the durable function call SuspendMicrovm with the session's
+  MicroVM ID after the job's result arrives, whether the job succeeded or failed. The call runs
+  inside the job's child context, so a replay of a completed job does not send it again. A
+  failed call logs a warning and does not fail the job. The session handle then records that the
+  MicroVM may be suspended, so each later job checks the state before delivery and resumes a
+  suspended MicroVM. `microvm` rejects `suspendAfter` in `config.request` with a
+  `TypeError`, and both operations reject a value that is not a boolean, before any durable
+  operation starts. The function's role needs `lambda:SuspendMicrovm` on the image, plus
+  `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. The MicroVM's role needs `lambda:SuspendMicrovm`
+  only for `autoSuspendOnIdle`. Every session job also checks the state after an HTTP 502 with
+  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
+  2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
+  GetMicrovm logs one warning per job, and the job keeps its retries. A denied ResumeMicrovm for
+  a suspended MicroVM fails the job at once with `MicrovmDeliveryError`. The doc comment of
+  `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
+  context checkpoint limit, and a new function version for any change.
 
 - **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
   `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports

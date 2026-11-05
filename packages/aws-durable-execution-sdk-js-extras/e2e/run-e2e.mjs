@@ -233,7 +233,7 @@ function ensureInfrastructure(account) {
           "lambda:TerminateMicrovm",
           "lambda:GetMicrovm",
           "lambda:CreateMicrovmAuthToken",
-          // A session resumes a MicroVM that suspended itself between jobs.
+          // A session resumes a MicroVM that suspended between jobs.
           "lambda:ResumeMicrovm",
         ],
         Resource: "*",
