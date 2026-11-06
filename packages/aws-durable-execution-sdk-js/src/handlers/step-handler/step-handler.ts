@@ -277,7 +277,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             });
           } else {
             const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
-            checkpoint.checkpoint(stepId, {
+            // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+            void checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,

@@ -360,7 +360,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
+    // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+    void checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -523,7 +524,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // checkpoint through during serialization.
     if (!isVirtual) {
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -598,7 +600,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.FAIL,

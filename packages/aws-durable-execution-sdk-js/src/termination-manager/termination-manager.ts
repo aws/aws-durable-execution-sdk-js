@@ -55,7 +55,8 @@ export class TerminationManager extends EventEmitter {
 
     // Instead of emitting an event, resolve the promise
     if (this.resolveTermination) {
-      this.handleTermination(this.terminationDetails).then(
+      // handleTermination does not reject.
+      void this.handleTermination(this.terminationDetails).then(
         this.resolveTermination,
       );
     }

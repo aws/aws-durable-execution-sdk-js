@@ -230,7 +230,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -326,7 +327,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -375,7 +377,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -582,7 +585,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (this.queue.length > 0) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       } else {
         // Queue is empty and processing is done - notify all waiting promises
@@ -1202,7 +1206,8 @@ export class CheckpointManager implements Checkpoint {
     op.pollCount ??= 0;
 
     op.timer = setTimeout(() => {
-      this.forceRefreshAndCheckStatus(stepId);
+      // forceCheckpoint does not reject, so this timer callback does not reject.
+      void this.forceRefreshAndCheckStatus(stepId);
     }, delay);
   }
 
@@ -1268,7 +1273,8 @@ export class CheckpointManager implements Checkpoint {
       const nextDelay = Math.min(op.pollCount * 1000, intervalCeilingMs);
 
       op.timer = setTimeout(() => {
-        this.forceRefreshAndCheckStatus(stepId);
+        // forceCheckpoint does not reject, so this timer callback does not reject.
+        void this.forceRefreshAndCheckStatus(stepId);
       }, nextDelay);
     }
   }
