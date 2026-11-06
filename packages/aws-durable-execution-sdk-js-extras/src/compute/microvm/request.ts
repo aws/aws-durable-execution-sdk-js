@@ -141,8 +141,9 @@ export async function callBeforeDeadline<T>(
  * This error and {@link MicrovmRequestUnauthorizedError} and
  * {@link MicrovmEndpointUnavailableError} are thrown inside the request step.
  * Only the step retry strategy sees them. When the step fails, the operation
- * reports a {@link MicrovmDeliveryError} or a `MicrovmNotRunningError`,
- * and `cause.name` keeps the name of this error.
+ * reports a {@link MicrovmDeliveryError} or a `MicrovmNotRunningError`.
+ * The name of this error is in the checkpointed step error type and in the
+ * message.
  *
  * Each of them extends {@link MicrovmDeliveryError}, and records its own name
  * as its checkpointed type, as it did before it extended it.

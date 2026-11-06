@@ -161,7 +161,9 @@ below describe each change in detail.
 
 - `microvm` in `@aws/durable-execution-sdk-js-extras` now requires `lambda:GetMicrovm` for HTTP
   delivery, and uses `lambda:ResumeMicrovm` for a MicroVM suspended from outside the operation.
-  See the Fixed entry for a `microvm` job that kept retrying an ended MicroVM.
+  A role without `lambda:GetMicrovm` now fails a job whose request gets no answer, even when
+  the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
+  such a job logged a warning and succeeded. See the Fixed entry for a `microvm` job that kept retrying an ended MicroVM.
 
 ### Fixed
 
@@ -679,7 +681,8 @@ below describe each change in detail.
   `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
   2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
   GetMicrovm fails the job at once with `MicrovmDeliveryError`. A GetMicrovm that fails otherwise
-  logs one warning per job, and the job keeps its retries. A denied ResumeMicrovm for
+  logs one warning per step attempt, so up to 5 with the default retry strategy, and the job
+  keeps its retries. A denied ResumeMicrovm for
   a suspended MicroVM fails the job at once with `MicrovmDeliveryError`. The doc comment of
   `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
   context checkpoint limit, and a new function version for any change.

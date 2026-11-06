@@ -248,6 +248,16 @@ describe("resumeIfSuspended", () => {
         Object.assign(new Error("slow down"), { name: "ThrottlingException" }),
       "slow down",
     ],
+    // Only AccessDeniedException counts as denied. Other auth-like errors
+    // keep the warn-and-retry path.
+    [
+      "UnrecognizedClientException",
+      () =>
+        Object.assign(new Error("bad token"), {
+          name: "UnrecognizedClientException",
+        }),
+      "bad token",
+    ],
   ])(
     "throws MicrovmStateCheckError for %s from GetMicrovm",
     async (_label, failure, message) => {
@@ -256,6 +266,7 @@ describe("resumeIfSuspended", () => {
 
       const error = await resumeIfSuspended(options(client)).catch((e) => e);
       expect(error).toBeInstanceOf(MicrovmStateCheckError);
+      expect(error).not.toBeInstanceOf(MicrovmGetDeniedError);
       expect(error.message).toBe(message);
     },
   );
