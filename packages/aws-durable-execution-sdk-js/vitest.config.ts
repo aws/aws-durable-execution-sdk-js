@@ -23,6 +23,15 @@ export default defineConfig({
         "src/testing/**",
         "src/index.ts", // barrel export file
       ],
+      // A floor about 1 point below the measured coverage, so a change that
+      // drops coverage fails `npm run test:coverage`. Raise these when
+      // coverage goes up.
+      thresholds: {
+        statements: 95,
+        branches: 90,
+        functions: 93,
+        lines: 95,
+      },
     },
   },
 });
