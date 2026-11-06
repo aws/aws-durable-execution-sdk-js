@@ -302,12 +302,14 @@ export interface SendJobOptions {
    * listens. That holds unless the worker takes more than 10 seconds to
    * start listening. Then the first delivery gets no answer, and the
    * operation makes one GetMicrovm call. So a job whose MicroVM runs makes
-   * no extra call, except in that case. It receives what remains of
-   * the retry window, in milliseconds. `undefined` from it keeps the current
-   * endpoint. When {@link SendJobOptions.recheck} is set too, only `recheck`
-   * runs.
+   * no extra call, except in that case.
+   *
+   * The call runs before the retry window and the backoff decide. So the
+   * window does not limit it, and only the invocation reserve does. At the
+   * reserve, the call does not start. `undefined` from it keeps the current
+   * endpoint.
    */
-  suspendCheck?: (maxWaitMs: number) => Promise<string | undefined>;
+  suspendCheck?: () => Promise<string | undefined>;
 }
 
 /**
@@ -364,7 +366,9 @@ export interface SendJobOptions {
  * {@link SendJobOptions.recheck}, it checks after any 502, 503, 504, or
  * request without an answer. With {@link SendJobOptions.suspendCheck}, it
  * checks only after a 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`
- * or a request without an answer, at most once per 2 seconds. A check that
+ * or a request without an answer, at most once per 2 seconds. That check
+ * runs first, before the retry window and the backoff decide, so a short
+ * window cannot skip it. A check that
  * finds the MicroVM terminating, terminated, or removed throws
  * `MicrovmStateError`, and the job fails with `MicrovmNotRunningError`.
  * Otherwise the function sends the job again to the endpoint that the check
@@ -499,6 +503,27 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
     }
 
+    // A job without the resume mode checks the state first after a sign
+    // that the MicroVM does not run, before the window and the backoff
+    // decide. A booting MicroVM gives no such sign, unless the worker takes
+    // more than 10 seconds to start listening. The check repeats after each
+    // such failure, at most once per 2 seconds. Only the invocation reserve
+    // limits it, so a short retry window cannot skip it. The worker can
+    // still suspend the MicroVM on idle after a state check, and the last
+    // call to the service wins.
+    if (
+      options.suspendCheck &&
+      (status === undefined || connectFailed) &&
+      (lastSuspendCheck === undefined ||
+        Date.now() - lastSuspendCheck >= SUSPEND_CHECK_INTERVAL_MS)
+    ) {
+      // At the reserve, no call starts, and the tier ends as without a check.
+      callBudgetMs(reserveStartsAt(options.remainingTimeMs), 0, unavailable);
+      lastSuspendCheck = Date.now();
+      endpoint = (await options.suspendCheck()) ?? endpoint;
+      url = endpointUrl(endpoint, options.path);
+    }
+
     if (Date.now() + delay > deadline()) {
       throw unavailable();
     }
@@ -506,16 +531,9 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     await sleep(delay);
     delay = Math.min(delay * 2, MAX_DELAY_MS);
     // A failed request or a gateway error can mean that the MicroVM
-    // suspended itself, or that it ended. So the job checks the state
-    // before it retries. The check resumes a suspended MicroVM, and throws
-    // for one that ended.
-    //
-    // A job without the resume mode checks the state only after a sign
-    // that the MicroVM does not run. A booting MicroVM gives no such sign, unless
-    // the worker takes more than 10 seconds to start listening. The check
-    // repeats after each such failure, at most once per 2 seconds. The
-    // worker can still suspend the MicroVM on idle after a state check, and
-    // the last call to the service wins.
+    // suspended itself, or that it ended. So a job in the resume mode checks
+    // the state before it retries. The check resumes a suspended MicroVM,
+    // and throws for one that ended.
     //
     // `deliverJob` sets only one of the two checks.
     if (
@@ -528,23 +546,6 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
       endpoint = (await options.recheck(remainingMs)) ?? endpoint;
       url = endpointUrl(endpoint, options.path);
-    } else if (
-      options.suspendCheck &&
-      (status === undefined || connectFailed)
-    ) {
-      const now = Date.now();
-      if (
-        lastSuspendCheck === undefined ||
-        now - lastSuspendCheck >= SUSPEND_CHECK_INTERVAL_MS
-      ) {
-        lastSuspendCheck = now;
-        const remainingMs = deadline() - now;
-        if (remainingMs <= 0) {
-          throw unavailable();
-        }
-        endpoint = (await options.suspendCheck(remainingMs)) ?? endpoint;
-        url = endpointUrl(endpoint, options.path);
-      }
     }
   }
 }

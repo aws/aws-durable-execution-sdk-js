@@ -754,14 +754,15 @@ export async function deliverJob(
       const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
-      const checkState = async (
-        maxWaitMs: number,
-      ): Promise<string | undefined> => {
+      // The check runs before the retry window decides, so what remains of
+      // the window does not limit it. The wait for a resume gets the length
+      // of the window, and the invocation reserve.
+      const checkState = async (): Promise<string | undefined> => {
         try {
           return await resumeIfSuspended({
             client,
             microvmId: launched.microvmId,
-            maxWaitMs,
+            maxWaitMs: retryWindowMs,
             remainingTimeMs: remainingTime(child),
             log,
           });

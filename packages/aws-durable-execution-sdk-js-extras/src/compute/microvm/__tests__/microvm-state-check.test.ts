@@ -4,7 +4,7 @@
 // once per 2 seconds. The endpoint of a terminated MicroVM answers that 502,
 // measured in us-east-1. So a MicroVM that ended fails the job at once,
 // instead of after both retry tiers.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   type DurableContext,
   type DurableLogger,
@@ -122,6 +122,50 @@ describe("microvm over HTTP, after a sign that the MicroVM does not run", () => 
     expect(endpoint.requests).toHaveLength(1);
     expect(client.events).toEqual(["get:TERMINATED", "terminate"]);
   });
+
+  it.each<[string, () => Response | Error]>([
+    ["a 502 with MICROVM_CONNECT_FAILED", connectFailed],
+    ["no answer", () => new TypeError("fetch failed")],
+  ])(
+    "fails with MicrovmNotRunningError after one GetMicrovm call when %s takes 3 seconds and the retry window is 1 second",
+    async (_label, answer) => {
+      const client = new FakeMicrovmsClient();
+      client.microvmState = "TERMINATED";
+      const endpoint = new FakeEndpoint();
+      endpoint.responses = [answer()];
+      // The answer of a dead endpoint can take 3 to 8 seconds, measured
+      // live. The fake clock moves 3 seconds during the request, so the
+      // request uses up the window.
+      const realNow = Date.now.bind(Date);
+      let offsetMs = 0;
+      const now = vi
+        .spyOn(Date, "now")
+        .mockImplementation(() => realNow() + offsetMs);
+      const slow: typeof fetch = async (url, init) => {
+        offsetMs += 3_000;
+        return endpoint.fetch(url, init);
+      };
+      // One step attempt. So the test shows what one attempt does.
+      const runner = runnerFor(client, endpoint, {
+        fetch: slow,
+        retryStrategy: noRetry,
+        request: { path: "/build", retryWindow: { seconds: 1 } },
+      });
+
+      try {
+        const execution = await runner.run({ payload: {} });
+
+        expect(execution.getStatus()).toBe("FAILED");
+        expect(execution.getError()?.errorType).toBe(
+          MicrovmNotRunningError.name,
+        );
+        expect(endpoint.requests).toHaveLength(1);
+        expect(client.events).toEqual(["get:TERMINATED", "terminate"]);
+      } finally {
+        now.mockRestore();
+      }
+    },
+  );
 
   it("removes one trailing period of stateReason, so the message has no double period", async () => {
     const client = new FakeMicrovmsClient();
