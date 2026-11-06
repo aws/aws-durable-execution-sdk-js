@@ -5,6 +5,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { withOperationsByName } from "../operations-index";
+import { TRUNCATION_OPERATIONS_FORMAT } from "../truncation-internal";
 
 /**
  * Configuration for the DynamoDB exporter.
@@ -45,6 +46,7 @@ export interface DynamoDBExporterConfig {
  * for the same execution **overwrite** the previous item (upsert).
  */
 export class DynamoDBExporter implements TelemetryExporter {
+  readonly [TRUNCATION_OPERATIONS_FORMAT] = "by-name" as const;
   private readonly tableName: string;
   private readonly partitionKey: string;
   private readonly sortKey: string | undefined;

@@ -18,7 +18,14 @@ import type {
   TelemetryExporter,
 } from "./types";
 import { withOperationsByName } from "./operations-index";
-import { truncateRecord } from "./truncation";
+import {
+  truncateRecord,
+  truncateRecordWithOperationsFormat,
+} from "./truncation";
+import {
+  TRUNCATION_OPERATIONS_FORMAT,
+  type TruncationFormatProvider,
+} from "./truncation-internal";
 
 export type {
   TelemetryExporter,
@@ -528,6 +535,7 @@ function buildOperationRecords(
  * this requires no additional IAM permissions or configuration.
  */
 export class LambdaLogExporter implements TelemetryExporter {
+  readonly [TRUNCATION_OPERATIONS_FORMAT] = "by-name" as const;
   /** CloudWatch Logs caps a single log event at 256 KB. */
   readonly maxRecordSizeBytes: number;
 
@@ -830,13 +838,20 @@ class ExportScheduler {
         await Promise.allSettled(
           this.exporters.map((exporter) => {
             try {
-              return exporter.export(
-                truncateRecord(
-                  record,
-                  exporter.maxRecordSizeBytes,
-                  exporter.render?.bind(exporter),
-                ),
-              );
+              const render = exporter.render?.bind(exporter);
+              const operationsFormat = (
+                exporter as TelemetryExporter & TruncationFormatProvider
+              )[TRUNCATION_OPERATIONS_FORMAT];
+              const truncated =
+                operationsFormat !== undefined
+                  ? truncateRecordWithOperationsFormat(
+                      record,
+                      exporter.maxRecordSizeBytes,
+                      render ?? ((value) => value),
+                      operationsFormat,
+                    )
+                  : truncateRecord(record, exporter.maxRecordSizeBytes, render);
+              return exporter.export(truncated);
             } catch (error) {
               return Promise.reject(error);
             }
