@@ -6,8 +6,9 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.ts", "src/**/*.{test,spec}.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", "src/scripts/**"],
     setupFiles: ["./vitest.setup.ts"],
-    // Off by default: coverage instrumentation adds real wall time to every
-    // local `npm test`. Use `npm run test:coverage` when coverage is wanted.
+    // `npm test` runs with --coverage, so CI checks the thresholds below.
+    // Coverage adds about 1s to a local run. Use `npx vitest run` for a run
+    // without coverage.
     coverage: {
       provider: "v8",
       reportsDirectory: "coverage/library",
