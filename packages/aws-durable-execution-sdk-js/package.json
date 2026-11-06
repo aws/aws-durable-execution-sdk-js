@@ -27,6 +27,7 @@
     "dist-cjs/",
     "dist-types/"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
