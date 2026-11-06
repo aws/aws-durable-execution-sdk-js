@@ -363,7 +363,8 @@ function describeValue(value: unknown): string {
  * happens once per invocation, in {@link createInvocationPluginRunner}, which is
  * what bounds a plugin instance's lifetime to a single invocation.
  *
- * @internal
+ * Not exported from the package entry point. Its declaration stays in
+ * `dist-types` on purpose: the OTel package tests take its type from there.
  */
 export async function loadConfiguredPlugins(
   explicitPlugins: readonly DurableInstrumentationPluginFactory[] | undefined,
