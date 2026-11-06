@@ -26,7 +26,8 @@ import { createPluginRunner, PluginRunnerOptions } from "./plugin-runner";
  * synchronous; unsupported Promise-like results are skipped, with rejections
  * observed so a JavaScript factory result cannot leak an unhandled rejection.
  *
- * @internal
+ * Not exported from the package entry point. Its declaration stays in
+ * `dist-types` on purpose: the OTel package tests take its type from there.
  */
 export function createInvocationPluginRunner(
   factories: readonly DurableInstrumentationPluginFactory[],
