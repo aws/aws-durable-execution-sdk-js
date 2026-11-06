@@ -33,7 +33,7 @@
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
     "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:all": "vitest run",
