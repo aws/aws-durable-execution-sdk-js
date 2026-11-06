@@ -483,20 +483,10 @@
         // ones CI will produce.
         //
         // TRIAGE BACKLOG -> then raise noFloatingPromises to "error".
-        // 76 total = noFloatingPromises 73, noMisusedPromises 2, useAwaitThenable 1,
-        // split 57 in test files, 17 in shipped package src (below), and 2 in a script
-        // and a packaging smoke test. The 17 that ship:
-        //   5  utils/checkpoint/checkpoint-manager.ts                      noFloatingPromises
-        //   3  handlers/run-in-child-context-handler/...-handler.ts         noFloatingPromises
-        //   3  utils/replay-validation/replay-validation.ts                noFloatingPromises
-        //   2  context/durable-context/mode-management/mode-management.ts   noMisusedPromises
-        //   1  handlers/step-handler/step-handler.ts                       noFloatingPromises
-        //   1  handlers/wait-for-callback-handler/...-handler.ts            useAwaitThenable
-        //   1  handlers/wait-for-condition-handler/...-handler.ts          noFloatingPromises
-        //   1  termination-manager/termination-manager.ts                  noFloatingPromises
-        // A deliberately un-awaited promise should get an explicit `void` or a
-        // suppression comment carrying a reason; the rest are likely real. Until that
-        // pass happens, these stay at "warn".
+        // These rules are "error" for all non-test source. Every deliberately
+        // un-awaited promise carries `void` and a one-line reason. Test files keep
+        // "warn" through the override for test files below: 58 findings remain there,
+        // 53 in the core package and 5 in the OTel package.
         //
         // FOOTGUN when writing those suppressions: Biome requires the reason to sit on
         // the SAME line as the directive. If it wraps onto a following `//` line, the
@@ -507,9 +497,9 @@
         // not silent.
         //
         // Like all nursery rules these are outside Biome's semver guarantees.
-        "noFloatingPromises": "warn",
-        "noMisusedPromises": "warn",
-        "useAwaitThenable": "warn"
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useAwaitThenable": "error"
       }
     }
   },
@@ -525,6 +515,26 @@
   },
 
   "overrides": [
+    {
+      // Test files keep the promise rules at "warn" until their 58 findings are triaged.
+      // This override comes first, so the testing package override below still sets
+      // "error" for that package's tests.
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.mts",
+        "**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noFloatingPromises": "warn",
+            "noMisusedPromises": "warn",
+            "useAwaitThenable": "warn"
+          }
+        }
+      }
+    },
     {
       /**
        * These files ARE CommonJS: jest configs, build scripts and the CJS integration
