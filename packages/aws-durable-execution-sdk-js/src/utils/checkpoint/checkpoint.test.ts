@@ -105,8 +105,8 @@ describe("CheckpointManager", () => {
       "should not enqueue or settle %s after disposal",
       async (method) => {
         checkpointHandler.dispose();
-        const settled = jest.fn();
-        const schedule = jest.spyOn(global, "setImmediate");
+        const settled = vi.fn();
+        const schedule = vi.spyOn(global, "setImmediate");
         const promise =
           method === "checkpoint"
             ? checkpointHandler.checkpoint("late-step", {})
@@ -125,7 +125,7 @@ describe("CheckpointManager", () => {
     );
 
     it("should abandon queued work before its scheduled processing starts", async () => {
-      const settled = jest.fn();
+      const settled = vi.fn();
       void checkpointHandler.checkpoint("queued-step", {}).then(settled);
       void checkpointHandler.forceCheckpoint().then(settled);
       const result = checkpointHandler.checkpointExecutionResult("execution", {
@@ -159,7 +159,7 @@ describe("CheckpointManager", () => {
       await new Promise((resolve) => setImmediate(resolve));
       expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
 
-      const settled = jest.fn();
+      const settled = vi.fn();
       void checkpointHandler.checkpoint("queued-step", {}).then(settled);
       checkpointHandler.dispose();
       finishCheckpoint({
@@ -246,7 +246,7 @@ describe("CheckpointManager", () => {
         await new Promise((resolve) => setImmediate(resolve));
         expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
 
-        const settled = jest.fn();
+        const settled = vi.fn();
         const queued = checkpointHandler.checkpoint("queued-step", {});
         void queued.then(settled, settled);
         // Force waiters attached to the active request must survive either transition.
