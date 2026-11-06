@@ -9,14 +9,15 @@ import type { CompletionReason } from "../../types/batch";
  */
 export abstract class DurableOperationError extends Error {
   abstract readonly errorType: string;
-  public cause?: Error;
+  // `declare` adds only the type. A plain field would run after super()
+  // and reset the native cause to undefined.
+  declare cause?: Error;
   public errorData?: string;
   public stackTrace?: string[];
 
   constructor(message: string, cause?: Error, errorData?: string) {
-    super(message);
+    super(message, { cause });
     this.name = this.constructor.name;
-    this.cause = cause;
     this.errorData = errorData;
 
     // Preserve original stack trace if cause exists and stack traces are enabled

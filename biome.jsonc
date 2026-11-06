@@ -483,9 +483,9 @@
         // ones CI will produce.
         //
         // TRIAGE BACKLOG -> then raise noFloatingPromises to "error".
-        // 77 total = noFloatingPromises 74, noMisusedPromises 2, useAwaitThenable 1,
-        // split 57 in test files, 18 in shipped package src (below), and 2 in a script
-        // and a packaging smoke test. The 18 that ship:
+        // 76 total = noFloatingPromises 73, noMisusedPromises 2, useAwaitThenable 1,
+        // split 57 in test files, 17 in shipped package src (below), and 2 in a script
+        // and a packaging smoke test. The 17 that ship:
         //   5  utils/checkpoint/checkpoint-manager.ts                      noFloatingPromises
         //   3  handlers/run-in-child-context-handler/...-handler.ts         noFloatingPromises
         //   3  utils/replay-validation/replay-validation.ts                noFloatingPromises
@@ -493,7 +493,6 @@
         //   1  handlers/step-handler/step-handler.ts                       noFloatingPromises
         //   1  handlers/wait-for-callback-handler/...-handler.ts            useAwaitThenable
         //   1  handlers/wait-for-condition-handler/...-handler.ts          noFloatingPromises
-        //   1  run-durable.ts                                             noFloatingPromises
         //   1  termination-manager/termination-manager.ts                  noFloatingPromises
         // A deliberately un-awaited promise should get an explicit `void` or a
         // suppression comment carrying a reason; the rest are likely real. Until that

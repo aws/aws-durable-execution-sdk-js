@@ -51,7 +51,6 @@ export class TerminationManager extends EventEmitter {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,
       message: options.message ?? "Operation terminated",
       error: options.error,
-      cleanup: options.cleanup,
     };
 
     // Instead of emitting an event, resolve the promise
@@ -69,12 +68,6 @@ export class TerminationManager extends EventEmitter {
   private async handleTermination(
     details: TerminationDetails,
   ): Promise<TerminationResponse> {
-    if (details.cleanup) {
-      try {
-        await details.cleanup();
-      } catch {}
-    }
-
     return {
       reason: details.reason,
       message: details.message,

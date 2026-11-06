@@ -117,4 +117,31 @@ describe("DurableOperationError", () => {
       expect(reconstructed instanceof Error).toBe(true);
     });
   });
+
+  describe("native cause", () => {
+    it("stores the cause as the native, non-enumerable Error cause", () => {
+      const originalError = new Error("card declined");
+      const stepError = new StepError("Step failed", originalError);
+
+      expect(stepError.cause).toBe(originalError);
+      expect(Object.getOwnPropertyDescriptor(stepError, "cause")).toEqual({
+        value: originalError,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+    });
+
+    it("still finds errorData through the cause chain for checkpoints", () => {
+      const inner = new InvokeError("Invoke failed", undefined, "inner-data");
+      const outer = new StepError("Step failed", inner);
+
+      expect(outer.toErrorObject()).toEqual({
+        ErrorType: "StepError",
+        ErrorMessage: "Step failed",
+        ErrorData: "inner-data",
+        StackTrace: undefined,
+      });
+    });
+  });
 });

@@ -27,11 +27,12 @@
     "dist-cjs/",
     "dist-types/"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
-    "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
+    "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -40,21 +41,19 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "run-locally": "tsx ./src/run-durable.ts",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@types/aws-lambda": "^8.10.164",
     "@vitest/coverage-v8": "^5.1.0",
     "rimraf": "^6.1.3",
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1161.0"
+    "@aws-sdk/client-lambda": "^3.1161.0",
+    "@types/aws-lambda": "^8.10.164"
   },
   "private": false
 }
