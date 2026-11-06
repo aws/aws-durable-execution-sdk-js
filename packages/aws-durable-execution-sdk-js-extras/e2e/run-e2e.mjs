@@ -809,16 +809,15 @@ const SCENARIOS = [
         result.recalled.resumeHooks >= 1,
         `resume hooks ${result.recalled.resumeHooks}`,
       );
-      // The recall job was sent inside the window after the suspend. So at
-      // least one request got the 502 before the service resumed the
-      // MicroVM.
-      const refused = requests.filter(
-        (r) => r.status === 502 && r.proxyError === "MICROVM_CONNECT_FAILED",
-      );
-      assert(refused.length >= 1, `requests ${JSON.stringify(requests)}`);
+      // The recall job was sent right after the suspend. So its first
+      // request got no 2xx: a 502, or no answer when it arrived during the
+      // suspend hook. A later request resumed the MicroVM, and got the 202.
+      const recall = requests.filter((r) => r.path === "/recall");
       assert(
-        requests.at(-1)?.status === 202,
-        `requests ${JSON.stringify(requests)}`,
+        recall.length >= 2 &&
+          !(recall[0].status >= 200 && recall[0].status < 300) &&
+          recall.at(-1)?.status === 202,
+        `recall requests ${JSON.stringify(recall)}`,
       );
       for (const op of ["remember.request", "recall.request"]) {
         assert(operationNames.includes(op), `history has no ${op}`);

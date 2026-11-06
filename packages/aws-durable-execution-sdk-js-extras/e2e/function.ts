@@ -276,7 +276,11 @@ function terminatingClient(): LambdaMicrovmsClient {
 function loggingFetch(executionArn: string): typeof fetch {
   return async (input, init) => {
     const started = Date.now();
-    const base = { e2e: "fetch", execution: executionArn.split("/").at(-2) };
+    const base = {
+      e2e: "fetch",
+      execution: executionArn.split("/").at(-2),
+      path: new URL(String(input)).pathname,
+    };
     try {
       const response = await fetch(input, init);
       console.log(
