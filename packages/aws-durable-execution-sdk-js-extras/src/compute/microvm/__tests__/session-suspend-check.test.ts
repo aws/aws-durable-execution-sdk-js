@@ -1,6 +1,6 @@
-// The check after a sign of a suspended MicroVM, for a session job without
-// the resume mode. The sign is an HTTP 502 with `x-aws-proxy-error:
-// MICROVM_CONNECT_FAILED`, or a request without an answer.
+// The check after a sign that the MicroVM does not run, for a session job.
+// The sign is an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`,
+// or a request without an answer.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   type DurableContext,
@@ -21,6 +21,7 @@ import {
   microvmSession,
 } from "..";
 import {
+  autoResumingEndpoint,
   baseConfig,
   FakeEndpoint,
   FakeMicrovmsClient,
@@ -35,14 +36,7 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 const STATE_CHECK_WARNING =
-  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
-
-/** The answer of the endpoint of a suspending or suspended MicroVM. */
-const connectFailed = (): Response =>
-  new Response(null, {
-    status: 502,
-    headers: { "x-aws-proxy-error": "MICROVM_CONNECT_FAILED" },
-  });
+  "GetMicrovm failed, so the operation could not check whether the MicroVM has ended. The request step keeps sending the job.";
 
 const noRetry = () => ({ shouldRetry: false });
 
@@ -50,27 +44,6 @@ const job = (
   path: string,
   options: Partial<MicrovmInvokeOptions> = {},
 ): MicrovmInvokeOptions => ({ path, timeout: { minutes: 10 }, ...options });
-
-/**
- * An endpoint that records each request in the client's event list. While
- * the client's MicroVM is not RUNNING, it answers 502 with
- * MICROVM_CONNECT_FAILED. A queued answer is used first.
- */
-function suspendableEndpoint(client: FakeMicrovmsClient): FakeEndpoint {
-  const endpoint = new FakeEndpoint();
-  const deliver = endpoint.fetch;
-  (endpoint as { fetch: typeof fetch }).fetch = (async (
-    url: string,
-    init: RequestInit,
-  ) => {
-    client.events.push(`request:${new URL(url).pathname}`);
-    if (endpoint.responses.length === 0 && client.microvmState !== "RUNNING") {
-      endpoint.responses.push(connectFailed());
-    }
-    return deliver(url, init);
-  }) as unknown as typeof fetch;
-  return endpoint;
-}
 
 function recordingLogger(warnings: string[]): DurableLogger {
   const ignore = (): void => {};
@@ -132,11 +105,11 @@ const oneJob =
   async (vm, ctx) =>
     vm.invoke(ctx, "build", 1, job("/build", options));
 
-describe("a session job without the resume mode", () => {
-  it("resumes a suspended MicroVM after a 502 with MICROVM_CONNECT_FAILED, and sends the job again", async () => {
+describe("a session job after a sign that the MicroVM does not run", () => {
+  it("keeps sending the job to a suspended MicroVM after a 502 with MICROVM_CONNECT_FAILED, and makes no ResumeMicrovm call", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
-    const endpoint = suspendableEndpoint(client);
+    const endpoint = autoResumingEndpoint(client);
     const runner = runnerFor(client, endpoint, oneJob());
 
     const executionPromise = runner.run({ payload: {} });
@@ -144,23 +117,22 @@ describe("a session job without the resume mode", () => {
     const execution = await executionPromise;
 
     expect(execution.getStatus()).toBe("SUCCEEDED");
+    // The service resumes the MicroVM on the request after the check.
     expect(client.events).toEqual([
       "request:/build",
       "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
       "request:/build",
+      "auto-resume",
       "terminate",
     ]);
   });
 
-  it("resumes a suspending MicroVM after a request without an answer", async () => {
+  it("sends the job to the endpoint that the check reports, after a request without an answer", async () => {
     const client = new FakeMicrovmsClient();
-    const endpoint = suspendableEndpoint(client);
+    const endpoint = autoResumingEndpoint(client);
     endpoint.responses = [new TypeError("fetch failed")];
     client.getResponses = [
-      async () => ({ state: "SUSPENDING" }),
-      async () => ({ state: "RUNNING", endpoint: "resumed.example" }),
+      async () => ({ state: "SUSPENDING", endpoint: "other.example" }),
     ];
     const runner = runnerFor(client, endpoint, oneJob());
 
@@ -172,52 +144,41 @@ describe("a session job without the resume mode", () => {
     expect(client.events).toEqual([
       "request:/build",
       "get:SUSPENDING",
-      "resume",
-      "get:RUNNING",
       "request:/build",
       "terminate",
     ]);
-    expect(endpoint.requests[1].url).toBe("https://resumed.example/build");
+    expect(endpoint.requests[1].url).toBe("https://other.example/build");
   });
 
-  it("resumes again after a conflict during SUSPENDING, once the MicroVM is SUSPENDED", async () => {
+  it("fails with MicrovmDeliveryError after the retries, and makes no ResumeMicrovm call, when the service does not resume the MicroVM", async () => {
+    // A MicroVM launched without `autoResumeEnabled` stays SUSPENDED, and
+    // its endpoint answers the 502 to every request.
     const client = new FakeMicrovmsClient();
-    const endpoint = suspendableEndpoint(client);
-    endpoint.responses = [new TypeError("fetch failed")];
-    // The MicroVM stays SUSPENDED until a resume is accepted.
     client.microvmState = "SUSPENDED";
-    client.getResponses = [async () => ({ state: "SUSPENDING" })];
-    client.resumeResponses = [
-      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
-    ];
+    const endpoint = autoResumingEndpoint(client, Number.POSITIVE_INFINITY);
     const runner = runnerFor(
       client,
       endpoint,
-      oneJob({ retryWindow: { seconds: 5 } }),
+      oneJob({ retryWindow: { seconds: 1 } }),
+      { retryStrategy: noRetry },
     );
 
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "build", 1);
-    const execution = await executionPromise;
+    const execution = await runner.run({ payload: {} });
 
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(client.events).toEqual([
-      "request:/build",
-      "get:SUSPENDING",
-      "resume",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "request:/build",
-      "terminate",
-    ]);
+    expect(execution.getStatus()).toBe("FAILED");
+    const error = execution.getError();
+    expect(error?.errorType).toBe(MicrovmDeliveryError.name);
+    expect(error?.errorMessage).toMatch(/Last failure: HTTP 502\.$/);
+    expect(client.events).not.toContain("resume");
+    expect(client.events.filter((e) => e === "get:SUSPENDED")).toHaveLength(1);
+    expect(client.microvmState).toBe("SUSPENDED");
   });
 
   it.each([502, 503, 504])(
     "makes no GetMicrovm call after a plain %i",
     async (status) => {
       const client = new FakeMicrovmsClient();
-      const endpoint = suspendableEndpoint(client);
+      const endpoint = autoResumingEndpoint(client);
       endpoint.responses = [status, status];
       const runner = runnerFor(client, endpoint, oneJob());
 
@@ -238,7 +199,7 @@ describe("a session job without the resume mode", () => {
   it("fails the job at once with MicrovmDeliveryError that names lambda:GetMicrovm when GetMicrovm is denied", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
-    const endpoint = suspendableEndpoint(client);
+    const endpoint = autoResumingEndpoint(client);
     client.getResponses = [
       throwing(
         new AccessDeniedException({
@@ -269,7 +230,7 @@ describe("a session job without the resume mode", () => {
   it("logs one warning per step attempt for a throttled GetMicrovm, and keeps sending the job", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
-    const endpoint = suspendableEndpoint(client);
+    const endpoint = autoResumingEndpoint(client, Number.POSITIVE_INFINITY);
     const throttled = () =>
       Object.assign(new Error("slow down"), { name: "ThrottlingException" });
     client.getResponses = [throwing(throttled()), throwing(throttled())];
@@ -307,43 +268,12 @@ describe("a session job without the resume mode", () => {
     expect(warnings.filter((w) => w === STATE_CHECK_WARNING)).toHaveLength(2);
   });
 
-  it("fails the job at once with MicrovmDeliveryError when ResumeMicrovm is denied for a suspended MicroVM", async () => {
-    const client = new FakeMicrovmsClient();
-    client.microvmState = "SUSPENDED";
-    const endpoint = suspendableEndpoint(client);
-    client.resumeResponses = [
-      throwing(
-        new AccessDeniedException({
-          message: "not authorized: ResumeMicrovm",
-          $metadata: { httpStatusCode: 403, requestId: "req-2" },
-        }),
-      ),
-    ];
-    // The default retry strategy does not retry the error.
-    const runner = runnerFor(client, endpoint, oneJob());
-
-    const execution = await runner.run({ payload: {} });
-
-    expect(execution.getStatus()).toBe("FAILED");
-    const error = execution.getError();
-    expect(error?.errorType).toBe(MicrovmDeliveryError.name);
-    expect(error?.errorMessage).toContain(
-      "MicroVM mvm-1 is SUSPENDED. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm. ResumeMicrovm request ID: req-2.",
-    );
-    expect(client.events).toEqual([
-      "request:/build",
-      "get:SUSPENDED",
-      "resume",
-      "terminate",
-    ]);
-  });
-
   it.each(["TERMINATING", "TERMINATED"])(
     "fails the job with MicrovmNotRunningError when the check finds the MicroVM %s",
     async (state) => {
       const client = new FakeMicrovmsClient();
       client.microvmState = state;
-      const endpoint = suspendableEndpoint(client);
+      const endpoint = autoResumingEndpoint(client);
       const runner = runnerFor(client, endpoint, oneJob());
 
       const execution = await runner.run({ payload: {} });
