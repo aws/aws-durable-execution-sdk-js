@@ -165,6 +165,7 @@ export {
   OperationChangeInfo,
   OperationInfo,
   OperationEndInfo,
+  ChildContextFnInfo,
   PluginOperationStatus,
   AttemptInfo,
   AttemptEndInfo,

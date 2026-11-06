@@ -24,4 +24,5 @@ export {
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,
+  ChildContextFnInfo,
 } from "./plugin";
