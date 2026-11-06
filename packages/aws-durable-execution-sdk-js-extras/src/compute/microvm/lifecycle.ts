@@ -109,32 +109,20 @@ export class MicrovmStateCheckError extends Error {
 }
 
 /**
- * Thrown by {@link resumeIfSuspended} when GetMicrovm is denied.
+ * Thrown by {@link resumeIfSuspended} when GetMicrovm or ResumeMicrovm is
+ * denied.
  *
- * A later attempt is denied the same way. Without the check, a job whose
+ * A later attempt is denied the same way. Without GetMicrovm, a job whose
  * MicroVM has ended keeps sending to the dead endpoint until both retry
- * tiers end. So the default retry strategy does not retry it, and the job
- * fails with `MicrovmDeliveryError` at once. The message names the
- * permission, and ends with the request ID of the call.
+ * tiers end. Without ResumeMicrovm, nothing else resumes a suspended
+ * MicroVM. So the default retry strategy does not retry it, and the job
+ * fails with `MicrovmDeliveryError` at once. The message names the denied
+ * action and the permission, and ends with the request ID of the call.
  *
  * @internal
  */
-export class MicrovmGetDeniedError extends Error {
-  override readonly name = "MicrovmGetDeniedError";
-}
-
-/**
- * Thrown when ResumeMicrovm is denied for a suspending or suspended MicroVM.
- *
- * Nothing else resumes the MicroVM, and a later attempt is denied the same
- * way. So the default retry strategy does not retry it, and the job fails
- * with `MicrovmDeliveryError` at once. The message names the permission,
- * and ends with the request ID of the call.
- *
- * @internal
- */
-export class MicrovmResumeDeniedError extends Error {
-  override readonly name = "MicrovmResumeDeniedError";
+export class MicrovmPermissionDeniedError extends Error {
+  override readonly name = "MicrovmPermissionDeniedError";
 }
 
 /**
@@ -156,7 +144,7 @@ export class MicrovmResumeDeniedError extends Error {
  *   the check also resumes a suspended MicroVM.
  *
  * 1. GetMicrovm runs once. A denied call throws
- *    {@link MicrovmGetDeniedError}, and the job fails at once. A failure
+ *    {@link MicrovmPermissionDeniedError}, and the job fails at once. A failure
  *    other than `AccessDeniedException` and `ResourceNotFoundException`
  *    throws {@link MicrovmStateCheckError}. The caller then keeps sending
  *    the job.
@@ -167,7 +155,7 @@ export class MicrovmResumeDeniedError extends Error {
  * 4. `TERMINATING`, `TERMINATED`, or not found: it throws
  *    {@link MicrovmStateError}.
  *
- * A denied ResumeMicrovm throws {@link MicrovmResumeDeniedError}. A
+ * A denied ResumeMicrovm throws {@link MicrovmPermissionDeniedError}. A
  * `ConflictException` is not an error: polling continues. ResumeMicrovm
  * requires `SUSPENDED`, so the service can reject a resume during
  * `SUSPENDING` with that error. The wait then sends ResumeMicrovm again at
@@ -210,7 +198,7 @@ export async function resumeIfSuspended(
       throw microvmNotFound(microvmId, "GetMicrovm", error);
     }
     if (errorName === "AccessDeniedException") {
-      throw new MicrovmGetDeniedError(
+      throw new MicrovmPermissionDeniedError(
         withRequestId(
           `MicroVM ${microvmId} gave a sign that it does not run. GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm.`,
           "GetMicrovm",
@@ -253,7 +241,7 @@ export async function resumeIfSuspended(
       throw microvmNotFound(microvmId, "ResumeMicrovm", error);
     }
     if (errorName === "AccessDeniedException") {
-      throw new MicrovmResumeDeniedError(
+      throw new MicrovmPermissionDeniedError(
         withRequestId(
           `MicroVM ${microvmId} is ${state}. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm.`,
           "ResumeMicrovm",

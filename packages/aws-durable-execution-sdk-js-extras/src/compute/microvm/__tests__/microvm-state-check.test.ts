@@ -278,7 +278,7 @@ describe("microvm over HTTP, after a sign that the MicroVM does not run", () => 
       "GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm. GetMicrovm request ID: get-req-9.",
     );
     const step = runner.getOperation("build.request").getStepDetails();
-    expect(step?.error?.errorType).toBe("MicrovmGetDeniedError");
+    expect(step?.error?.errorType).toBe("MicrovmPermissionDeniedError");
     expect(step?.attempt).toBe(1);
     expect(endpoint.requests).toHaveLength(1);
     expect(client.events).toEqual(["terminate"]);
@@ -383,6 +383,62 @@ describe("microvm over HTTP, after a sign that the MicroVM does not run", () => 
     expect(endpoint.requests).toHaveLength(1);
     expect(client.events).toEqual(["get:SUSPENDED", "resume", "terminate"]);
   });
+
+  it.each([
+    [
+      "GetMicrovm",
+      (client: FakeMicrovmsClient) => {
+        client.getResponses = [
+          throwing(
+            new AccessDeniedException({
+              message: "denied",
+              $metadata: { httpStatusCode: 403, requestId: "req-1" },
+            }),
+          ),
+        ];
+      },
+    ],
+    [
+      "ResumeMicrovm",
+      (client: FakeMicrovmsClient) => {
+        client.microvmState = "SUSPENDED";
+        client.resumeResponses = [
+          throwing(
+            new AccessDeniedException({
+              message: "denied",
+              $metadata: { httpStatusCode: 403, requestId: "req-1" },
+            }),
+          ),
+        ];
+      },
+    ],
+  ])(
+    "gives a custom retry strategy MicrovmPermissionDeniedError when %s is denied",
+    async (action, deny) => {
+      const client = new FakeMicrovmsClient();
+      deny(client);
+      const endpoint = new FakeEndpoint();
+      endpoint.responses = [connectFailed()];
+      const seen: string[] = [];
+      const runner = runnerFor(client, endpoint, {
+        retryStrategy: (error: Error) => {
+          seen.push(error.name);
+          return { shouldRetry: false };
+        },
+      });
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getStatus()).toBe("FAILED");
+      expect(execution.getError()?.errorMessage).toContain(
+        `${action} was denied`,
+      );
+      expect(execution.getError()?.errorMessage).toContain(
+        `The function's execution role needs lambda:${action}. ${action} request ID: req-1.`,
+      );
+      expect(seen).toEqual(["MicrovmPermissionDeniedError"]);
+    },
+  );
 
   it.each([500, 503])(
     "makes no GetMicrovm call after a plain %i, because the worker answered",

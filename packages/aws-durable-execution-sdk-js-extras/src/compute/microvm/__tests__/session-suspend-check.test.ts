@@ -260,7 +260,7 @@ describe("a session job without the resume mode", () => {
       "GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm. GetMicrovm request ID: req-1.",
     );
     const step = runner.getOperation("build.request").getStepDetails();
-    expect(step?.error?.errorType).toBe("MicrovmGetDeniedError");
+    expect(step?.error?.errorType).toBe("MicrovmPermissionDeniedError");
     expect(step?.attempt).toBe(1);
     expect(client.events).toEqual(["request:/build", "terminate"]);
     expect(warnings).not.toContain(STATE_CHECK_WARNING);
