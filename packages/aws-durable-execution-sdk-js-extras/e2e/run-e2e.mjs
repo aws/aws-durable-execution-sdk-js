@@ -233,8 +233,9 @@ function ensureInfrastructure(account) {
           "lambda:TerminateMicrovm",
           "lambda:GetMicrovm",
           "lambda:CreateMicrovmAuthToken",
-          // A session resumes a MicroVM that suspended between jobs.
-          "lambda:ResumeMicrovm",
+          // A session job with suspendAfter suspends the MicroVM. The role
+          // has no lambda:ResumeMicrovm: the service resumes the MicroVM.
+          "lambda:SuspendMicrovm",
         ],
         Resource: "*",
       },
@@ -414,6 +415,15 @@ function ensureFunction(infra, imageArn) {
 }
 
 // ---------------------------------------------------------------- scenarios
+
+// The idle policy of a session that suspends its MicroVM. The service
+// resumes the MicroVM on the next request. The idle timer counts only
+// inbound requests, so it is longer than any MicroVM lives.
+const AUTO_RESUME = {
+  autoResumeEnabled: true,
+  maxIdleDurationSeconds: 86_400,
+  suspendedDurationSeconds: 3_600,
+};
 
 const SCENARIOS = [
   {
@@ -744,6 +754,7 @@ const SCENARIOS = [
       // The worker suspends the MicroVM 10 seconds after the first job ends,
       // during the 60-second wait.
       autoSuspendIdleSeconds: 10,
+      idlePolicy: AUTO_RESUME,
     },
     expect: ({ execution, result, observedStates, operationNames }) => {
       assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
@@ -765,6 +776,51 @@ const SCENARIOS = [
         `resume hooks ${result.recalled.resumeHooks}`,
       );
       for (const op of ["long-pause", "second-pause", "recall.request"]) {
+        assert(operationNames.includes(op), `history has no ${op}`);
+      }
+    },
+  },
+  {
+    // The durable function suspends the MicroVM after the first job, and
+    // sends the second job at once. The endpoint answers 502 with
+    // MICROVM_CONNECT_FAILED for about 5 seconds after a suspend, and the
+    // request step retries until the service resumes the MicroVM. The
+    // function role has no lambda:ResumeMicrovm.
+    id: "suspend-after-session",
+    countRequests: true,
+    event: {
+      scenario: "suspend-after-session",
+      job: { mode: "succeed", sleepSeconds: 0, label: "suspend-after-key" },
+      timeoutSeconds: 900,
+      logRequests: true,
+      idlePolicy: AUTO_RESUME,
+    },
+    expect: ({ execution, result, operationNames, requests }) => {
+      assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
+      // The value lives only in the worker's memory. The same value and
+      // process ID show that the MicroVM was suspended and resumed, not
+      // replaced.
+      assert(
+        result?.recalled?.value === "suspend-after-key" &&
+          result.recalled.pid === result.remembered.pid,
+        `result ${JSON.stringify(result)}`,
+      );
+      assert(
+        result.recalled.resumeHooks >= 1,
+        `resume hooks ${result.recalled.resumeHooks}`,
+      );
+      // The recall job was sent inside the window after the suspend. So at
+      // least one request got the 502 before the service resumed the
+      // MicroVM.
+      const refused = requests.filter(
+        (r) => r.status === 502 && r.proxyError === "MICROVM_CONNECT_FAILED",
+      );
+      assert(refused.length >= 1, `requests ${JSON.stringify(requests)}`);
+      assert(
+        requests.at(-1)?.status === 202,
+        `requests ${JSON.stringify(requests)}`,
+      );
+      for (const op of ["remember.request", "recall.request"]) {
         assert(operationNames.includes(op), `history has no ${op}`);
       }
     },
