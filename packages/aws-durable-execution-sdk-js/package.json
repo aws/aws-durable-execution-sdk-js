@@ -41,7 +41,6 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "run-locally": "tsx ./src/run-durable.ts",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },
@@ -49,7 +48,6 @@
     "@biomejs/biome": "2.5.15",
     "@vitest/coverage-v8": "^5.1.0",
     "rimraf": "^6.1.3",
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
   },

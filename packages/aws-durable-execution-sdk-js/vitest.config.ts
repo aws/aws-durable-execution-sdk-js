@@ -22,7 +22,6 @@ export default defineConfig({
         "src/demo/**",
         "src/testing/**",
         "src/index.ts", // barrel export file
-        "src/run-durable.ts", // temporary file
       ],
     },
   },
