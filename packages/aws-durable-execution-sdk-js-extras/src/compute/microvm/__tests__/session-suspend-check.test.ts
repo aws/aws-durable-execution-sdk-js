@@ -18,7 +18,6 @@ import {
   MicrovmNotRunningError,
   type MicrovmSessionConfig,
   type MicrovmSessionHandler,
-  microvm,
   microvmSession,
 } from "..";
 import {
@@ -37,8 +36,6 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 const STATE_CHECK_WARNING =
   "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
-const GET_DENIED_NOTE =
-  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
 
 /** The answer of the endpoint of a suspending or suspended MicroVM. */
 const connectFailed = (): Response =>
@@ -238,42 +235,38 @@ describe("a session job without the resume mode", () => {
     },
   );
 
-  it("logs one warning for a denied GetMicrovm, keeps sending the job, and names the denial in the final error", async () => {
+  it("fails the job at once with MicrovmDeliveryError that names lambda:GetMicrovm when GetMicrovm is denied", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
     const endpoint = suspendableEndpoint(client);
-    const denied = () =>
-      new AccessDeniedException({
-        message: "not authorized: GetMicrovm",
-        $metadata: { httpStatusCode: 403, requestId: "req-1" },
-      });
-    client.getResponses = [throwing(denied()), throwing(denied())];
+    client.getResponses = [
+      throwing(
+        new AccessDeniedException({
+          message: "not authorized: GetMicrovm",
+          $metadata: { httpStatusCode: 403, requestId: "req-1" },
+        }),
+      ),
+    ];
     const warnings: string[] = [];
-    // A 4-second window checks after the first request, and again after
-    // the request at 3.75 seconds.
-    const runner = runnerFor(
-      client,
-      endpoint,
-      oneJob({ retryWindow: { seconds: 4 } }),
-      { retryStrategy: noRetry },
-      warnings,
-    );
+    // The default retry strategy does not retry the error.
+    const runner = runnerFor(client, endpoint, oneJob(), {}, warnings);
 
     const execution = await runner.run({ payload: {} });
 
     expect(execution.getStatus()).toBe("FAILED");
     const error = execution.getError();
     expect(error?.errorType).toBe(MicrovmDeliveryError.name);
-    expect(error?.errorMessage).toMatch(
-      new RegExp(`Last failure: HTTP 502\\. ${GET_DENIED_NOTE}$`),
+    expect(error?.errorMessage).toContain(
+      "GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm. GetMicrovm request ID: req-1.",
     );
-    expect(client.events.filter((e) => e === "request:/build")).toHaveLength(5);
-    expect(client.getResponses).toHaveLength(0);
-    expect(client.events).not.toContain("resume");
-    expect(warnings.filter((w) => w === STATE_CHECK_WARNING)).toHaveLength(1);
+    const step = runner.getOperation("build.request").getStepDetails();
+    expect(step?.error?.errorType).toBe("MicrovmPermissionDeniedError");
+    expect(step?.attempt).toBe(1);
+    expect(client.events).toEqual(["request:/build", "terminate"]);
+    expect(warnings).not.toContain(STATE_CHECK_WARNING);
   });
 
-  it("logs one warning per job for a GetMicrovm that fails otherwise, without the denial note", async () => {
+  it("logs one warning per step attempt for a throttled GetMicrovm, and keeps sending the job", async () => {
     const client = new FakeMicrovmsClient();
     client.microvmState = "SUSPENDED";
     const endpoint = suspendableEndpoint(client);
@@ -366,30 +359,4 @@ describe("a session job without the resume mode", () => {
       ]);
     },
   );
-});
-
-describe("microvm over HTTP", () => {
-  it("makes no GetMicrovm call after a 502 with MICROVM_CONNECT_FAILED", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = [connectFailed()];
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: withDurableExecution(
-        async (event: unknown, context: DurableContext) =>
-          microvm(context, "build", event, {
-            ...baseConfig(client),
-            fetch: endpoint.fetch,
-            request: { path: "/build" },
-          }),
-      ),
-    }) as Runner;
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "build", "done");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(endpoint.requests).toHaveLength(2);
-    expect(client.events).toEqual(["terminate"]);
-  });
 });

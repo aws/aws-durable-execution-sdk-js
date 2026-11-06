@@ -6,7 +6,7 @@ import {
 import { MicrovmEndpointUnavailableError } from "..";
 import { MicrovmStateError } from "../aws-errors";
 import {
-  MicrovmResumeDeniedError,
+  MicrovmPermissionDeniedError,
   MicrovmStateCheckError,
   resumeIfSuspended,
 } from "../lifecycle";
@@ -225,37 +225,60 @@ describe("resumeIfSuspended", () => {
     },
   );
 
-  it("throws MicrovmStateCheckError with denied set for a denied GetMicrovm", async () => {
+  it("throws MicrovmPermissionDeniedError that names lambda:GetMicrovm for a denied GetMicrovm", async () => {
     const client = new FakeMicrovmsClient();
     const denied = new AccessDeniedException({ message: "denied", ...meta });
     client.getResponses = [throwing(denied)];
 
     const error = await resumeIfSuspended(options(client)).catch((e) => e);
-    expect(error).toBeInstanceOf(MicrovmStateCheckError);
-    expect(error.denied).toBe(true);
-    expect(error.message).toBe("denied. GetMicrovm request ID: req-9.");
+    expect(error).toBeInstanceOf(MicrovmPermissionDeniedError);
+    expect(error.name).toBe("MicrovmPermissionDeniedError");
+    expect(error.message).toBe(
+      "MicroVM mvm-1 gave a sign that it does not run. GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm. GetMicrovm request ID: req-9.",
+    );
     expect(error.cause).toBe(denied);
   });
 
-  it("throws MicrovmStateCheckError without denied for another GetMicrovm failure", async () => {
-    const client = new FakeMicrovmsClient();
-    client.getResponses = [throwing(new Error("socket hang up"))];
+  it.each([
+    ["a connection error", () => new Error("socket hang up"), "socket hang up"],
+    [
+      "throttling",
+      () =>
+        Object.assign(new Error("slow down"), { name: "ThrottlingException" }),
+      "slow down",
+    ],
+    // Only AccessDeniedException counts as denied. Other auth-like errors
+    // keep the warn-and-retry path.
+    [
+      "UnrecognizedClientException",
+      () =>
+        Object.assign(new Error("bad token"), {
+          name: "UnrecognizedClientException",
+        }),
+      "bad token",
+    ],
+  ])(
+    "throws MicrovmStateCheckError for %s from GetMicrovm",
+    async (_label, failure, message) => {
+      const client = new FakeMicrovmsClient();
+      client.getResponses = [throwing(failure())];
 
-    const error = await resumeIfSuspended(options(client)).catch((e) => e);
-    expect(error).toBeInstanceOf(MicrovmStateCheckError);
-    expect(error.denied).toBe(false);
-    expect(error.message).toBe("socket hang up");
-  });
+      const error = await resumeIfSuspended(options(client)).catch((e) => e);
+      expect(error).toBeInstanceOf(MicrovmStateCheckError);
+      expect(error).not.toBeInstanceOf(MicrovmPermissionDeniedError);
+      expect(error.message).toBe(message);
+    },
+  );
 
-  it("throws MicrovmResumeDeniedError that names lambda:ResumeMicrovm for a denied ResumeMicrovm", async () => {
+  it("throws MicrovmPermissionDeniedError that names lambda:ResumeMicrovm for a denied ResumeMicrovm", async () => {
     const client = new FakeMicrovmsClient();
     const denied = new AccessDeniedException({ message: "denied", ...meta });
     client.getResponses = [state("SUSPENDED")];
     client.resumeResponses = [throwing(denied)];
 
     const error = await resumeIfSuspended(options(client)).catch((e) => e);
-    expect(error).toBeInstanceOf(MicrovmResumeDeniedError);
-    expect(error.name).toBe("MicrovmResumeDeniedError");
+    expect(error).toBeInstanceOf(MicrovmPermissionDeniedError);
+    expect(error.name).toBe("MicrovmPermissionDeniedError");
     expect(error.message).toBe(
       "MicroVM mvm-1 is SUSPENDED. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm. ResumeMicrovm request ID: req-9.",
     );
@@ -275,7 +298,7 @@ describe("resumeIfSuspended", () => {
     ];
 
     const error = await resumeIfSuspended(options(client)).catch((e) => e);
-    expect(error).toBeInstanceOf(MicrovmResumeDeniedError);
+    expect(error).toBeInstanceOf(MicrovmPermissionDeniedError);
     expect(error.message).toMatch(/needs lambda:ResumeMicrovm\.$/);
   });
 

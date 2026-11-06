@@ -91,40 +91,38 @@ export async function ensureRunning(
 }
 
 /**
- * Thrown by {@link resumeIfSuspended} when its GetMicrovm call fails.
+ * Thrown by {@link resumeIfSuspended} when its GetMicrovm call fails with a
+ * transient error: throttling, a server error, a timeout, a connection
+ * error, or any error other than `AccessDeniedException` and
+ * `ResourceNotFoundException`.
  *
- * The request step of a session without the resume mode runs that check
- * only after a sign of a suspended MicroVM. The session may never have
- * asked to suspend. So the step logs one warning per job, and keeps sending
- * the job. `cause` is the error of the call.
+ * The request step of a job without the resume mode runs that check only
+ * after a sign that the MicroVM does not run. A later call can succeed. So
+ * the step logs one warning per step attempt, and keeps sending the job.
+ * With the default retry strategy, that is up to 5 warnings. `cause` is the
+ * error of the call.
  *
  * @internal
  */
 export class MicrovmStateCheckError extends Error {
   override readonly name = "MicrovmStateCheckError";
-
-  constructor(
-    message: string,
-    /** Whether the service answered `AccessDeniedException`. */
-    readonly denied: boolean,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
 }
 
 /**
- * Thrown when ResumeMicrovm is denied for a suspending or suspended MicroVM.
+ * Thrown by {@link resumeIfSuspended} when GetMicrovm or ResumeMicrovm is
+ * denied.
  *
- * Nothing else resumes the MicroVM, and a later attempt is denied the same
- * way. So the default retry strategy does not retry it, and the job fails
- * with `MicrovmDeliveryError` at once. The message names the permission,
- * and ends with the request ID of the call.
+ * A later attempt is denied the same way. Without GetMicrovm, a job whose
+ * MicroVM has ended keeps sending to the dead endpoint until both retry
+ * tiers end. Without ResumeMicrovm, nothing else resumes a suspended
+ * MicroVM. So the default retry strategy does not retry it, and the job
+ * fails with `MicrovmDeliveryError` at once. The message names the denied
+ * action and the permission, and ends with the request ID of the call.
  *
  * @internal
  */
-export class MicrovmResumeDeniedError extends Error {
-  override readonly name = "MicrovmResumeDeniedError";
+export class MicrovmPermissionDeniedError extends Error {
+  override readonly name = "MicrovmPermissionDeniedError";
 }
 
 /**
@@ -132,14 +130,22 @@ export class MicrovmResumeDeniedError extends Error {
  * its current endpoint.
  *
  * @remarks
- * The request step of a session without the resume mode calls it after a
- * sign that the MicroVM may be suspended: an HTTP 502 from the endpoint with
- * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer. The durable
- * function can suspend the MicroVM after a `suspendAfter` job. The session
- * can lose the record of that job on replay. So this check runs for every
- * session job.
+ * The request step of a job without the resume mode calls it after a sign
+ * that the MicroVM does not run: an HTTP 502 from the endpoint with
+ * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer. The check runs
+ * for every job over HTTP, from `microvm` and from a session:
  *
- * 1. GetMicrovm runs once. A failure other than `ResourceNotFoundException`
+ * - The endpoint of a terminated MicroVM answers that 502, measured in
+ *   us-east-1. So the check ends the job of a dead MicroVM at once, instead
+ *   of after both retry tiers.
+ * - The durable function can suspend a session MicroVM after a
+ *   `suspendAfter` job. The session can lose the record of that job on
+ *   replay. The endpoint of a suspended MicroVM answers the same 502. So
+ *   the check also resumes a suspended MicroVM.
+ *
+ * 1. GetMicrovm runs once. A denied call throws
+ *    {@link MicrovmPermissionDeniedError}, and the job fails at once. A failure
+ *    other than `AccessDeniedException` and `ResourceNotFoundException`
  *    throws {@link MicrovmStateCheckError}. The caller then keeps sending
  *    the job.
  * 2. `RUNNING` or `PENDING`: the function returns at once.
@@ -149,7 +155,7 @@ export class MicrovmResumeDeniedError extends Error {
  * 4. `TERMINATING`, `TERMINATED`, or not found: it throws
  *    {@link MicrovmStateError}.
  *
- * A denied ResumeMicrovm throws {@link MicrovmResumeDeniedError}. A
+ * A denied ResumeMicrovm throws {@link MicrovmPermissionDeniedError}. A
  * `ConflictException` is not an error: polling continues. ResumeMicrovm
  * requires `SUSPENDED`, so the service can reject a resume during
  * `SUSPENDING` with that error. The wait then sends ResumeMicrovm again at
@@ -191,9 +197,18 @@ export async function resumeIfSuspended(
     if (errorName === "ResourceNotFoundException") {
       throw microvmNotFound(microvmId, "GetMicrovm", error);
     }
+    if (errorName === "AccessDeniedException") {
+      throw new MicrovmPermissionDeniedError(
+        withRequestId(
+          `MicroVM ${microvmId} gave a sign that it does not run. GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm.`,
+          "GetMicrovm",
+          isMicrovmsServiceError(error) ? error : undefined,
+        ),
+        { cause: error },
+      );
+    }
     throw new MicrovmStateCheckError(
       (addRequestId("GetMicrovm", error) as Error).message,
-      errorName === "AccessDeniedException",
       { cause: error },
     );
   }
@@ -226,7 +241,7 @@ export async function resumeIfSuspended(
       throw microvmNotFound(microvmId, "ResumeMicrovm", error);
     }
     if (errorName === "AccessDeniedException") {
-      throw new MicrovmResumeDeniedError(
+      throw new MicrovmPermissionDeniedError(
         withRequestId(
           `MicroVM ${microvmId} is ${state}. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm.`,
           "ResumeMicrovm",
@@ -250,17 +265,20 @@ export async function resumeIfSuspended(
 /**
  * Throws {@link MicrovmStateError} for a terminating or terminated MicroVM.
  * The GetMicrovm output carries the request ID in `$metadata`. The state
- * fails the step, so the message names that request ID.
+ * fails the step, so the message names that request ID. The service's
+ * `stateReason` can end with a period, such as `Success.`. The message adds
+ * its own period, so one trailing period of `stateReason` is removed.
  */
 function throwIfEnded(
   microvmId: string,
   current: { state?: string; stateReason?: string },
 ): void {
-  const { state, stateReason } = current;
+  const { state } = current;
+  const reason = current.stateReason?.replace(/\.$/, "");
   if (state === "TERMINATING" || state === "TERMINATED") {
     throw new MicrovmStateError(
       withRequestId(
-        `MicroVM ${microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
+        `MicroVM ${microvmId} is ${state}${reason ? `: ${reason}` : ""}.`,
         "GetMicrovm",
         current,
       ),

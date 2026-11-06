@@ -450,7 +450,9 @@ export interface MicrovmSession {
    * reports it when CreateMicrovmAuthToken reports the MicroVM removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job. A suspended MicroVM whose
-   * ResumeMicrovm is denied fails the delivery at once.
+   * ResumeMicrovm is denied fails the delivery at once. A denied GetMicrovm
+   * in the check after a sign of a suspended MicroVM fails it at once too.
+   * The message names the permission.
    * @throws \{TypeError\} When `name`, `path`, or `port` is invalid,
    * `suspendAfter` is not a boolean, or `JSON.stringify` cannot encode
    * `input`.

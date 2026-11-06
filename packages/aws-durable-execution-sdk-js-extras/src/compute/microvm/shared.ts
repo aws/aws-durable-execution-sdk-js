@@ -278,8 +278,8 @@ export interface LaunchResult {
    * suspended MicroVM, before delivery. Replay reads it from the checkpoint.
    * So every replay follows the mode that the launch prepared the MicroVM
    * for. A session launch always records it. A `microvm()` launch does not
-   * record it, because a single job never resumes its MicroVM. So the field
-   * is optional.
+   * record it, because a single job never checks the state before delivery.
+   * So the field is optional.
    */
   resumeBeforeDelivery?: boolean;
 }
@@ -658,32 +658,37 @@ export interface DeliverJobOptions {
    * session's flag, see the current value.
    */
   resume?: boolean | (() => boolean);
-  /**
-   * Turns on the check after a sign of a suspended MicroVM, for an attempt
-   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
-   * every job. A failed GetMicrovm call in that check logs one warning per
-   * job, and the attempt keeps sending the job.
-   */
-  suspendCheck?: boolean;
 }
 
 /**
- * The warning, once per job, after a failed state check of a session
- * without the resume mode.
+ * The warning, once per step attempt (so up to 5 with the default retry
+ * strategy), after a failed state check of an attempt without the resume
+ * mode.
  */
 const STATE_CHECK_WARNING =
   "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
 
 /**
- * The sentence that the first tier adds to its final error after a denied
- * state check. Without it, the message names only the last HTTP failure.
- */
-const GET_DENIED_NOTE =
-  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
-
-/**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
+ *
+ * An attempt without `resume` checks the MicroVM state once after a sign
+ * that the MicroVM does not run: an HTTP 502 with `x-aws-proxy-error:
+ * MICROVM_CONNECT_FAILED`, or no answer. See {@link resumeIfSuspended}.
+ * Every job over HTTP runs this check, from `microvm` and from a session:
+ *
+ * 1. The endpoint of a terminated MicroVM answers that 502, measured in
+ *    us-east-1. Without the check, the request step retries the 502 as a
+ *    MicroVM that is still starting, in both retry tiers. With the check, a
+ *    terminating, terminated, or removed MicroVM fails the job at once with
+ *    `MicrovmNotRunningError`.
+ * 2. A session MicroVM can also give that sign while it is suspended. The
+ *    check then resumes it.
+ *
+ * A denied GetMicrovm call in the check fails the job at once with
+ * `MicrovmDeliveryError`, and the message names `lambda:GetMicrovm`. Any
+ * other failed GetMicrovm call logs one warning per step attempt, so up to
+ * 5 with the default retry strategy. The attempt keeps sending the job.
  */
 export async function deliverJob(
   child: DurableContext,
@@ -706,8 +711,8 @@ export async function deliverJob(
     "input",
     job.inputJson,
   );
-  // One warning per job for a failed state check. The attempts of the step
-  // in this invocation share it.
+  // One warning per step attempt for a failed state check. The requests of
+  // the attempt in this invocation share it.
   let checkWarned = false;
   await child.step(
     `${jobName}.request`,
@@ -749,15 +754,15 @@ export async function deliverJob(
       const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
-      let getDenied = false;
-      const checkState = async (
-        maxWaitMs: number,
-      ): Promise<string | undefined> => {
+      // The check runs before the retry window decides, so what remains of
+      // the window does not limit it. The wait for a resume gets the length
+      // of the window, and the invocation reserve.
+      const checkState = async (): Promise<string | undefined> => {
         try {
           return await resumeIfSuspended({
             client,
             microvmId: launched.microvmId,
-            maxWaitMs,
+            maxWaitMs: retryWindowMs,
             remainingTimeMs: remainingTime(child),
             log,
           });
@@ -765,7 +770,6 @@ export async function deliverJob(
           if (!(error instanceof MicrovmStateCheckError)) {
             throw error;
           }
-          getDenied ||= error.denied;
           if (!checkWarned) {
             checkWarned = true;
             stepContext.logger.warn(STATE_CHECK_WARNING, {
@@ -797,10 +801,7 @@ export async function deliverJob(
         windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(resume && { recheck: running }),
-        ...(!resume &&
-          options.suspendCheck === true && { suspendCheck: checkState }),
-        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
+        ...(resume ? { recheck: running } : { suspendCheck: checkState }),
       });
     },
     {

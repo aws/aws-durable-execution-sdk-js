@@ -63,9 +63,6 @@ describe("sendJob with suspendCheck", () => {
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
     expect(suspendCheck).toHaveBeenCalledTimes(1);
-    // The check gets what remains of the window: 60 seconds minus the first
-    // 250-millisecond backoff.
-    expect(suspendCheck).toHaveBeenCalledWith(59_750);
     expect(endpoint.requests.map((r) => r.url)).toEqual([
       "https://mvm-1.example/job",
       "https://resumed.example/job",
@@ -132,8 +129,8 @@ describe("sendJob with suspendCheck", () => {
   it("checks again after each failed request, at most once per 2 seconds", async () => {
     const endpoint = new FakeEndpoint();
     // The backoff is 250, 500, 1,000, 2,000, and 4,000 milliseconds. The
-    // checks run after the requests whose backoff ends at least 2 seconds
-    // after the last check.
+    // checks run right after the failed requests that come at least 2
+    // seconds after the last check, before the backoff.
     endpoint.responses = [
       connectFailed(),
       connectFailed(),
@@ -150,9 +147,9 @@ describe("sendJob with suspendCheck", () => {
     await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
 
     expect(endpoint.requests).toHaveLength(6);
-    // 250 checks. 750 and 1,750 are within 2 seconds. 3,750 checks. 7,750
-    // checks.
-    expect(checkedAt).toEqual([250, 3_750, 7_750]);
+    // 0 checks. 250, 750, and 1,750 are within 2 seconds. 3,750 checks.
+    // 7,750 is accepted.
+    expect(checkedAt).toEqual([0, 3_750]);
   });
 
   it("re-arms after a request that the check did not fix", async () => {
@@ -182,28 +179,39 @@ describe("sendJob with suspendCheck", () => {
     expect(endpoint.requests).toHaveLength(1);
   });
 
-  it("uses recheck, not suspendCheck, when both are set", async () => {
+  it("checks the state when the retry window has no time left", async () => {
     const endpoint = new FakeEndpoint();
-    // A sign that both checks act on.
     endpoint.responses = [connectFailed()];
-    const recheck = vi.fn(async () => undefined);
     const suspendCheck = vi.fn(async () => undefined);
 
-    await expect(send(endpoint, { recheck, suspendCheck })).resolves.toBe(202);
+    // The first backoff of 250 milliseconds would end after the window. The
+    // check runs before the window decides.
+    const error = await send(endpoint, {
+      retryWindowMs: 100,
+      suspendCheck,
+    }).catch((e) => e);
 
-    expect(recheck).toHaveBeenCalledTimes(1);
-    expect(suspendCheck).not.toHaveBeenCalled();
+    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
+    expect(suspendCheck).toHaveBeenCalledTimes(1);
+    expect(endpoint.requests).toHaveLength(1);
   });
 
-  it("fails without a check when no time is left for it", async () => {
+  it("makes no check when the invocation reserve is reached, and fails as without a check", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
     const suspendCheck = vi.fn(async () => undefined);
+    // 11 seconds remain at the start: enough for the first request. The
+    // request takes 1.5 seconds, so less than 1 second remains before the
+    // reserve when the check is due.
+    const endsAt = clock + 11_000;
+    const slow: typeof fetch = async (url, init) => {
+      clock += 1_500;
+      return endpoint.fetch(url, init);
+    };
 
-    // The first backoff of 250 milliseconds ends exactly at the end of the
-    // window. So the check would get 0 milliseconds.
     const error = await send(endpoint, {
-      retryWindowMs: 250,
+      fetch: slow,
+      remainingTimeMs: () => endsAt - clock,
       suspendCheck,
     }).catch((e) => e);
 
@@ -211,35 +219,5 @@ describe("sendJob with suspendCheck", () => {
     expect(error.message).toMatch(/Last failure: HTTP 502\.$/);
     expect(suspendCheck).not.toHaveBeenCalled();
     expect(endpoint.requests).toHaveLength(1);
-  });
-
-  it("adds the note to the final MicrovmEndpointUnavailableError", async () => {
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = Array.from({ length: 20 }, connectFailed);
-
-    const error = await send(endpoint, {
-      retryWindowMs: 5_000,
-      suspendCheck: async () => undefined,
-      unavailableNote: () =>
-        "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.",
-    }).catch((e) => e);
-
-    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(error.message).toMatch(
-      /Last failure: HTTP 502\. GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended\.$/,
-    );
-  });
-
-  it("keeps the message unchanged when the note is undefined", async () => {
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = Array.from({ length: 20 }, () => 503);
-
-    const error = await send(endpoint, {
-      retryWindowMs: 5_000,
-      unavailableNote: () => undefined,
-    }).catch((e) => e);
-
-    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(error.message).toMatch(/Last failure: HTTP 503\.$/);
   });
 });
