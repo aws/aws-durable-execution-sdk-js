@@ -16,7 +16,9 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import {
   AccessDeniedException,
+  InternalServerException,
   ResourceNotFoundException,
+  ThrottlingException,
 } from "@aws-sdk/client-lambda-microvms";
 import {
   MicrovmDeliveryError,
@@ -40,8 +42,6 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 const STATE_CHECK_WARNING =
   "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
-const GET_DENIED_NOTE =
-  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
 
 /** The answer of the endpoint of a terminated MicroVM, measured live. */
 const connectFailed = (): Response =>
@@ -209,41 +209,86 @@ describe("microvm over HTTP, after a sign that the MicroVM does not run", () => 
     },
   );
 
-  it("logs one warning for a denied GetMicrovm, keeps sending the job, and names the denial in the final error", async () => {
+  it("fails at once with MicrovmDeliveryError that names lambda:GetMicrovm when GetMicrovm is denied", async () => {
     const client = new FakeMicrovmsClient();
-    const denied = () =>
-      new AccessDeniedException({
-        message: "not authorized: GetMicrovm",
-        $metadata: { httpStatusCode: 403, requestId: "req-1" },
-      });
-    client.getResponses = [throwing(denied()), throwing(denied())];
+    client.getResponses = [
+      throwing(
+        new AccessDeniedException({
+          message: "not authorized: GetMicrovm",
+          $metadata: { httpStatusCode: 403, requestId: "get-req-9" },
+        }),
+      ),
+    ];
     const endpoint = new FakeEndpoint();
     endpoint.responses = Array.from({ length: 10 }, connectFailed);
     const warnings: string[] = [];
-    // A 4-second window checks after the first request, and again after
-    // the request at 3.75 seconds.
-    const runner = runnerFor(
-      client,
-      endpoint,
-      {
-        retryStrategy: noRetry,
-        request: { path: "/build", retryWindow: { seconds: 4 } },
-      },
-      warnings,
-    );
+    // The default retry strategy does not retry the error.
+    const runner = runnerFor(client, endpoint, {}, warnings);
 
     const execution = await runner.run({ payload: {} });
 
     expect(execution.getStatus()).toBe("FAILED");
     const error = execution.getError();
     expect(error?.errorType).toBe(MicrovmDeliveryError.name);
-    expect(error?.errorMessage).toMatch(
-      new RegExp(`Last failure: HTTP 502\\. ${GET_DENIED_NOTE}$`),
+    expect(error?.errorMessage).toContain(
+      "GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm. GetMicrovm request ID: get-req-9.",
     );
-    expect(endpoint.requests).toHaveLength(5);
-    expect(client.getResponses).toHaveLength(0);
-    expect(warnings.filter((w) => w === STATE_CHECK_WARNING)).toHaveLength(1);
+    const step = runner.getOperation("build.request").getStepDetails();
+    expect(step?.error?.errorType).toBe("MicrovmGetDeniedError");
+    expect(step?.attempt).toBe(1);
+    expect(endpoint.requests).toHaveLength(1);
+    expect(client.events).toEqual(["terminate"]);
+    expect(warnings).not.toContain(STATE_CHECK_WARNING);
   });
+
+  it.each([
+    [
+      "is throttled",
+      () =>
+        new ThrottlingException({
+          message: "Rate exceeded",
+          $metadata: { httpStatusCode: 429, requestId: "get-req-1" },
+        }),
+    ],
+    [
+      "fails with a 5xx",
+      () =>
+        new InternalServerException({
+          message: "internal error",
+          $metadata: { httpStatusCode: 500, requestId: "get-req-1" },
+        }),
+    ],
+  ])(
+    "logs one warning and keeps sending the job when GetMicrovm %s",
+    async (_label, failure) => {
+      const client = new FakeMicrovmsClient();
+      client.getResponses = [throwing(failure()), throwing(failure())];
+      const endpoint = new FakeEndpoint();
+      endpoint.responses = Array.from({ length: 10 }, connectFailed);
+      const warnings: string[] = [];
+      // A 4-second window checks after the first request, and again after
+      // the request at 3.75 seconds.
+      const runner = runnerFor(
+        client,
+        endpoint,
+        {
+          retryStrategy: noRetry,
+          request: { path: "/build", retryWindow: { seconds: 4 } },
+        },
+        warnings,
+      );
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getStatus()).toBe("FAILED");
+      const error = execution.getError();
+      expect(error?.errorType).toBe(MicrovmDeliveryError.name);
+      expect(error?.errorMessage).toMatch(/Last failure: HTTP 502\.$/);
+      expect(endpoint.requests).toHaveLength(5);
+      expect(client.getResponses).toHaveLength(0);
+      expect(warnings.filter((w) => w === STATE_CHECK_WARNING)).toHaveLength(1);
+    },
+  );
 
   it("resumes a MicroVM that something outside the operation suspended, and the job succeeds", async () => {
     const client = new FakeMicrovmsClient();

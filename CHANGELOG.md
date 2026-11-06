@@ -159,8 +159,8 @@ below describe each change in detail.
   execution that started on an earlier build, with an input in the last 8 KiB below the old
   limit, fails at its next replay.
 
-- `microvm` in `@aws/durable-execution-sdk-js-extras` now uses `lambda:GetMicrovm` for HTTP
-  delivery, and `lambda:ResumeMicrovm` for a MicroVM suspended from outside the operation.
+- `microvm` in `@aws/durable-execution-sdk-js-extras` now requires `lambda:GetMicrovm` for HTTP
+  delivery, and uses `lambda:ResumeMicrovm` for a MicroVM suspended from outside the operation.
   See the Fixed entry for a `microvm` job that kept retrying an ended MicroVM.
 
 ### Fixed
@@ -175,13 +175,14 @@ below describe each change in detail.
   the request step calls GetMicrovm after each such answer, at most once per 2 seconds. A
   terminating, terminated, or removed MicroVM fails the job at once with
   `MicrovmNotRunningError`. The message names the `stateReason` and ends with
-  `GetMicrovm request ID: <id>.`. Grant `lambda:GetMicrovm` to the function's role of
-  `microvm`. Without it, the check logs one warning per step attempt, so up to 5 with the
-  default retry strategy, and the job keeps its retries. Each check is a denied GetMicrovm
-  call, about one per request. The final `MicrovmDeliveryError` message then adds the sentence
-  `GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.`
-  A healthy job can also log one warning, when its first request has no answer. A `microvm`
-  MicroVM that something outside the operation suspended is resumed, as in a session. That needs
+  `GetMicrovm request ID: <id>.`. `lambda:GetMicrovm` is now required for HTTP delivery. A
+  denied GetMicrovm fails the job at once with `MicrovmDeliveryError`, without a retry. The
+  message names `lambda:GetMicrovm` and ends with `GetMicrovm request ID: <id>.`. This applies
+  to `microvm` and to `microvmSession`, because both use the same check. A GetMicrovm that fails
+  otherwise, such as throttling, a server error, a timeout, or a connection error, logs one
+  warning per step attempt, so up to 5 with the default retry strategy, and the job keeps its
+  retries. A `microvm` MicroVM that something outside the operation suspended is resumed, as in
+  a session. That needs
   `lambda:ResumeMicrovm`. Without it, the job fails at once with `MicrovmDeliveryError`. A job in the
   `run` hook has no request step, so it still fails with `MicrovmTimeoutError` at its
   `heartbeatTimeout`.
@@ -677,7 +678,8 @@ below describe each change in detail.
   only for `autoSuspendOnIdle`. Every session job also checks the state after an HTTP 502 with
   `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
   2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
-  GetMicrovm logs one warning per job, and the job keeps its retries. A denied ResumeMicrovm for
+  GetMicrovm fails the job at once with `MicrovmDeliveryError`. A GetMicrovm that fails otherwise
+  logs one warning per job, and the job keeps its retries. A denied ResumeMicrovm for
   a suspended MicroVM fails the job at once with `MicrovmDeliveryError`. The doc comment of
   `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
   context checkpoint limit, and a new function version for any change.

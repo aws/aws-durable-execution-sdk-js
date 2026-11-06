@@ -212,34 +212,4 @@ describe("sendJob with suspendCheck", () => {
     expect(suspendCheck).not.toHaveBeenCalled();
     expect(endpoint.requests).toHaveLength(1);
   });
-
-  it("adds the note to the final MicrovmEndpointUnavailableError", async () => {
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = Array.from({ length: 20 }, connectFailed);
-
-    const error = await send(endpoint, {
-      retryWindowMs: 5_000,
-      suspendCheck: async () => undefined,
-      unavailableNote: () =>
-        "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.",
-    }).catch((e) => e);
-
-    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(error.message).toMatch(
-      /Last failure: HTTP 502\. GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended\.$/,
-    );
-  });
-
-  it("keeps the message unchanged when the note is undefined", async () => {
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = Array.from({ length: 20 }, () => 503);
-
-    const error = await send(endpoint, {
-      retryWindowMs: 5_000,
-      unavailableNote: () => undefined,
-    }).catch((e) => e);
-
-    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(error.message).toMatch(/Last failure: HTTP 503\.$/);
-  });
 });

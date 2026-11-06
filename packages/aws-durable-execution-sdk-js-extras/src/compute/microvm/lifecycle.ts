@@ -91,28 +91,36 @@ export async function ensureRunning(
 }
 
 /**
- * Thrown by {@link resumeIfSuspended} when its GetMicrovm call fails.
+ * Thrown by {@link resumeIfSuspended} when its GetMicrovm call fails with a
+ * transient error: throttling, a server error, a timeout, a connection
+ * error, or any error other than `AccessDeniedException` and
+ * `ResourceNotFoundException`.
  *
  * The request step of a job without the resume mode runs that check only
- * after a sign that the MicroVM does not run. The job may never have needed
- * the check. Roles of `microvm` from before this check may not have
- * `lambda:GetMicrovm`. So the step logs one warning per step attempt, and
- * keeps sending the job. With the default retry strategy, that is up to 5
- * warnings. `cause` is the error of the call.
+ * after a sign that the MicroVM does not run. A later call can succeed. So
+ * the step logs one warning per step attempt, and keeps sending the job.
+ * With the default retry strategy, that is up to 5 warnings. `cause` is the
+ * error of the call.
  *
  * @internal
  */
 export class MicrovmStateCheckError extends Error {
   override readonly name = "MicrovmStateCheckError";
+}
 
-  constructor(
-    message: string,
-    /** Whether the service answered `AccessDeniedException`. */
-    readonly denied: boolean,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
+/**
+ * Thrown by {@link resumeIfSuspended} when GetMicrovm is denied.
+ *
+ * A later attempt is denied the same way. Without the check, a job whose
+ * MicroVM has ended keeps sending to the dead endpoint until both retry
+ * tiers end. So the default retry strategy does not retry it, and the job
+ * fails with `MicrovmDeliveryError` at once. The message names the
+ * permission, and ends with the request ID of the call.
+ *
+ * @internal
+ */
+export class MicrovmGetDeniedError extends Error {
+  override readonly name = "MicrovmGetDeniedError";
 }
 
 /**
@@ -147,7 +155,9 @@ export class MicrovmResumeDeniedError extends Error {
  *   replay. The endpoint of a suspended MicroVM answers the same 502. So
  *   the check also resumes a suspended MicroVM.
  *
- * 1. GetMicrovm runs once. A failure other than `ResourceNotFoundException`
+ * 1. GetMicrovm runs once. A denied call throws
+ *    {@link MicrovmGetDeniedError}, and the job fails at once. A failure
+ *    other than `AccessDeniedException` and `ResourceNotFoundException`
  *    throws {@link MicrovmStateCheckError}. The caller then keeps sending
  *    the job.
  * 2. `RUNNING` or `PENDING`: the function returns at once.
@@ -199,9 +209,18 @@ export async function resumeIfSuspended(
     if (errorName === "ResourceNotFoundException") {
       throw microvmNotFound(microvmId, "GetMicrovm", error);
     }
+    if (errorName === "AccessDeniedException") {
+      throw new MicrovmGetDeniedError(
+        withRequestId(
+          `MicroVM ${microvmId} gave a sign that it does not run. GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm.`,
+          "GetMicrovm",
+          isMicrovmsServiceError(error) ? error : undefined,
+        ),
+        { cause: error },
+      );
+    }
     throw new MicrovmStateCheckError(
       (addRequestId("GetMicrovm", error) as Error).message,
-      errorName === "AccessDeniedException",
       { cause: error },
     );
   }

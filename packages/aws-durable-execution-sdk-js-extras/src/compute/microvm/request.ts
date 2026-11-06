@@ -307,11 +307,6 @@ export interface SendJobOptions {
    * runs.
    */
   suspendCheck?: (maxWaitMs: number) => Promise<string | undefined>;
-  /**
-   * Returns a sentence to add to the message of
-   * {@link MicrovmEndpointUnavailableError}, or `undefined`.
-   */
-  unavailableNote?: () => string | undefined;
 }
 
 /**
@@ -394,12 +389,10 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
 
   let attempt = 0;
   let lastFailure = "no attempt";
-  const unavailable = (): MicrovmEndpointUnavailableError => {
-    const note = options.unavailableNote?.();
-    return new MicrovmEndpointUnavailableError(
-      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.${note ? ` ${note}` : ""}`,
+  const unavailable = (): MicrovmEndpointUnavailableError =>
+    new MicrovmEndpointUnavailableError(
+      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.`,
     );
-  };
   const newToken = (): Promise<Record<string, string>> =>
     callBeforeDeadline(
       (sendOptions) => createAuthToken(options, sendOptions),

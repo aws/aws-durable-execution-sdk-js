@@ -134,10 +134,13 @@ export class MicrovmDeliveryError extends MicrovmError {
  * The message has no request ID when the AWS SDK error or output carries
  * none, or when the error does not come from the Lambda MicroVMs service.
  *
- * A GetMicrovm call that is denied or fails does not report the state. The
- * request step then logs one warning and keeps retrying. So the job fails
- * with a plain {@link MicrovmDeliveryError}, after the retries of both
- * tiers.
+ * A denied GetMicrovm call in the check of case 2 does not report the
+ * state. The job then fails at once with a plain
+ * {@link MicrovmDeliveryError}, and the message names `lambda:GetMicrovm`.
+ * A GetMicrovm call that fails otherwise does not report the state either.
+ * The request step then logs one warning and keeps retrying. So the job
+ * fails with a plain {@link MicrovmDeliveryError}, after the retries of
+ * both tiers.
  *
  * A job in the `run` hook has no request step. So a MicroVM that ends
  * before it runs that job fails it with {@link MicrovmTimeoutError}, at the

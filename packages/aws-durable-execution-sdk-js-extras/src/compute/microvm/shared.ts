@@ -669,13 +669,6 @@ const STATE_CHECK_WARNING =
   "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
 
 /**
- * The sentence that the first tier adds to its final error after a denied
- * state check. Without it, the message names only the last HTTP failure.
- */
-const GET_DENIED_NOTE =
-  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
-
-/**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
  *
@@ -692,9 +685,10 @@ const GET_DENIED_NOTE =
  * 2. A session MicroVM can also give that sign while it is suspended. The
  *    check then resumes it.
  *
- * A failed GetMicrovm call in the check logs one warning per step attempt,
- * so up to 5 with the default retry strategy. The attempt keeps sending the
- * job.
+ * A denied GetMicrovm call in the check fails the job at once with
+ * `MicrovmDeliveryError`, and the message names `lambda:GetMicrovm`. Any
+ * other failed GetMicrovm call logs one warning per step attempt, so up to
+ * 5 with the default retry strategy. The attempt keeps sending the job.
  */
 export async function deliverJob(
   child: DurableContext,
@@ -760,7 +754,6 @@ export async function deliverJob(
       const endpoint = resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
-      let getDenied = false;
       const checkState = async (
         maxWaitMs: number,
       ): Promise<string | undefined> => {
@@ -776,7 +769,6 @@ export async function deliverJob(
           if (!(error instanceof MicrovmStateCheckError)) {
             throw error;
           }
-          getDenied ||= error.denied;
           if (!checkWarned) {
             checkWarned = true;
             stepContext.logger.warn(STATE_CHECK_WARNING, {
@@ -809,7 +801,6 @@ export async function deliverJob(
         remainingTimeMs: remainingTime(child),
         log,
         ...(resume ? { recheck: running } : { suspendCheck: checkState }),
-        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
       });
     },
     {
