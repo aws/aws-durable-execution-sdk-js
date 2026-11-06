@@ -4,9 +4,10 @@ import { DurableExecutionInvocationInput } from "../../types";
 
 /**
  * Custom DurableExecutionInvocationInput which uses a custom durable
- * execution client instead of the API-based LambdaClient.
+ * execution client instead of the API-based LambdaClient. The testing
+ * library uses it to run handlers against its local checkpoint server.
  *
- * @internal
+ * @public
  */
 export class DurableExecutionInvocationInputWithClient
   implements DurableExecutionInvocationInput

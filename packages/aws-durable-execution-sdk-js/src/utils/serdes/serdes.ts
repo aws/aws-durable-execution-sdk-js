@@ -45,14 +45,14 @@ export interface Serdes<T> {
 }
 
 /**
- * Serdes typed for arbitrary values. Used internally where the concrete type is unknown.
- * @internal
+ * Serdes typed for arbitrary values. Used where the concrete type is unknown.
+ * @public
  */
 export type AnySerdes = Serdes<any>;
 
 /**
  * Deserialize-only Serdes typed for arbitrary values. Used for callback deserializers.
- * @internal
+ * @public
  */
 export type AnySerdesDeserializer = Pick<AnySerdes, "deserialize">;
 
