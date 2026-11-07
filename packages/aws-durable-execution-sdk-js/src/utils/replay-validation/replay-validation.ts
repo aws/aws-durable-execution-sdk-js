@@ -25,7 +25,8 @@ export const validateReplayConsistency = (
         `Expected type "${checkpointData.Type}", but got "${currentOperation.type}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    // terminate() is the effect. The returned promise never settles.
+    void terminateForUnrecoverableError(context, error, stepId);
   }
 
   // Validate operation name (including undefined)
@@ -35,7 +36,8 @@ export const validateReplayConsistency = (
         `Expected name "${checkpointData.Name ?? "undefined"}", but got "${currentOperation.name ?? "undefined"}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    // terminate() is the effect. The returned promise never settles.
+    void terminateForUnrecoverableError(context, error, stepId);
   }
 
   // Validate operation subtype
@@ -45,6 +47,7 @@ export const validateReplayConsistency = (
         `Expected subtype "${checkpointData.SubType}", but got "${currentOperation.subType}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    // terminate() is the effect. The returned promise never settles.
+    void terminateForUnrecoverableError(context, error, stepId);
   }
 };

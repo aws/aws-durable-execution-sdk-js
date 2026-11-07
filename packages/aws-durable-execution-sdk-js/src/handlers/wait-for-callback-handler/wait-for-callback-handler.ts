@@ -142,6 +142,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
               callbackId,
               name,
             });
+            // biome-ignore lint/nursery/useAwaitThenable: WaitForCallbackSubmitterFunc returns Promise<void>; Biome does not infer the type of this generic `let`.
             await submitter(callbackId, callbackContext);
             log("✅", "Submitter completed:", {
               callbackId,
