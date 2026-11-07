@@ -12,9 +12,9 @@ import { DurableLogger } from "./durable-logger";
  */
 export interface CreateCallbackConfig<TOutput = string> {
   /** Maximum time to wait for callback submission */
-  timeout?: Duration;
+  timeout?: Duration | undefined;
   /** Heartbeat timeout to detect stalled callback operations */
-  heartbeatTimeout?: Duration;
+  heartbeatTimeout?: Duration | undefined;
   /** Deserialization configuration for callback data */
   serdes?: Omit<Serdes<TOutput>, "serialize">;
   /**

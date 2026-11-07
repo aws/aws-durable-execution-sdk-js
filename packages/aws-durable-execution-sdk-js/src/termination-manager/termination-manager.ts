@@ -24,7 +24,7 @@ export class TerminationManager extends EventEmitter {
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
-  private setCheckpointTerminating?: () => void;
+  private setCheckpointTerminating?: (() => void) | undefined;
 
   constructor(setCheckpointTerminating?: () => void) {
     super();

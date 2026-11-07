@@ -74,7 +74,7 @@ export interface BatchItem<TResult> {
   /** The result value if the item succeeded */
   result?: TResult;
   /** The error if the item failed (always ChildContextError since batch items run in child contexts) */
-  error?: ChildContextError;
+  error?: ChildContextError | undefined;
   /** Index of the item in the original array */
   index: number;
   /** Status of the item execution */
@@ -335,12 +335,12 @@ export interface CompletionItemStatus {
   /** Index of the item/branch in the original array (definition order) */
   index: number;
   /** Optional custom name of the item/branch, when one was provided */
-  name?: string;
+  name?: string | undefined;
   /**
    * Current status of the item/branch, or `undefined` if it has not started
    * yet (possible when `maxConcurrency` limits how many run at once).
    */
-  status?: BatchItemStatus;
+  status?: BatchItemStatus | undefined;
 }
 
 /**
@@ -395,13 +395,13 @@ export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
  */
 export interface MapConfig<TItem, TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Function to generate custom names for map items */
   itemNamer?: (item: TItem, index: number) => string;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each item */
-  itemSerdes?: Serdes<TResult>;
+  itemSerdes?: Serdes<TResult> | undefined;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
@@ -447,11 +447,11 @@ export interface NamedParallelBranch<TResult, Logger extends DurableLogger> {
  */
 export interface ParallelConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each branch */
-  itemSerdes?: Serdes<TResult>;
+  itemSerdes?: Serdes<TResult> | undefined;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
@@ -482,7 +482,7 @@ export interface ConcurrentExecutionItem<T> {
   /** Index of the item in the original array */
   index: number;
   /** Optional custom name for the item */
-  name?: string;
+  name?: string | undefined;
 }
 
 /**
@@ -500,19 +500,19 @@ export type ConcurrentExecutor<TItem, TResult, Logger extends DurableLogger> = (
  */
 export interface ConcurrencyConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Top-level operation subtype for tracking */
-  topLevelSubType?: string;
+  topLevelSubType?: string | undefined;
   /** Iteration-level operation subtype for tracking */
-  iterationSubType?: string;
+  iterationSubType?: string | undefined;
   /** Function to generate summary from batch result */
-  summaryGenerator?: (result: BatchResult<TResult>) => string;
+  summaryGenerator?: ((result: BatchResult<TResult>) => string) | undefined;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each item */
-  itemSerdes?: Serdes<TResult>;
+  itemSerdes?: Serdes<TResult> | undefined;
   /** Configuration for completion behavior */
-  completionConfig?: CompletionConfig;
+  completionConfig?: CompletionConfig | undefined;
   /**
    * Nesting type for concurrent execution contexts (default: NestingType.NESTED)
    *
@@ -522,5 +522,5 @@ export interface ConcurrencyConfig<TResult> {
    * - **NESTED**: Create CONTEXT operations with full observability but higher cost
    * - **FLAT**: Use virtual contexts for ~30% cost reduction and higher scale
    */
-  nesting?: NestingType;
+  nesting?: NestingType | undefined;
 }

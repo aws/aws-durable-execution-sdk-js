@@ -44,7 +44,8 @@ function toInvokeError(error: ErrorObject | undefined): InvokeError {
   if (error.ErrorMessage || error.ErrorType) {
     cause = new Error(error.ErrorMessage);
     cause.name = error.ErrorType || "Error";
-    cause.stack = error.StackTrace?.join("\n");
+    // Error.stack is typed without undefined. A missing trace clears the stack.
+    Object.assign(cause, { stack: error.StackTrace?.join("\n") });
   }
   return new InvokeError(
     error.ErrorMessage || "Invoke failed",

@@ -42,14 +42,14 @@ export type PluginOperationStatus =
  */
 export interface OperationInfo {
   id: string;
-  name?: string;
+  name?: string | undefined;
   type: string;
-  subType?: string;
-  parentId?: string;
-  status?: PluginOperationStatus;
-  startTimestamp?: Date;
-  endTimestamp?: Date;
-  result?: string;
+  subType?: string | undefined;
+  parentId?: string | undefined;
+  status?: PluginOperationStatus | undefined;
+  startTimestamp?: Date | undefined;
+  endTimestamp?: Date | undefined;
+  result?: string | undefined;
   /**
    * Error details, when available. Checkpoint-derived metadata can omit this
    * field when wire error data is missing or empty, including during replay
@@ -59,12 +59,12 @@ export interface OperationInfo {
    * imply success. Supplied partial error details are retained, including
    * explicitly empty strings or an empty stack trace.
    */
-  error?: Error;
+  error?: Error | undefined;
   /**
    * The current attempt number for the operation (1-based), when applicable
    * (e.g. steps). Sourced from the checkpointed step details.
    */
-  attempt?: number;
+  attempt?: number | undefined;
   isReplay: boolean;
 }
 
@@ -72,7 +72,7 @@ export interface OperationInfo {
  * Information provided when a durable operation ends.
  */
 export interface OperationEndInfo extends OperationInfo {
-  error?: Error;
+  error?: Error | undefined;
 }
 
 /**
@@ -98,7 +98,7 @@ export type AttemptEndInfoOutcome =
  */
 export interface AttemptEndInfo extends AttemptInfo {
   outcome: AttemptEndInfoOutcome;
-  error?: Error;
+  error?: Error | undefined;
 }
 
 /**
@@ -114,7 +114,7 @@ export interface InvocationBaseInfo {
    * as reported by the backend. This remains the same across all
    * invocations (including replays) of a given execution.
    */
-  executionStartTimestamp?: Date;
+  executionStartTimestamp?: Date | undefined;
 }
 
 /**
@@ -149,7 +149,7 @@ export interface InvocationInfo extends InvocationBaseInfo {
 export interface InvocationEndInfo extends InvocationBaseInfo {
   status: PluginInvocationStatus;
   executionResult?: unknown;
-  executionError?: Error;
+  executionError?: Error | undefined;
 }
 
 /**
@@ -268,7 +268,7 @@ export interface DurableInstrumentationPlugin {
 export interface PropagationInput {
   readonly executionArn: string;
   readonly operationId: string;
-  readonly parentOperationId?: string;
+  readonly parentOperationId?: string | undefined;
   readonly targetFunctionName: string;
 }
 

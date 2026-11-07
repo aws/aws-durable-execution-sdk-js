@@ -27,8 +27,8 @@ export interface Checkpoint {
     stepId: string,
     state: OperationLifecycleState,
     options?: {
-      metadata?: OperationMetadata;
-      endTimestamp?: Date;
+      metadata?: OperationMetadata | undefined;
+      endTimestamp?: Date | undefined;
     },
   ): void;
 

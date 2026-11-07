@@ -85,7 +85,8 @@ export const createCallbackPromise = <T>(
       ? ((): CallbackError => {
           const cause = new Error(error.ErrorMessage);
           cause.name = error.ErrorType || "Error";
-          cause.stack = error.StackTrace?.join("\n");
+          // Error.stack is typed without undefined. A missing trace clears the stack.
+          Object.assign(cause, { stack: error.StackTrace?.join("\n") });
           if (isTimeout) {
             return new CallbackTimeoutError(
               error.ErrorMessage || "Callback timed out",

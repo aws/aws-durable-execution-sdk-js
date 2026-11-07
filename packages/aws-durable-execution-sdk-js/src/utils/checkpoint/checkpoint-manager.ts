@@ -797,8 +797,8 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     state: OperationLifecycleState,
     options?: {
-      metadata?: OperationMetadata;
-      endTimestamp?: Date;
+      metadata?: OperationMetadata | undefined;
+      endTimestamp?: Date | undefined;
     },
   ): void {
     let op = this.operations.get(stepId);
