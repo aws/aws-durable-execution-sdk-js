@@ -6,6 +6,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the file exporter.
@@ -62,6 +63,7 @@ export class FileExporter implements TelemetryExporter {
     this.directory = config.directory;
     this.mode = config.mode ?? "ndjson";
     this.operationsFormat = config.operationsFormat ?? "array";
+    registerTruncationFormat(this, { operations: this.operationsFormat });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes;
   }
 
