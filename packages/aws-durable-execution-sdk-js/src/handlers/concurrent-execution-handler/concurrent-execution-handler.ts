@@ -878,7 +878,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           (reconciling() ? currentIndex <= lastRecorded : shouldContinue())
         ) {
           const index = currentIndex++;
-          const item = items[index];
+          // The loop runs only while currentIndex < items.length.
+          const item = items[index] as ConcurrentExecutionItem<T>;
 
           // A gap item has no terminal record, so it was still running when
           // the earlier invocation ended. Once the outcome is already known,

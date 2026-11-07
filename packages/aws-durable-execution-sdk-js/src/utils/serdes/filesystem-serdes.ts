@@ -162,10 +162,11 @@ function parseDurableExecutionArn(
 ): DurableExecutionArnParts | undefined {
   const match = DURABLE_EXECUTION_ARN_PATTERN.exec(arn);
   if (!match) return undefined;
+  // The pattern has three required groups, so a match sets all three.
   return {
-    functionName: match[1],
-    executionName: match[2],
-    invocationId: match[3],
+    functionName: match[1] as string,
+    executionName: match[2] as string,
+    invocationId: match[3] as string,
   };
 }
 

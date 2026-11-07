@@ -70,8 +70,7 @@ async function runHandler<
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
-  const initialExecutionEvent =
-    executionContext._stepData[Object.keys(executionContext._stepData)[0]];
+  const initialExecutionEvent = Object.values(executionContext._stepData)[0];
   const customerHandlerEvent = JSON.parse(
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );

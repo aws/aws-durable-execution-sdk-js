@@ -507,9 +507,7 @@ export class CheckpointManager implements Checkpoint {
     // Cursor-based drain: sizes were computed at enqueue time, and a single
     // slice() replaces O(n²) per-item shift().
     let consumed = 0;
-    while (consumed < this.queue.length) {
-      const nextItem = this.queue[consumed];
-
+    for (const nextItem of this.queue) {
       if (
         (currentSize + nextItem.sizeBytes > this.MAX_PAYLOAD_SIZE ||
           batch.length >= this.MAX_ITEMS_IN_BATCH) &&
