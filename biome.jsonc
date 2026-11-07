@@ -18,7 +18,7 @@
   //    previously used `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`
   //    at error severity, and that package's `prebuild` ran `npm run lint` while CI
   //    runs `npm run build` -- so this whole set failed the build job on every pull
-  //    request, exactly as the core SDK's three rules did (see gap 4). Treating it as
+  //    request, exactly as the core SDK's three rules did (see gap 3). Treating it as
   //    a pre-commit-only concern would understate what was lost.
   //
   //    Three async-safety rules are recovered via the `types` domain below
@@ -78,15 +78,7 @@
   //    `tsc --noEmit` still runs and still catches type errors, but it does not
   //    implement any of these rules.
   //
-  // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
-  //    equivalent, and nothing automated replaces it. API Extractor used to parse TSDoc
-  //    here, but it was removed once its only consumer (api-documenter, generating
-  //    docs/api-reference/) was dropped in favour of aws/aws-durable-execution-docs --
-  //    and it was never a backstop anyway, since `api:extract` ran in no workflow. Note
-  //    tsdoc/syntax was "warn" before, so nothing regressed -- this is an unfilled gap,
-  //    not a loss.
-  //
-  // 3. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
+  // 2. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
   //    no formatter for either, and Prettier was dropped rather than retained just for
   //    them. The reasoning: almost nothing in this repo hand-writes those files -- the
   //    conformance CloudFormation templates, the issue templates and most docs are
@@ -107,7 +99,7 @@
   //    its own decision about whether to gate it. Everything Biome can format, Biome
   //    formats, and that is now the whole story.
   //
-  // 4. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
+  // 3. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
   //    section accounts for `...typescriptEslint.configs.recommended.rules` only. The
   //    other two gated error-level sets -- strictTypeChecked and eslint-plugin-jest's
   //    recommended -- are accounted for separately, in gap 1 and the `test` domain note
@@ -166,7 +158,7 @@
   //    Both are genuine regressions rather than unfilled gaps: a violation used to
   //    fail the build job and now fails nothing.
   //
-  // 5. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
+  // 4. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
   //    wrongly implied it was -- the claim "the only two net losses" was corrected four
   //    times, each time because someone enumerated from a direction this file had not.
   //    Read it as "what has been measured so far", and re-derive rather than trust it.
@@ -586,7 +578,7 @@
             // The real equivalent of eslint:recommended's `no-empty`, which this package
             // gated. It is NOT in Biome's recommended set, so it is OFF by default -- a
             // THIRD failure mode beyond "recommended but below error", which the
-            // enumeration in gap 5 does not find. 100 violations repo-wide, 0 here.
+            // enumeration in gap 4 does not find. 100 violations repo-wide, 0 here.
             // (Biome's `noEmptyBlock` is a CSS rule and is NOT this one.)
             "noEmptyBlockStatements": "error"
           },
