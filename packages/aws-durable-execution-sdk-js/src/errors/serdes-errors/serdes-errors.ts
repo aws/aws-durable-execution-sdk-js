@@ -9,6 +9,7 @@ import { SerdesContext } from "../../utils/serdes/serdes";
  * This is used by withDurableExecution to terminate the Lambda when serdes fails
  */
 export class SerdesFailedError extends UnrecoverableInvocationError {
+  override name = "SerdesFailedError";
   readonly terminationReason = TerminationReason.SERDES_FAILED;
 
   constructor(message?: string, originalError?: Error) {
