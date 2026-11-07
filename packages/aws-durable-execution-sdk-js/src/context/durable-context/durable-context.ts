@@ -82,13 +82,13 @@ export class DurableContextImpl<Logger extends DurableLogger>
 {
   readonly [DURABLE_CONTEXT_BRAND] = true;
 
-  private _stepPrefix?: string;
+  private _stepPrefix?: string | undefined;
   private _stepCounter: number = 0;
   private durableLogger: Logger;
   private modeAwareLoggingEnabled: boolean = true;
   private checkpoint: CheckpointManager;
   private durableExecutionMode: DurableExecutionMode;
-  private _parentId?: string;
+  private _parentId?: string | undefined;
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
 

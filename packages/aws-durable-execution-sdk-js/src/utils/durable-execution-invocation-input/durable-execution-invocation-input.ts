@@ -18,7 +18,7 @@ export class DurableExecutionInvocationInputWithClient
   };
   public readonly DurableExecutionArn: string;
   public readonly CheckpointToken: string;
-  public readonly UpdatedOperationIds?: string[];
+  public readonly UpdatedOperationIds?: string[] | undefined;
   constructor(
     params: DurableExecutionInvocationInput,
     public readonly durableExecutionClient: DurableExecutionClient,

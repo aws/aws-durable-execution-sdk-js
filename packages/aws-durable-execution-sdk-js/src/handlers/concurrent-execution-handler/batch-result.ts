@@ -36,7 +36,7 @@ const KNOWN_DURABLE_ERROR_TYPES = new Set([
  * be dropped and rebuilt as a generic error.
  */
 interface SerializedBatchError extends ErrorObject {
-  Cause?: SerializedBatchError;
+  Cause?: SerializedBatchError | undefined;
 }
 
 /** Serialize an Error (and its cause chain) into a SerializedBatchError. */
@@ -71,7 +71,8 @@ function reconstructBatchError(errorObject: SerializedBatchError): Error {
   } else {
     error = new Error(errorObject.ErrorMessage);
     error.name = errorObject.ErrorType || "Error";
-    error.stack = errorObject.StackTrace?.join("\n");
+    // Error.stack is typed without undefined. A missing trace clears the stack.
+    Object.assign(error, { stack: errorObject.StackTrace?.join("\n") });
   }
 
   // Override the cause with the reconstructed original error when present so

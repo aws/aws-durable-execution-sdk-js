@@ -13,23 +13,23 @@ import { DurableExecutionMode } from "../../types";
 export interface ActiveExecutionIdentity {
   executionArn: string;
   requestId: string;
-  tenantId?: string;
+  tenantId?: string | undefined;
   /**
    * Returns the log fields that this execution's plugins add. Absent when the handler has no
    * plugin that adds log fields.
    */
-  enrichLogContext?: () =>
-    | Record<string, string | number | boolean>
+  enrichLogContext?:
+    | (() => Record<string, string | number | boolean> | undefined)
     | undefined;
 }
 
 interface ContextInfo {
   contextId: string;
-  parentId?: string;
-  attempt?: number;
-  durableExecutionMode?: DurableExecutionMode;
-  operationName?: string;
-  execution?: ActiveExecutionIdentity;
+  parentId?: string | undefined;
+  attempt?: number | undefined;
+  durableExecutionMode?: DurableExecutionMode | undefined;
+  operationName?: string | undefined;
+  execution?: ActiveExecutionIdentity | undefined;
 }
 
 const asyncLocalStorage = createContextStorage<ContextInfo>();

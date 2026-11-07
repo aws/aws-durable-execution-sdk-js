@@ -12,7 +12,7 @@ export abstract class DurableOperationError extends Error {
   // `declare` adds only the type. A plain field would run after super()
   // and reset the native cause to undefined.
   declare cause?: Error;
-  public errorData?: string;
+  public errorData?: string | undefined;
   public stackTrace?: string[];
 
   constructor(message: string, cause?: Error, errorData?: string) {
@@ -32,7 +32,8 @@ export abstract class DurableOperationError extends Error {
   static fromErrorObject(errorObject: ErrorObject): DurableOperationError {
     const cause = new Error(errorObject.ErrorMessage);
     cause.name = errorObject.ErrorType || "Error";
-    cause.stack = errorObject.StackTrace?.join("\n");
+    // Error.stack is typed without undefined. A missing trace clears the stack.
+    Object.assign(cause, { stack: errorObject.StackTrace?.join("\n") });
 
     // Determine error type and create appropriate instance
     switch (errorObject.ErrorType) {

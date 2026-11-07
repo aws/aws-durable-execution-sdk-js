@@ -9,11 +9,11 @@ import { DurableOperationError } from "../errors/durable-error/durable-error";
  */
 export interface ChildConfig<T> {
   /** Serialization/deserialization configuration for child context data */
-  serdes?: Serdes<T>;
+  serdes?: Serdes<T> | undefined;
   /** Sub-type identifier for categorizing child contexts */
-  subType?: string;
+  subType?: string | undefined;
   /** Function to generate summaries for large results (used internally by map/parallel) */
-  summaryGenerator?: (result: T) => string;
+  summaryGenerator?: ((result: T) => string) | undefined;
   /** Function to map child context errors to custom error types based on the original error */
   errorMapper?: (originalError: DurableOperationError) => DurableOperationError;
   /** If true, skip checkpointing and use parent's parentId for child operations */

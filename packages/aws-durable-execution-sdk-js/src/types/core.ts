@@ -53,7 +53,7 @@ export interface DurableExecutionInvocationInput {
    * When undefined (e.g., first invocation), all pre-existing completed operations are
    * treated as replay.
    */
-  UpdatedOperationIds?: string[];
+  UpdatedOperationIds?: string[] | undefined;
 
   /**
    * Execution state including operation history and pagination information.
