@@ -184,15 +184,17 @@ export function buildPreview(
 
   const result: Record<string, unknown> = {};
   for (const [path, val] of accepted) {
-    const parts = path.split(".");
+    const parents = path.split(".");
+    // split() always returns at least one item.
+    const leaf = parents.pop() as string;
     let node = result;
-    for (let i = 0; i < parts.length - 1; i++) {
-      if (typeof node[parts[i]] !== "object" || node[parts[i]] === null) {
-        node[parts[i]] = {};
+    for (const key of parents) {
+      if (typeof node[key] !== "object" || node[key] === null) {
+        node[key] = {};
       }
-      node = node[parts[i]] as Record<string, unknown>;
+      node = node[key] as Record<string, unknown>;
     }
-    node[parts[parts.length - 1]] = val;
+    node[leaf] = val;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;

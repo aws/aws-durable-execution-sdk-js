@@ -243,18 +243,19 @@ export function createClassSerdesWithDates<T extends object>(
 
       // Convert date strings back to Date objects (supports nested paths)
       for (const prop of dateProps) {
-        const parts = prop.split(".");
+        const parents = prop.split(".");
+        // split() always returns at least one item.
+        const lastKey = parents.pop() as string;
         let obj: Record<string, unknown> = instance as Record<string, unknown>;
 
         // Navigate to parent of target property
-        for (let i = 0; i < parts.length - 1; i++) {
-          const next = obj[parts[i]];
+        for (const key of parents) {
+          const next = obj[key];
           if (!next || typeof next !== "object") break;
           obj = next as Record<string, unknown>;
         }
 
         // Convert to Date if path exists
-        const lastKey = parts[parts.length - 1];
         if (obj[lastKey]) {
           obj[lastKey] = new Date(obj[lastKey] as string);
         }
