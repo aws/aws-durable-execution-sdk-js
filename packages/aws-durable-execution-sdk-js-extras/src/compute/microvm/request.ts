@@ -353,7 +353,10 @@ export interface SendJobOptions {
  * request arrives. For about 5 seconds after a suspend, the endpoint
  * answers that 502 and does not resume the MicroVM, measured in us-east-1.
  * The backoff reaches 7.75 seconds after 5 retries. So the retries outlast
- * that window.
+ * that window. With a `retryWindow` under about 9 seconds, the step retry
+ * strategy covers the rest of that window, at the cost of one or two more
+ * step attempts. A job sent right after a suspend can take up to about 10
+ * seconds.
  *
  * @returns The status that accepted the job.
  */

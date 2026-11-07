@@ -146,7 +146,7 @@ describe("checkNotEnded", () => {
     }).catch((e) => e);
     expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
     expect(error.message).toMatch(
-      /^The GetMicrovm call for MicroVM mvm-1 had no time left before the invocation reserve, after \d+ ms\.$/,
+      /^GetMicrovm for MicroVM mvm-1 did not end before the invocation reserve, after \d+ ms\.$/,
     );
     expect(client.events).toEqual([]);
   });

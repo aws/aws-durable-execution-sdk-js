@@ -74,7 +74,7 @@ export const handler = withDurableExecution(
             timeout: { minutes: 5 },
             // The heartbeat timeout starts before the resume. Without the
             // image's resume hook, the worker can refuse the job for up to 30
-            // seconds after a resume. So it is the default 60-second
+            // seconds after the suspend. So it is the default 60-second
             // retryWindow plus 30 seconds.
             heartbeatTimeout: { seconds: 90 },
           },

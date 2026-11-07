@@ -326,8 +326,9 @@ To suspend a MicroVM, set `idlePolicy` with `autoResumeEnabled: true`. The SDK d
 2. Set `maxIdleDurationSeconds` above `maximumDurationInSeconds` (the operation timeout plus 5 minutes). The idle timer counts only inbound requests, so a shorter value suspends a running job. A probe in us-east-1 measured this: the service suspended a MicroVM 66 seconds into a job, with a 60-second idle time. The service accepts values up to 2,147,483,647.
 3. Set `suspendedDurationSeconds` to the session `timeout` or more.
 4. Without `autoResumeEnabled`, a job after a suspend fails after its retries with `MicrovmDeliveryError`. The endpoint of the suspended MicroVM answers HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED` to every request, and the MicroVM stays suspended. With the default retry strategy, the job fails after about 6 minutes.
-5. The first job after a suspend takes about 1 s longer. The endpoint holds the request that resumes the MicroVM for about 750 milliseconds, measured in us-east-1.
-6. For about 5 seconds after a suspend, the endpoint answers that 502 and does not resume the MicroVM, measured in us-east-1. The request step retries the 502. Its backoff reaches 7.75 seconds after 5 retries, so a job right after a suspend still arrives.
+5. A job that arrives more than about 5 seconds after a suspend takes about 1 s longer. The endpoint holds the request that resumes the MicroVM for about 750 milliseconds, measured in us-east-1.
+6. For about 5 seconds after a suspend, the endpoint answers that 502 and does not resume the MicroVM, measured in us-east-1. The request step retries the 502. Its backoff reaches 7.75 seconds after 5 retries, so a job right after a suspend still arrives. With a `retryWindow` under about 9 seconds, the step retry strategy covers the rest of that window, at the cost of one or two more step attempts. A job sent right after a suspend can take up to about 10 seconds.
+7. An execution in flight that launched before this version can fail its next job after a suspend. The code no longer resumes the MicroVM. A session that launched with `autoSuspendOnIdle` or an `idlePolicy` replays a launch checkpoint with `"resumeBeforeDelivery": true`, and the code ignores that field. A session that used `suspendAfter` without an idle policy also no longer resumes the MicroVM. In both cases, the next job after the suspend works only if the MicroVM was launched with `autoResumeEnabled: true`. Otherwise it fails after its retries with `MicrovmDeliveryError`.
 
 ```typescript
 const idlePolicy = {
@@ -408,7 +409,7 @@ What happens:
 2. When the job's result arrives, the durable function calls `SuspendMicrovm` with the session's MicroVM ID. The call runs inside the job's child context (subtype `MicrovmSessionJob`), before the child context returns. It happens for a job that succeeds and for a job that fails.
 3. The call is not a step and has no checkpoint of its own. The child context's completion checkpoint covers it. A replay of a completed job does not run the child context again, so it sends no second suspend.
 4. A failed `SuspendMicrovm` call logs a warning and does not fail the job. The job returns its result.
-5. The next job sends its request. The service resumes the MicroVM on that request, or on a retry after the 5-second window. The session keeps no record of the suspend, so a replay changes nothing.
+5. The next job sends its request. The service resumes the MicroVM on that request, or on a retry after the 5-second window. With a `retryWindow` under about 9 seconds, the step retry strategy covers the rest of that window, at the cost of one or two more step attempts. A job sent right after a suspend can take up to about 10 seconds. The session keeps no record of the suspend, so a replay changes nothing.
 
 The setting works with or without `autoSuspendOnIdle`. With both, the idle time applies after each resume. Both need the `idlePolicy` with `autoResumeEnabled: true` of [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs).
 

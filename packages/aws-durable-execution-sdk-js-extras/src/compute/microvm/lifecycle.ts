@@ -17,7 +17,7 @@ import {
   reserveStartsAt,
 } from "./request";
 
-export interface StateCheckOptions {
+interface StateCheckOptions {
   client: LambdaMicrovmsClient;
   microvmId: string;
   /**
@@ -108,7 +108,7 @@ export async function checkNotEnded(
       reserveStartsAt(options.remainingTimeMs),
       () =>
         new MicrovmEndpointUnavailableError(
-          `The GetMicrovm call for MicroVM ${microvmId} had no time left before the invocation reserve, after ${Date.now() - started} ms.`,
+          `GetMicrovm for MicroVM ${microvmId} did not end before the invocation reserve, after ${Date.now() - started} ms.`,
         ),
     );
   } catch (error) {

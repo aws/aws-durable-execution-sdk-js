@@ -42,7 +42,7 @@ below describe each change in detail.
     job.
   - Without `autoResumeEnabled`, a job after a suspend fails after its retries with
     `MicrovmDeliveryError`. With the default retry strategy, that takes about 6 minutes.
-  - The first job after a suspend takes about 1 s longer.
+  - A job that arrives more than about 5 seconds after a suspend takes about 1 s longer.
   - The function's role no longer needs `lambda:ResumeMicrovm`. It needs `lambda:GetMicrovm` for
     HTTP delivery, and `lambda:SuspendMicrovm` for `suspendAfter`.
   - The request step no longer calls GetMicrovm before each job. It calls GetMicrovm only after an
@@ -50,12 +50,19 @@ below describe each change in detail.
     most once per 2 seconds. A terminating, terminated, or removed MicroVM still fails the job at
     once with `MicrovmNotRunningError`. A `SUSPENDING` or `SUSPENDED` MicroVM keeps the request
     step retrying. The endpoint answers that 502 for about 5 seconds after a suspend, and the
-    backoff of the request step outlasts that window.
+    backoff of the request step outlasts that window. With a `retryWindow` under about 9 seconds,
+    the step retry strategy covers the rest of that window, at the cost of one or two more step
+    attempts. A job sent right after a suspend can take up to about 10 seconds.
   - The launch checkpoint of a session no longer records `resumeBeforeDelivery`. An execution in
     flight that launched with `autoSuspendOnIdle` or an `idlePolicy` replays a launch checkpoint
     with `"resumeBeforeDelivery": true`. The new code ignores the field. So its next job no longer
     resumes the MicroVM. That job works only if the MicroVM was launched with
     `autoResumeEnabled: true`. Otherwise it fails after its retries with `MicrovmDeliveryError`.
+    An execution in flight whose session used `suspendAfter` without an `idlePolicy` is affected
+    too: its next job after the suspend no longer resumes the MicroVM and fails after its retries
+    with `MicrovmDeliveryError`.
+  - The message of the reserve error of the state check now reads: `GetMicrovm for MicroVM <id>
+    did not end before the invocation reserve, after <n> ms.`
   - The warning after a failed GetMicrovm now reads: `GetMicrovm failed, so the operation could
     not check whether the MicroVM has ended. The request step keeps sending the job.`
 

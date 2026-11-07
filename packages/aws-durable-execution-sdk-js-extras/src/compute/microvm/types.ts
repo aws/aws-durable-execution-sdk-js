@@ -251,7 +251,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * retries with `MicrovmDeliveryError`. With the default retry strategy,
    * that takes about 6 minutes.
    *
-   * The first job after a suspend takes about 1 s longer.
+   * A job that arrives more than about 5 seconds after a suspend takes about
+   * 1 s longer. A job sent right after a suspend can take up to about 10
+   * seconds.
    *
    * ```typescript
    * idlePolicy: {
@@ -296,8 +298,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * - A MicroVM that serves inbound traffic that is not a job, such as a
    *   preview environment waiting for an approval.
    *
-   * Leave it off for such a workload. The first job after a suspend takes
-   * about 1 s longer, measured in us-east-1, and the job's `timeout` and
+   * Leave it off for such a workload. A job that arrives more than about 5
+   * seconds after a suspend takes about 1 s longer, measured in us-east-1,
+   * and the job's `timeout` and
    * `heartbeatTimeout` count that latency. Suspending does not extend the
    * MicroVM's lifetime.
    *
@@ -371,8 +374,9 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *
    * A job after a {@link suspendAfter} job waits until the service resumes
    * the MicroVM. Without the image's `resume` hook, the worker can refuse it
-   * with HTTP 503 for up to 30 seconds after that. So set the heartbeat timeout of such a job to at least the
-   * `retryWindow` plus 30 seconds.
+   * with HTTP 503 for up to 30 seconds after the suspend. So set the
+   * heartbeat timeout of such a job to at least the `retryWindow` plus 30
+   * seconds.
    */
   heartbeatTimeout?: Duration;
 
@@ -412,13 +416,16 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * suspend. For about 5 seconds after a suspend, the endpoint answers HTTP
    * 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, and does not
    * resume the MicroVM. The request step retries that 502. So a job right
-   * after a `suspendAfter` job still arrives, after the window.
+   * after a `suspendAfter` job still arrives, after the window. With a
+   * `retryWindow` under about 9 seconds, the step retry strategy covers the
+   * rest of that window, at the cost of one or two more step attempts. A job
+   * sent right after a suspend can take up to about 10 seconds.
    *
    * Set it on the job before a long wait, such as a durable wait or a
    * callback. Do not set it on back-to-back jobs, or on the last job of the
-   * session. Each suspend and resume costs a snapshot, and the first job
-   * after a suspend takes about 1 s longer. The session terminates the
-   * MicroVM after its last job anyway.
+   * session. Each suspend and resume costs a snapshot, and a job that
+   * arrives after the window takes about 1 s longer. The session terminates
+   * the MicroVM after its last job anyway.
    *
    * Only {@link MicrovmSession.invoke} accepts it. {@link microvm} throws a
    * `TypeError` for it in `config.request`. A value that is not a boolean
