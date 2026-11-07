@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   truncateRecord,
   truncateRecordWithOperationsFormat,
 } from "./truncation";
 import { applyOperationsFormat } from "./operations-index";
+import { getTruncationFormat } from "./truncation-internal";
+import { OTelExporter } from "./exporters/otel-exporter";
 import type { OperationRecord, DurableExecutionTelemetryRecord } from "./types";
 
 function op(
@@ -92,6 +94,39 @@ describe("truncateRecord", () => {
     expect(bytes(out)).toBeLessThanOrEqual(limit);
   });
 
+  it("keeps opted-in results when dropping error causes already makes it fit", () => {
+    const r = record({
+      error: {
+        name: "Error",
+        message: "failed",
+        cause: { name: "Error", message: "C".repeat(800) },
+      },
+      operations: [
+        op({
+          id: "op",
+          name: "charge",
+          result: "R".repeat(200),
+        }),
+      ],
+    });
+    const afterCauseDrop = {
+      ...r,
+      error: { name: "Error", message: "failed" },
+      droppedCauses: true,
+      truncated: true,
+    };
+    const limit = bytes(afterCauseDrop);
+
+    expect(bytes(r)).toBeGreaterThan(limit);
+    const out = truncateRecord(r, limit);
+
+    expect(out.droppedCauses).toBe(true);
+    expect(out.operations[0].result).toBe("R".repeat(200));
+    expect(out.operations[0].truncated).toBeUndefined();
+    expect(out.droppedOperations).toBeUndefined();
+    expect(bytes(out)).toBeLessThanOrEqual(limit);
+  });
+
   it("measures the rendered record a bounded number of times for array exporters", () => {
     const ops = Array.from({ length: 2000 }, (_, i) =>
       op({
@@ -111,7 +146,7 @@ describe("truncateRecord", () => {
       r,
       Math.floor(bytes(r) / 2),
       render,
-      "array",
+      { operations: "array" },
     );
 
     expect(out.truncated).toBe(true);
@@ -135,7 +170,9 @@ describe("truncateRecord", () => {
       return value;
     };
 
-    const out = truncateRecordWithOperationsFormat(r, limit, render, "array");
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "array",
+    });
 
     expect(out.truncated).toBe(true);
     expect(out.droppedOperations).toBeUndefined();
@@ -231,7 +268,9 @@ describe("truncateRecord", () => {
     expect(bytes(render(twoDrops))).toBeGreaterThan(limit);
     expect(bytes(render(threeDrops))).toBeLessThanOrEqual(limit);
 
-    const out = truncateRecordWithOperationsFormat(r, limit, render, "both");
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "both",
+    });
     expect(out.droppedOperations).toBe(1);
     expect(out.operations.map((operation) => operation.id)).toEqual(
       ops.slice(1).map((operation) => operation.id),
@@ -246,6 +285,120 @@ describe("truncateRecord", () => {
     const customOut = truncateRecord(r, limit, customRender);
     expect(customOut.droppedOperations).toBe(1);
     expect(customRenders).toBeGreaterThan(3);
+  });
+
+  it("updates large repeated-name summaries as operations are removed", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `op-${i}`,
+        name: "repeated",
+        status: i % 7 === 0 ? "FAILED" : "SUCCEEDED",
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+        durationMs: i,
+        attempt: i % 5,
+      }),
+    );
+    const r = record({ operations: ops });
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const firstRetained = 1000;
+    const expected = {
+      ...r,
+      operations: ops.slice(firstRetained),
+      truncated: true,
+      droppedOperations: firstRetained,
+    };
+
+    const out = truncateRecordWithOperationsFormat(
+      r,
+      bytes(render(expected)),
+      render,
+      { operations: "both" },
+    );
+
+    expect(out.droppedOperations).toBe(firstRetained);
+    expect(out.operations.map((operation) => operation.id)).toEqual(
+      ops.slice(firstRetained).map((operation) => operation.id),
+    );
+    const summary = render(out) as {
+      operationsByName: Record<string, { count: number; failedCount: number }>;
+    };
+    expect(summary.operationsByName.repeated.count).toBe(1000);
+    expect(summary.operationsByName.repeated.failedCount).toBe(
+      ops
+        .slice(firstRetained)
+        .filter((operation) => operation.status === "FAILED").length,
+    );
+  });
+
+  it("does not drop a later operation when the __proto__ summary disappears", () => {
+    const ops = [
+      op({
+        id: "old",
+        name: "__proto__",
+        startTime: "2026-07-02T00:00:01.000Z",
+      }),
+      op({
+        id: "new",
+        name: "__proto__",
+        startTime: "2026-07-02T00:00:02.000Z",
+        error: { name: "Error", message: "E".repeat(400) },
+      }),
+      op({
+        id: "keep",
+        name: "keep",
+        startTime: "2026-07-02T00:00:03.000Z",
+      }),
+    ];
+    const r = record({ operations: ops });
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const afterTwoDrops = {
+      ...r,
+      operations: [ops[2]],
+      truncated: true,
+      droppedOperations: 2,
+    };
+    const limit = bytes(render(afterTwoDrops));
+
+    expect(bytes(render(r))).toBeGreaterThan(limit);
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "both",
+    });
+
+    expect(out.droppedOperations).toBe(2);
+    expect(out.operations.map((operation) => operation.id)).toEqual(["keep"]);
+    expect(bytes(render(out))).toBeLessThanOrEqual(limit);
+  });
+
+  it("keeps OTel payload sizing exact without rendering the envelope per drop", () => {
+    for (const operationsFormat of ["array", "by-name", "both"] as const) {
+      const exporter = new OTelExporter({
+        endpoint: "https://otel.example/v1/logs",
+        operationsFormat,
+      });
+      const render = vi.fn((value: DurableExecutionTelemetryRecord) =>
+        exporter.render(value),
+      );
+      const ops = Array.from({ length: 1000 }, (_, i) =>
+        op({
+          id: `op-${i}`,
+          name: `step-${i}`,
+          startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+          result: "R".repeat(100),
+        }),
+      );
+      const r = record({ operations: ops });
+      const limit = Math.floor(bytes(exporter.render(r)) / 2);
+      const format = getTruncationFormat(exporter);
+      expect(format).toBeDefined();
+
+      const out = truncateRecordWithOperationsFormat(r, limit, render, format!);
+
+      expect(out.truncated).toBe(true);
+      expect(bytes(exporter.render(out))).toBeLessThanOrEqual(limit);
+      expect(render.mock.calls.length).toBeLessThan(100);
+    }
   });
 
   it("drops whole operations oldest-first after results are exhausted", () => {

@@ -8,7 +8,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
-import { TRUNCATION_OPERATIONS_FORMAT } from "../truncation-internal";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the EventBridge exporter.
@@ -58,7 +58,6 @@ export class EventBridgeExporter implements TelemetryExporter {
   private readonly eventBusName: string;
   private readonly source: string;
   private readonly operationsFormat: OperationsFormat;
-  readonly [TRUNCATION_OPERATIONS_FORMAT]: OperationsFormat;
   private readonly client: EventBridgeClient;
   readonly maxRecordSizeBytes: number;
 
@@ -66,7 +65,7 @@ export class EventBridgeExporter implements TelemetryExporter {
     this.eventBusName = config.eventBusName ?? "default";
     this.source = config.source ?? "software.amazon.lambda.durable.telemetry";
     this.operationsFormat = config.operationsFormat ?? "array";
-    this[TRUNCATION_OPERATIONS_FORMAT] = this.operationsFormat;
+    registerTruncationFormat(this, { operations: this.operationsFormat });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new EventBridgeClient(
       config.region ? { region: config.region } : {},

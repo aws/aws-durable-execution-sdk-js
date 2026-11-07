@@ -23,8 +23,8 @@ import {
   truncateRecordWithOperationsFormat,
 } from "./truncation";
 import {
-  TRUNCATION_OPERATIONS_FORMAT,
-  type TruncationFormatProvider,
+  getTruncationFormat,
+  registerTruncationFormat,
 } from "./truncation-internal";
 
 export type {
@@ -535,11 +535,11 @@ function buildOperationRecords(
  * this requires no additional IAM permissions or configuration.
  */
 export class LambdaLogExporter implements TelemetryExporter {
-  readonly [TRUNCATION_OPERATIONS_FORMAT] = "by-name" as const;
   /** CloudWatch Logs caps a single log event at 256 KB. */
   readonly maxRecordSizeBytes: number;
 
   constructor(config: { maxRecordSizeBytes?: number } = {}) {
+    registerTruncationFormat(this, { operations: "by-name" });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
   }
 
@@ -839,18 +839,15 @@ class ExportScheduler {
           this.exporters.map((exporter) => {
             try {
               const render = exporter.render?.bind(exporter);
-              const operationsFormat = (
-                exporter as TelemetryExporter & TruncationFormatProvider
-              )[TRUNCATION_OPERATIONS_FORMAT];
-              const truncated =
-                operationsFormat !== undefined
-                  ? truncateRecordWithOperationsFormat(
-                      record,
-                      exporter.maxRecordSizeBytes,
-                      render ?? ((value) => value),
-                      operationsFormat,
-                    )
-                  : truncateRecord(record, exporter.maxRecordSizeBytes, render);
+              const truncationFormat = getTruncationFormat(exporter);
+              const truncated = truncationFormat
+                ? truncateRecordWithOperationsFormat(
+                    record,
+                    exporter.maxRecordSizeBytes,
+                    render ?? ((value) => value),
+                    truncationFormat,
+                  )
+                : truncateRecord(record, exporter.maxRecordSizeBytes, render);
               return exporter.export(truncated);
             } catch (error) {
               return Promise.reject(error);

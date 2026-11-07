@@ -6,7 +6,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
-import { TRUNCATION_OPERATIONS_FORMAT } from "../truncation-internal";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the SQS exporter.
@@ -59,7 +59,6 @@ export class SQSExporter implements TelemetryExporter {
   private readonly messageGroupId?: string;
   private readonly isFifo: boolean;
   private readonly operationsFormat: OperationsFormat;
-  readonly [TRUNCATION_OPERATIONS_FORMAT]: OperationsFormat;
   private readonly client: SQSClient;
   readonly maxRecordSizeBytes: number;
 
@@ -70,7 +69,7 @@ export class SQSExporter implements TelemetryExporter {
     this.messageGroupId = config.messageGroupId || undefined;
     this.isFifo = config.queueUrl.endsWith(".fifo");
     this.operationsFormat = config.operationsFormat ?? "array";
-    this[TRUNCATION_OPERATIONS_FORMAT] = this.operationsFormat;
+    registerTruncationFormat(this, { operations: this.operationsFormat });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new SQSClient(config.region ? { region: config.region } : {});
   }

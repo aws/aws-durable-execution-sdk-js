@@ -1,12 +1,23 @@
 import type { OperationsFormat } from "./types";
 
-/** Marks SDK-owned renderers whose operation shape can be sized by deltas. */
-export const TRUNCATION_OPERATIONS_FORMAT: unique symbol = Symbol(
-  "truncationOperationsFormat",
-);
+export interface TruncationFormat {
+  operations: OperationsFormat | "by-name";
+  envelope?: "otel";
+}
 
-export type TruncationOperationsFormat = OperationsFormat | "by-name";
+// Keep sizing metadata outside exported class declarations. Otherwise TypeScript
+// publishes an implementation detail on every first-party exporter type.
+const formats = new WeakMap<object, TruncationFormat>();
 
-export interface TruncationFormatProvider {
-  readonly [TRUNCATION_OPERATIONS_FORMAT]?: TruncationOperationsFormat;
+export function registerTruncationFormat(
+  exporter: object,
+  format: TruncationFormat,
+): void {
+  formats.set(exporter, format);
+}
+
+export function getTruncationFormat(
+  exporter: object,
+): TruncationFormat | undefined {
+  return formats.get(exporter);
 }
