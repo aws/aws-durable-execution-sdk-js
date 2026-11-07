@@ -13,6 +13,9 @@ export abstract class UnrecoverableError extends Error {
     public readonly originalError?: Error,
   ) {
     super(message);
+    // Fallback for subclasses without a fixed `name`. Each concrete SDK
+    // subclass sets one, because a bundler can rename classes when it
+    // minifies them.
     this.name = this.constructor.name;
 
     // Preserve the original stack trace if available

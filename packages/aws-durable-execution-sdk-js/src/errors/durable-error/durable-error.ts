@@ -17,6 +17,8 @@ export abstract class DurableOperationError extends Error {
 
   constructor(message: string, cause?: Error, errorData?: string) {
     super(message, { cause });
+    // Fallback for subclasses outside the SDK. Each SDK subclass sets a fixed
+    // `name`, because a bundler can rename classes when it minifies them.
     this.name = this.constructor.name;
     this.errorData = errorData;
 
@@ -135,6 +137,7 @@ export abstract class DurableOperationError extends Error {
  * @public
  */
 export class StepError extends DurableOperationError {
+  override name = "StepError";
   readonly errorType = "StepError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -162,6 +165,7 @@ export class StepError extends DurableOperationError {
  * @public
  */
 export class CallbackError extends DurableOperationError {
+  override name = "CallbackError";
   readonly errorType: string = "CallbackError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -175,6 +179,7 @@ export class CallbackError extends DurableOperationError {
  * @public
  */
 export class CallbackExternalError extends CallbackError {
+  override name = "CallbackExternalError";
   readonly errorType = "CallbackExternalError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -187,6 +192,7 @@ export class CallbackExternalError extends CallbackError {
  * @public
  */
 export class CallbackTimeoutError extends CallbackError {
+  override name = "CallbackTimeoutError";
   readonly errorType = "CallbackTimeoutError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -199,6 +205,7 @@ export class CallbackTimeoutError extends CallbackError {
  * @public
  */
 export class CallbackSubmitterError extends CallbackError {
+  override name = "CallbackSubmitterError";
   readonly errorType = "CallbackSubmitterError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -211,6 +218,7 @@ export class CallbackSubmitterError extends CallbackError {
  * @public
  */
 export class InvokeError extends DurableOperationError {
+  override name = "InvokeError";
   readonly errorType = "InvokeError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -223,6 +231,7 @@ export class InvokeError extends DurableOperationError {
  * @public
  */
 export class ChildContextError extends DurableOperationError {
+  override name = "ChildContextError";
   readonly errorType = "ChildContextError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -235,6 +244,7 @@ export class ChildContextError extends DurableOperationError {
  * @public
  */
 export class PromiseCombinatorError extends DurableOperationError {
+  override name = "PromiseCombinatorError";
   readonly errorType = "PromiseCombinatorError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -247,6 +257,7 @@ export class PromiseCombinatorError extends DurableOperationError {
  * @public
  */
 export class WaitForConditionError extends DurableOperationError {
+  override name = "WaitForConditionError";
   readonly errorType = "WaitForConditionError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -262,6 +273,7 @@ export class WaitForConditionError extends DurableOperationError {
  * @public
  */
 export class BatchCompletionError extends DurableOperationError {
+  override name = "BatchCompletionError";
   readonly errorType = "BatchCompletionError";
 
   constructor(
