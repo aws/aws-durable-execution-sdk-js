@@ -52,11 +52,10 @@ export class FakeMicrovmsClient {
   terminateResponses: Handler[] = [];
   getResponses: Handler[] = [];
   suspendResponses: Handler[] = [];
-  resumeResponses: Handler[] = [];
   tokenResponses: Handler[] = [];
   /**
    * The MicroVM state that GetMicrovm reports when its queue is empty.
-   * SuspendMicrovm sets it to SUSPENDED, and ResumeMicrovm to RUNNING.
+   * SuspendMicrovm sets it to SUSPENDED.
    */
   microvmState = "RUNNING";
   /** Each lifecycle command in call order, such as "get:RUNNING" or "suspend". */
@@ -97,13 +96,11 @@ export class FakeMicrovmsClient {
       return {};
     }
     if (command instanceof ResumeMicrovmCommand) {
+      // The operations never resume a MicroVM. The service resumes it on
+      // the next request. So a ResumeMicrovm call is a defect: the event
+      // records it, and the call fails.
       this.events.push("resume");
-      const next = this.resumeResponses.shift();
-      if (next) {
-        return next(command.input, options);
-      }
-      this.microvmState = "RUNNING";
-      return {};
+      throw new Error("unexpected ResumeMicrovm call");
     }
     if (command instanceof CreateMicrovmAuthTokenCommand) {
       this.tokenInputs.push(command.input);
@@ -176,6 +173,58 @@ export class FakeStsServiceException extends Error {
     super(message);
     this.name = name;
   }
+}
+
+/** The answer of the endpoint of a terminated or suspended MicroVM. */
+export const connectFailed = (): Response =>
+  new Response(null, {
+    status: 502,
+    headers: { "x-aws-proxy-error": "MICROVM_CONNECT_FAILED" },
+  });
+
+/**
+ * Returns an endpoint that acts as the endpoint of a MicroVM launched with
+ * `idlePolicy.autoResumeEnabled: true`. It records each request in the
+ * client's event list as `request:<path>`. A queued answer is used first.
+ * Otherwise it answers by the client's `microvmState`:
+ *
+ * - `TERMINATING` or `TERMINATED`: a 502 with `MICROVM_CONNECT_FAILED`.
+ * - `SUSPENDING` or `SUSPENDED`: that 502 for the first `windowRequests`
+ *   requests, as the real endpoint does for about 5 seconds after a
+ *   suspend. The next request resumes the MicroVM: the endpoint records
+ *   `auto-resume`, sets the state to `RUNNING`, and accepts the request.
+ * - Any other state: it accepts the request.
+ */
+export function autoResumingEndpoint(
+  client: FakeMicrovmsClient,
+  windowRequests = 1,
+): FakeEndpoint {
+  const endpoint = new FakeEndpoint();
+  const deliver = endpoint.fetch;
+  let refused = 0;
+  (endpoint as { fetch: typeof fetch }).fetch = (async (
+    url: string,
+    init: RequestInit,
+  ) => {
+    client.events.push(`request:${new URL(url).pathname}`);
+    if (endpoint.responses.length === 0) {
+      const state = client.microvmState;
+      if (state === "TERMINATING" || state === "TERMINATED") {
+        endpoint.responses.push(connectFailed());
+      } else if (state === "SUSPENDING" || state === "SUSPENDED") {
+        if (refused < windowRequests) {
+          refused++;
+          endpoint.responses.push(connectFailed());
+        } else {
+          refused = 0;
+          client.microvmState = "RUNNING";
+          client.events.push("auto-resume");
+        }
+      }
+    }
+    return deliver(url, init);
+  }) as unknown as typeof fetch;
+  return endpoint;
 }
 
 export interface RecordedRequest {
