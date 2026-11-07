@@ -1,3 +1,4 @@
+import { sdkErrorName } from "../error-name";
 import { TerminationReason } from "../../termination-manager/types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { UnrecoverableInvocationError } from "../unrecoverable-error/unrecoverable-error";
@@ -9,7 +10,7 @@ import { SerdesContext } from "../../utils/serdes/serdes";
  * This is used by withDurableExecution to terminate the Lambda when serdes fails
  */
 export class SerdesFailedError extends UnrecoverableInvocationError {
-  override name = "SerdesFailedError";
+  override name = sdkErrorName(this, SerdesFailedError, "SerdesFailedError");
   readonly terminationReason = TerminationReason.SERDES_FAILED;
 
   constructor(message?: string, originalError?: Error) {

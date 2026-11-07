@@ -94,4 +94,16 @@ describe("error names", () => {
       expect(create().name).toBe(expected);
     },
   );
+
+  it("keeps the class name of a subclass outside the SDK", () => {
+    class CustomStepError extends StepError {}
+    class CustomCallbackTimeoutError extends CallbackTimeoutError {}
+    class CustomSerdesError extends SerdesFailedError {}
+
+    expect(new CustomStepError().name).toBe("CustomStepError");
+    expect(new CustomCallbackTimeoutError().name).toBe(
+      "CustomCallbackTimeoutError",
+    );
+    expect(new CustomSerdesError().name).toBe("CustomSerdesError");
+  });
 });

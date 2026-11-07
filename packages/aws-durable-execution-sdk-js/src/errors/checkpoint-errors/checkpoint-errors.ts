@@ -1,3 +1,4 @@
+import { sdkErrorName } from "../error-name";
 import { TerminationReason } from "../../termination-manager/types";
 import {
   UnrecoverableInvocationError,
@@ -10,7 +11,11 @@ import {
  * This will terminate the current Lambda invocation, but the execution can continue with a new invocation
  */
 export class CheckpointUnrecoverableInvocationError extends UnrecoverableInvocationError {
-  override name = "CheckpointUnrecoverableInvocationError";
+  override name = sdkErrorName(
+    this,
+    CheckpointUnrecoverableInvocationError,
+    "CheckpointUnrecoverableInvocationError",
+  );
   readonly terminationReason = TerminationReason.CHECKPOINT_FAILED;
 
   constructor(message?: string, originalError?: Error) {
@@ -24,7 +29,11 @@ export class CheckpointUnrecoverableInvocationError extends UnrecoverableInvocat
  * This will terminate the entire execution and cannot be recovered
  */
 export class CheckpointUnrecoverableExecutionError extends UnrecoverableExecutionError {
-  override name = "CheckpointUnrecoverableExecutionError";
+  override name = sdkErrorName(
+    this,
+    CheckpointUnrecoverableExecutionError,
+    "CheckpointUnrecoverableExecutionError",
+  );
   readonly terminationReason = TerminationReason.CHECKPOINT_FAILED;
 
   constructor(message?: string, originalError?: Error) {

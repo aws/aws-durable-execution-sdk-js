@@ -1,3 +1,4 @@
+import { sdkErrorName } from "../error-name";
 import { ErrorObject } from "../../types/wire";
 import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 // Type-only import to avoid a runtime circular dependency with types/batch.
@@ -137,7 +138,7 @@ export abstract class DurableOperationError extends Error {
  * @public
  */
 export class StepError extends DurableOperationError {
-  override name = "StepError";
+  override name = sdkErrorName(this, StepError, "StepError");
   readonly errorType = "StepError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -165,7 +166,7 @@ export class StepError extends DurableOperationError {
  * @public
  */
 export class CallbackError extends DurableOperationError {
-  override name = "CallbackError";
+  override name = sdkErrorName(this, CallbackError, "CallbackError");
   readonly errorType: string = "CallbackError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -179,7 +180,11 @@ export class CallbackError extends DurableOperationError {
  * @public
  */
 export class CallbackExternalError extends CallbackError {
-  override name = "CallbackExternalError";
+  override name = sdkErrorName(
+    this,
+    CallbackExternalError,
+    "CallbackExternalError",
+  );
   readonly errorType = "CallbackExternalError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -192,7 +197,11 @@ export class CallbackExternalError extends CallbackError {
  * @public
  */
 export class CallbackTimeoutError extends CallbackError {
-  override name = "CallbackTimeoutError";
+  override name = sdkErrorName(
+    this,
+    CallbackTimeoutError,
+    "CallbackTimeoutError",
+  );
   readonly errorType = "CallbackTimeoutError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -205,7 +214,11 @@ export class CallbackTimeoutError extends CallbackError {
  * @public
  */
 export class CallbackSubmitterError extends CallbackError {
-  override name = "CallbackSubmitterError";
+  override name = sdkErrorName(
+    this,
+    CallbackSubmitterError,
+    "CallbackSubmitterError",
+  );
   readonly errorType = "CallbackSubmitterError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -218,7 +231,7 @@ export class CallbackSubmitterError extends CallbackError {
  * @public
  */
 export class InvokeError extends DurableOperationError {
-  override name = "InvokeError";
+  override name = sdkErrorName(this, InvokeError, "InvokeError");
   readonly errorType = "InvokeError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -231,7 +244,7 @@ export class InvokeError extends DurableOperationError {
  * @public
  */
 export class ChildContextError extends DurableOperationError {
-  override name = "ChildContextError";
+  override name = sdkErrorName(this, ChildContextError, "ChildContextError");
   readonly errorType = "ChildContextError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -244,7 +257,11 @@ export class ChildContextError extends DurableOperationError {
  * @public
  */
 export class PromiseCombinatorError extends DurableOperationError {
-  override name = "PromiseCombinatorError";
+  override name = sdkErrorName(
+    this,
+    PromiseCombinatorError,
+    "PromiseCombinatorError",
+  );
   readonly errorType = "PromiseCombinatorError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -257,7 +274,11 @@ export class PromiseCombinatorError extends DurableOperationError {
  * @public
  */
 export class WaitForConditionError extends DurableOperationError {
-  override name = "WaitForConditionError";
+  override name = sdkErrorName(
+    this,
+    WaitForConditionError,
+    "WaitForConditionError",
+  );
   readonly errorType = "WaitForConditionError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -273,7 +294,11 @@ export class WaitForConditionError extends DurableOperationError {
  * @public
  */
 export class BatchCompletionError extends DurableOperationError {
-  override name = "BatchCompletionError";
+  override name = sdkErrorName(
+    this,
+    BatchCompletionError,
+    "BatchCompletionError",
+  );
   readonly errorType = "BatchCompletionError";
 
   constructor(
