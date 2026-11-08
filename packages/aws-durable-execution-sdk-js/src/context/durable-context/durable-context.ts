@@ -150,7 +150,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
       this.captureExecutionState.bind(this),
       this.checkAndUpdateReplayMode.bind(this),
       this.checkForNonResolvingPromise.bind(this),
-      () => this.durableExecutionMode,
       (mode) => {
         this.durableExecutionMode = mode;
       },
@@ -794,7 +793,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this._executionContext,
         this.runInChildContext.bind(this),
-        () => this._defaultSerdes,
       );
       const promise = concurrentExecutionHandler(
         nameOrItems,

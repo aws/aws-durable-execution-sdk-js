@@ -6,7 +6,6 @@ export class ModeManagement {
     private captureExecutionState: () => boolean,
     private checkAndUpdateReplayMode: () => void,
     private checkForNonResolvingPromise: () => Promise<never> | null,
-    private getDurableExecutionMode: () => DurableExecutionMode,
     private setDurableExecutionMode: (mode: DurableExecutionMode) => void,
   ) {}
 
