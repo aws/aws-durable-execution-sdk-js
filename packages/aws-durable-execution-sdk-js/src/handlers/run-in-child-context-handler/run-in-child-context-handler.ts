@@ -1,22 +1,22 @@
 import {
-  ExecutionContext,
-  ChildFunc,
-  ChildConfig,
+  type ExecutionContext,
+  type ChildFunc,
+  type ChildConfig,
   OperationSubType,
   DurableExecutionMode,
-  DurableContext,
+  type DurableContext,
   OperationLifecycleState,
 } from "../../types";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -29,10 +29,10 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
 import {
-  DurableInstrumentationPlugin,
+  type DurableInstrumentationPlugin,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {

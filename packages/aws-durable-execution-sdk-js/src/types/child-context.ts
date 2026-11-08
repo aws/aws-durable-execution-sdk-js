@@ -1,6 +1,6 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { DurableLogger } from "./durable-logger";
-import { DurableContext } from "./durable-context";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { DurableLogger } from "./durable-logger";
+import type { DurableContext } from "./durable-context";
 import { DurableOperationError } from "../errors/durable-error/durable-error";
 
 /**

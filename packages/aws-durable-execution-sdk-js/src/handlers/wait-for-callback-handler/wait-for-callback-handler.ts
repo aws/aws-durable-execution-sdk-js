@@ -1,27 +1,27 @@
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
-  ExecutionContext,
-  WaitForCallbackSubmitterFunc,
-  WaitForCallbackConfig,
-  CreateCallbackConfig,
-  DurableContext,
+  type ExecutionContext,
+  type WaitForCallbackSubmitterFunc,
+  type WaitForCallbackConfig,
+  type CreateCallbackConfig,
+  type DurableContext,
   OperationSubType,
-  WaitForCallbackContext,
-  StepContext,
-  StepConfig,
+  type WaitForCallbackContext,
+  type StepContext,
+  type StepConfig,
   DurablePromise,
-  DurableLogger,
+  type DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createPassThroughSerdes } from "../callback-handler/callback";
-import { AnySerdesDeserializer } from "../../utils/serdes/serdes";
+import type { AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
 import type { InternalDurableContext } from "../../types/internal-context";
 import { OperationType } from "../../types/wire";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
 
 /**

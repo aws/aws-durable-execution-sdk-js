@@ -1,21 +1,21 @@
-import { Context } from "aws-lambda";
-import { LoggerConfig } from "./logger";
-import { SerdesConfig } from "../utils/serdes/serdes";
-import { StepFunc, StepConfig } from "./step";
-import { ChildFunc, ChildConfig } from "./child-context";
-import { InvokeConfig } from "./invoke";
-import { Duration } from "./core";
-import {
+import type { Context } from "aws-lambda";
+import type { LoggerConfig } from "./logger";
+import type { SerdesConfig } from "../utils/serdes/serdes";
+import type { StepFunc, StepConfig } from "./step";
+import type { ChildFunc, ChildConfig } from "./child-context";
+import type { InvokeConfig } from "./invoke";
+import type { Duration } from "./core";
+import type {
   CreateCallbackConfig,
   CreateCallbackResult,
   WaitForCallbackSubmitterFunc,
   WaitForCallbackConfig,
 } from "./callback";
-import {
+import type {
   WaitForConditionCheckFunc,
   WaitForConditionConfig,
 } from "./wait-condition";
-import {
+import type {
   MapFunc,
   MapConfig,
   ParallelFunc,
@@ -24,7 +24,7 @@ import {
   BatchResult,
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
-import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * @public

@@ -1,6 +1,6 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { StepContext } from "./logger";
-import { DurableLogger, Duration } from "../types";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { StepContext } from "./logger";
+import type { DurableLogger, Duration } from "../types";
 
 /**
  * Decision returned by a retry strategy function

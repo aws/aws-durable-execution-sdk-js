@@ -1,8 +1,8 @@
-import {
+import type {
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
-import { DurableLogData } from "../../types/logger";
+import type { DurableLogData } from "../../types/logger";
 
 /**
  * The methods of a Powertools for AWS Lambda (TypeScript) `Logger` that the

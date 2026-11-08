@@ -1,5 +1,5 @@
-import { Operation, OperationType } from "../../types/wire";
-import { OperationSubType, ExecutionContext } from "../../types";
+import { type Operation, OperationType } from "../../types/wire";
+import { OperationSubType, type ExecutionContext } from "../../types";
 import { terminateForUnrecoverableError } from "../termination-helper/termination-helper";
 import { NonDeterministicExecutionError } from "../../errors/non-deterministic-error/non-deterministic-error";
 

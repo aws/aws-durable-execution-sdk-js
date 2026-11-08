@@ -1,6 +1,6 @@
-import { WireOperation } from "../../types/wire";
-import { DurableExecutionClient } from "../../types/durable-execution";
-import { DurableExecutionInvocationInput } from "../../types";
+import type { WireOperation } from "../../types/wire";
+import type { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionInvocationInput } from "../../types";
 
 /**
  * Custom DurableExecutionInvocationInput which uses a custom durable

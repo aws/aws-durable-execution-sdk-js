@@ -1,6 +1,6 @@
-import { OperationUpdate } from "../../types/wire";
+import type { OperationUpdate } from "../../types/wire";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import {
+import type {
   OperationMetadata,
   OperationInfo,
 } from "../../types/operation-lifecycle";

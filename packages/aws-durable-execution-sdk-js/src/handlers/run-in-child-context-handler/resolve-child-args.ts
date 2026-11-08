@@ -1,5 +1,5 @@
-import { ChildConfig, ChildFunc } from "../../types/child-context";
-import { DurableLogger } from "../../types/durable-logger";
+import type { ChildConfig, ChildFunc } from "../../types/child-context";
+import type { DurableLogger } from "../../types/durable-logger";
 
 /**
  * Disambiguates the `runInChildContext` overloads — `(name, fn, options)` vs

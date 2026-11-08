@@ -1,5 +1,5 @@
 import { OperationType } from "./types/wire";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
@@ -10,7 +10,7 @@ import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unr
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import {
   TerminationReason,
-  TerminationResponse,
+  type TerminationResponse,
   classifyTermination,
 } from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
@@ -24,18 +24,18 @@ import {
 } from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 import {
-  DurableLogger,
-  DurableExecutionInvocationInput,
-  DurableExecutionInvocationOutput,
+  type DurableLogger,
+  type DurableExecutionInvocationInput,
+  type DurableExecutionInvocationOutput,
   DurableExecutionMode,
-  ExecutionContext,
+  type ExecutionContext,
   InvocationStatus,
 } from "./types";
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { runWithRootContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
-import {
+import type {
   DurableExecutionConfig,
   DurableExecutionHandler,
   DurableLambdaHandler,
@@ -44,11 +44,11 @@ import { createInvocationPluginRunner } from "./utils/plugin/plugin-factory";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
-  DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
-  InvocationBaseInfo,
-  InvocationInfo,
-  OperationInfo,
+  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginFactory,
+  type InvocationBaseInfo,
+  type InvocationInfo,
+  type OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
 

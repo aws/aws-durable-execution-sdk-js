@@ -1,14 +1,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { SerdesContext, AnySerdes } from "./serdes";
+import type { SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 export {
   FieldMatchMode,
   PreviewMode,
+  buildPreview,
+} from "./preview";
+export type {
   PreviewField,
   PreviewConfig,
-  buildPreview,
 } from "./preview";
 
 // Subtract 1KB headroom for the envelope wrapper and other checkpoint metadata

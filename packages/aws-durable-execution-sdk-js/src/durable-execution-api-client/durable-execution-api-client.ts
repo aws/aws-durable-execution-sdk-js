@@ -1,17 +1,17 @@
 // The runtime dependency on `@aws-sdk/client-lambda` lives in `./lambda-module`. The
 // type-only import below is erased at compile time.
 import type { LambdaClient } from "@aws-sdk/client-lambda";
-import {
+import type {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
 } from "../types/wire";
-import { DurableExecutionClient } from "../types/durable-execution";
+import type { DurableExecutionClient } from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
-import { DurableLogger } from "../types/durable-logger";
+import type { DurableLogger } from "../types/durable-logger";
 import {
-  LambdaModule,
+  type LambdaModule,
   loadLambdaModule,
   resolveDefaultLambdaClient,
 } from "./lambda-module";
