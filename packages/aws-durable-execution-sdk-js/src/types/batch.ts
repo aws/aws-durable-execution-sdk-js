@@ -339,13 +339,11 @@ export interface CustomCompletionConfig {
  * ```
  *
  * @remarks
- * The mutual exclusivity is enforced only at the type level. There is no
- * runtime guard, so a plain-JavaScript caller (or TypeScript code that casts
- * around the union) that passes both is accepted: the handler checks
- * `shouldComplete` first in all three completion spots (`shouldContinue`,
- * `isComplete`, `getCompletionReason`), so the predicate wins and the threshold
- * fields (`minSuccessful`/`toleratedFailureCount`/`toleratedFailurePercentage`)
- * are silently ignored.
+ * The SDK also checks the mutual exclusivity at run time. A plain-JavaScript
+ * caller, or TypeScript code that casts around the union, can pass
+ * `shouldComplete` together with a threshold field. The `map` or `parallel`
+ * call then fails the execution with a configuration error. Lambda does not
+ * retry it.
  *
  * @public
  */
