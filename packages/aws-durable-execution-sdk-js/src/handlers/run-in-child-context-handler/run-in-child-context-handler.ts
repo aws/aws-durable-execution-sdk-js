@@ -186,6 +186,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       if (phase1Error !== undefined) {
         throw phase1Error;
       }
+      // biome-ignore lint/style/noNonNullAssertion: phase 1 has settled without an error, so it set the result.
       return phase1Result!;
     });
   };
@@ -440,11 +441,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
     };
+    const wrapChildContextFn = plugin.wrapChildContextFn;
     const result = (await runWithContext(
       entityId,
       parentId,
-      plugin.wrapChildContextFn
-        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
+      wrapChildContextFn
+        ? () => wrapChildContextFn.call(plugin, wrapInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,

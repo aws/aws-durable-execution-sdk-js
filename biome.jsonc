@@ -639,6 +639,23 @@
       }
     },
     {
+      // The shipped core SDK source holds no `any` and no `!`. A site that needs one
+      // carries a suppression with its reason. Test files and src/testing keep the
+      // repo-wide levels.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/*.test.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/__tests__/**",
+        "!packages/aws-durable-execution-sdk-js/src/testing/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "error" },
+          "suspicious": { "noExplicitAny": "error" }
+        }
+      }
+    },
+    {
       // Parity with the old per-package configs, which turned `no-explicit-any` off in
       // test files. Return types on test callbacks are noise for the same reason.
       "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mts"],

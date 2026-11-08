@@ -206,7 +206,7 @@ function resolveExecutionDir(
 
 async function writeToFile(
   basePath: string,
-  value: any,
+  value: unknown,
   context: SerdesContext,
   pathEncoding: FileSystemPathEncoding,
 ): Promise<string> {
@@ -289,7 +289,7 @@ export function createFileSystemSerdes(
   const pathEncoding = config.pathEncoding ?? FileSystemPathEncoding.URI;
   return {
     serialize: async (
-      value: any,
+      value: unknown,
       context: SerdesContext,
     ): Promise<string | undefined> => {
       if (value === undefined) return undefined;
@@ -332,7 +332,7 @@ export function createFileSystemSerdes(
     deserialize: async (
       data: string | undefined,
       _context: SerdesContext,
-    ): Promise<any> => {
+    ): Promise<unknown> => {
       if (data === undefined) return undefined;
 
       const envelope = JSON.parse(data) as FileSystemEnvelope;

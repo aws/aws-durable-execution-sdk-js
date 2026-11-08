@@ -40,6 +40,7 @@ export const createWaitHandler = (
   ): DurablePromise<void> {
     const isNameFirst = typeof nameOrDuration === "string";
     const actualName = isNameFirst ? nameOrDuration : undefined;
+    // biome-ignore lint/style/noNonNullAssertion: the (name, duration) overload requires a duration.
     const actualDuration = isNameFirst ? duration! : nameOrDuration;
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();

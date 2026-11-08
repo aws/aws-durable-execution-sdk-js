@@ -328,12 +328,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
           await plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           const stepFn = (): Promise<T> => fn(stepContext);
+          const wrapOperationAttemptFn = plugin.wrapOperationAttemptFn;
           result = (await runWithContext(
             stepId,
             parentId,
-            plugin.wrapOperationAttemptFn
+            wrapOperationAttemptFn
               ? (): CustomerFnResult =>
-                  plugin.wrapOperationAttemptFn!(attemptInfo, stepFn)
+                  wrapOperationAttemptFn.call(plugin, attemptInfo, stepFn)
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
