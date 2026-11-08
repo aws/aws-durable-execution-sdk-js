@@ -32,6 +32,7 @@ import { DurablePromise } from "../../types/durable-promise";
 import type { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
 import {
+  type CustomerFnResult,
   type DurableInstrumentationPlugin,
   PluginOperationStatus,
 } from "../../types/plugin";
@@ -446,7 +447,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       entityId,
       parentId,
       wrapChildContextFn
-        ? () => wrapChildContextFn.call(plugin, wrapInfo, childContextFn)
+        ? (): CustomerFnResult =>
+            wrapChildContextFn.call(plugin, wrapInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,

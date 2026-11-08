@@ -142,7 +142,7 @@ export const initializeExecutionContext = async (
       // returns something other than a finite number states no deadline either, so it
       // reads as `Infinity` too. Otherwise a stub context in a unit test, or a context
       // from another compute, would fail the invocation when the SDK reads the deadline.
-      getRemainingTimeMs: () => {
+      getRemainingTimeMs: (): number => {
         try {
           const remaining = context.getRemainingTimeInMillis();
           return typeof remaining === "number" && Number.isFinite(remaining)

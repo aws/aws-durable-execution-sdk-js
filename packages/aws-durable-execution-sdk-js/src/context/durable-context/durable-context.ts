@@ -308,6 +308,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
    * gate does not fire on the pending in-flight step (issue #751).
    * @internal
    */
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: ConcurrencyController calls it through a cast during replay.
   private skipNextOperation(): void {
     this._stepCounter++;
   }
