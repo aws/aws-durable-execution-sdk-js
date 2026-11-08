@@ -559,7 +559,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.durableExecution.plugin,
       );
       return typeof nameOrDuration === "string"
-        ? waitHandler(nameOrDuration, maybeDuration!)
+        ? // biome-ignore lint/style/noNonNullAssertion: the (name, duration) overload requires a duration.
+          waitHandler(nameOrDuration, maybeDuration!)
         : waitHandler(nameOrDuration);
     });
   }
@@ -677,6 +678,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
           : undefined,
       );
       return waitForCallbackHandler(
+        // biome-ignore lint/style/noNonNullAssertion: the overloads require a name or a submitter.
         nameOrSubmitter!,
         submitterOrConfig,
         maybeConfig,
@@ -712,6 +714,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         ? waitForConditionHandler(
             nameOrCheckFunc,
             checkFuncOrConfig as WaitForConditionCheckFunc<T, Logger>,
+            // biome-ignore lint/style/noNonNullAssertion: the (name, check, config) overload requires a config.
             maybeConfig!,
           )
         : waitForConditionHandler(

@@ -987,8 +987,9 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           // Create shallow copy to prevent mutations from affecting the returned result
           const finalBatchItems: BatchItem<R>[] = [];
           for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
+            const item = resultItems[i];
+            if (item !== undefined) {
+              finalBatchItems.push({ ...item });
             }
           }
 

@@ -207,6 +207,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       // Always deserialize the result since it's a string. The child context
       // counts as EXECUTING meanwhile, so the invocation cannot suspend before
       // the caller's next line runs.
+      // biome-ignore lint/style/noNonNullAssertion: the deserialized callback result is the caller T, as before.
       return (await completeAfter(
         checkpoint,
         stepId,
