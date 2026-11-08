@@ -306,7 +306,7 @@
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0",
-    "node-llama-cpp": "^3.22.2"
+    "node-llama-cpp": "^3.22.3"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
