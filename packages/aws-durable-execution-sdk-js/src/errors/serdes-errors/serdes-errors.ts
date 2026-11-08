@@ -2,7 +2,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { UnrecoverableInvocationError } from "../unrecoverable-error/unrecoverable-error";
 import { log } from "../../utils/logger/logger";
-import { SerdesContext } from "../../utils/serdes/serdes";
+import type { SerdesContext } from "../../utils/serdes/serdes";
 
 /**
  * Error thrown when serdes operation fails and terminates Lambda invocation

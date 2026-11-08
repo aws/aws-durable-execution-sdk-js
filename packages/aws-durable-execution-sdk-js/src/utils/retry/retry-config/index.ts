@@ -1,4 +1,8 @@
-import { RetryDecision, JitterStrategy, Duration } from "../../../types";
+import {
+  type RetryDecision,
+  JitterStrategy,
+  type Duration,
+} from "../../../types";
 import { durationToSeconds } from "../../duration/duration";
 import {
   finalizeDelaySeconds,

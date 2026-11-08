@@ -1,34 +1,34 @@
 import {
-  ExecutionContext,
-  DurableContext,
-  StepFunc,
-  StepConfig,
-  ChildFunc,
-  ChildConfig,
-  CreateCallbackConfig,
-  CreateCallbackResult,
-  WaitForCallbackSubmitterFunc,
-  WaitForCallbackConfig,
-  WaitForConditionCheckFunc,
-  WaitForConditionConfig,
-  MapFunc,
-  MapConfig,
-  Duration,
-  ParallelFunc,
-  ParallelConfig,
-  NamedParallelBranch,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  ConcurrencyConfig,
-  LoggerConfig,
-  InvokeConfig,
+  type ExecutionContext,
+  type DurableContext,
+  type StepFunc,
+  type StepConfig,
+  type ChildFunc,
+  type ChildConfig,
+  type CreateCallbackConfig,
+  type CreateCallbackResult,
+  type WaitForCallbackSubmitterFunc,
+  type WaitForCallbackConfig,
+  type WaitForConditionCheckFunc,
+  type WaitForConditionConfig,
+  type MapFunc,
+  type MapConfig,
+  type Duration,
+  type ParallelFunc,
+  type ParallelConfig,
+  type NamedParallelBranch,
+  type ConcurrentExecutionItem,
+  type ConcurrentExecutor,
+  type ConcurrencyConfig,
+  type LoggerConfig,
+  type InvokeConfig,
   DurableExecutionMode,
-  BatchResult,
+  type BatchResult,
   DurablePromise,
-  DurableLogData,
+  type DurableLogData,
 } from "../../types";
-import { InternalDurableContext } from "../../types/internal-context";
-import { Context } from "aws-lambda";
+import type { InternalDurableContext } from "../../types/internal-context";
+import type { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
@@ -52,19 +52,19 @@ import {
   getActiveContext,
   validateContextUsage,
 } from "../../utils/context-tracker/context-tracker";
-import {
+import type {
   DurableContextLogger,
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import {
-  SerdesConfig,
+  type SerdesConfig,
   defaultSerdes,
-  AnySerdes,
-  AnySerdesDeserializer,
+  type AnySerdes,
+  type AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;

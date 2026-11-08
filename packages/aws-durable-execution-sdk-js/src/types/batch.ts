@@ -1,7 +1,7 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { DurableContext } from "./durable-context";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { DurableContext } from "./durable-context";
 import { ChildContextError } from "../errors/durable-error/durable-error";
-import { DurableLogger } from "./durable-logger";
+import type { DurableLogger } from "./durable-logger";
 
 /**
  * Nesting type for batch operations (map and parallel)

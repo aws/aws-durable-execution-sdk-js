@@ -1,6 +1,6 @@
-import { DurableContext } from "../../types/durable-context";
-import { RetryDecision } from "../../types";
-import { ChildConfig } from "../../types/child-context";
+import type { DurableContext } from "../../types/durable-context";
+import type { RetryDecision } from "../../types";
+import type { ChildConfig } from "../../types/child-context";
 
 /**
  * Configuration for {@link withRetry}.

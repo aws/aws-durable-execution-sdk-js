@@ -1,7 +1,7 @@
 import {
-  ExecutionContext,
+  type ExecutionContext,
   OperationSubType,
-  Duration,
+  type Duration,
   OperationLifecycleState,
 } from "../../types";
 import {
@@ -10,11 +10,11 @@ import {
   OperationAction,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,

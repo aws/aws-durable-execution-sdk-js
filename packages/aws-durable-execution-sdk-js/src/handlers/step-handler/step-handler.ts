@@ -1,24 +1,24 @@
 import {
-  ExecutionContext,
-  StepFunc,
-  StepConfig,
+  type ExecutionContext,
+  type StepFunc,
+  type StepConfig,
   StepSemantics,
   OperationSubType,
-  StepContext,
+  type StepContext,
   DurablePromise,
   DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { terminateForUnrecoverableError } from "../../utils/termination-helper/termination-helper";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
@@ -26,7 +26,7 @@ import {
   DurableOperationError,
   StepError,
 } from "../../errors/durable-error/durable-error";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -35,11 +35,11 @@ import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecover
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import {
-  DurableInstrumentationPlugin,
+  type DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
-  CustomerFnResult,
+  type CustomerFnResult,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {

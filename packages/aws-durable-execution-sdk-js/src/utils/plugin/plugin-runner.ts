@@ -1,4 +1,4 @@
-import {
+import type {
   DurableInstrumentationPlugin,
   AttemptEndInfo,
   AttemptInfo,
@@ -11,7 +11,7 @@ import {
   CustomerFnResult,
   CustomerFn,
 } from "../../types/plugin";
-import { DurableExecutionInvocationOutput } from "../../types/core";
+import type { DurableExecutionInvocationOutput } from "../../types/core";
 import { MAX_TIMER_DELAY_MS } from "../constants/constants";
 import { collectPropagationMetadata } from "./propagation-metadata";
 

@@ -1,9 +1,9 @@
-import {
+import type {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
   InvocationInfo,
 } from "../../types/plugin";
-import { createPluginRunner, PluginRunnerOptions } from "./plugin-runner";
+import { createPluginRunner, type PluginRunnerOptions } from "./plugin-runner";
 
 /**
  * Builds the composite plugin runner for one invocation.

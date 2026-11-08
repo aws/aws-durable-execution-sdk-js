@@ -1,16 +1,16 @@
 import {
-  ExecutionContext,
-  CreateCallbackConfig,
-  CreateCallbackResult,
+  type ExecutionContext,
+  type CreateCallbackConfig,
+  type CreateCallbackResult,
   OperationSubType,
   DurablePromise,
   OperationLifecycleState,
 } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
+import type { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
@@ -20,7 +20,7 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,

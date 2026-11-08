@@ -1,9 +1,9 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { RetryDecision } from "./step";
-import { WaitForCallbackContext } from "./logger";
-import { Duration } from "./core";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { RetryDecision } from "./step";
+import type { WaitForCallbackContext } from "./logger";
+import type { Duration } from "./core";
 import { DurablePromise } from "./durable-promise";
-import { DurableLogger } from "./durable-logger";
+import type { DurableLogger } from "./durable-logger";
 
 /**
  * Configuration options for createCallback operations

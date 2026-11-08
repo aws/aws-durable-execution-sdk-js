@@ -1,7 +1,7 @@
 import {
-  WaitForConditionDecision,
+  type WaitForConditionDecision,
   JitterStrategy,
-  Duration,
+  type Duration,
 } from "../../types";
 import { durationToSeconds } from "../duration/duration";
 

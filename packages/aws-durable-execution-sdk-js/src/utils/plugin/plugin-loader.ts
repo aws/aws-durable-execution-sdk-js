@@ -3,9 +3,9 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
-  DurableInstrumentationPluginFactory,
+  type DurableInstrumentationPluginFactory,
   DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
-  RegisteredDurableInstrumentationPluginFactory,
+  type RegisteredDurableInstrumentationPluginFactory,
 } from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";

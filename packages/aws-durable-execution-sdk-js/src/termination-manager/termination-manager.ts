@@ -13,9 +13,9 @@ Cons:
 
 import { EventEmitter } from "events";
 import {
-  TerminationOptions,
-  TerminationDetails,
-  TerminationResponse,
+  type TerminationOptions,
+  type TerminationDetails,
+  type TerminationResponse,
   TerminationReason,
 } from "./types";
 
