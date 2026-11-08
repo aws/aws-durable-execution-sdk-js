@@ -310,6 +310,34 @@ export interface CustomCompletionConfig {
  * `toleratedFailureCount`, or `toleratedFailurePercentage` is a compile-time
  * error.
  *
+ * **Items that still run when the batch completes.** The batch can complete
+ * while some items still run. For example, `minSuccessful: 1` completes the
+ * batch when the first item succeeds. The SDK does not stop the other items:
+ *
+ * 1. Their results are dropped. They are not checkpointed and not in the
+ *    {@link BatchResult}.
+ * 2. Their code keeps running until it returns. A step that runs counts as
+ *    running work, so the invocation cannot suspend until the step returns.
+ *    For example, a `context.wait` after the batch waits for the slowest
+ *    running step, and Lambda bills that time.
+ * 3. If the invocation returns first, Lambda freezes the process with the code
+ *    still running. The code can continue in a later invocation of the same
+ *    Lambda environment.
+ *
+ * So pass `StepContext.signal` to every call in a step that can take
+ * long. The SDK aborts it when the batch completes without the step:
+ *
+ * ```ts
+ * await context.parallel(
+ *   "fastest-quote",
+ *   [
+ *     (ctx) => ctx.step("a", (s) => getQuote(urlA, { signal: s.signal })),
+ *     (ctx) => ctx.step("b", (s) => getQuote(urlB, { signal: s.signal })),
+ *   ],
+ *   { completionConfig: { minSuccessful: 1 } },
+ * );
+ * ```
+ *
  * @remarks
  * The mutual exclusivity is enforced only at the type level. There is no
  * runtime guard, so a plain-JavaScript caller (or TypeScript code that casts
@@ -402,7 +430,11 @@ export interface MapConfig<TItem, TResult> {
   serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each item */
   itemSerdes?: Serdes<TResult> | undefined;
-  /** Configuration for completion behavior */
+  /**
+   * Configuration for completion behavior. When the batch completes early,
+   * items that still run are not stopped. Pass `StepContext.signal` to
+   * long calls in their steps. See {@link CompletionConfig}.
+   */
   completionConfig?: CompletionConfig;
   /**
    * Function to generate a summary string from the batch result.
@@ -452,7 +484,11 @@ export interface ParallelConfig<TResult> {
   serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each branch */
   itemSerdes?: Serdes<TResult> | undefined;
-  /** Configuration for completion behavior */
+  /**
+   * Configuration for completion behavior. When the batch completes early,
+   * items that still run are not stopped. Pass `StepContext.signal` to
+   * long calls in their steps. See {@link CompletionConfig}.
+   */
   completionConfig?: CompletionConfig;
   /**
    * Function to generate a summary string from the batch result.
