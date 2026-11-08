@@ -48,6 +48,7 @@ export interface Serdes<T> {
  * Serdes typed for arbitrary values. Used where the concrete type is unknown.
  * @public
  */
+// biome-ignore lint/suspicious/noExplicitAny: public type that must fit every Serdes<T>; unknown would not.
 export type AnySerdes = Serdes<any>;
 
 /**
@@ -89,16 +90,17 @@ export interface SerdesConfig {
  *
  * @public
  */
+// biome-ignore lint/suspicious/noExplicitAny: public value that must fit every Serdes<T>; unknown would not.
 export const defaultSerdes: Serdes<any> = {
   serialize: async (
-    value: any,
+    value: unknown,
     _context: SerdesContext,
   ): Promise<string | undefined> =>
     value !== undefined ? JSON.stringify(value) : undefined,
   deserialize: async (
     data: string | undefined,
     _context: SerdesContext,
-  ): Promise<any> => (data !== undefined ? JSON.parse(data) : undefined),
+  ): Promise<unknown> => (data !== undefined ? JSON.parse(data) : undefined),
 };
 
 /**
