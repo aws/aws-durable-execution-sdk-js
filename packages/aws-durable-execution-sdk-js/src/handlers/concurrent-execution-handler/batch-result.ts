@@ -1,16 +1,16 @@
-import { ErrorObject } from "../../types/wire";
+import type { ErrorObject } from "../../types/wire";
 import {
   BatchItemStatus,
-  BatchItem,
-  BatchResult,
-  CompletionReason,
+  type BatchItem,
+  type BatchResult,
+  type CompletionReason,
 } from "../../types";
 import {
   DurableOperationError,
   ChildContextError,
   BatchCompletionError,
 } from "../../errors/durable-error/durable-error";
-import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
+import type { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
 /**
  * Durable error type names that can be reconstructed into their concrete

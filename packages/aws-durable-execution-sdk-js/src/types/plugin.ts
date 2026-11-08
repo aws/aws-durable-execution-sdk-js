@@ -1,4 +1,4 @@
-import { DurableExecutionInvocationOutput } from "./core";
+import type { DurableExecutionInvocationOutput } from "./core";
 
 /**
  * Status enumeration for plugin invocation end hooks.

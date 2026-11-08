@@ -1,4 +1,4 @@
-import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * Log data passed to the durable logger when `getDurableLogData` is called.

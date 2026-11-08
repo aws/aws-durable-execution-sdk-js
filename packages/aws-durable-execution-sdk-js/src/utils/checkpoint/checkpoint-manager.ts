@@ -1,12 +1,12 @@
 import {
-  CheckpointDurableExecutionRequest,
-  OperationUpdate,
-  Operation,
+  type CheckpointDurableExecutionRequest,
+  type OperationUpdate,
+  type Operation,
   OperationStatus,
   OperationType,
   OperationAction,
 } from "../../types/wire";
-import { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -22,8 +22,8 @@ import {
   DurableExecutionClientErrorScope,
   isDurableExecutionClientError,
 } from "../../errors/durable-execution-client-error/durable-execution-client-error";
-import { DurableLogger } from "../../types/durable-logger";
-import { Checkpoint } from "./checkpoint-helper";
+import type { DurableLogger } from "../../types/durable-logger";
+import type { Checkpoint } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
   MAX_TIMER_DELAY_MS,
@@ -33,12 +33,12 @@ import {
   EXTENDED_POLL_INTERVAL_CEILING_MS,
   POLLS_BEFORE_EXTENDED_INTERVAL,
 } from "../constants/constants";
-import {
+import type {
   OperationInfo,
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
