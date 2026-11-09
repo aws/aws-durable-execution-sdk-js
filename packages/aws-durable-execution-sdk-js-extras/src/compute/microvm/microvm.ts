@@ -92,8 +92,8 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
  * `RunMicrovm` rejects it with `ValidationException`.
  * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
- * or the route rejects the job, or GetMicrovm or ResumeMicrovm is denied. The
- * message names the permission. Its subclass `MicrovmNotRunningError` means
+ * or the route rejects the job, or GetMicrovm is denied. The message names
+ * the permission. Its subclass `MicrovmNotRunningError` means
  * that CreateMicrovmAuthToken reported the MicroVM removed.
  * @throws \{MicrovmJobFailedError\} When the MicroVM reports a failure.
  * @throws \{MicrovmTimeoutError\} When no result or heartbeat arrives in time.

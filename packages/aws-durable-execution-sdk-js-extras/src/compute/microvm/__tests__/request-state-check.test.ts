@@ -1,5 +1,5 @@
-// The first retry tier's check after a sign of a suspended MicroVM: an HTTP
-// 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer.
+// The first retry tier's check after a sign that the MicroVM does not run:
+// an HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or no answer.
 import {
   vi,
   describe,
@@ -9,18 +9,21 @@ import {
   afterEach,
   type MockInstance,
 } from "vitest";
-import { MicrovmEndpointUnavailableError } from "..";
-import { type SendJobOptions, sendJob } from "../request";
+import {
+  MicrovmEndpointUnavailableError,
+  type SendJobOptions,
+  sendJob,
+} from "../request";
 import { FakeEndpoint, FakeMicrovmsClient } from "./fakes";
 
-/** The answer of the endpoint of a suspending or suspended MicroVM. */
+/** The answer of the endpoint of a terminated or suspended MicroVM. */
 const connectFailed = (): Response =>
   new Response(null, {
     status: 502,
     headers: { "x-aws-proxy-error": "MICROVM_CONNECT_FAILED" },
   });
 
-describe("sendJob with suspendCheck", () => {
+describe("sendJob with stateCheck", () => {
   let clock: number;
   let now: MockInstance;
 
@@ -58,25 +61,25 @@ describe("sendJob with suspendCheck", () => {
   it("checks the state after a 502 with MICROVM_CONNECT_FAILED, and sends the job to the endpoint that the check reports", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
-    const suspendCheck = vi.fn(async () => "resumed.example");
+    const stateCheck = vi.fn(async () => "other.example");
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
-    expect(suspendCheck).toHaveBeenCalledTimes(1);
+    expect(stateCheck).toHaveBeenCalledTimes(1);
     expect(endpoint.requests.map((r) => r.url)).toEqual([
       "https://mvm-1.example/job",
-      "https://resumed.example/job",
+      "https://other.example/job",
     ]);
   });
 
   it("checks the state after a request without an answer", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [new TypeError("fetch failed")];
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
-    expect(suspendCheck).toHaveBeenCalledTimes(1);
+    expect(stateCheck).toHaveBeenCalledTimes(1);
     // undefined keeps the current endpoint.
     expect(endpoint.requests.map((r) => r.url)).toEqual([
       "https://mvm-1.example/job",
@@ -109,21 +112,21 @@ describe("sendJob with suspendCheck", () => {
   ])("does not check the state after %s", async (_label, answer) => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [answer(), answer(), answer()];
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
-    expect(suspendCheck).not.toHaveBeenCalled();
+    expect(stateCheck).not.toHaveBeenCalled();
     expect(endpoint.requests).toHaveLength(4);
   });
 
   it("makes no call for a job accepted at once", async () => {
     const endpoint = new FakeEndpoint();
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
-    expect(suspendCheck).not.toHaveBeenCalled();
+    expect(stateCheck).not.toHaveBeenCalled();
   });
 
   it("checks again after each failed request, at most once per 2 seconds", async () => {
@@ -139,12 +142,12 @@ describe("sendJob with suspendCheck", () => {
       connectFailed(),
     ];
     const checkedAt: number[] = [];
-    const suspendCheck = vi.fn(async () => {
+    const stateCheck = vi.fn(async () => {
       checkedAt.push(clock - 1_000_000);
       return undefined;
     });
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
     expect(endpoint.requests).toHaveLength(6);
     // 0 checks. 250, 750, and 1,750 are within 2 seconds. 3,750 checks.
@@ -154,14 +157,14 @@ describe("sendJob with suspendCheck", () => {
 
   it("re-arms after a request that the check did not fix", async () => {
     const endpoint = new FakeEndpoint();
-    // The worker suspends again after the check reported RUNNING. So the
-    // second sign of a suspended MicroVM gets its own check.
+    // The MicroVM ends after the check reported RUNNING. So the second sign
+    // gets its own check.
     endpoint.responses = [connectFailed(), 503, 503, 503, connectFailed()];
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
 
-    await expect(send(endpoint, { suspendCheck })).resolves.toBe(202);
+    await expect(send(endpoint, { stateCheck })).resolves.toBe(202);
 
-    expect(suspendCheck).toHaveBeenCalledTimes(2);
+    expect(stateCheck).toHaveBeenCalledTimes(2);
   });
 
   it("rethrows an error of the check", async () => {
@@ -171,7 +174,7 @@ describe("sendJob with suspendCheck", () => {
 
     await expect(
       send(endpoint, {
-        suspendCheck: async () => {
+        stateCheck: async () => {
           throw failure;
         },
       }),
@@ -182,24 +185,24 @@ describe("sendJob with suspendCheck", () => {
   it("checks the state when the retry window has no time left", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
 
     // The first backoff of 250 milliseconds would end after the window. The
     // check runs before the window decides.
     const error = await send(endpoint, {
       retryWindowMs: 100,
-      suspendCheck,
+      stateCheck,
     }).catch((e) => e);
 
     expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(suspendCheck).toHaveBeenCalledTimes(1);
+    expect(stateCheck).toHaveBeenCalledTimes(1);
     expect(endpoint.requests).toHaveLength(1);
   });
 
   it("makes no check when the invocation reserve is reached, and fails as without a check", async () => {
     const endpoint = new FakeEndpoint();
     endpoint.responses = [connectFailed()];
-    const suspendCheck = vi.fn(async () => undefined);
+    const stateCheck = vi.fn(async () => undefined);
     // 11 seconds remain at the start: enough for the first request. The
     // request takes 1.5 seconds, so less than 1 second remains before the
     // reserve when the check is due.
@@ -212,12 +215,12 @@ describe("sendJob with suspendCheck", () => {
     const error = await send(endpoint, {
       fetch: slow,
       remainingTimeMs: () => endsAt - clock,
-      suspendCheck,
+      stateCheck,
     }).catch((e) => e);
 
     expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
     expect(error.message).toMatch(/Last failure: HTTP 502\.$/);
-    expect(suspendCheck).not.toHaveBeenCalled();
+    expect(stateCheck).not.toHaveBeenCalled();
     expect(endpoint.requests).toHaveLength(1);
   });
 });

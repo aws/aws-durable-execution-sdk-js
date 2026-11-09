@@ -54,8 +54,12 @@ import type {
  * With `autoSuspendOnIdle: true`, the worker in the MicroVM suspends its own
  * MicroVM between jobs, when no job has run for `autoSuspendIdleTime`. The
  * default idle time is 60 seconds, or the session `timeout` if that is
- * shorter. The next `vm.invoke` resumes it. Suspending is off by default. See
+ * shorter. Suspending is off by default. See
  * {@link MicrovmSessionConfig.autoSuspendOnIdle}.
+ *
+ * To suspend a MicroVM, set `idlePolicy` with `autoResumeEnabled: true`.
+ * The SDK does not resume a MicroVM; the service resumes it on the next
+ * request. See {@link MicrovmSessionConfig.idlePolicy}.
  *
  * Each durable operation records a subtype from
  * {@link MicrovmOperationSubType}: `MicrovmSession` on the child context,
@@ -66,23 +70,18 @@ import type {
  * The session sends its first job right after the launch. The MicroVM
  * endpoint holds or refuses requests until the `run` hook returns. The request
  * step retries a refused request inside its own attempt. So the session needs
- * no separate readiness wait, which would cost one more invocation. When the
- * MicroVM can be suspended, the request step calls GetMicrovm before each
- * job. It resumes a suspended MicroVM, and it returns at once for a new
- * MicroVM that is still booting. The launch checkpoint records whether the
- * MicroVM can be suspended. Replay follows that record, not the current
- * config.
+ * no separate readiness wait, which would cost one more invocation.
  *
  * A job with `suspendAfter` makes the durable function call SuspendMicrovm
- * after the job's result arrives. Each later job of the handle then checks
- * the state before delivery, as with `autoSuspendOnIdle`. That record is kept
- * in memory only. So every job of every session also checks the state after a
- * sign of a suspended MicroVM: no answer, or an HTTP 502 with
- * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. A booting MicroVM gives
- * neither sign, unless the worker takes more than 10 seconds to start
- * listening. Then the first delivery gets no answer, and the operation makes
- * one GetMicrovm call. So a session that never suspends makes no extra call,
- * except in that case. See {@link MicrovmInvokeOptions.suspendAfter}.
+ * after the job's result arrives. See
+ * {@link MicrovmInvokeOptions.suspendAfter}. Every job checks the MicroVM
+ * state after a sign that the MicroVM does not run: no answer, or an HTTP
+ * 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The check fails the
+ * job of a MicroVM that has ended, and lets the job retry otherwise. A
+ * booting MicroVM gives neither sign, unless the worker takes more than 10
+ * seconds to start listening. Then the first delivery gets no answer, and
+ * the operation makes one GetMicrovm call. So a session whose MicroVM runs
+ * makes no extra call, except in that case.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
  * error and continue with the same MicroVM. An error that leaves the handler
@@ -158,10 +157,6 @@ export function microvmSession<TOutput = unknown>(
         region: scope.region,
         ...(autoSuspendIdleSeconds !== undefined && { autoSuspendIdleSeconds }),
       };
-      // The worker suspends the MicroVM when it has been idle, and an idle
-      // policy can suspend it too. Either way, each job must resume it first.
-      const resumeFromConfig =
-        autoSuspendIdleSeconds !== undefined || config.idlePolicy !== undefined;
       const launched = await inStage(name, "launch", () =>
         launch(child, scope, {
           tokenSource: sessionId,
@@ -169,30 +164,12 @@ export function microvmSession<TOutput = unknown>(
           defaultIngress: "ALL_INGRESS",
           runHookPayload: JSON.stringify(payload),
           delivery: "http",
-          resumeBeforeDelivery: resumeFromConfig,
           extra: config.idlePolicy ? { idlePolicy: config.idlePolicy } : {},
         }),
       );
 
-      // 1. The worker reads its idle time once, from the run hook payload of
-      //    the launch. RunMicrovm sets the idle policy once, at the launch.
-      // 2. The launch step's result comes from the checkpoint on replay.
-      // 3. So a deploy that changes autoSuspendOnIdle or idlePolicy does not
-      //    change what the running MicroVM does.
-      // 4. A job that skips the state check of a suspended MicroVM gets a
-      //    502, or no answer. The request step then checks the state, and
-      //    resumes the MicroVM. That costs a failed request per job.
-      // 5. So each job follows the resume mode that the launch recorded, not
-      //    the current config.
-      // Every session launch records a boolean. So only `true` turns the
-      // state check on. A missing field, or any other value, reads as false.
-      const resumeBeforeDelivery = launched.resumeBeforeDelivery === true;
-
       try {
-        return await handler(
-          createSession(scope, launched, resumeBeforeDelivery),
-          child,
-        );
+        return await handler(createSession(scope, launched), child);
       } finally {
         await terminate(child, scope, launched.microvmId);
       }
@@ -219,9 +196,9 @@ export const DEFAULT_AUTO_SUSPEND_IDLE_SECONDS = 60;
 
 /**
  * The shortest idle time a session accepts. A resumed MicroVM runs its
- * `resume` hook, reports RUNNING at the next state poll, and then receives
- * the job after a new auth token. That path can take a few seconds. A
- * shorter idle time could suspend the MicroVM again before its job arrives.
+ * `resume` hook, and then receives the job. The request that resumes it can
+ * follow a few seconds of retries. A shorter idle time could suspend the
+ * MicroVM again before its job arrives.
  */
 const MIN_AUTO_SUSPEND_IDLE_SECONDS = 10;
 
@@ -234,9 +211,9 @@ function validateAutoSuspend(
   config: MicrovmSessionConfig,
   timeoutSeconds: number,
 ): number | undefined {
-  // Suspending is opt-in. It needs lambda:GetMicrovm and
-  // lambda:ResumeMicrovm in the function's role, and lambda:SuspendMicrovm in
-  // the MicroVM's role. It also stops background processes between jobs.
+  // Suspending is opt-in. It needs an idle policy with autoResumeEnabled,
+  // and lambda:SuspendMicrovm in the MicroVM's role. It also stops
+  // background processes between jobs.
   if (config.autoSuspendOnIdle !== true) {
     if (config.autoSuspendIdleTime !== undefined) {
       throw new TypeError(
@@ -282,12 +259,7 @@ function validateAutoSuspend(
 function createSession(
   scope: OperationScope,
   launched: LaunchResult,
-  resumeBeforeDelivery: boolean,
 ): MicrovmSession {
-  const state: SessionState = {
-    resumeBeforeDelivery,
-    maybeSuspended: false,
-  };
   return {
     microvmId: launched.microvmId,
     invoke: <TOutput = unknown, TInput = unknown>(
@@ -300,38 +272,11 @@ function createSession(
         context,
         scope,
         launched,
-        state,
         jobName,
         input,
         options,
       ),
   };
-}
-
-/** The state of one session handle. */
-interface SessionState {
-  /** The resume mode that the launch recorded. */
-  readonly resumeBeforeDelivery: boolean;
-  /**
-   * Set after the child context of a `suspendAfter` job returned or threw,
-   * also when a completed job replays. Later jobs then check the state
-   * before delivery. It only changes from `false` to `true`.
-   *
-   * The flag lives in memory only. A new invocation sets it again when it
-   * replays the completed `invoke`. A replayed completed `map` item,
-   * `parallel` branch, or containing child context can skip the `invoke`
-   * call, and so the flag. The check after a sign of a suspended MicroVM
-   * covers those cases. See `resumeIfSuspended`.
-   */
-  maybeSuspended: boolean;
-}
-
-/**
- * Whether a job checks the MicroVM state before delivery. The request step
- * reads it at the start of each attempt.
- */
-function resumeMode(state: SessionState): boolean {
-  return state.resumeBeforeDelivery || state.maybeSuspended;
 }
 
 /**
@@ -346,7 +291,6 @@ function invokeJob<TOutput, TInput>(
   context: DurableContext,
   scope: OperationScope,
   launched: LaunchResult,
-  state: SessionState,
   jobName: string,
   input: TInput,
   options: MicrovmInvokeOptions,
@@ -367,7 +311,7 @@ function invokeJob<TOutput, TInput>(
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
 
-  const job = context.runInChildContext<TOutput>(
+  return context.runInChildContext<TOutput>(
     jobName,
     async (jobContext) => {
       const [result, callbackId] = await createJobCallback<TOutput>(
@@ -386,7 +330,6 @@ function invokeJob<TOutput, TInput>(
           // The request sends the input's JSON text from
           // validateJobInput. So `input` is encoded once per call.
           measuredJob(callbackId, inputJson, options.heartbeatTimeout),
-          { resume: () => resumeMode(state) },
         ),
       );
       try {
@@ -404,16 +347,4 @@ function invokeJob<TOutput, TInput>(
       errorMapper: microvmErrorMapper(jobName),
     },
   );
-  if (!suspendAfter) {
-    return job;
-  }
-  // The flag is set outside the child context, when the child context
-  // settles, not when the caller awaits the result. So it is also set when a
-  // completed job replays, because the child context does not run then. And
-  // the suspendAfter job does not check the state before its own delivery.
-  const markMaybeSuspended = (): void => {
-    state.maybeSuspended = true;
-  };
-  job.then(markMaybeSuspended, markMaybeSuspended);
-  return job;
 }

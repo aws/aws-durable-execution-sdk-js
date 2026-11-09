@@ -19,7 +19,7 @@ createTests({
   // The local runner cannot launch a MicroVM.
   cloudOnly: true,
   tests: (runner, { assertEventSignatures }) => {
-    // The launch, the suspend, the 30-second wait, the resume and the
+    // The launch, the suspend, the 30-second wait, the auto-resume and the
     // terminate can take longer than the 120-second default timeout. So the
     // test sets its own timeout of 240 seconds.
     it("suspends the MicroVM between the jobs, and resumes it with the file of the first job", async () => {
@@ -52,7 +52,8 @@ createTests({
         value: string;
       };
       // The second job read the file that the first job wrote, so both
-      // jobs ran in the session's MicroVM, and the resume kept the file.
+      // jobs ran in the session's MicroVM, and the auto-resume kept the
+      // file.
       expect(result.value).toBe(`written-by-${key}`);
       expect(result.writtenBy).toBe(result.sessionMicrovmId);
       expect(result.readBy).toBe(result.sessionMicrovmId);

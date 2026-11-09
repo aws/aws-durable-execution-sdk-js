@@ -28,7 +28,8 @@ export interface E2eEvent {
     | "parallel"
     | "session"
     | "idle-session"
-    | "suspend-session";
+    | "suspend-session"
+    | "suspend-after-session";
   job: E2eJob;
   timeoutSeconds: number;
   heartbeatTimeoutSeconds?: number;
@@ -47,7 +48,9 @@ export interface E2eEvent {
    * GetMicrovm reports TERMINATED. So the job finds a dead MicroVM.
    */
   terminateAfterLaunch?: boolean;
-  /** The session idle policy, for the idle-session scenario. */
+  /** Logs each job request of a session, so the runner can count them. */
+  logRequests?: boolean;
+  /** The session idle policy. */
   idlePolicy?: {
     autoResumeEnabled: boolean;
     maxIdleDurationSeconds: number;
@@ -102,11 +105,53 @@ export const handler = withDurableExecution(
       );
     }
 
+    if (event.scenario === "suspend-after-session") {
+      // The first job stores a value in the worker's memory, and the durable
+      // function suspends the MicroVM after it. The second job is sent at
+      // once, inside the window of about 5 seconds in which the endpoint
+      // answers 502 and does not resume the MicroVM. The service then
+      // resumes it on a retry. The function role has no
+      // lambda:ResumeMicrovm, so a ResumeMicrovm call would fail the job.
+      return microvmSession(
+        context,
+        "suspend-after",
+        {
+          imageIdentifier: config.imageIdentifier,
+          executionRoleArn: config.executionRoleArn,
+          timeout: config.timeout,
+          idlePolicy: event.idlePolicy,
+          ...(event.logRequests === true && {
+            fetch: loggingFetch(context.executionContext.durableExecutionArn),
+          }),
+        },
+        async (vm, sessionContext) => {
+          const remembered = await vm.invoke<{ pid: number }>(
+            sessionContext,
+            "remember",
+            { value: event.job.label },
+            { path: "/remember", timeout: { minutes: 5 }, suspendAfter: true },
+          );
+          const recalled = await vm.invoke<{ pid: number; value: string }>(
+            sessionContext,
+            "recall",
+            {},
+            {
+              path: "/recall",
+              timeout: { minutes: 5 },
+              heartbeatTimeout: { seconds: 90 },
+            },
+          );
+          return { remembered, recalled, sessionMicrovmId: vm.microvmId };
+        },
+      );
+    }
+
     if (event.scenario === "suspend-session") {
       // The first job stores a value in the worker's memory. The worker
       // suspends its MicroVM when it has run no job for the idle time, during
       // the first wait. The second wait finds the MicroVM still suspended.
-      // The last job resumes the MicroVM and reads the value back from memory.
+      // The service resumes the MicroVM on the last job's request, and the
+      // job reads the value back from memory.
       return microvmSession(
         context,
         "suspending",
@@ -114,6 +159,7 @@ export const handler = withDurableExecution(
           imageIdentifier: config.imageIdentifier,
           executionRoleArn: config.executionRoleArn,
           timeout: config.timeout,
+          idlePolicy: event.idlePolicy,
           autoSuspendOnIdle: true,
           ...(event.autoSuspendIdleSeconds !== undefined && {
             autoSuspendIdleTime: { seconds: event.autoSuspendIdleSeconds },
@@ -230,7 +276,11 @@ function terminatingClient(): LambdaMicrovmsClient {
 function loggingFetch(executionArn: string): typeof fetch {
   return async (input, init) => {
     const started = Date.now();
-    const base = { e2e: "fetch", execution: executionArn.split("/").at(-2) };
+    const base = {
+      e2e: "fetch",
+      execution: executionArn.split("/").at(-2),
+      path: new URL(String(input)).pathname,
+    };
     try {
       const response = await fetch(input, init);
       console.log(
