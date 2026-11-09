@@ -105,6 +105,13 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
   private _defaultSerdes: AnySerdes = defaultSerdes;
 
+  /**
+   * Aborted when the invocation terminates or when a non-virtual context that
+   * contains this one finishes. Steps of this context receive it as
+   * `StepContext.signal`.
+   */
+  private readonly _signal: AbortSignal;
+
   private _defaultCallbackDeserializer: AnySerdesDeserializer =
     createPassThroughSerdes();
   private _customCallbackDeserializerSet: boolean = false;
@@ -127,7 +134,9 @@ export class DurableContextImpl<Logger extends DurableLogger>
     durableExecution: DurableExecution,
     parentId?: string,
     preserveChildDepth: number = 0,
+    signal: AbortSignal = new AbortController().signal,
   ) {
+    this._signal = signal;
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
     this._preserveChildDepth = preserveChildDepth;
@@ -423,6 +432,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         () => this._defaultSerdes,
         this.durableExecution.plugin,
         pluginOperationName,
+        this._signal,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -511,6 +521,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
           stepPrefix,
           _checkpointToken,
           parentId,
+          ownSignal,
         ) => {
           const childCtx = createDurableContext(
             executionContext,
@@ -521,6 +532,9 @@ export class DurableContextImpl<Logger extends DurableLogger>
             this.durableExecution,
             parentId,
             childPreserveDepth,
+            ownSignal
+              ? AbortSignal.any([this._signal, ownSignal])
+              : this._signal,
           );
           // Propagate serdes config to child context
           childCtx.configureSerdes({
@@ -821,6 +835,7 @@ export const createDurableContext = <Logger extends DurableLogger>(
   durableExecution: DurableExecution,
   parentId?: string,
   preserveChildDepth: number = 0,
+  signal?: AbortSignal,
 ): DurableContextImpl<Logger> => {
   return new DurableContextImpl<Logger>(
     executionContext,
@@ -831,5 +846,6 @@ export const createDurableContext = <Logger extends DurableLogger>(
     durableExecution,
     parentId,
     preserveChildDepth,
+    signal,
   );
 };

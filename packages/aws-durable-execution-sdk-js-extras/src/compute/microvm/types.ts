@@ -194,6 +194,12 @@ export interface MicrovmConfig extends MicrovmBaseConfig {
 /**
  * Configuration for {@link microvmSession}.
  *
+ * @remarks
+ * To suspend a MicroVM, set `idlePolicy` with `autoResumeEnabled: true`.
+ * The SDK does not resume a MicroVM; the service resumes it on the next
+ * request. This applies to {@link MicrovmSessionConfig.autoSuspendOnIdle}
+ * and to {@link MicrovmInvokeOptions.suspendAfter}.
+ *
  * @public
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -227,14 +233,35 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
   timeout: Duration;
 
   /**
-   * The MicroVM idle policy. Not set by default.
+   * The MicroVM idle policy. Not set by default. RunMicrovm sets it once, at
+   * the launch.
    *
-   * With {@link autoSuspendOnIdle}, the session suspends an idle MicroVM
-   * itself, and it counts running jobs. An idle policy counts only inbound
-   * traffic, and a running job receives none. So
-   * `maxIdleDurationSeconds` must be longer than the longest job, or the
-   * service suspends the MicroVM during that job. Set it only for a MicroVM
-   * that serves inbound traffic of its own.
+   * To suspend a MicroVM, set `idlePolicy` with `autoResumeEnabled: true`.
+   * The SDK does not resume a MicroVM; the service resumes it on the next
+   * request. So {@link autoSuspendOnIdle} and
+   * {@link MicrovmInvokeOptions.suspendAfter} need it.
+   *
+   * Set `maxIdleDurationSeconds` above `maximumDurationInSeconds` (the
+   * operation timeout plus 5 minutes). The idle timer counts only inbound
+   * requests, so a shorter value suspends a running job. Set
+   * `suspendedDurationSeconds` to the session `timeout` or more. The service
+   * requires all three fields, and `maxIdleDurationSeconds` of at least 60.
+   *
+   * Without `autoResumeEnabled`, a job after a suspend fails after its
+   * retries with `MicrovmDeliveryError`. With the default retry strategy,
+   * that takes about 6 minutes.
+   *
+   * A job that arrives more than about 5 seconds after a suspend takes about
+   * 1 s longer. A job sent right after a suspend can take up to about 10
+   * seconds.
+   *
+   * ```typescript
+   * idlePolicy: {
+   *   autoResumeEnabled: true,
+   *   maxIdleDurationSeconds: 86_400,
+   *   suspendedDurationSeconds: 28_800,
+   * },
+   * ```
    */
   idlePolicy?: IdlePolicy;
 
@@ -242,24 +269,27 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * Whether the MicroVM suspends itself when no job has run for
    * {@link autoSuspendIdleTime}. Defaults to `false`.
    *
-   * It is off by default because it needs more permissions and changes what
-   * the MicroVM does between jobs:
+   * It is off by default because it needs more setup and changes what the
+   * MicroVM does between jobs:
    *
-   * 1. The function's role needs `lambda:GetMicrovm` and
-   *    `lambda:ResumeMicrovm`. Without them, every job fails.
+   * 1. To suspend a MicroVM, set {@link idlePolicy} with
+   *    `autoResumeEnabled: true`. The SDK does not resume a MicroVM; the
+   *    service resumes it on the next request. Without `autoResumeEnabled`,
+   *    a job after a suspend fails after its retries with
+   *    `MicrovmDeliveryError`.
    * 2. The MicroVM's role needs `lambda:SuspendMicrovm` on the image. That
    *    permission lets any MicroVM of the image suspend any other.
    * 3. Background processes that an earlier job started stop while the
    *    MicroVM is suspended.
    *
-   * Without it, a session needs only the permissions of {@link microvm} with
+   * The function's role needs only the permissions of {@link microvm} with
    * HTTP delivery.
    *
    * A running MicroVM pays compute charges. A suspended MicroVM pays only
    * for snapshot storage and keeps its memory and files. The worker in the
    * MicroVM counts its running jobs. When none has run for the idle time, it
-   * calls SuspendMicrovm on its own MicroVM. Before each `vm.invoke`, the
-   * request step resumes a suspended MicroVM.
+   * calls SuspendMicrovm on its own MicroVM. The service resumes it when the
+   * next `vm.invoke` sends its request.
    *
    * "Idle" means only that no job runs in the worker. The worker cannot see
    * other work in the MicroVM. So it also suspends the MicroVM in these cases:
@@ -268,8 +298,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * - A MicroVM that serves inbound traffic that is not a job, such as a
    *   preview environment waiting for an approval.
    *
-   * Leave it off for such a workload. A resume adds latency to the next job,
-   * about 1 second in us-east-1, and the job's `timeout` and
+   * Leave it off for such a workload. A job that arrives more than about 5
+   * seconds after a suspend takes about 1 s longer, measured in us-east-1,
+   * and the job's `timeout` and
    * `heartbeatTimeout` count that latency. Suspending does not extend the
    * MicroVM's lifetime.
    *
@@ -288,8 +319,7 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * keeps running. The action authorizes on the image. So code in any
    * MicroVM of that image can suspend any other MicroVM of that image, even
    * during a job. That job then waits until its `heartbeatTimeout` or its
-   * `timeout`. Use one image per trust boundary. The durable function role
-   * needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. The worker must be
+   * `timeout`. Use one image per trust boundary. The worker must be
    * a version that supports the setting. An older worker ignores it, and its
    * MicroVM keeps running.
    */
@@ -342,10 +372,11 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * disables the `terminate` hook, reports nothing. The heartbeat timeout is
    * then the only way that the job fails soon after the MicroVM ends.
    *
-   * A job after a {@link suspendAfter} job waits for the resume of the
-   * MicroVM. The worker can refuse it with HTTP 503 for up to 30 seconds
-   * before that. So set the heartbeat timeout of such a job to at least the
-   * `retryWindow` plus 30 seconds.
+   * A job after a {@link suspendAfter} job waits until the service resumes
+   * the MicroVM. Without the image's `resume` hook, the worker can refuse it
+   * with HTTP 503 for up to 30 seconds after the suspend. So set the
+   * heartbeat timeout of such a job to at least the `retryWindow` plus 30
+   * seconds.
    */
   heartbeatTimeout?: Duration;
 
@@ -359,7 +390,7 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *    returns. The MicroVM does not suspend itself for this.
    * 2. Do not use it on a job that runs next to other jobs of the session,
    *    such as in `map`, `parallel`, or a promise combinator. Those jobs
-   *    freeze until the next job resumes the MicroVM, and can hit their
+   *    freeze until the next request resumes the MicroVM, and can hit their
    *    heartbeat timeout.
    * 3. The suspend runs inside the job's child context, so it follows the
    *    child context replay rules. A result larger than the child context
@@ -373,24 +404,28 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *    MicroVM image. The MicroVM's role does not need it for this setting.
    * 6. Adding or removing `suspendAfter` changes what the session does on
    *    replay. Change it only through a new function version.
+   * 7. To suspend a MicroVM, set {@link MicrovmSessionConfig.idlePolicy}
+   *    with `autoResumeEnabled: true`. The SDK does not resume a MicroVM;
+   *    the service resumes it on the next request. Without
+   *    `autoResumeEnabled`, a job after a suspend fails after its retries
+   *    with `MicrovmDeliveryError`.
    *
    * The call stops at the invocation reserve, as the other calls of the
    * session do. A failed or stopped SuspendMicrovm call logs a warning and
-   * does not fail the job. After the job, also when a completed job replays,
-   * the next job of the handle checks the MicroVM state before delivery and
-   * resumes a suspended MicroVM. A replay of a completed job sends no second
-   * suspend. A job after a failed call checks the state too, because the
-   * call may still have suspended the MicroVM. The check after a sign of a
-   * suspended MicroVM stays: an HTTP 502 with
-   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an
-   * answer.
+   * does not fail the job. A replay of a completed job sends no second
+   * suspend. For about 5 seconds after a suspend, the endpoint answers HTTP
+   * 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, and does not
+   * resume the MicroVM. The request step retries that 502. So a job right
+   * after a `suspendAfter` job still arrives, after the window. With a
+   * `retryWindow` under about 9 seconds, the step retry strategy covers the
+   * rest of that window, at the cost of one or two more step attempts. A job
+   * sent right after a suspend can take up to about 10 seconds.
    *
    * Set it on the job before a long wait, such as a durable wait or a
    * callback. Do not set it on back-to-back jobs, or on the last job of the
-   * session. Each suspend and resume costs a snapshot and about 1 second of
-   * latency for the next job. The session terminates the MicroVM after its
-   * last job anyway. The function's role also needs `lambda:GetMicrovm` and
-   * `lambda:ResumeMicrovm`.
+   * session. Each suspend and resume costs a snapshot, and a job that
+   * arrives after the window takes about 1 s longer. The session terminates
+   * the MicroVM after its last job anyway.
    *
    * Only {@link MicrovmSession.invoke} accepts it. {@link microvm} throws a
    * `TypeError` for it in `config.request`. A value that is not a boolean
@@ -434,25 +469,24 @@ export interface MicrovmSession {
    * exactly that text. The input must be the same on every replay.
    *
    * A call with `options.suspendAfter` set to `true` makes the durable
-   * function suspend the MicroVM after the job's result arrives. Each later
-   * job of the handle then checks the MicroVM state before delivery, as with
-   * `autoSuspendOnIdle`. See {@link MicrovmInvokeOptions.suspendAfter}.
+   * function suspend the MicroVM after the job's result arrives. The service
+   * resumes it on the next request when the session sets an `idlePolicy`
+   * with `autoResumeEnabled: true`. See
+   * {@link MicrovmInvokeOptions.suspendAfter}.
    *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
-   * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
-   * and the session checks the MicroVM state before each job. It checks with
-   * `autoSuspendOnIdle: true` or an `idlePolicy`, and after a job with
-   * `suspendAfter`. A check after a sign of a suspended MicroVM reports it
-   * too. Otherwise an ended MicroVM fails the job with
-   * {@link MicrovmDeliveryError} after the retries. Every session also
-   * reports it when CreateMicrovmAuthToken reports the MicroVM removed.
+   * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended.
+   * The request step checks the MicroVM state after an HTTP 502 with
+   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED` or a request without an
+   * answer. It also reports it when CreateMicrovmAuthToken reports the
+   * MicroVM removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
-   * retries, or the route rejects the job. A suspended MicroVM whose
-   * ResumeMicrovm is denied fails the delivery at once. A denied GetMicrovm
-   * in the check after a sign of a suspended MicroVM fails it at once too.
-   * The message names the permission.
+   * retries, or the route rejects the job. A suspended MicroVM that the
+   * service does not resume fails the delivery this way. A denied
+   * GetMicrovm in the check after a sign that the MicroVM does not run
+   * fails it at once. The message names the permission.
    * @throws \{TypeError\} When `name`, `path`, or `port` is invalid,
    * `suspendAfter` is not a boolean, or `JSON.stringify` cannot encode
    * `input`.

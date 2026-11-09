@@ -41,7 +41,7 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 const STATE_CHECK_WARNING =
-  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
+  "GetMicrovm failed, so the operation could not check whether the MicroVM has ended. The request step keeps sending the job.";
 
 /** The answer of the endpoint of a terminated MicroVM, measured live. */
 const connectFailed = (): Response =>
@@ -334,75 +334,35 @@ describe("microvm over HTTP, after a sign that the MicroVM does not run", () => 
     },
   );
 
-  it("resumes a MicroVM that something outside the operation suspended, and the job succeeds", async () => {
-    const client = new FakeMicrovmsClient();
-    client.microvmState = "SUSPENDED";
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = [connectFailed()];
-    const runner = runnerFor(client, endpoint);
+  it.each(["SUSPENDED", "SUSPENDING"])(
+    "keeps sending the job to a %s MicroVM without a ResumeMicrovm call, and the job succeeds",
+    async (state) => {
+      const client = new FakeMicrovmsClient();
+      client.microvmState = state;
+      const endpoint = new FakeEndpoint();
+      // The endpoint answers the 502 for about 5 seconds after a suspend.
+      // The service then resumes the MicroVM on the next request.
+      endpoint.responses = [connectFailed(), connectFailed()];
+      const runner = runnerFor(client, endpoint);
 
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "done");
-    const execution = await executionPromise;
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "done");
+      const execution = await executionPromise;
 
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(execution.getResult()).toBe("done");
-    expect(endpoint.requests).toHaveLength(2);
-    expect(client.events).toEqual([
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "terminate",
-    ]);
-  });
-
-  it("fails at once with MicrovmDeliveryError when ResumeMicrovm is denied for a MicroVM suspended from outside", async () => {
-    const client = new FakeMicrovmsClient();
-    client.microvmState = "SUSPENDED";
-    client.resumeResponses = [
-      throwing(
-        new AccessDeniedException({
-          message: "not authorized: ResumeMicrovm",
-          $metadata: { httpStatusCode: 403, requestId: "resume-req-1" },
-        }),
-      ),
-    ];
-    const endpoint = new FakeEndpoint();
-    endpoint.responses = [connectFailed()];
-    // The default retry strategy does not retry the error.
-    const runner = runnerFor(client, endpoint);
-
-    const execution = await runner.run({ payload: {} });
-
-    expect(execution.getStatus()).toBe("FAILED");
-    const error = execution.getError();
-    expect(error?.errorType).toBe(MicrovmDeliveryError.name);
-    expect(error?.errorMessage).toContain(
-      "MicroVM mvm-1 is SUSPENDED. ResumeMicrovm was denied, so the operation cannot resume it. The function's execution role needs lambda:ResumeMicrovm. ResumeMicrovm request ID: resume-req-1.",
-    );
-    expect(endpoint.requests).toHaveLength(1);
-    expect(client.events).toEqual(["get:SUSPENDED", "resume", "terminate"]);
-  });
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toBe("done");
+      expect(endpoint.requests).toHaveLength(3);
+      // The second 502 comes 250 milliseconds after the check. So it gets
+      // no check of its own.
+      expect(client.events).toEqual([`get:${state}`, "terminate"]);
+    },
+  );
 
   it.each([
     [
       "GetMicrovm",
       (client: FakeMicrovmsClient) => {
         client.getResponses = [
-          throwing(
-            new AccessDeniedException({
-              message: "denied",
-              $metadata: { httpStatusCode: 403, requestId: "req-1" },
-            }),
-          ),
-        ];
-      },
-    ],
-    [
-      "ResumeMicrovm",
-      (client: FakeMicrovmsClient) => {
-        client.microvmState = "SUSPENDED";
-        client.resumeResponses = [
           throwing(
             new AccessDeniedException({
               message: "denied",

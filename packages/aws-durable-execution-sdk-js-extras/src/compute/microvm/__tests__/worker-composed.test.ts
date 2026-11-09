@@ -2,9 +2,12 @@
 // protocol spans both packages:
 //
 // 1. The worker answers 503 from the moment it starts to suspend.
-// 2. A suspended MicroVM's endpoint answers 502.
-// 3. The request step answers a 502, 503, or 504 by checking the MicroVM
-//    state, resuming it, and sending the job again.
+// 2. A suspended MicroVM's endpoint answers 502 with `x-aws-proxy-error:
+//    MICROVM_CONNECT_FAILED` for about 5 seconds after the suspend. The
+//    service then resumes the MicroVM on the next request, because the
+//    MicroVM was launched with `idlePolicy.autoResumeEnabled: true`.
+// 3. The request step retries a 502, 503, or 504, and never resumes the
+//    MicroVM itself.
 // 4. The worker stops refusing jobs at the `resume` hook, or 30 seconds after
 //    its suspend call.
 //
@@ -24,7 +27,6 @@ import {
   CreateMicrovmAuthTokenCommand,
   GetMicrovmCommand,
   type LambdaMicrovmsClient,
-  ResumeMicrovmCommand,
   SuspendMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 import { defaultMicrovmRetryStrategy } from "..";
@@ -38,16 +40,25 @@ import {
 const IDLE_SECONDS = 10;
 const ENDPOINT = "mvm-1.example";
 const REGION = "us-east-1";
+/**
+ * How long the endpoint answers 502 after a suspend, and does not resume
+ * the MicroVM. A probe in us-east-1 measured 4.4 to 4.8 seconds after the
+ * SuspendMicrovm call returned.
+ */
+const SETTLE_MS = 4_800;
 
 /**
  * The MicroVMs service for one MicroVM. Both sides use it: the worker calls
- * SuspendMicrovm, and the request step calls GetMicrovm and ResumeMicrovm.
+ * SuspendMicrovm, and the request step calls GetMicrovm. The endpoint calls
+ * {@link FakeService.autoResume}.
  */
 class FakeService {
   state = "RUNNING";
+  /** When the MicroVM last became SUSPENDED. */
+  suspendedAt = 0;
   /** While true, a SuspendMicrovm call stays pending until `finishSuspend`. */
   holdSuspend = false;
-  /** Whether ResumeMicrovm sends the worker the `resume` hook. */
+  /** Whether an auto-resume sends the worker the `resume` hook. */
   sendResumeHook = true;
   readonly calls: string[] = [];
   listener: MicrovmWorkerListener | undefined;
@@ -63,30 +74,47 @@ class FakeService {
           this.pendingSuspend = resolve;
         });
       }
-      this.state = "SUSPENDED";
+      this.suspend();
       return {};
     }
     if (command instanceof GetMicrovmCommand) {
       this.calls.push(`get:${this.state}`);
       return { microvmId: "mvm-1", state: this.state, endpoint: ENDPOINT };
     }
-    if (command instanceof ResumeMicrovmCommand) {
-      this.calls.push("resume");
-      this.state = "RUNNING";
-      if (this.sendResumeHook && this.listener) {
-        await send(
-          this.listener,
-          `${HOOK_PATH_PREFIX}resume`,
-          {},
-          LAMBDA_HOOK_HEADERS,
-        );
-      }
-      return {};
-    }
     if (command instanceof CreateMicrovmAuthTokenCommand) {
       return { authToken: { "X-aws-proxy-auth": "token" } };
     }
+    // ResumeMicrovm and every other command. The request step must never
+    // resume the MicroVM.
+    this.calls.push((command as object).constructor.name);
     throw new Error("unexpected command");
+  }
+
+  suspend(): void {
+    this.state = "SUSPENDED";
+    this.suspendedAt = Date.now();
+  }
+
+  /**
+   * Resumes the MicroVM for a request, as the service does for a MicroVM
+   * with `autoResumeEnabled`. Returns false during the settle window after
+   * a suspend, when the endpoint answers 502 instead.
+   */
+  async autoResume(): Promise<boolean> {
+    if (Date.now() - this.suspendedAt < SETTLE_MS) {
+      return false;
+    }
+    this.calls.push("auto-resume");
+    this.state = "RUNNING";
+    if (this.sendResumeHook && this.listener) {
+      await send(
+        this.listener,
+        `${HOOK_PATH_PREFIX}resume`,
+        {},
+        LAMBDA_HOOK_HEADERS,
+      );
+    }
+    return true;
   }
 
   /** Lets a held SuspendMicrovm call finish. */
@@ -222,11 +250,17 @@ describe("the request step against the real worker listener", () => {
     vi.useRealTimers();
   });
 
-  /** The endpoint: a suspended MicroVM answers 502, a running one forwards. */
+  /**
+   * The endpoint: a suspended MicroVM answers 502 during the settle window,
+   * and is resumed by the request after it. A running one forwards.
+   */
   const endpointFetch = (async (url: string, init: RequestInit) => {
-    if (service.state !== "RUNNING") {
+    if (service.state !== "RUNNING" && !(await service.autoResume())) {
       statuses.push(502);
-      return new Response(null, { status: 502 });
+      return new Response(null, {
+        status: 502,
+        headers: { "x-aws-proxy-error": "MICROVM_CONNECT_FAILED" },
+      });
     }
     const freeze = suspendBeforeNextRequest;
     if (freeze) {
@@ -244,7 +278,7 @@ describe("the request step against the real worker listener", () => {
       init.body as string,
     );
     if (freeze) {
-      service.state = "SUSPENDED";
+      service.suspend();
     }
     if (loseNextAnswer) {
       loseNextAnswer = false;
@@ -281,7 +315,7 @@ describe("the request step against the real worker listener", () => {
   };
 
   /** Runs the request step of one session job, as `vm.invoke` does. */
-  const deliver = (callbackId: string, resume = true) =>
+  const deliver = (callbackId: string) =>
     deliverJob(
       child,
       scope(),
@@ -289,7 +323,6 @@ describe("the request step against the real worker listener", () => {
       launched,
       {},
       measuredJob(callbackId, JSON.stringify({ n: 1 }), undefined),
-      { resume },
     );
 
   const runHook = () =>
@@ -320,7 +353,7 @@ describe("the request step against the real worker listener", () => {
     return result;
   }
 
-  it("delivers a job that arrives during the 503 refusal after the MicroVM resumes", async () => {
+  it("delivers a job that arrives during the 503 refusal after the service resumes the MicroVM", async () => {
     await runHook();
     service.holdSuspend = true;
     // The idle time ends. The worker calls SuspendMicrovm, which the service
@@ -328,14 +361,15 @@ describe("the request step against the real worker listener", () => {
     await vi.advanceTimersByTimeAsync(IDLE_SECONDS * 1_000);
     expect(service.calls).toEqual(["suspend"]);
 
-    // The state check finds RUNNING, so the job goes to the worker, which
-    // answers 503.
+    // The MicroVM still runs, so the job goes to the worker, which answers
+    // 503.
     const delivery = deliver("cb-1");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(statuses.length).toBeGreaterThan(0);
     expect(new Set(statuses)).toEqual(new Set([503]));
-    // The service suspends the MicroVM. The next state check after a 503
-    // finds it SUSPENDED and resumes it. The resume hook ends the refusal.
+    // The service suspends the MicroVM. The endpoint answers 502 during the
+    // settle window. The request after it resumes the MicroVM, and the
+    // resume hook ends the refusal.
     service.finishSuspend();
     const suspendedAt = Date.now();
 
@@ -347,11 +381,13 @@ describe("the request step against the real worker listener", () => {
     expect(Date.now() - suspendedAt).toBeLessThan(30_000);
 
     expect(statuses.at(-1)).toBe(202);
+    expect(statuses).toContain(502);
     expect(service.calls).toContain("get:SUSPENDED");
-    expect(service.calls.filter((c) => c === "resume")).toHaveLength(1);
-    expect(service.calls.indexOf("resume")).toBeGreaterThan(
+    expect(service.calls.filter((c) => c === "auto-resume")).toHaveLength(1);
+    expect(service.calls.indexOf("auto-resume")).toBeGreaterThan(
       service.calls.indexOf("get:SUSPENDED"),
     );
+    expect(service.calls).not.toContain("ResumeMicrovmCommand");
     expect(ran).toEqual(['cb-1:{"n":1}']);
     expect(completions).toContain("SendDurableExecutionCallbackSuccessCommand");
   });
@@ -363,13 +399,14 @@ describe("the request step against the real worker listener", () => {
     expect(service.state).toBe("SUSPENDED");
     const suspendedAt = Date.now();
 
-    // The state check resumes the MicroVM, but the worker hears no resume
+    // The service resumes the MicroVM, but the worker hears no resume
     // hook. So it refuses jobs until 30 seconds after its suspend call.
     const delivery = deliver("cb-1");
     await settle(delivery, 60_000);
     await listener.idle();
 
-    expect(service.calls).toContain("resume");
+    expect(service.calls).toContain("auto-resume");
+    expect(service.calls).not.toContain("ResumeMicrovmCommand");
     expect(statuses.filter((s) => s === 503).length).toBeGreaterThan(0);
     expect(statuses.at(-1)).toBe(202);
     expect(Date.now() - suspendedAt).toBeGreaterThanOrEqual(30_000);
@@ -380,8 +417,7 @@ describe("the request step against the real worker listener", () => {
     await runHook();
     loseNextAnswer = true;
 
-    // microvm() style: no state check before delivery.
-    const delivery = deliver("cb-1", false);
+    const delivery = deliver("cb-1");
     await settle(delivery, 10_000);
     await listener.idle();
 
@@ -394,33 +430,34 @@ describe("the request step against the real worker listener", () => {
     ).toHaveLength(1);
   });
 
-  it("resumes the MicroVM when a suspend hook arrives before the resend of a running job", async () => {
+  it("lets the service resume the MicroVM when a suspend hook arrives before the resend of a running job", async () => {
     // 1. The worker starts cb-1, and the endpoint loses the 202.
-    // 2. The request step checks the state, and finds RUNNING.
+    // 2. The request step checks the state before the backoff, and finds
+    //    RUNNING.
     // 3. Lambda sends the suspend hook. The worker refuses jobs.
     // 4. The resend of cb-1 arrives. The MicroVM then freezes with cb-1.
     // A 202 in step 4 would end the delivery. Nothing would resume the
     // MicroVM, and cb-1 would never complete. The 503 makes the request
-    // step check the state again, find SUSPENDED, and resume the MicroVM.
+    // step send cb-1 again. The endpoint answers 502 during the settle
+    // window, and the request after it resumes the MicroVM.
     await runHook();
     heldJobs.add("cb-1");
     loseNextAnswer = true;
     const delivery = deliver("cb-1");
     await vi.advanceTimersByTimeAsync(0);
     expect(statuses).toEqual(["lost"]);
+    // The state check runs first after the sign, before the backoff.
     expect(service.calls).toEqual(["get:RUNNING"]);
     suspendBeforeNextRequest = true;
 
     await settle(delivery, 60_000);
 
-    expect(statuses).toEqual(["lost", 503, 202]);
-    expect(service.calls).toEqual([
-      "get:RUNNING",
-      "get:RUNNING",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-    ]);
+    expect(statuses.slice(0, 2)).toEqual(["lost", 503]);
+    expect(statuses.at(-1)).toBe(202);
+    expect(new Set(statuses.slice(2, -1))).toEqual(new Set([502]));
+    expect(service.calls[0]).toBe("get:RUNNING");
+    expect(service.calls.at(-1)).toBe("auto-resume");
+    expect(service.calls).not.toContain("ResumeMicrovmCommand");
     expect(service.state).toBe("RUNNING");
     expect(ran).toEqual(['cb-1:{"n":1}']);
 

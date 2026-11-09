@@ -61,6 +61,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   plugin: DurableInstrumentationPlugin = {},
   // Plugin-only operation name; never checkpointed. Labels the STEP span.
   pluginOperationName?: string,
+  // Passed to the step function as StepContext.signal.
+  signal: AbortSignal = new AbortController().signal,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -306,6 +308,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const stepContext: StepContext<Logger> = {
             logger,
             attempt: currentAttempt,
+            signal,
           };
 
           // Mark operation as EXECUTING

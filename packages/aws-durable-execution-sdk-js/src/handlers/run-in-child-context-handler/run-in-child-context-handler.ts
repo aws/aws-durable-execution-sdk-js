@@ -85,6 +85,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     stepPrefix?: string,
     checkpointToken?: string,
     parentId?: string,
+    ownSignal?: AbortSignal,
   ) => DurableContext<Logger>,
   parentId?: string,
 
@@ -340,6 +341,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     entityId: string,
     checkpointToken: string | undefined,
     parentId?: string,
+    ownSignal?: AbortSignal,
   ) => DurableContext<Logger>,
   parentId?: string,
 
@@ -382,6 +384,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   const childReplayMode = determineChildReplayMode(context, entityId);
 
+  // Aborted when this context finishes, right after markAncestorFinished.
+  // markAncestorFinished drops the checkpoints of the descendants. So the
+  // steps that still run inside this context learn that the SDK no longer uses
+  // their results. A virtual context does not call markAncestorFinished. So it
+  // never aborts this signal, and its steps see only the abort of a
+  // non-virtual context that holds it.
+  const finished = new AbortController();
+
   // Create a child context with appropriate parentId and stepPrefix
   const durableChildContext = createChildContext(
     context,
@@ -395,6 +405,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
     // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
+    finished.signal,
   );
 
   // From the moment `fn` returns or throws until this context settles, it does
@@ -470,6 +481,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // below is unaffected (hasFinishedAncestor only inspects ancestors).
     if (!isVirtual) {
       checkpoint.markAncestorFinished(entityId);
+      finished.abort();
     }
 
     // Serialize the result for consistency
@@ -602,6 +614,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // Mark this run-in-child-context as finished and checkpoint failure (only for non-virtual)
     if (!isVirtual) {
       checkpoint.markAncestorFinished(entityId);
+      finished.abort();
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
       // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
