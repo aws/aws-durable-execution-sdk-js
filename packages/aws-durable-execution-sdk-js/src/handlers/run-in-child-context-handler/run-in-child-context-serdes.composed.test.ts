@@ -87,6 +87,7 @@ describe("runInChildContext serdes round-trip", () => {
       terminate: vi.fn(),
       getTerminationPromise: vi.fn().mockResolvedValue({}),
       isTerminated: false,
+      isTerminationRequested: vi.fn().mockReturnValue(false),
       terminationPromise: Promise.resolve(),
       handleTermination: vi.fn(),
       addListener: vi.fn(),

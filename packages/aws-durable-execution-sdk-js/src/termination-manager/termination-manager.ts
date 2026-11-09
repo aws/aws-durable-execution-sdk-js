@@ -62,6 +62,11 @@ export class TerminationManager extends EventEmitter {
     }
   }
 
+  /** Whether `terminate` was called for this invocation. */
+  isTerminationRequested(): boolean {
+    return this.isTerminated;
+  }
+
   getTerminationPromise(): Promise<TerminationResponse> {
     return this.terminationPromise;
   }
