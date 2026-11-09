@@ -11,32 +11,31 @@ retry of the same execution.
 The SDK never stops that code by force. A step can stop itself when the SDK aborts its
 `ctx.signal`. So follow these rules in a durable function:
 
-1. Keep each step much shorter than the function timeout. The SDK does not check the deadline
-   when an operation starts. So when the deadline passes during a step, the step finishes and
-   the SDK starts the next operation. Split long work into several steps.
-2. Give every I/O call in a step a timeout that is shorter than the time left in the
-   invocation. A step that cannot wait forever cannot outlive its invocation by much. The SDK
-   does not abort `ctx.signal` at the deadline. So combine the two signals:
+1. Keep each step much shorter than the function timeout. When the deadline passes, the SDK
+   terminates the invocation: it aborts `ctx.signal` of every running step, sends no further
+   checkpoint, and starts no further operation. Lambda retries the invocation. A step that
+   was running at the deadline runs again on the retry. Split long work into several steps.
+2. Pass `ctx.signal` to every I/O call in a step. The SDK aborts it at the deadline, so the
+   step stops instead of running next to the retry:
 
    ```typescript
    await context.step("load", async (ctx) => {
-     const remaining = context.lambdaContext.getRemainingTimeInMillis();
-     const timeout = Math.max(0, remaining - 1000);
-     const res = await fetch(url, {
-       signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(timeout)]),
-     });
+     const res = await fetch(url, { signal: ctx.signal });
      // Read the body inside the step. The signal also covers the body read,
      // and the step returns plain data that the SDK can checkpoint.
      return res.json();
    });
    ```
 
+   A step that ignores the signal keeps running after the deadline. Its result is not
+   checkpointed.
+
 3. Make every step idempotent. Derive the idempotency key from the execution and the step, not
    from the time. A step already runs at least once. On LMI, an old invocation can also run the
    same step at the same time as its retry.
-4. Pass `ctx.signal` to every I/O call in a step that runs inside a `map` or `parallel`. When
-   the batch [completes early](BATCH_COMPLETION.md), the SDK aborts the signal of every step that
-   still runs. So those steps can stop.
+4. The same signal stops leftover steps in a `map` or `parallel`. When the batch
+   [completes early](BATCH_COMPLETION.md), the SDK aborts the signal of every step that still
+   runs.
 5. After `context.promise.race`, the remaining branches keep running, and the SDK does not
    abort their signals. A step that ignores its signal also keeps running. So use
    `promise.race` or such a step only when its leftover work has no side effects, or side
