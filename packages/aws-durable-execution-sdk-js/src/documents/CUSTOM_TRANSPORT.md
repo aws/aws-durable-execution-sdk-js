@@ -16,6 +16,9 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
+// Without a timeout, Node.js fetch waits up to 300 seconds for a response.
+const REQUEST_TIMEOUT_MS = 10_000;
+
 class HttpDurableExecutionClient implements DurableExecutionClient {
   constructor(private readonly endpoint: string) {}
 
@@ -24,6 +27,7 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await fetch(`${this.endpoint}/state`, {
       method: "POST",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
     });
@@ -43,6 +47,7 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
   ): Promise<CheckpointDurableExecutionResponse> {
     const response = await fetch(`${this.endpoint}/checkpoint`, {
       method: "POST",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
     });
@@ -81,6 +86,11 @@ Without a stated scope, every failure is treated as transient, so a permanent on
 until the execution times out. Note that a stated scope is believed ahead of the SDK's own
 error inspection, so a transport that wraps another one takes over responsibility for
 classifying the errors it wraps.
+
+Set a timeout on every `getExecutionState` and `checkpoint` request, as the example does. On
+[Lambda Managed Instances](LAMBDA_MANAGED_INSTANCES.md), the execution environment
+keeps running after the invocation ends. So a request without a timeout keeps its socket and
+timers open after the invocation's deadline.
 
 To keep the Lambda transport but configure the underlying client yourself, pass it to
 `DurableExecutionApiClient` rather than using the deprecated `client` option:

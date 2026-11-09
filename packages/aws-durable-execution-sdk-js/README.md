@@ -213,6 +213,7 @@ The SDK runs on the Lambda managed Node.js runtimes `nodejs22.x` and `nodejs24.x
 - [Instrumentation plugins](src/documents/PLUGINS.md), including the SDK 3.x plugin migration.
 - [Custom transport](src/documents/CUSTOM_TRANSPORT.md)
 - [Runtime requirements](src/documents/RUNTIME_REQUIREMENTS.md)
+- [Running on Lambda Managed Instances](src/documents/LAMBDA_MANAGED_INSTANCES.md)
 - [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md)
 - [Examples](../aws-durable-execution-sdk-js-examples/src/examples)
 - [Testing SDK](../aws-durable-execution-sdk-js-testing): run durable functions in tests.
