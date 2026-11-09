@@ -139,9 +139,9 @@ createTests({
         await expectMicrovmTerminated(microvmId);
 
         // The tree is the tree of the session example, with a callback in
-        // place of the wait. The state check and the resume run inside the
-        // second request step. So the tree shows them only as a request step
-        // that succeeded after the suspend.
+        // place of the wait. The suspend runs inside the first job's
+        // context, and the service resumes the MicroVM on the second
+        // request. So neither adds an operation to the tree.
         const roots = execution
           .getOperations()
           .filter((operation) => operation.getParentId() === undefined);
@@ -192,13 +192,11 @@ createTests({
           ],
         ]);
 
-        // The session sets neither autoSuspendOnIdle nor an idle policy. So
-        // the launch records no resume before delivery. suspendAfter is an
-        // option of one job, and the launch checkpoint does not record it.
+        // suspendAfter is an option of one job. So the launch checkpoint
+        // does not record it.
         expect(launch.getStepDetails()?.result).toMatchObject({
           delivery: "http",
           microvmId,
-          resumeBeforeDelivery: false,
         });
 
         // A job can finish before the invocation that waits for it ends. The

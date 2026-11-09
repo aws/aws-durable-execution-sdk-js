@@ -2,14 +2,14 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
 import { ExampleConfig } from "../../../types";
 import { requireMicrovmEnv } from "../../shared/microvm-env";
 
 export const config: ExampleConfig = {
   name: "MicroVM Session Suspend After",
   description:
-    "Runs two jobs in one Lambda MicroVM that the worker suspends after the first",
+    "Runs two jobs in one Lambda MicroVM that the function suspends after the first",
   durableConfig: {
     ExecutionTimeout: 900,
     RetentionPeriodInDays: 7,
@@ -24,9 +24,9 @@ export const config: ExampleConfig = {
 // execution timeout.
 const GATE_TIMEOUT = { minutes: 5 };
 
-// The second job waits for the resume. The worker can refuse it with HTTP 503
-// for up to 30 seconds before that, and the request step retries for up to
-// 60 seconds. So its heartbeat timeout is longer than both together.
+// The second job's request resumes the MicroVM. The request step retries for
+// up to 60 seconds while the MicroVM resumes. So the heartbeat timeout of the
+// second job is longer than that.
 const RESUMED_JOB_HEARTBEAT_TIMEOUT = { seconds: 120 };
 
 export const handler = withDurableExecution(
@@ -34,9 +34,7 @@ export const handler = withDurableExecution(
     const { imageArn, executionRoleArn } = requireMicrovmEnv();
 
     // The session launches one MicroVM and terminates it when the handler
-    // returns. It does not suspend when idle. The image enables the resume
-    // hook. So the worker accepts the next job as soon as the MicroVM
-    // resumes.
+    // returns. It does not suspend when idle.
     return microvmSession(
       context,
       "suspend-after-session",
@@ -44,10 +42,21 @@ export const handler = withDurableExecution(
         imageIdentifier: imageArn,
         executionRoleArn,
         timeout: { minutes: 10 },
+        // The SDK does not resume a MicroVM. The service resumes it on the
+        // next request, when the idle policy enables auto-resume. The idle
+        // timer counts only inbound requests. So it is longer than the
+        // MicroVM's maximum duration, the timeout plus 5 minutes, and never
+        // suspends a running job.
+        idlePolicy: {
+          autoResumeEnabled: true,
+          maxIdleDurationSeconds: 3_600,
+          suspendedDurationSeconds: 600,
+        },
       },
       async (vm, sessionContext) => {
-        // The worker suspends the MicroVM when this job has ended and its
-        // result is reported.
+        // The durable function suspends the MicroVM after this job's result
+        // arrives. The function's role needs lambda:SuspendMicrovm on the
+        // MicroVM image.
         const written = await vm.invoke<{ microvmId: string }>(
           sessionContext,
           "write",
@@ -65,7 +74,7 @@ export const handler = withDurableExecution(
         // 1. The first job has ended before the gate starts.
         // 2. The second job starts only after the caller completes the gate.
         // 3. So no job runs while the gate is pending.
-        // 4. So the worker suspends the MicroVM after the first job.
+        // 4. So the function suspends the MicroVM after the first job.
         // 5. So a caller that sees the MicroVM SUSPENDED while the gate is
         //    pending sees a suspend between the two jobs.
         // The callback result carries no data. So the handler ignores it.
@@ -74,10 +83,9 @@ export const handler = withDurableExecution(
         });
         await gate;
 
-        // The first job set suspendAfter. So the request step calls
-        // GetMicrovm, finds the MicroVM SUSPENDED, and calls ResumeMicrovm
-        // before it sends the job. A suspended MicroVM keeps its files. So
-        // this job reads the file that the first job wrote.
+        // The service resumes the suspended MicroVM on this job's request.
+        // A suspended MicroVM keeps its files. So this job reads the file
+        // that the first job wrote.
         const read = await vm.invoke<{ microvmId: string; value: string }>(
           sessionContext,
           "read",
