@@ -6,6 +6,7 @@ import {
   LoggingExecutionContext,
 } from "./default-logger";
 import { Console } from "node:console";
+import { StepError } from "../../errors/durable-error/durable-error";
 
 // Mock the Console constructor
 vi.mock("node:console", () => {
@@ -363,6 +364,26 @@ describe("Default Logger", () => {
             errorType: "Error",
             errorMessage: "Test error",
             stackTrace: ["Error: Test error", "    at test.js:1:1"],
+          },
+        });
+      });
+
+      it("keeps the cause of a durable error that is logged alone", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+        const inner = new Error("card declined");
+        inner.stack = "Error: card declined\n    at pay.js:1:1";
+        const error = new StepError("Step failed", inner);
+
+        logger.log?.(DurableLogLevel.ERROR, error);
+
+        const parsedLog = JSON.parse(mockConsole.error.mock.calls[0][0]);
+        expect(parsedLog.message).toMatchObject({
+          errorType: "StepError",
+          errorMessage: "Step failed",
+          cause: {
+            errorType: "Error",
+            errorMessage: "card declined",
+            stackTrace: ["Error: card declined", "    at pay.js:1:1"],
           },
         });
       });

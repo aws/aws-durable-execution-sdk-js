@@ -10,11 +10,14 @@ export const safeStringify = (data: unknown): string => {
 
           // Handle Error objects by extracting their properties
           if (value instanceof Error) {
+            // A spread copies only enumerable properties, and the native
+            // cause is not enumerable. So the cause is copied here.
             return {
               ...value,
               name: value.name,
               message: value.message,
               stack: value.stack,
+              ...(value.cause !== undefined && { cause: value.cause }),
             };
           }
         }
