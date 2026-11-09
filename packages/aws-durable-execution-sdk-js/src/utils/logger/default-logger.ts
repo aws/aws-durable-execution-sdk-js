@@ -84,7 +84,7 @@ function jsonErrorReplacer(
   value: DurableLogField,
 ): DurableLogField {
   if (value instanceof Error) {
-    const formatted = Object.assign(
+    return Object.assign(
       {
         errorType: value?.constructor?.name ?? "UnknownError",
         errorMessage: value.message,
@@ -92,16 +92,13 @@ function jsonErrorReplacer(
           typeof value.stack === "string"
             ? value.stack.split("\n")
             : value.stack,
+        // Object.assign copies only enumerable properties, and the native
+        // cause is not enumerable. So the cause is set here. JSON.stringify
+        // omits it when it is undefined, and calls this replacer on it.
+        cause: value.cause as DurableLogField,
       },
       value,
     );
-    // Object.assign copies only enumerable properties, and the native
-    // cause is not enumerable. So the cause is copied here. JSON.stringify
-    // then calls this replacer on the cause too.
-    if (value.cause !== undefined) {
-      return { ...formatted, cause: value.cause as DurableLogField };
-    }
-    return formatted;
   }
   return value;
 }
