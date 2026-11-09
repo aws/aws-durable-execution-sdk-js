@@ -1,815 +1,226 @@
 # AWS Durable Execution SDK for JavaScript
 
-TypeScript SDK for building stateful, long-running AWS Lambda functions with automatic state persistence, retry logic, and workflow orchestration.
+Write AWS Lambda durable functions in TypeScript or JavaScript: multi-step handlers that checkpoint each step and resume after waits and failures.
 
-## Features
-
-- **Durable Execution**: Automatically persists state and resumes from checkpoints
-- **Automatic Retries**: Configurable retry strategies with exponential backoff and jitter
-- **Workflow Orchestration**: Compose complex workflows with steps, child contexts, and parallel execution
-- **External Integration**: Wait for callbacks from external systems
-- **Batch Operations**: Process arrays with concurrency control and completion policies
-- **Type Safety**: Full TypeScript support with comprehensive type definitions
-
-## Installation
+## Install
 
 ```bash
 npm install @aws/durable-execution-sdk-js
 ```
 
-## Quick Start
+## Quick start
 
 ```typescript
 import {
+  type DurableContext,
   withDurableExecution,
-  DurableContext,
 } from "@aws/durable-execution-sdk-js";
 
-const handler = async (event: any, context: DurableContext) => {
-  // Execute a durable step with automatic retry
-  const userData = await context.step("fetch-user", async () =>
-    fetchUserFromDB(event.userId),
-  );
-
-  // Wait for 5 seconds
-  await context.wait({ seconds: 5 });
-
-  // Process data in another step
-  const result = await context.step("process-user", async () =>
-    processUser(userData),
-  );
-
-  return result;
-};
-
-export const lambdaHandler = withDurableExecution(handler);
-```
-
-## Documentation
-
-This README provides a quick reference for the SDK's main features. For more detailed information:
-
-- **[API Reference](https://docs.aws.amazon.com/durable-execution/)** - Complete technical reference with detailed type definitions and operation specifications
-- **[Concepts and Use Cases](src/documents/CONCEPTS.md)** - Learn about the replay model, best practices, and real-world examples including GenAI agents, human-in-the-loop workflows, and saga patterns
-- **[Contributing](../../CONTRIBUTING.md)** - Learn about contributing to the AWS Durable Execution SDK for JavaScript
-
-## Core Concepts
-
-### DurableContext
-
-The `DurableContext` is the main interface for building durable workflows. It provides methods for executing steps, waiting, invoking other functions, and coordinating parallel operations.
-
-### Step Operations
-
-Execute atomic operations with automatic retry and state persistence:
-
-```typescript
-// Named step with retry configuration
-const result = await context.step(
-  "fetch-data",
-  async (ctx) => {
-    return await fetchFromAPI();
-  },
-  {
-    retryStrategy: (error, attempt) => ({
-      shouldRetry: attempt < 3,
-      delay: { seconds: Math.pow(2, attempt) },
-    }),
-  },
-);
-
-// Anonymous step
-const data = await context.step(async () => processData());
-```
-
-**Important**: `step()` is for single atomic operations only. To group multiple durable operations, use `runInChildContext()`.
-
-### Child Contexts
-
-Group multiple durable operations with isolated state tracking:
-
-```typescript
-const orderResult = await context.runInChildContext(
-  "process-order",
-  async (childCtx) => {
-    // Child context has its own step counter and state
-    const validated = await childCtx.step("validate", async () =>
-      validateOrder(order),
+export const handler = withDurableExecution(
+  async (event: { userId: string }, context: DurableContext) => {
+    const user = await context.step("fetch-user", async () =>
+      fetchUser(event.userId),
     );
-    await childCtx.wait({ seconds: 1 });
-    const charged = await childCtx.step("charge", async () =>
-      chargePayment(validated),
-    );
-    return charged;
+    await context.wait({ seconds: 5 });
+    return context.step("process-user", async () => processUser(user));
   },
 );
 ```
 
-### Invoking Other Functions
+`withDurableExecution` wraps your handler. Export the wrapped handler as the Lambda handler.
 
-Call another AWS Lambda function and wait for it complete:
+Each `step` checkpoints its result. On replay, the SDK returns the checkpointed result and does not run the step again. Code outside a step runs again on every replay. So code outside a step must be deterministic. Read the time, generate IDs, and call APIs inside a step. [Concepts](src/documents/CONCEPTS.md) explains the replay model.
+
+## Common uses
+
+### Wait
 
 ```typescript
-const result = await context.invoke(
+await context.wait({ seconds: 30 });
+await context.wait("rate-limit-delay", { minutes: 5 });
+```
+
+The function invocation ends during a wait. Lambda does not bill compute while the function waits.
+
+### Group operations in a child context
+
+`step` runs one function. To group several durable operations, use `runInChildContext`:
+
+```typescript
+const receipt = await context.runInChildContext("process-order", async (child) => {
+  const order = await child.step("validate", async () => validate(event.order));
+  await child.wait({ seconds: 1 });
+  return child.step("charge", async () => charge(order));
+});
+```
+
+### Invoke another function
+
+```typescript
+const payment = await context.invoke(
   "process-payment",
-  "arn:aws:lambda:us-east-1:123456789012:function:payment-processor",
+  "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:1",
   { amount: 100, currency: "USD" },
 );
 ```
 
-### Wait Operations
+A durable target function needs a version or alias qualifier in its ARN.
 
-Pause execution for a specified duration:
+### Wait for an external system
+
+`waitForCallback` gives your submitter a callback ID. The external system completes the callback with `SendDurableExecutionCallbackSuccess` or `SendDurableExecutionCallbackFailure`.
 
 ```typescript
-// Wait 30 seconds
-await context.wait({ seconds: 30 });
-
-// Named wait for tracking
-await context.wait("rate-limit-delay", { seconds: 5 });
+const approval = await context.waitForCallback(
+  "wait-for-approval",
+  async (callbackId) => {
+    await sendApprovalRequest(callbackId);
+  },
+  { timeout: { hours: 24 } },
+);
 ```
 
-### Conditional Waiting
-
-Wait until a condition is met by periodically checking state:
+To send the callback ID later, use `createCallback`. It returns the promise and the ID:
 
 ```typescript
-const finalState = await context.waitForCondition(
+const [approvalPromise, callbackId] = await context.createCallback("approval", {
+  timeout: { hours: 24 },
+});
+await sendApprovalRequest(callbackId);
+const approval = await approvalPromise;
+```
+
+### Poll until a condition holds
+
+```typescript
+const job = await context.waitForCondition(
   "wait-for-job",
-  async (currentState, ctx) => {
-    const status = await checkJobStatus(currentState.jobId);
-    return { ...currentState, status };
-  },
+  async (state) => ({ ...state, status: await getJobStatus(state.jobId) }),
   {
     initialState: { jobId: "job-123", status: "pending" },
-    waitStrategy: (state, attempt) => {
-      if (state.status === "completed") {
-        return { shouldContinue: false };
-      }
-      return {
-        shouldContinue: true,
-        delay: { seconds: Math.min(attempt * 2, 60) },
-      };
-    },
+    waitStrategy: (state, attempt) =>
+      state.status === "completed"
+        ? { shouldContinue: false }
+        : { shouldContinue: true, delay: { seconds: Math.min(attempt * 2, 60) } },
   },
 );
 ```
 
-### External Callbacks
+### Process many items
 
-Wait for external systems to complete operations:
-
-```typescript
-// Create a callback and send ID to external system
-const [callbackPromise, callbackId] = await context.createCallback(
-  "external-approval",
-  { timeout: { minutes: 3 } },
-);
-
-await sendApprovalRequest(callbackId, requestData);
-const approvalResult = await callbackPromise;
-
-// Or use waitForCallback with submitter function
-const result = await context.waitForCallback(
-  "wait-for-webhook",
-  async (callbackId, ctx) => {
-    await submitToExternalAPI(callbackId);
-  },
-  { timeout: { minutes: 5 } },
-);
-```
-
-## Batch Operations
-
-### Map
-
-Process arrays of items, applying durable operations to each with concurrency control:
+`map` runs a durable function for each item. `parallel` runs a list of branches. Both run in the same invocation. Each item runs in its own child context.
 
 ```typescript
 const results = await context.map(
   "process-users",
   users,
-  async (ctx, user, index) => {
-    return await ctx.step(`process-${user.id}`, async () => processUser(user));
-  },
-  {
-    maxConcurrency: 5,
-    completionConfig: {
-      minSuccessful: 8,
-      toleratedFailureCount: 2,
-    },
-    itemNamer: (user, index) => `User-${user.id}`,
-  },
+  async (ctx, user) => ctx.step("process", async () => processUser(user)),
+  { maxConcurrency: 5 },
 );
+results.throwIfError();
+const processed = results.getResults();
 
-// Check results
-console.log(
-  `Succeeded: ${results.successCount}, Failed: ${results.failureCount}`,
-);
-results.throwIfError(); // Throws if any failures
+const [a, b] = (
+  await context.parallel("fetch-all", [
+    async (ctx) => ctx.step("fetch-a", async () => fetchA()),
+    async (ctx) => ctx.step("fetch-b", async () => fetchB()),
+  ])
+).getResults();
 ```
 
-**Note**: `map()` executes durable operations (steps, waits, etc.) within the same Lambda invocation using child contexts for isolation. It does not spawn separate Lambda functions.
+Without `completionConfig`, the first failed item completes the batch. `completionConfig` sets another rule, for example `{ minSuccessful: 8 }` or `{ toleratedFailureCount: 2 }`. To wait for every item, set `{ toleratedFailurePercentage: 100 }`. [Batch early completion](src/documents/BATCH_COMPLETION.md) explains what happens to items that are still running when a batch completes.
 
-### Parallel
+`context.promise.all`, `race`, `any`, and `allSettled` combine durable promises that already run. They have no concurrency limit and no completion rule. So use them only for short operations, and use `map` or `parallel` for the rest.
 
-Execute multiple branches with durable operations in parallel:
-
-```typescript
-const results = await context.parallel(
-  "parallel-tasks",
-  [
-    { name: "task1", func: async (ctx) => ctx.step(async () => fetchData1()) },
-    { name: "task2", func: async (ctx) => ctx.step(async () => fetchData2()) },
-    async (ctx) => ctx.step(async () => fetchData3()),
-  ],
-  {
-    maxConcurrency: 2,
-    completionConfig: { minSuccessful: 2 },
-  },
-);
-```
-
-**Note**: `parallel()` executes durable operations within the same Lambda invocation. Each branch runs in its own child context with isolated state tracking.
-
-### Early completion
-
-A `map()` or `parallel()` completes early when its completion rule is met before every item has finished. With no `completionConfig`, the rule is fail-fast: the first failure completes the batch. `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage` and `shouldComplete` set other rules. Setting any of them replaces fail-fast.
-
-The batch checks its rule each time an item's result reaches it. Once the rule is met, the remaining items are abandoned:
-
-- An item that is running is reported as `STARTED`. It is not counted in `successCount` or `failureCount`.
-- An item that had not started, because of `maxConcurrency`, does not appear in `all`.
-- The batch does not wait for abandoned items and does not stop them by force. When the batch's context finishes, an abandoned item can stop in two ways:
-  - **Cooperative abort.** The SDK aborts the `ctx.signal` of the item's steps. A step that passes its signal to its I/O calls, or checks it in its loops, stops when the signal aborts. With `NestingType.FLAT`, the item's steps share the signal of the batch's context, and the SDK aborts that signal too.
-  - **Dropped checkpoint.** The SDK drops the item's checkpoints. Code that ignores the signal stops only when it awaits a dropped checkpoint.
-
-  Until the item stops, its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
-  - A step whose function is running keeps running while the invocation is active. It is not guaranteed to finish. If it finishes after the batch's context, its result is not recorded.
-  - A new `step` with the default `StepSemantics.AtLeastOncePerRetry` runs its function once, and the history has no record of it. A new `waitForCondition` runs its check function once. The item then stops.
-  - `runInChildContext` does not await its own checkpoints. So its function runs, and the operations inside it follow these rules.
-  - A new `wait`, `invoke`, `createCallback`, `waitForCallback`, or step with `StepSemantics.AtMostOncePerRetry` stops the item before it takes effect. "New" means the item starts it after the batch's context finished. An operation started earlier may already have recorded its start and taken effect.
-
-What happens next depends on what the handler does after the batch:
-
-- If the handler returns, the invocation can end while abandoned code still runs. That code is then not guaranteed to finish.
-- If the handler waits, for example on a `wait` or a callback, the invocation cannot suspend while an abandoned step function or `waitForCondition` check is still running. Such an operation counts as running until its function returns and its dropped checkpoint releases it. So a slow abandoned function keeps the invocation active, which adds to its duration and cost.
-
-An abandoned item can record its outcome before the batch's context finishes. This includes an item that recorded its outcome before the item that completed the batch, but whose result reached the batch later. The execution history then shows its child context as `SUCCEEDED` or `FAILED`, while the `BatchResult` reports it as `STARTED`. With `NestingType.FLAT`, the item has no child context, and the history shows its operations instead.
-
-The handler receives only the `BatchResult`. Replay returns the same completed items and the same `completionReason`. Replay can omit the `STARTED` items, so `started()`, `startedCount` and `totalCount` can differ after replay. So base decisions on the completed items, and do not reconcile the `BatchResult` with the execution history.
-
-To get the result of every item, use a rule that cannot complete early. Set `toleratedFailurePercentage: 100`, and leave `minSuccessful`, `toleratedFailureCount` and `shouldComplete` unset. The batch then waits for every item. Failed items appear in `failed()`. The call does not throw, so call `throwIfError()` if a failure must stop the handler:
+### Log
 
 ```typescript
-const results = await context.map("process-all", items, processItem, {
-  completionConfig: { toleratedFailurePercentage: 100 },
+context.logger.info("Processing started", { userId: event.userId });
+
+await context.step("process", async (stepCtx) => {
+  stepCtx.logger.debug("Step running");
 });
-const failures = results.failed(); // every failed item, with its error
 ```
 
-### Promise Combinators
+The logger adds the execution ARN, the request ID, and the operation to each entry. By default it does not repeat log entries during replay. To log during replay, call `context.configureLogger({ modeAware: false })`. [Logging](src/documents/LOGGING.md) covers custom loggers and Powertools for AWS Lambda.
 
-For fast, in-memory operations (use `map()` or `parallel()` for durable operations):
+## Advanced
+
+### Retries
+
+A step that throws is retried by its retry strategy. `createRetryStrategy` builds an exponential backoff strategy:
 
 ```typescript
-// Wait for all promises
-const [user, posts, comments] = await context.promise.all([
-  fetchUser(userId),
-  fetchPosts(userId),
-  fetchComments(userId),
-]);
-
-// Race promises
-const fastest = await context.promise.race([
-  fetchFromPrimary(),
-  fetchFromSecondary(),
-]);
-
-// Wait for first success
-const result = await context.promise.any([
-  fetchFromSource1(),
-  fetchFromSource2(),
-  fetchFromSource3(),
-]);
-
-// Wait for all to settle
-const results = await context.promise.allSettled([operation1(), operation2()]);
-```
-
-**Note**: Promise combinators accept already-executing promises and cannot provide concurrency control or durability. Use `map()` or `parallel()` for durable, controlled execution.
-
-## Operation Subtypes
-
-`runInChildContext`, `step`, and `createCallback` accept a `subType` option. A function that composes several operations can use it to label its parts. The SDK records the subtype in the checkpoint and passes it to plugins. So execution history and plugins can filter the parts without parsing names.
-
-```typescript
-ctx.runInChildContext(
-  name,
-  async (child) => {
-    const receipt = await child.step("charge", async () => charge(orderId), {
-      subType: "OrderCharge",
-    });
-    await child.step("notify", async () => notify(receipt), {
-      subType: "OrderNotify",
-    });
-    return receipt;
-  },
-  { subType: "ChargeAndNotify" },
-);
-```
-
-The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects the default subtype, such as `Step` or `Callback`. Replay compares the subtype with the checkpoint. So changing a subtype is a breaking change for executions in flight.
-
-[`@aws/durable-execution-sdk-js-extras`](../aws-durable-execution-sdk-js-extras) ships ready-made operations built this way, such as `microvm`.
-
-## Configuration
-
-### Dynamic Instrumentation Plugins
-
-Instrumentation plugins can be selected at Lambda cold start without importing
-them in the function artifact. Install a provider package in the function or a
-Lambda layer, then set an ordered list of package or module specifiers:
-
-```text
-DURABLE_EXECUTION_PLUGINS=@example/durable-otel,@example/durable-audit/provider
-```
-
-The SDK imports each module once when `withDurableExecution(...)` initializes
-the wrapped handler. An unset or blank variable preserves the existing
-behavior. Plugins passed through `DurableExecutionConfig.plugins` run first in
-their configured order; environment-selected plugins follow in the order listed
-in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
-create the same plugin type.
-
-Provider modules export a factory named `durableExecutionPluginProvider`. A
-factory is an object with a `createPlugin(info)` method; a bare function is not
-one and is rejected. The SDK calls `createPlugin` once per invocation, with that
-invocation's `InvocationInfo`, so the instance it returns serves exactly one
-invocation:
-
-```typescript
-import type {
-  DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
+import {
+  createRetryStrategy,
+  JitterStrategy,
 } from "@aws/durable-execution-sdk-js";
 
-class AuditPlugin implements DurableInstrumentationPlugin {
-  constructor(
-    private readonly exporter: Exporter,
-    private readonly executionArn: string,
-  ) {}
-  // Implement the lifecycle hooks needed by this plugin.
-}
-
-// Built once for the execution environment and shared by every instance.
-const exporter = new Exporter();
-
-export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory<AuditPlugin> =
-  {
-    createPlugin: (info) => new AuditPlugin(exporter, info.executionArn),
-  };
-```
-
-Because an instance is dropped when its invocation returns, a plugin never has
-to key per-execution state by execution ARN, and two executions running
-concurrently in one execution environment cannot observe each other's state.
-State that belongs to the execution environment — an exporter, a tracer
-provider, a scheduler — belongs outside the factory, as above.
-
-The module specifier must be resolvable through normal application module
-resolution or Node.js module paths. For a Lambda layer, package the provider and
-its dependencies under `nodejs/node_modules`:
-
-```text
-plugin-layer.zip
-`-- nodejs
-    `-- node_modules
-        `-- @example
-            `-- durable-audit
-```
-
-Malformed configuration, missing modules or exports, a
-`durableExecutionPluginProvider` without a `createPlugin` method, and an entry in
-`DurableExecutionConfig.plugins` without one are reported as `PluginLoadError`
-failures before execution state is read — the two sources are checked by the same
-rule, because an entry with no `createPlugin` could never produce a plugin. A
-`createPlugin` that throws when it runs, or returns nothing, is contained like
-any other plugin failure: that plugin sits out the invocation and the execution
-is unaffected.
-
-### Instrumentation Operation Status and Errors
-
-Use `OperationInfo.status` to identify terminal operation states such as `FAILED`,
-`CANCELLED`, `TIMED_OUT`, and `STOPPED`. `OperationInfo.error` contains optional
-error details; a failed operation can have `error === undefined`, including in
-replay and `onOperationChange` metadata. Missing or empty checkpointed error data
-does not invent an error. Supplied partial details, including explicitly empty
-strings or an empty stack trace, remain available.
-
-This also applies to API-v1 plugins: code that uses only the presence of `error`
-as its failure signal should inspect `status` instead. For an attempt-end hook,
-use `AttemptEndInfo.outcome` to determine whether that attempt failed. An external
-callback failure without error details still rejects the callback promise and
-retains its failed operation status; optional instrumentation details do not
-change the caller's outcome or persisted state.
-
-### Retry Strategies
-
-Custom retry strategy:
-
-```typescript
-await context.step("custom-retry", async () => riskyOperation(), {
-  retryStrategy: (error, attempt) => ({
-    shouldRetry: attempt < 5 && error.message.includes("timeout"),
-    delay: { seconds: attempt * 2 },
+await context.step("call-api", async () => callApi(), {
+  retryStrategy: createRetryStrategy({
+    maxAttempts: 5,
+    initialDelay: { seconds: 1 },
+    maxDelay: { seconds: 60 },
+    backoffRate: 2,
+    jitter: JitterStrategy.FULL,
+    retryableErrors: [/timeout/i],
   }),
 });
 ```
 
-### Step Semantics
+`retryStrategy` can also be a function `(error, attemptCount) => ({ shouldRetry, delay })`. `retryPresets` has ready-made strategies. A step that fails after its last attempt throws `StepError`.
 
-Control execution guarantees:
+### Step semantics
+
+`semantics` sets what happens when an invocation ends while the step runs:
+
+- `StepSemantics.AtLeastOncePerRetry` (default): the step runs again on replay. So it can run more than once per attempt.
+- `StepSemantics.AtMostOncePerRetry`: the SDK checkpoints the start before the step runs. On replay, the SDK does not run that attempt again.
+
+Both apply per retry attempt. So for a step that must run at most once in total, also disable retries:
 
 ```typescript
 import { StepSemantics } from "@aws/durable-execution-sdk-js";
 
-// At-least-once per retry (default)
-await context.step("retriable-operation", async () => sendNotification(), {
-  semantics: StepSemantics.AtLeastOncePerRetry,
-});
-
-// At-most-once per retry
-await context.step("idempotent-operation", async () => updateDatabase(), {
+await context.step("charge-once", async () => chargeCard(order), {
   semantics: StepSemantics.AtMostOncePerRetry,
+  retryStrategy: () => ({ shouldRetry: false }),
 });
 ```
 
-**Important**: These semantics apply _per retry_, not per overall execution:
+### Errors
 
-- **AtLeastOncePerRetry**: The step will execute at least once on each retry attempt. If the step succeeds but the checkpoint fails (e.g., sandbox crash), the step will re-execute on replay.
-- **AtMostOncePerRetry**: The step will execute at most once per retry attempt. A checkpoint is created before execution, so if a failure occurs after the checkpoint but before step completion, the previous step retry attempt is skipped on replay.
+Each durable operation throws its own error class when it fails, for example `StepError`, `CallbackError`, `InvokeError`, and `ChildContextError`. Every class extends `DurableOperationError`. The SDK checkpoints the error. So replay throws the same class, and code that branches on the class stays deterministic.
 
-**To achieve at-most-once semantics on a step-level**, use a custom retry strategy:
+### Operation subtypes
 
-```typescript
-await context.step(
-  "truly-once-only",
-  async () => callThatCannotTolerateDuplicates(),
-  {
-    semantics: StepSemantics.AtMostOncePerRetry,
-    retryStrategy: () => ({ shouldRetry: false }), // No retries
-  },
-);
-```
+`step`, `runInChildContext`, and `createCallback` accept a `subType` option, for example `{ subType: "OrderCharge" }`. The SDK records the subtype in the checkpoint and passes it to plugins. The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. Replay compares the subtype with the checkpoint. So a changed subtype fails executions in flight.
 
-Without this, a step using `AtMostOncePerRetry` with retries enabled could still execute multiple times across different retry attempts.
+### Configuration
 
-### Jitter Strategies
+`withDurableExecution(handler, config)` takes a `DurableExecutionConfig`. Its options include:
 
-Prevent thundering herd:
+- `plugins`: instrumentation plugin factories. The `DURABLE_EXECUTION_PLUGINS` environment variable adds plugins at cold start. See [Instrumentation plugins](src/documents/PLUGINS.md).
+- `durableExecutionClient`: a custom transport, or a `DurableExecutionApiClient` with your own `LambdaClient`. See [Custom transport](src/documents/CUSTOM_TRANSPORT.md).
 
-```typescript
-import {
-  JitterStrategy,
-  createRetryStrategy,
-} from "@aws/durable-execution-sdk-js";
+The SDK runs on the Lambda managed Node.js runtimes `nodejs22.x` and `nodejs24.x`. [Runtime requirements](src/documents/RUNTIME_REQUIREMENTS.md) lists what other runtimes, such as LLRT, need.
 
-const retryStrategy = createRetryStrategy({
-  maxAttempts: 5,
-  initialDelay: { seconds: 1 },
-  maxDelay: { seconds: 60 },
-  exponentialDelayFactor: 2,
-  jitterStrategy: JitterStrategy.FULL,
-});
-```
+## Reference
 
-### Custom Transport
-
-By default the SDK talks to the Lambda durable execution APIs. You can replace that
-transport with your own by implementing `DurableExecutionClient`, which has two operations
-and names no AWS types:
-
-```typescript
-import {
-  CheckpointDurableExecutionRequest,
-  CheckpointDurableExecutionResponse,
-  DurableExecutionClient,
-  DurableExecutionClientError,
-  DurableExecutionClientErrorScope,
-  GetDurableExecutionStateRequest,
-  GetDurableExecutionStateResponse,
-  withDurableExecution,
-} from "@aws/durable-execution-sdk-js";
-
-// Without a timeout, Node.js fetch waits up to 300 seconds for a response.
-const REQUEST_TIMEOUT_MS = 10_000;
-
-class HttpDurableExecutionClient implements DurableExecutionClient {
-  constructor(private readonly endpoint: string) {}
-
-  async getExecutionState(
-    params: GetDurableExecutionStateRequest,
-  ): Promise<GetDurableExecutionStateResponse> {
-    const response = await fetch(`${this.endpoint}/state`, {
-      method: "POST",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(params),
-    });
-
-    if (!response.ok) {
-      throw this.toClientError(
-        "Failed to read execution state",
-        response.status,
-      );
-    }
-
-    return response.json() as Promise<GetDurableExecutionStateResponse>;
-  }
-
-  async checkpoint(
-    params: CheckpointDurableExecutionRequest,
-  ): Promise<CheckpointDurableExecutionResponse> {
-    const response = await fetch(`${this.endpoint}/checkpoint`, {
-      method: "POST",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(params),
-    });
-
-    if (!response.ok) {
-      throw this.toClientError("Checkpoint failed", response.status);
-    }
-
-    return response.json() as Promise<CheckpointDurableExecutionResponse>;
-  }
-
-  // Tell the SDK whether to end just this invocation or the whole execution.
-  private toClientError(
-    message: string,
-    status: number,
-  ): DurableExecutionClientError {
-    return new DurableExecutionClientError(`${message}: ${status}`, {
-      scope:
-        status >= 400 && status < 500 && status !== 429
-          ? // A rejected request will not succeed on retry.
-            DurableExecutionClientErrorScope.EXECUTION
-          : // Throttling and server-side errors may.
-            DurableExecutionClientErrorScope.INVOCATION,
-    });
-  }
-}
-
-export const handler = withDurableExecution(myHandler, {
-  durableExecutionClient: new HttpDurableExecutionClient(
-    process.env.DURABLE_ENDPOINT!,
-  ),
-});
-```
-
-Without a stated scope, every failure is treated as transient, so a permanent one is retried
-until the execution times out. Note that a stated scope is believed ahead of the SDK's own
-error inspection, so a transport that wraps another one takes over responsibility for
-classifying the errors it wraps.
-
-Set a timeout on every `getExecutionState` and `checkpoint` request, as the example does. On
-[Lambda Managed Instances](#running-on-lambda-managed-instances), the execution environment
-keeps running after the invocation ends. So a request without a timeout keeps its socket and
-timers open after the invocation's deadline.
-
-To keep the Lambda transport but configure the underlying client yourself, pass it to
-`DurableExecutionApiClient` rather than using the deprecated `client` option:
-
-```typescript
-import { DurableExecutionApiClient } from "@aws/durable-execution-sdk-js";
-import { LambdaClient } from "@aws-sdk/client-lambda";
-
-export const handler = withDurableExecution(myHandler, {
-  durableExecutionClient: new DurableExecutionApiClient(
-    new LambdaClient({ region: "us-west-2", maxAttempts: 5 }),
-  ),
-});
-```
-
-## Logging
-
-Access enriched logger:
-
-```typescript
-const handler = async (event: any, context: DurableContext) => {
-  context.logger.info("Processing started", { userId: event.userId });
-
-  try {
-    const result = await context.step("process", async (ctx) => {
-      ctx.logger.debug("Step executing");
-      return processData();
-    });
-
-    context.logger.info("Processing completed", { result });
-    return result;
-  } catch (error) {
-    context.logger.error("Processing failed", error);
-    throw error;
-  }
-};
-```
-
-Custom logger:
-
-```typescript
-context.configureLogger({
-  customLogger: {
-    log: (level, message, data, error) =>
-      console.log(`[${level}] ${message}`, data),
-    error: (message, error, data) => console.error(message, error, data),
-    warn: (message, data) => console.warn(message, data),
-    info: (message, data) => console.info(message, data),
-    debug: (message, data) => console.debug(message, data),
-  },
-  modeAware: false, // Optional: show logs during replay (default: true)
-});
-```
-
-**Tip for local development:** Set `modeAware: false` to see all logs during replay, which can be helpful for debugging:
-
-```typescript
-context.configureLogger({ modeAware: false });
-```
-
-### Powertools for AWS Lambda (TypeScript)
-
-`createPowertoolsLogger` wraps a [Powertools `Logger`](https://docs.powertools.aws.dev/lambda/typescript/latest/features/logger/). Every log entry then contains the durable execution metadata: `executionArn`, `requestId`, `tenantId`, `operationId`, `operationName`, and `attempt`. Keys without a value are omitted. Every entry also contains the fields that the configured plugins add, such as the OTel plugin's `traceId` and `spanId`, as entries of the default logger do.
-
-```typescript
-import { Logger } from "@aws-lambda-powertools/logger";
-import {
-  createPowertoolsLogger,
-  DurableContext,
-  PowertoolsDurableLogger,
-  withDurableExecution,
-} from "@aws/durable-execution-sdk-js";
-
-const logger = new Logger({ serviceName: "my-service" });
-
-export const handler = withDurableExecution(
-  async (
-    event: { orderId: string },
-    context: DurableContext<PowertoolsDurableLogger<Logger>>,
-  ) => {
-    context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
-    context.logger.info("workflow-started", { orderId: event.orderId });
-  },
-);
-```
-
-- Declare `context` as `DurableContext<PowertoolsDurableLogger<Logger>>`, as above. Then `context.logger` and the step loggers accept the Powertools argument types. Without the declaration, `context.logger` accepts any arguments.
-- The keys use the same names as the default logger and the Python SDK.
-- A key passed in the log call replaces the metadata key with the same name. The metadata replaces keys set with `appendKeys` or `persistentKeys`, because Powertools applies per-call keys after those.
-- The adapter reads the metadata on every call. So one adapter instance logs the correct `operationId` and `attempt` for concurrent steps and child contexts.
-- Powertools reads only `message` from an `Error` passed as the first argument, and writes no stack. To log the stack, pass the `Error` as a later argument: `context.logger.error("charge failed", error)`.
-- The SDK does not depend on `@aws-lambda-powertools/logger`. Install it in your function.
-- `logger.addContext(context.lambdaContext)` adds the Powertools Lambda context fields, such as `cold_start` and `function_name`. It also adds `function_request_id`, which repeats `requestId`. For a tenant-scoped execution it adds `tenant_id`, which repeats `tenantId`. Powertools stores these fields on the `Logger` instance. So when several invocations run at the same time in one process, as on Lambda Managed Instances, they carry the values of the invocation that called `addContext` last. The durable metadata fields do not have this problem.
-
-Leave the `POWERTOOLS_DEV` environment variable unset in deployed functions. When it is set, Powertools writes through the global `console`. With Lambda's JSON log format, Lambda wraps each `console` line in a JSON object. So each Powertools entry then appears as a string inside the `message` field of a second JSON object.
-
-The `powertools-logger` example used to define its own adapter class, which wrote snake_case keys (`execution_arn`, `request_id`, `operation_id`). `createPowertoolsLogger` writes camelCase keys. If you copied that example, update log queries and metric filters to the camelCase names.
-
-## Runtime requirements
-
-The SDK targets the Lambda managed Node.js runtimes (`nodejs22.x`, `nodejs24.x`), where
-everything below is satisfied automatically. It also runs on a **container image carrying your
-own JavaScript runtime**, which is how durable functions can be deployed on a runtime Lambda
-does not manage.
-
-At load, the SDK imports these Node builtins: `async_hooks`, `crypto`, `events`,
-`node:console`, `node:crypto`, `node:fs/promises` (`mkdir`, `readFile`, `writeFile`),
-`node:path`, `node:url` and `node:util`. Note that a **named ESM import of a missing export is
-fatal at module load**, not at first use — so a runtime that provides a module but not the
-member the SDK imports from it will fail with a `SyntaxError` before your handler runs.
-
-It also loads `@aws-sdk/client-lambda` on first checkpoint, via a dynamic import. If you bundle
-with `@aws-sdk` marked external, the runtime must provide that client.
-
-### Runtimes without AsyncLocalStorage
-
-Some lightweight runtimes — [LLRT](https://github.com/awslabs/llrt), for example — implement
-only part of the Node API. The SDK detects and works around the two gaps that would otherwise be
-fatal:
-
-- **`async_hooks.AsyncLocalStorage`** is used to track which durable operation is active across
-  `await` boundaries. Without it the SDK falls back to tracking only within synchronous code.
-- **`util.formatWithOptions`** is used by the default logger. Without it the SDK falls back to
-  `util.format`.
-
-**Checkpointing and replay are unaffected**, and the checkpoint data is byte-for-byte the same.
-What degrades is observability, and the SDK emits one warning per execution environment when it
-does:
-
-|                                                              | Effect on a runtime without `AsyncLocalStorage`                                                                                                                  |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Log records emitted after an `await`                         | lose `operationId`, `operationName` and `attempt`                                                                                                                |
-| Replay-aware logging                                         | cannot suppress replayed records, so a log statement behind the replay frontier is re-emitted on **every replay** — this adds CloudWatch cost on long executions |
-| Using a parent or sibling context inside `runInChildContext` | only detected when it happens synchronously                                                                                                                      |
-
-That last item is a guard against a real determinism bug, so if you deploy on such a runtime,
-enable the `no-nested-durable-operations` rule from
-[`@aws/durable-execution-sdk-js-eslint-plugin`](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-eslint-plugin),
-which catches the same mistake at build time.
-
-Performance is a separate question from support. Durable executions replay, and replay cost grows
-with the number of completed operations, so a runtime without a JIT can be slower overall for
-workflows with large operation counts or compute-heavy steps — even where it starts faster.
-Measure your own workload before switching.
-
-## Running on Lambda Managed Instances
-
-On [Lambda Managed Instances](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-execution-environment.html)
-(LMI), the execution environment does not freeze between invocations. An invocation timeout
-does not stop the code that is running. One Node.js worker runs several invocations at the same
-time, and they share module-level state
-([LMI Node.js runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-nodejs-runtime.html)).
-So code from an ended invocation can keep running next to a later invocation, or next to a
-retry of the same execution.
-
-The SDK never stops that code by force. A step can stop itself when the SDK aborts its
-`ctx.signal`. So follow these rules in a durable function:
-
-1. Keep each step much shorter than the function timeout. The SDK does not check the deadline
-   when an operation starts. So when the deadline passes during a step, the step finishes and
-   the SDK starts the next operation. Split long work into several steps.
-2. Give every I/O call in a step a timeout that is shorter than the time left in the
-   invocation. A step that cannot wait forever cannot outlive its invocation by much. The SDK
-   does not abort `ctx.signal` at the deadline. So combine the two signals:
-
-   ```typescript
-   await context.step("load", async (ctx) => {
-     const remaining = context.lambdaContext.getRemainingTimeInMillis();
-     const timeout = Math.max(0, remaining - 1000);
-     const res = await fetch(url, {
-       signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(timeout)]),
-     });
-     // Read the body inside the step. The signal also covers the body read,
-     // and the step returns plain data that the SDK can checkpoint.
-     return res.json();
-   });
-   ```
-
-3. Make every step idempotent. Derive the idempotency key from the execution and the step, not
-   from the time. A step already runs at least once. On LMI, an old invocation can also run the
-   same step at the same time as its retry.
-4. Pass `ctx.signal` to every I/O call in a step that runs inside a `map` or `parallel`. When
-   the batch [completes early](#early-completion), the SDK aborts the signal of every step that
-   still runs. So those steps can stop.
-5. After `context.promise.race`, the remaining branches keep running, and the SDK does not
-   abort their signals. A step that ignores its signal also keeps running. So use
-   `promise.race` or such a step only when its leftover work has no side effects, or side
-   effects that are safe to repeat.
-6. Do not use `finally` around a durable operation for cleanup. When the invocation suspends,
-   the code after the `await` never runs, so the `finally` block never runs.
-7. Keep no per-invocation state in module-level variables. Concurrent invocations in one worker
-   share them.
-8. Avoid long synchronous CPU work. It blocks every invocation in the worker, and nothing can
-   interrupt it.
-
-Plugin authors: see the remarks on `DurableInstrumentationPlugin` and
-`DurableInstrumentationPluginFactory`. Custom transport authors: see
-[Custom Transport](#custom-transport).
+- [Concepts and use cases](src/documents/CONCEPTS.md): the replay model, best practices, and patterns.
+- [Batch early completion](src/documents/BATCH_COMPLETION.md)
+- [Logging](src/documents/LOGGING.md)
+- [Instrumentation plugins](src/documents/PLUGINS.md), including the SDK 3.x plugin migration.
+- [Custom transport](src/documents/CUSTOM_TRANSPORT.md)
+- [Runtime requirements](src/documents/RUNTIME_REQUIREMENTS.md)
+- [Running on Lambda Managed Instances](src/documents/LAMBDA_MANAGED_INSTANCES.md)
+- [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md)
+- [Examples](../aws-durable-execution-sdk-js-examples/src/examples)
+- [Testing SDK](../aws-durable-execution-sdk-js-testing): run durable functions in tests.
+- [API reference](https://docs.aws.amazon.com/durable-execution/)
+- [Source](src) and the TSDoc comments in [`src/types/durable-context.ts`](src/types/durable-context.ts).
+- [Contributing](../../CONTRIBUTING.md)
 
 ## License
 
 This project is licensed under the Apache-2.0 License.
-
-## SDK 3.x plugin migration
-
-See the [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md) for
-package versions, before/after examples, provider packaging, and validation.
-
-SDK 3.x requires an explicit migration from the legacy v1 provider contract.
-Providers declaring `pluginApiVersion` are rejected with `PluginLoadError` in
-both `plugins` and `DURABLE_EXECUTION_PLUGINS` registration. They are not silently
-called with a different lifetime: v1 `createPlugin()` ran once per handler,
-whereas a 3.x factory's `createPlugin(info)` runs once per invocation.
-
-Replace legacy provider/instance registrations with a factory object:
-
-```typescript
-import { withDurableExecution, type InvocationInfo } from "@aws/durable-execution-sdk-js";
-
-const factory = {
-  createPlugin(info: InvocationInfo) {
-    return new MyPlugin(info);
-  },
-};
-const handler = withDurableExecution(myHandler, { plugins: [factory] });
-```
-
-Return a fresh plugin instance for each invocation. Keep intentionally shared
-resources, such as a tracer provider/exporter, outside the invocation instance;
-keep invocation-specific spans, operation maps and buffers inside it. Remove
-legacy `pluginApiVersion` and `pluginType` metadata after migrating the factory.
-Environment-loaded modules still export `durableExecutionPluginProvider`, whose
-value is now this factory shape. Upgrade bundled OTel layers together with core
-3.x and use their factory builders; an old 1.x layer is rejected rather than
-silently reinterpreted. Core 2.x's supported v1 providers are unaffected by this
-major-only policy.
