@@ -26,7 +26,7 @@ It checks the execution status, the operation history, and that every MicroVM en
 ```bash
 npm run build -w packages/aws-durable-execution-sdk-js \
   && npm run build -w packages/aws-durable-execution-sdk-js-extras \
-  && npm run build -w packages/aws-durable-execution-sdk-js-microvm-worker
+  && npm run build -w packages/aws-durable-execution-sdk-js-compute-worker
 cd packages/aws-durable-execution-sdk-js-extras
 AWS_REGION=us-east-1 node e2e/run-e2e.mjs
 ```
