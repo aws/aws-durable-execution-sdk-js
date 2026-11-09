@@ -45,6 +45,7 @@ describe("withDurableExecution Queue Completion", () => {
       durableExecutionArn: "test-arn",
 
       pendingCompletions: new Set(),
+      getRemainingTimeMs: (): number => Infinity,
     };
 
     (initializeExecutionContext as Mock).mockResolvedValue({

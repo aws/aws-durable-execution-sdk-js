@@ -5,7 +5,7 @@
  * SDK must stop its own work at the deadline: abort the signal of every running step, send no
  * further checkpoint, and start no further operation.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Context } from "aws-lambda";
 
 import { withDurableExecution } from "./with-durable-execution";
@@ -167,6 +167,45 @@ describe("invocation deadline", () => {
       Status: InvocationStatus.SUCCEEDED,
       Result: JSON.stringify("done"),
     });
+  });
+
+  it("keeps running when the timer fires but the context reports time left", async () => {
+    // Fake timers fire the deadline timer while the context, like the local test runner's,
+    // reports a constant remaining time.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { client } = recordingClient();
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const lambdaContext = {
+        awsRequestId: "request-1",
+        getRemainingTimeInMillis: () => 300_000,
+      } as unknown as Context;
+
+      const pending = invoke(
+        async (_event, context) => {
+          await context.step("gated", async () => {
+            await gate;
+          });
+          return "done";
+        },
+        lambdaContext,
+        client,
+        1_000_000,
+      );
+      await vi.advanceTimersByTimeAsync(400_000);
+      release();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(await pending).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: JSON.stringify("done"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not abort the signal after the invocation returned", async () => {

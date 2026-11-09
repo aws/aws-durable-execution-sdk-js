@@ -71,6 +71,7 @@ const executionContextFor = (
   },
   durableExecutionArn: executionArn,
   requestId: `req-for-${executionArn}`,
+  getRemainingTimeMs: (): number => Infinity,
   terminationManager: {
     getTerminationPromise: () => new Promise(() => {}),
     terminate: vi.fn(),
