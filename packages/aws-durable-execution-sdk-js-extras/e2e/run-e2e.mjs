@@ -785,7 +785,10 @@ const SCENARIOS = [
     // sends the second job at once. The endpoint answers 502 with
     // MICROVM_CONNECT_FAILED for about 5 seconds after a suspend, and the
     // request step retries until the service resumes the MicroVM. The
-    // function role has no lambda:ResumeMicrovm.
+    // first request can also arrive after those 5 seconds, because the job
+    // first waits for CreateMicrovmAuthToken. Then that request resumes the
+    // MicroVM and gets the 202. The function role has no
+    // lambda:ResumeMicrovm.
     id: "suspend-after-session",
     countRequests: true,
     event: {
@@ -809,13 +812,15 @@ const SCENARIOS = [
         result.recalled.resumeHooks >= 1,
         `resume hooks ${result.recalled.resumeHooks}`,
       );
-      // The recall job was sent right after the suspend. So its first
-      // request got no 2xx: a 502, or no answer when it arrived during the
-      // suspend hook. A later request resumed the MicroVM, and got the 202.
+      // Only the last recall request got a 2xx, and it was a 202. Each
+      // earlier request got a 502, or no answer when it arrived during the
+      // suspend hook. The count of earlier requests depends on how long
+      // CreateMicrovmAuthToken took, so the count can be zero.
       const recall = requests.filter((r) => r.path === "/recall");
+      const is2xx = (r) => r.status >= 200 && r.status < 300;
       assert(
-        recall.length >= 2 &&
-          !(recall[0].status >= 200 && recall[0].status < 300) &&
+        recall.length >= 1 &&
+          recall.slice(0, -1).every((r) => !is2xx(r)) &&
           recall.at(-1)?.status === 202,
         `recall requests ${JSON.stringify(recall)}`,
       );
