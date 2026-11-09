@@ -643,6 +643,9 @@ async function runHandler<
     // would abort the signal of leftover steps.
     clearTimeout(deadlineTimer);
     checkpointManager.dispose();
+    // dispose closes admission without the termination callback. So abort the
+    // signal here too: a step that the handler did not await can then stop.
+    terminated.abort();
   }
 }
 

@@ -1079,7 +1079,9 @@ export class CheckpointManager implements Checkpoint {
     // The invocation is already ending, and every reason this would schedule is a suspend
     // the termination manager would discard. Arming a cooldown timer for it only leaves a
     // timer pending past the invocation.
-    if (this.checkpointTokenRevoked) {
+    // After dispose, the invocation has ended. A timer armed now would call terminate()
+    // on it, for example when a checkpoint that was in flight at dispose completes.
+    if (this.checkpointTokenRevoked || this.disposed) {
       return;
     }
 

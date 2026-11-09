@@ -8,7 +8,13 @@ import {
 } from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationSubType, ExecutionContext, DurableLogger } from "../../types";
+import {
+  OperationSubType,
+  OperationLifecycleState,
+  ExecutionContext,
+  DurableLogger,
+} from "../../types";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointManager } from "./checkpoint-manager";
 import { CheckpointFunction } from "../../testing/mock-checkpoint";
@@ -307,6 +313,49 @@ describe("CheckpointManager", () => {
         expect.objectContaining({ Id: hashId("active-step") }),
       ]);
       expect(mockState.checkpoint.mock.calls[1][0].Updates).toEqual([]);
+    });
+
+    it("should not terminate after an in-flight checkpoint finishes after disposal", async () => {
+      vi.useFakeTimers();
+      try {
+        let finishCheckpoint!: (
+          value: CheckpointDurableExecutionResponse,
+        ) => void;
+        mockState.checkpoint.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishCheckpoint = resolve;
+            }),
+        );
+        // An awaited wait makes the manager eligible to terminate once its queue is idle.
+        checkpointHandler.markOperationState(
+          "wait-step",
+          OperationLifecycleState.IDLE_AWAITED,
+          {
+            metadata: {
+              stepId: "wait-step",
+              type: OperationType.WAIT,
+              subType: OperationSubType.WAIT,
+            },
+          },
+        );
+        void checkpointHandler.checkpoint("in-flight-step", {});
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+
+        checkpointHandler.dispose();
+        finishCheckpoint({
+          CheckpointToken: mockNewTaskToken,
+          NewExecutionState: undefined,
+        });
+        await vi.advanceTimersByTimeAsync(
+          CHECKPOINT_TERMINATION_COOLDOWN_MS * 2,
+        );
+
+        expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
