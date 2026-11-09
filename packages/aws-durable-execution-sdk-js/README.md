@@ -498,6 +498,9 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
+// Without a timeout, Node.js fetch waits up to 300 seconds for a response.
+const REQUEST_TIMEOUT_MS = 10_000;
+
 class HttpDurableExecutionClient implements DurableExecutionClient {
   constructor(private readonly endpoint: string) {}
 
@@ -506,6 +509,7 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await fetch(`${this.endpoint}/state`, {
       method: "POST",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
     });
@@ -525,6 +529,7 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
   ): Promise<CheckpointDurableExecutionResponse> {
     const response = await fetch(`${this.endpoint}/checkpoint`, {
       method: "POST",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
     });
@@ -563,6 +568,11 @@ Without a stated scope, every failure is treated as transient, so a permanent on
 until the execution times out. Note that a stated scope is believed ahead of the SDK's own
 error inspection, so a transport that wraps another one takes over responsibility for
 classifying the errors it wraps.
+
+Set a timeout on every `getExecutionState` and `checkpoint` request, as the example does. On
+[Lambda Managed Instances](#running-on-lambda-managed-instances), the execution environment
+keeps running after the invocation ends. So a request without a timeout keeps its socket and
+timers open after the invocation's deadline.
 
 To keep the Lambda transport but configure the underlying client yourself, pass it to
 `DurableExecutionApiClient` rather than using the deprecated `client` option:
@@ -707,6 +717,52 @@ Performance is a separate question from support. Durable executions replay, and 
 with the number of completed operations, so a runtime without a JIT can be slower overall for
 workflows with large operation counts or compute-heavy steps — even where it starts faster.
 Measure your own workload before switching.
+
+## Running on Lambda Managed Instances
+
+On [Lambda Managed Instances](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-execution-environment.html)
+(LMI), the execution environment does not freeze between invocations. An invocation timeout
+does not stop the code that is running. One Node.js worker runs several invocations at the same
+time, and they share module-level state
+([LMI Node.js runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-nodejs-runtime.html)).
+So code from an ended invocation can keep running next to a later invocation, or next to a
+retry of the same execution.
+
+The SDK does not stop that code. So follow these rules in a durable function:
+
+1. Keep each step much shorter than the function timeout. The SDK does not check the deadline
+   when an operation starts. So when the deadline passes during a step, the step finishes and
+   the SDK starts the next operation. Split long work into several steps.
+2. Give every I/O call in a step a timeout that is shorter than the time left in the
+   invocation. A step that cannot wait forever cannot outlive its invocation by much.
+
+   ```typescript
+   await context.step("load", async () => {
+     const remaining = context.lambdaContext.getRemainingTimeInMillis();
+     const timeout = Math.max(0, remaining - 1000);
+     return s3.send(new GetObjectCommand(input), {
+       abortSignal: AbortSignal.timeout(timeout),
+     });
+   });
+   ```
+
+3. Make every step idempotent. Derive the idempotency key from the execution and the step, not
+   from the time. A step already runs at least once. On LMI, an old invocation can also run the
+   same step at the same time as its retry.
+4. After `context.promise.race`, or after a `map` or `parallel` that
+   [completes early](#early-completion), the remaining branches keep running. Use early
+   completion only when those branches have no side effects, or side effects that are safe to
+   repeat.
+5. Do not use `finally` around a durable operation for cleanup. When the invocation suspends,
+   the code after the `await` never runs, so the `finally` block never runs.
+6. Keep no per-invocation state in module-level variables. Concurrent invocations in one worker
+   share them.
+7. Avoid long synchronous CPU work. It blocks every invocation in the worker, and nothing can
+   interrupt it.
+
+Plugin authors: see the remarks on `DurableInstrumentationPlugin` and
+`DurableInstrumentationPluginFactory`. Custom transport authors: see
+[Custom Transport](#custom-transport).
 
 ## License
 
