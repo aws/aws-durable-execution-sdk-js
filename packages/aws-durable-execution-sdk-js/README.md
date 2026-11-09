@@ -240,7 +240,7 @@ The batch checks its rule each time an item's result reaches it. Once the rule i
 
 - An item that is running is reported as `STARTED`. It is not counted in `successCount` or `failureCount`.
 - An item that had not started, because of `maxConcurrency`, does not appear in `all`.
-- The batch does not wait for abandoned items and does not stop them. Once the batch's context finishes, the item's checkpoints are dropped. An abandoned item stops only when it awaits a dropped checkpoint. Until then its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
+- The batch does not wait for abandoned items and does not stop them by force. When the batch's context finishes, the SDK aborts the `ctx.signal` of every step that still runs. A step that passes its signal to its I/O calls can then stop. Once the batch's context finishes, the item's checkpoints are dropped. An abandoned item stops only when it awaits a dropped checkpoint. Until then its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
   - A step whose function is running keeps running while the invocation is active. It is not guaranteed to finish. If it finishes after the batch's context, its result is not recorded.
   - A new `step` with the default `StepSemantics.AtLeastOncePerRetry` runs its function once, and the history has no record of it. A new `waitForCondition` runs its check function once. The item then stops.
   - `runInChildContext` does not await its own checkpoints. So its function runs, and the operations inside it follow these rules.
@@ -728,20 +728,22 @@ time, and they share module-level state
 So code from an ended invocation can keep running next to a later invocation, or next to a
 retry of the same execution.
 
-The SDK does not stop that code. So follow these rules in a durable function:
+The SDK never stops that code by force. A step can stop itself when the SDK aborts its
+`ctx.signal`. So follow these rules in a durable function:
 
 1. Keep each step much shorter than the function timeout. The SDK does not check the deadline
    when an operation starts. So when the deadline passes during a step, the step finishes and
    the SDK starts the next operation. Split long work into several steps.
 2. Give every I/O call in a step a timeout that is shorter than the time left in the
-   invocation. A step that cannot wait forever cannot outlive its invocation by much.
+   invocation. A step that cannot wait forever cannot outlive its invocation by much. The SDK
+   does not abort `ctx.signal` at the deadline. So combine the two signals:
 
    ```typescript
-   await context.step("load", async () => {
+   await context.step("load", async (ctx) => {
      const remaining = context.lambdaContext.getRemainingTimeInMillis();
      const timeout = Math.max(0, remaining - 1000);
      return s3.send(new GetObjectCommand(input), {
-       abortSignal: AbortSignal.timeout(timeout),
+       abortSignal: AbortSignal.any([ctx.signal, AbortSignal.timeout(timeout)]),
      });
    });
    ```
@@ -749,15 +751,18 @@ The SDK does not stop that code. So follow these rules in a durable function:
 3. Make every step idempotent. Derive the idempotency key from the execution and the step, not
    from the time. A step already runs at least once. On LMI, an old invocation can also run the
    same step at the same time as its retry.
-4. After `context.promise.race`, or after a `map` or `parallel` that
-   [completes early](#early-completion), the remaining branches keep running. Use early
-   completion only when those branches have no side effects, or side effects that are safe to
-   repeat.
-5. Do not use `finally` around a durable operation for cleanup. When the invocation suspends,
+4. Pass `ctx.signal` to every I/O call in a step that runs inside a `map` or `parallel`. When
+   the batch [completes early](#early-completion), the SDK aborts the signal of every step that
+   still runs. So those steps can stop.
+5. After `context.promise.race`, the remaining branches keep running, and the SDK does not
+   abort their signals. A step that ignores its signal also keeps running. So use
+   `promise.race` or such a step only when its leftover work has no side effects, or side
+   effects that are safe to repeat.
+6. Do not use `finally` around a durable operation for cleanup. When the invocation suspends,
    the code after the `await` never runs, so the `finally` block never runs.
-6. Keep no per-invocation state in module-level variables. Concurrent invocations in one worker
+7. Keep no per-invocation state in module-level variables. Concurrent invocations in one worker
    share them.
-7. Avoid long synchronous CPU work. It blocks every invocation in the worker, and nothing can
+8. Avoid long synchronous CPU work. It blocks every invocation in the worker, and nothing can
    interrupt it.
 
 Plugin authors: see the remarks on `DurableInstrumentationPlugin` and
