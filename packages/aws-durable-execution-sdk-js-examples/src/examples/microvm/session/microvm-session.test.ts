@@ -60,11 +60,14 @@ createTests({
 
       await expectMicrovmTerminated(result.sessionMicrovmId);
 
+      // The number of invocations depends on how fast each job finishes.
       // A job can finish before the invocation that waits for it ends. The
-      // invocation then continues, and the execution has one invocation
-      // fewer.
+      // invocation then continues, so the execution has one invocation
+      // fewer. A slow job makes the invocation suspend, so the execution has
+      // one invocation more. Each of the two jobs can go either way. So the
+      // count can differ from the history by up to 2.
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
+        invocationCompletedDifference: 2,
       });
     }, 240_000);
   },
