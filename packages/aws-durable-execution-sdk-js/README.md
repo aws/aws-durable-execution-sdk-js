@@ -240,7 +240,11 @@ The batch checks its rule each time an item's result reaches it. Once the rule i
 
 - An item that is running is reported as `STARTED`. It is not counted in `successCount` or `failureCount`.
 - An item that had not started, because of `maxConcurrency`, does not appear in `all`.
-- The batch does not wait for abandoned items and does not stop them by force. When the batch's context finishes, the SDK aborts the `ctx.signal` of every step that still runs. A step that passes its signal to its I/O calls can then stop. Once the batch's context finishes, the item's checkpoints are dropped. An abandoned item stops only when it awaits a dropped checkpoint. Until then its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
+- The batch does not wait for abandoned items and does not stop them by force. When the batch's context finishes, an abandoned item can stop in two ways:
+  - **Cooperative abort.** The SDK aborts the `ctx.signal` of the item's steps. A step that passes its signal to its I/O calls, or checks it in its loops, stops when the signal aborts. With `NestingType.FLAT`, the item's steps share the signal of the batch's context, and the SDK aborts that signal too.
+  - **Dropped checkpoint.** The SDK drops the item's checkpoints. Code that ignores the signal stops only when it awaits a dropped checkpoint.
+
+  Until the item stops, its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
   - A step whose function is running keeps running while the invocation is active. It is not guaranteed to finish. If it finishes after the batch's context, its result is not recorded.
   - A new `step` with the default `StepSemantics.AtLeastOncePerRetry` runs its function once, and the history has no record of it. A new `waitForCondition` runs its check function once. The item then stops.
   - `runInChildContext` does not await its own checkpoints. So its function runs, and the operations inside it follow these rules.
@@ -742,9 +746,12 @@ The SDK never stops that code by force. A step can stop itself when the SDK abor
    await context.step("load", async (ctx) => {
      const remaining = context.lambdaContext.getRemainingTimeInMillis();
      const timeout = Math.max(0, remaining - 1000);
-     return s3.send(new GetObjectCommand(input), {
-       abortSignal: AbortSignal.any([ctx.signal, AbortSignal.timeout(timeout)]),
+     const res = await fetch(url, {
+       signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(timeout)]),
      });
+     // Read the body inside the step. The signal also covers the body read,
+     // and the step returns plain data that the SDK can checkpoint.
+     return res.json();
    });
    ```
 
