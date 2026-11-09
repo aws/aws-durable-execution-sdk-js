@@ -1,7 +1,7 @@
-import { StepFunc, StepConfig } from "./step";
-import { CreateCallbackConfig, CreateCallbackResult } from "./callback";
+import type { StepFunc, StepConfig } from "./step";
+import type { CreateCallbackConfig, CreateCallbackResult } from "./callback";
 import { DurablePromise } from "./durable-promise";
-import { DurableLogger } from "./durable-logger";
+import type { DurableLogger } from "./durable-logger";
 
 /**
  * Internal context extension, implemented by `DurableContextImpl`, not part

@@ -1,34 +1,34 @@
 import {
-  ExecutionContext,
-  DurableContext,
-  StepFunc,
-  StepConfig,
-  ChildFunc,
-  ChildConfig,
-  CreateCallbackConfig,
-  CreateCallbackResult,
-  WaitForCallbackSubmitterFunc,
-  WaitForCallbackConfig,
-  WaitForConditionCheckFunc,
-  WaitForConditionConfig,
-  MapFunc,
-  MapConfig,
-  Duration,
-  ParallelFunc,
-  ParallelConfig,
-  NamedParallelBranch,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  ConcurrencyConfig,
-  LoggerConfig,
-  InvokeConfig,
+  type ExecutionContext,
+  type DurableContext,
+  type StepFunc,
+  type StepConfig,
+  type ChildFunc,
+  type ChildConfig,
+  type CreateCallbackConfig,
+  type CreateCallbackResult,
+  type WaitForCallbackSubmitterFunc,
+  type WaitForCallbackConfig,
+  type WaitForConditionCheckFunc,
+  type WaitForConditionConfig,
+  type MapFunc,
+  type MapConfig,
+  type Duration,
+  type ParallelFunc,
+  type ParallelConfig,
+  type NamedParallelBranch,
+  type ConcurrentExecutionItem,
+  type ConcurrentExecutor,
+  type ConcurrencyConfig,
+  type LoggerConfig,
+  type InvokeConfig,
   DurableExecutionMode,
-  BatchResult,
+  type BatchResult,
   DurablePromise,
-  DurableLogData,
+  type DurableLogData,
 } from "../../types";
-import { InternalDurableContext } from "../../types/internal-context";
-import { Context } from "aws-lambda";
+import type { InternalDurableContext } from "../../types/internal-context";
+import type { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
@@ -52,19 +52,19 @@ import {
   getActiveContext,
   validateContextUsage,
 } from "../../utils/context-tracker/context-tracker";
-import {
+import type {
   DurableContextLogger,
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import {
-  SerdesConfig,
+  type SerdesConfig,
   defaultSerdes,
-  AnySerdes,
-  AnySerdesDeserializer,
+  type AnySerdes,
+  type AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
@@ -82,13 +82,13 @@ export class DurableContextImpl<Logger extends DurableLogger>
 {
   readonly [DURABLE_CONTEXT_BRAND] = true;
 
-  private _stepPrefix?: string;
+  private _stepPrefix?: string | undefined;
   private _stepCounter: number = 0;
   private durableLogger: Logger;
   private modeAwareLoggingEnabled: boolean = true;
   private checkpoint: CheckpointManager;
   private durableExecutionMode: DurableExecutionMode;
-  private _parentId?: string;
+  private _parentId?: string | undefined;
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
 
@@ -559,7 +559,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.durableExecution.plugin,
       );
       return typeof nameOrDuration === "string"
-        ? waitHandler(nameOrDuration, maybeDuration!)
+        ? // biome-ignore lint/style/noNonNullAssertion: the (name, duration) overload requires a duration.
+          waitHandler(nameOrDuration, maybeDuration!)
         : waitHandler(nameOrDuration);
     });
   }
@@ -677,6 +678,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
           : undefined,
       );
       return waitForCallbackHandler(
+        // biome-ignore lint/style/noNonNullAssertion: the overloads require a name or a submitter.
         nameOrSubmitter!,
         submitterOrConfig,
         maybeConfig,
@@ -712,6 +714,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         ? waitForConditionHandler(
             nameOrCheckFunc,
             checkFuncOrConfig as WaitForConditionCheckFunc<T, Logger>,
+            // biome-ignore lint/style/noNonNullAssertion: the (name, check, config) overload requires a config.
             maybeConfig!,
           )
         : waitForConditionHandler(

@@ -1,4 +1,4 @@
-import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * Log data passed to the durable logger when `getDurableLogData` is called.
@@ -7,10 +7,10 @@ import { DurableContextLogger, DurableLogger } from "./durable-logger";
 export interface DurableLogData {
   requestId: string;
   executionArn: string;
-  tenantId?: string;
-  operationId?: string;
-  operationName?: string;
-  attempt?: number;
+  tenantId?: string | undefined;
+  operationId?: string | undefined;
+  operationName?: string | undefined;
+  attempt?: number | undefined;
   // We aren't attaching any additional properties, but this is
   // added for type-compatibility with popular loggers like powertools
   [key: string]: unknown;
@@ -50,7 +50,9 @@ export interface LoggerConfig<Logger extends DurableLogger> {
  * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
  * @public
  */
-export interface OperationContext<Logger extends DurableLogger> {
+export interface OperationContext<
+  Logger extends DurableContextLogger<DurableLogger>,
+> {
   logger: Logger; // Basic durable logger which will be parsed by the enriched durable logger
 }
 

@@ -13,9 +13,9 @@ Cons:
 
 import { EventEmitter } from "events";
 import {
-  TerminationOptions,
-  TerminationDetails,
-  TerminationResponse,
+  type TerminationOptions,
+  type TerminationDetails,
+  type TerminationResponse,
   TerminationReason,
 } from "./types";
 
@@ -24,7 +24,7 @@ export class TerminationManager extends EventEmitter {
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
-  private setCheckpointTerminating?: () => void;
+  private setCheckpointTerminating?: (() => void) | undefined;
 
   constructor(setCheckpointTerminating?: () => void) {
     super();
@@ -55,7 +55,8 @@ export class TerminationManager extends EventEmitter {
 
     // Instead of emitting an event, resolve the promise
     if (this.resolveTermination) {
-      this.handleTermination(this.terminationDetails).then(
+      // handleTermination does not reject.
+      void this.handleTermination(this.terminationDetails).then(
         this.resolveTermination,
       );
     }

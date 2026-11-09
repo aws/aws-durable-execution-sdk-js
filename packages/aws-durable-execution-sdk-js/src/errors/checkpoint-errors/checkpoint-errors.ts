@@ -10,6 +10,7 @@ import {
  * This will terminate the current Lambda invocation, but the execution can continue with a new invocation
  */
 export class CheckpointUnrecoverableInvocationError extends UnrecoverableInvocationError {
+  override name = "CheckpointUnrecoverableInvocationError";
   readonly terminationReason = TerminationReason.CHECKPOINT_FAILED;
 
   constructor(message?: string, originalError?: Error) {
@@ -23,6 +24,7 @@ export class CheckpointUnrecoverableInvocationError extends UnrecoverableInvocat
  * This will terminate the entire execution and cannot be recovered
  */
 export class CheckpointUnrecoverableExecutionError extends UnrecoverableExecutionError {
+  override name = "CheckpointUnrecoverableExecutionError";
   readonly terminationReason = TerminationReason.CHECKPOINT_FAILED;
 
   constructor(message?: string, originalError?: Error) {

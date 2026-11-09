@@ -1,22 +1,22 @@
 import {
-  ExecutionContext,
-  ChildFunc,
-  ChildConfig,
+  type ExecutionContext,
+  type ChildFunc,
+  type ChildConfig,
   OperationSubType,
   DurableExecutionMode,
-  DurableContext,
+  type DurableContext,
   OperationLifecycleState,
 } from "../../types";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -29,10 +29,10 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
 import {
-  DurableInstrumentationPlugin,
+  type DurableInstrumentationPlugin,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {
@@ -186,6 +186,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       if (phase1Error !== undefined) {
         throw phase1Error;
       }
+      // biome-ignore lint/style/noNonNullAssertion: phase 1 has settled without an error, so it set the result.
       return phase1Result!;
     });
   };
@@ -360,7 +361,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
+    // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+    void checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -439,11 +441,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
     };
+    const wrapChildContextFn = plugin.wrapChildContextFn;
     const result = (await runWithContext(
       entityId,
       parentId,
-      plugin.wrapChildContextFn
-        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
+      wrapChildContextFn
+        ? () => wrapChildContextFn.call(plugin, wrapInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,
@@ -523,7 +526,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // checkpoint through during serialization.
     if (!isVirtual) {
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -598,7 +602,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.FAIL,

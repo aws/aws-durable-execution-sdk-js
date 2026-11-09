@@ -1,20 +1,20 @@
 import {
-  ExecutionContext,
-  DurableContext,
+  type ExecutionContext,
+  type DurableContext,
   BatchItemStatus,
   DurableExecutionMode,
-  ConcurrencyConfig,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  BatchResult,
-  BatchItem,
-  CompletionReason,
-  CompletionStatus,
-  CompletionItemStatus,
-  CompletionConfig,
+  type ConcurrencyConfig,
+  type ConcurrentExecutionItem,
+  type ConcurrentExecutor,
+  type BatchResult,
+  type BatchItem,
+  type CompletionReason,
+  type CompletionStatus,
+  type CompletionItemStatus,
+  type CompletionConfig,
   CompletionOutcome,
   DurablePromise,
-  DurableLogger,
+  type DurableLogger,
   NestingType,
 } from "../../types";
 import { OperationStatus } from "../../types/wire";
@@ -24,7 +24,7 @@ import {
   restoreBatchResult,
   createBatchResultSerdes,
 } from "./batch-result";
-import { AnySerdes } from "../../utils/serdes/serdes";
+import type { AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -878,7 +878,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           (reconciling() ? currentIndex <= lastRecorded : shouldContinue())
         ) {
           const index = currentIndex++;
-          const item = items[index];
+          // The loop runs only while currentIndex < items.length.
+          const item = items[index] as ConcurrentExecutionItem<T>;
 
           // A gap item has no terminal record, so it was still running when
           // the earlier invocation ended. Once the outcome is already known,
@@ -986,8 +987,9 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           // Create shallow copy to prevent mutations from affecting the returned result
           const finalBatchItems: BatchItem<R>[] = [];
           for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
+            const item = resultItems[i];
+            if (item !== undefined) {
+              finalBatchItems.push({ ...item });
             }
           }
 

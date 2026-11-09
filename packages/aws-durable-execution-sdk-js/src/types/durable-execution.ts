@@ -2,20 +2,20 @@
 // signature so callers can inject a configured client. Importing it as a type keeps
 // `@aws-sdk/client-lambda` out of the runtime graph for this module.
 import type { LambdaClient } from "@aws-sdk/client-lambda";
-import {
+import type {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
 } from "./wire";
-import { DurableContext } from "./durable-context";
-import { DurableLogger } from "./durable-logger";
-import { Context } from "aws-lambda";
-import {
+import type { DurableContext } from "./durable-context";
+import type { DurableLogger } from "./durable-logger";
+import type { Context } from "aws-lambda";
+import type {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
 } from "./core";
-import { DurableInstrumentationPluginFactory } from "./plugin";
+import type { DurableInstrumentationPluginFactory } from "./plugin";
 
 /**
  * A handler function type for a durable execution that provides automatic state persistence,

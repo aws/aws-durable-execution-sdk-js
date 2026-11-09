@@ -1,10 +1,10 @@
 import {
-  ExecutionContext,
-  WaitForConditionCheckFunc,
-  WaitForConditionConfig,
-  WaitForConditionDecision,
+  type ExecutionContext,
+  type WaitForConditionCheckFunc,
+  type WaitForConditionConfig,
+  type WaitForConditionDecision,
   OperationSubType,
-  WaitForConditionContext,
+  type WaitForConditionContext,
   DurablePromise,
   DurableExecutionMode,
   OperationLifecycleState,
@@ -16,9 +16,9 @@ import {
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -29,9 +29,9 @@ import {
   DurableOperationError,
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import {
-  DurableInstrumentationPlugin,
+  type DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
   PluginOperationStatus,
 } from "../../types/plugin";
@@ -233,7 +233,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         // Checkpoint START if not already started
         if (stepData?.Status !== OperationStatus.STARTED) {
           const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
-          checkpoint.checkpoint(stepId, {
+          // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+          void checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.START,
@@ -267,11 +268,13 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
           await plugin.onOperationAttemptStart?.(attemptInfo);
 
+          const wrapOperationAttemptFn = plugin.wrapOperationAttemptFn;
           const newState: T = (await runWithContext(
             stepId,
             parentId,
-            plugin.wrapOperationAttemptFn
-              ? () => plugin.wrapOperationAttemptFn!(attemptInfo, checkFunc)
+            wrapOperationAttemptFn
+              ? () =>
+                  wrapOperationAttemptFn.call(plugin, attemptInfo, checkFunc)
               : checkFunc,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,

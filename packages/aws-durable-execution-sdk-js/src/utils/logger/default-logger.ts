@@ -1,7 +1,7 @@
 import { Console } from "node:console";
-import { DurableLogLevel, DurableLogData } from "../../types";
+import { DurableLogLevel, type DurableLogData } from "../../types";
 import util from "node:util";
-import {
+import type {
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";

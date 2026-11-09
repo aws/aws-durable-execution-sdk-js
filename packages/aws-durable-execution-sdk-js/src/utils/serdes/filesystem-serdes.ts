@@ -1,14 +1,16 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { SerdesContext, AnySerdes } from "./serdes";
+import type { SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 export {
   FieldMatchMode,
   PreviewMode,
+  buildPreview,
+} from "./preview";
+export type {
   PreviewField,
   PreviewConfig,
-  buildPreview,
 } from "./preview";
 
 // Subtract 1KB headroom for the envelope wrapper and other checkpoint metadata
@@ -162,10 +164,11 @@ function parseDurableExecutionArn(
 ): DurableExecutionArnParts | undefined {
   const match = DURABLE_EXECUTION_ARN_PATTERN.exec(arn);
   if (!match) return undefined;
+  // The pattern has three required groups, so a match sets all three.
   return {
-    functionName: match[1],
-    executionName: match[2],
-    invocationId: match[3],
+    functionName: match[1] as string,
+    executionName: match[2] as string,
+    invocationId: match[3] as string,
   };
 }
 
@@ -203,7 +206,7 @@ function resolveExecutionDir(
 
 async function writeToFile(
   basePath: string,
-  value: any,
+  value: unknown,
   context: SerdesContext,
   pathEncoding: FileSystemPathEncoding,
 ): Promise<string> {
@@ -286,7 +289,7 @@ export function createFileSystemSerdes(
   const pathEncoding = config.pathEncoding ?? FileSystemPathEncoding.URI;
   return {
     serialize: async (
-      value: any,
+      value: unknown,
       context: SerdesContext,
     ): Promise<string | undefined> => {
       if (value === undefined) return undefined;
@@ -329,7 +332,7 @@ export function createFileSystemSerdes(
     deserialize: async (
       data: string | undefined,
       _context: SerdesContext,
-    ): Promise<any> => {
+    ): Promise<unknown> => {
       if (data === undefined) return undefined;
 
       const envelope = JSON.parse(data) as FileSystemEnvelope;
