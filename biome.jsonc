@@ -645,6 +645,7 @@
       "includes": [
         "packages/aws-durable-execution-sdk-js/src/**/*.ts",
         "!packages/aws-durable-execution-sdk-js/src/**/*.test.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/*.test-d.ts",
         "!packages/aws-durable-execution-sdk-js/src/**/__tests__/**",
         "!packages/aws-durable-execution-sdk-js/src/testing/**"
       ],
@@ -658,7 +659,14 @@
     {
       // Parity with the old per-package configs, which turned `no-explicit-any` off in
       // test files. Return types on test callbacks are noise for the same reason.
-      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mts"],
+      // Type tests (`*.test-d.ts`) check inferred types, so an explicit return type
+      // there would hide what they test.
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.mts",
+        "**/*.test-d.ts"
+      ],
       "linter": {
         "rules": {
           "suspicious": { "noExplicitAny": "off" },

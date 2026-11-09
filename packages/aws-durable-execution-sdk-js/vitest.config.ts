@@ -18,6 +18,7 @@ export default defineConfig({
         "**/dist/**",
         "src/**/*.test.ts",
         "src/**/*.spec.ts",
+        "src/**/*.test-d.ts",
         "src/**/__tests__/**",
         "src/scripts/**",
         "src/demo/**",
