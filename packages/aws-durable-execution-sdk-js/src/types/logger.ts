@@ -70,6 +70,39 @@ export interface StepContext<Logger extends DurableLogger>
    * fallback path once earlier attempts have failed.
    */
   attempt: number;
+
+  /**
+   * Aborted when the SDK drops the result of this step.
+   *
+   * The SDK aborts this signal in two cases only:
+   *
+   * 1. The SDK terminates the invocation, for example to suspend for a wait or
+   *    to fail after a checkpoint error.
+   * 2. A child context that contains this step returns before the step ends.
+   *    For example, a `map` or `parallel` call returns early because its
+   *    `completionConfig` is met, while some items still run.
+   *
+   * Returning or throwing from the handler does not abort this signal. So a
+   * step that the handler did not await keeps a live signal after the
+   * handler ends.
+   *
+   * In both cases the SDK drops the result of the step. But the step function
+   * keeps running until it returns. So pass this signal to `fetch`, to AWS SDK
+   * calls (`client.send(command, { abortSignal })`) and to your own loops to
+   * stop work that nobody uses.
+   *
+   * The SDK never aborts a step by force. A step that ignores the signal
+   * behaves as before.
+   *
+   * @example
+   * ```ts
+   * await context.step("fetch-quote", async (ctx) => {
+   *   const res = await fetch(url, { signal: ctx.signal });
+   *   return res.json();
+   * });
+   * ```
+   */
+  signal: AbortSignal;
 }
 
 /**

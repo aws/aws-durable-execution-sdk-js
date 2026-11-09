@@ -180,6 +180,7 @@ describe("Run In Child Context Handler", () => {
         TEST_CONSTANTS.CHILD_CONTEXT_ID, // stepPrefix (entityId)
         undefined, // checkpointToken
         parentId, // parentId should be inherited from parent
+        expect.any(AbortSignal), // aborted when this context finishes
       );
     });
 
@@ -216,6 +217,7 @@ describe("Run In Child Context Handler", () => {
         TEST_CONSTANTS.CHILD_CONTEXT_ID, // stepPrefix (entityId)
         undefined, // checkpointToken
         TEST_CONSTANTS.CHILD_CONTEXT_ID, // parentId should be entityId for normal context
+        expect.any(AbortSignal), // aborted when this context finishes
       );
     });
 
