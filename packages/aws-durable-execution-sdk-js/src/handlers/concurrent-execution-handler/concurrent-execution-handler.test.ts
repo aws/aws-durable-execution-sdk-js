@@ -1,4 +1,13 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+} from "vitest";
+import {
   createConcurrentExecutionHandler,
   ConcurrencyController,
 } from "./concurrent-execution-handler";
@@ -11,6 +20,7 @@ import {
   completeBatch,
   continueBatch,
   CompletionOutcome,
+  ConcurrentExecutor,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 import {
@@ -19,8 +29,8 @@ import {
 } from "../../errors/durable-error/durable-error";
 
 describe("Concurrent Execution Handler", () => {
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockRunInChildContext: jest.MockedFunction<
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockRunInChildContext: MockedFunction<
     DurableContext<DurableLogger>["runInChildContext"]
   >;
   let concurrentExecutionHandler: ReturnType<
@@ -28,8 +38,8 @@ describe("Concurrent Execution Handler", () => {
   >;
 
   beforeEach(() => {
-    mockExecutionContext = {} as jest.Mocked<ExecutionContext>;
-    mockRunInChildContext = jest.fn();
+    mockExecutionContext = {} as Mocked<ExecutionContext>;
+    mockRunInChildContext = vi.fn() as typeof mockRunInChildContext;
     concurrentExecutionHandler = createConcurrentExecutionHandler(
       mockExecutionContext,
       mockRunInChildContext,
@@ -39,7 +49,7 @@ describe("Concurrent Execution Handler", () => {
   describe("BatchResult restoration", () => {
     it("should automatically restore BatchResult methods when result comes from deserialized data", async () => {
       const items = [{ id: "item-0", data: "test", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("result");
+      const executor = vi.fn().mockResolvedValue("result");
 
       // Simulate deserialized BatchResult data (plain object without methods)
       const deserializedBatchResultData = {
@@ -68,7 +78,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should return result as BatchResult when result is not a plain object with all array", async () => {
       const items = [{ id: "item-0", data: "test", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("result");
+      const executor = vi.fn().mockResolvedValue("result");
 
       // Mock runInChildContext to return a non-BatchResult object (covers line 307)
       const nonBatchResult = { someProperty: "value" };
@@ -84,7 +94,7 @@ describe("Concurrent Execution Handler", () => {
   describe("validation", () => {
     it("should throw for non-array items", async () => {
       await expect(
-        concurrentExecutionHandler("not-array" as any, jest.fn()),
+        concurrentExecutionHandler("not-array" as any, vi.fn()),
       ).rejects.toThrow("Concurrent execution requires an array of items");
     });
 
@@ -95,12 +105,12 @@ describe("Concurrent Execution Handler", () => {
     });
 
     it("should terminate execution for invalid maxConcurrency", async () => {
-      const terminate = jest.fn();
+      const terminate = vi.fn();
       (mockExecutionContext as any).terminationManager = { terminate };
 
       // The returned promise never resolves (execution is terminated), so we
       // don't await it -- just assert the termination was requested.
-      void concurrentExecutionHandler([], jest.fn(), { maxConcurrency: 0 });
+      void concurrentExecutionHandler([], vi.fn(), { maxConcurrency: 0 });
       await Promise.resolve();
 
       expect(terminate).toHaveBeenCalledWith(
@@ -111,7 +121,7 @@ describe("Concurrent Execution Handler", () => {
       );
 
       terminate.mockClear();
-      void concurrentExecutionHandler([], jest.fn(), { maxConcurrency: -1 });
+      void concurrentExecutionHandler([], vi.fn(), { maxConcurrency: -1 });
       await Promise.resolve();
 
       expect(terminate).toHaveBeenCalledWith(
@@ -123,7 +133,7 @@ describe("Concurrent Execution Handler", () => {
     });
 
     it("should terminate execution when shouldComplete is combined with threshold fields", async () => {
-      const terminate = jest.fn();
+      const terminate = vi.fn();
       (mockExecutionContext as any).terminationManager = { terminate };
 
       // Cast bypasses the compile-time union to exercise the runtime guard.
@@ -131,7 +141,7 @@ describe("Concurrent Execution Handler", () => {
       // don't await it — just assert the termination was requested.
       void concurrentExecutionHandler(
         [{ id: "item-0", data: "data1", index: 0 }],
-        jest.fn(),
+        vi.fn<ConcurrentExecutor<string, unknown, DurableLogger>>(),
         {
           completionConfig: {
             minSuccessful: 1,
@@ -155,7 +165,7 @@ describe("Concurrent Execution Handler", () => {
   describe("parameter parsing", () => {
     it("should handle name parameter", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockRunInChildContext.mockResolvedValue(
         new MockBatchResult([
@@ -174,7 +184,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should handle undefined name", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockRunInChildContext.mockResolvedValue(
         new MockBatchResult([
@@ -193,7 +203,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should handle config with subTypes", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
       const config = {
         topLevelSubType: "TOP_TYPE",
         iterationSubType: "ITER_TYPE",
@@ -266,7 +276,7 @@ describe("Concurrent Execution Handler", () => {
         const result = await concurrentExecutionHandler(
           nameParam,
           [],
-          jest.fn(),
+          vi.fn(),
           config,
         );
 
@@ -299,7 +309,7 @@ describe("Concurrent Execution Handler", () => {
           return new DurablePromise(async () => {
             if (typeof actualFn === "function") {
               const mockDurableContext = {
-                runInChildContext: jest.fn(),
+                runInChildContext: vi.fn(),
                 durableExecutionMode: "ExecutionMode",
                 _stepPrefix: "test-step-prefix",
               } as any;
@@ -311,7 +321,7 @@ describe("Concurrent Execution Handler", () => {
         },
       );
 
-      const result = await concurrentExecutionHandler([], jest.fn());
+      const result = await concurrentExecutionHandler([], vi.fn());
 
       expect(actualExecuteOperation).toBeDefined();
       expect(result).toBeDefined();
@@ -324,7 +334,7 @@ describe("Concurrent Execution Handler", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
@@ -353,7 +363,7 @@ describe("Concurrent Execution Handler", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
@@ -379,7 +389,7 @@ describe("Concurrent Execution Handler", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
@@ -398,7 +408,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should create ConcurrencyController and execute", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("result");
+      const executor = vi.fn().mockResolvedValue("result");
 
       // Mock to return a simple result that covers the executeOperation path
       mockRunInChildContext.mockResolvedValue(
@@ -419,7 +429,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should handle empty items with ConcurrencyController", async () => {
       const items: any[] = [];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockRunInChildContext.mockResolvedValue(new MockBatchResult([]) as any);
 
@@ -431,7 +441,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should pass config to ConcurrencyController", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("result");
+      const executor = vi.fn().mockResolvedValue("result");
       const config = { maxConcurrency: 2 };
 
       mockRunInChildContext.mockResolvedValue(
@@ -447,7 +457,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should handle iterationSubType in config", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("result");
+      const executor = vi.fn().mockResolvedValue("result");
       const config = { iterationSubType: "ITERATION_TYPE" };
 
       mockRunInChildContext.mockResolvedValue(
@@ -463,7 +473,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should pass iterationSubType to runInChildContext when executing items", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
       const config = { iterationSubType: "CUSTOM_ITERATION_TYPE" };
 
       // Mock the executeOperation function to capture the actual execution
@@ -499,7 +509,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should execute the actual ConcurrencyController path", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("test-result");
+      const executor = vi.fn().mockResolvedValue("test-result");
       const config = { iterationSubType: "TEST_ITERATION_TYPE" };
 
       // Create a real execution context that will execute the actual path
@@ -518,7 +528,7 @@ describe("Concurrent Execution Handler", () => {
             // Execute the actual operation to cover the executeOperation function
             if (typeof actualFn === "function") {
               const mockDurableContext = {
-                runInChildContext: jest.fn().mockResolvedValue("test-result"),
+                runInChildContext: vi.fn().mockResolvedValue("test-result"),
               } as any;
 
               return await actualFn(mockDurableContext);
@@ -536,7 +546,7 @@ describe("Concurrent Execution Handler", () => {
 
     it("should handle undefined config in executeOperation", async () => {
       const items = [{ id: "item-0", data: "data", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("test-result");
+      const executor = vi.fn().mockResolvedValue("test-result");
 
       // Test with undefined config to cover the config || {} branch
       let actualExecuteOperation: any;
@@ -553,7 +563,7 @@ describe("Concurrent Execution Handler", () => {
           return new DurablePromise(async () => {
             if (typeof actualFn === "function") {
               const mockDurableContext = {
-                runInChildContext: jest.fn().mockResolvedValue("test-result"),
+                runInChildContext: vi.fn().mockResolvedValue("test-result"),
               } as any;
 
               return await actualFn(mockDurableContext);
@@ -577,12 +587,12 @@ describe("Concurrent Execution Handler", () => {
 
 describe("ConcurrencyController", () => {
   let controller: ConcurrencyController<DurableLogger>;
-  let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
+  let mockParentContext: Mocked<DurableContext<DurableLogger>>;
 
   beforeEach(() => {
     controller = new ConcurrencyController("test-operation");
     mockParentContext = {
-      runInChildContext: jest.fn(),
+      runInChildContext: vi.fn(),
     } as any;
   });
 
@@ -592,7 +602,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest
+      const executor = vi
         .fn()
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
@@ -619,7 +629,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
       const error = new ChildContextError("test error");
 
       mockParentContext.runInChildContext
@@ -644,7 +654,7 @@ describe("ConcurrencyController", () => {
         { id: "item-1", data: "data2", index: 1 },
         { id: "item-2", data: "data3", index: 2 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
       let activeCount = 0;
       let maxActive = 0;
 
@@ -675,7 +685,7 @@ describe("ConcurrencyController", () => {
         { id: "item-1", data: "data2", index: 1 },
         { id: "item-2", data: "data3", index: 2 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
@@ -704,7 +714,7 @@ describe("ConcurrencyController", () => {
           { id: "item-1", data: "data2", index: 1 },
           { id: "item-2", data: "data3", index: 2 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         mockParentContext.runInChildContext
           .mockResolvedValueOnce("result1")
@@ -735,7 +745,7 @@ describe("ConcurrencyController", () => {
           { id: "item-0", data: "data1", index: 0 },
           { id: "item-1", data: "data2", index: 1 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         // The item succeeds, but the predicate declares the batch failed
         // (e.g. a required quorum can no longer be met).
@@ -778,7 +788,7 @@ describe("ConcurrencyController", () => {
           { id: "item-0", data: "data1", index: 0 },
           { id: "item-1", data: "data2", index: 1 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         mockParentContext.runInChildContext
           .mockResolvedValueOnce("result1")
@@ -802,7 +812,7 @@ describe("ConcurrencyController", () => {
           { id: "item-0", data: "data1", index: 0 },
           { id: "item-1", data: "data2", index: 1 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         // Predicate signals completion at zero progress; no item should start.
         mockParentContext.runInChildContext.mockImplementation(
@@ -831,7 +841,7 @@ describe("ConcurrencyController", () => {
           { id: "branch-B", data: "b", index: 1 },
           { id: "branch-C", data: "c", index: 2 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         // A never resolves; B and C resolve.
         mockParentContext.runInChildContext
@@ -871,7 +881,7 @@ describe("ConcurrencyController", () => {
           { id: "branch-B", data: "b", index: 1 },
           { id: "branch-C", data: "c", index: 2 },
         ];
-        const executor = jest.fn();
+        const executor = vi.fn();
 
         // A resolves; B and C never resolve.
         mockParentContext.runInChildContext
@@ -909,7 +919,7 @@ describe("ConcurrencyController", () => {
         { id: "item-1", data: "data2", index: 1 },
         { id: "item-2", data: "data3", index: 2 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockParentContext.runInChildContext
         .mockRejectedValueOnce(new Error("error1"))
@@ -937,7 +947,7 @@ describe("ConcurrencyController", () => {
         { id: "item-1", data: "data2", index: 1 },
         { id: "item-2", data: "data3", index: 2 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       // With 2 failures out of 3 items = 66.67% > 40% tolerance, should stop
       mockParentContext.runInChildContext
@@ -963,7 +973,7 @@ describe("ConcurrencyController", () => {
 
     it("should handle non-Error rejections", async () => {
       const items = [{ id: "item-0", data: "data1", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockParentContext.runInChildContext.mockRejectedValueOnce("string error");
 
@@ -984,7 +994,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
@@ -1012,7 +1022,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       // Both items complete, but one fails - this should trigger the uncovered branch
       mockParentContext.runInChildContext
@@ -1040,7 +1050,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       // First item fails - should fail-fast and not process second item
       mockParentContext.runInChildContext.mockRejectedValueOnce(
@@ -1067,7 +1077,7 @@ describe("ConcurrencyController", () => {
     it("should handle verbose logging", async () => {
       const verboseController = new ConcurrencyController("verbose-test");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       mockParentContext.runInChildContext.mockResolvedValueOnce("result");
 
@@ -1107,7 +1117,7 @@ describe("ConcurrencyController", () => {
     ])("should handle empty items array with $name", async ({ config }) => {
       const result = await controller.executeItems(
         [],
-        jest.fn(),
+        vi.fn(),
         mockParentContext,
         config,
       );
@@ -1122,7 +1132,7 @@ describe("ConcurrencyController", () => {
 
     it("should cover remaining edge cases", async () => {
       const items = [{ id: "item-0", data: "data1", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       // Test the case where completedCount === items.length and no completion config
       mockParentContext.runInChildContext.mockResolvedValueOnce("result");
@@ -1143,7 +1153,7 @@ describe("ConcurrencyController", () => {
         { id: "item-0", data: "data1", index: 0 },
         { id: "item-1", data: "data2", index: 1 },
       ];
-      const executor = jest.fn();
+      const executor = vi.fn();
 
       // Resolve in reverse order
       const resolvers: Array<(value: any) => void> = [];
@@ -1175,7 +1185,7 @@ describe("ConcurrencyController", () => {
 
     it("should pass iterationSubType to runInChildContext", async () => {
       const items = [{ id: "item-0", data: "data1", index: 0 }];
-      const executor = jest.fn();
+      const executor = vi.fn();
       const config = { iterationSubType: "CUSTOM_ITERATION_TYPE" };
 
       mockParentContext.runInChildContext.mockResolvedValue("result");
@@ -1197,12 +1207,12 @@ describe("ConcurrencyController", () => {
       // Create a new controller for this test to ensure clean state
       const testController = new ConcurrencyController("test-operation");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
-      const executor = jest.fn().mockResolvedValue("test-result");
+      const executor = vi.fn().mockResolvedValue("test-result");
       const config = { iterationSubType: "TEST_ITERATION_TYPE" };
 
       // Mock the parent context but let the actual execution happen
       const testParentContext = {
-        runInChildContext: jest
+        runInChildContext: vi
           .fn()
           .mockImplementation((itemId, childFunc, options) => {
             // Verify the options contain the iterationSubType

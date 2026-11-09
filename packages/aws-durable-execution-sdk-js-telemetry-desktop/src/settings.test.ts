@@ -14,13 +14,14 @@
  * `electron` is mocked because this module only needs `app.getPath("userData")`
  * from it, and requiring the real thing would pull in the whole runtime.
  */
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 let userDataDir = "";
 
-jest.mock("electron", () => ({
+vi.mock("electron", () => ({
   app: { getPath: () => userDataDir },
 }));
 
@@ -56,11 +57,11 @@ beforeEach(() => {
     delete process.env[key];
   }
   // The corrupt-file cases warn by design; keep the suite output readable.
-  jest.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
   rmSync(userDataDir, { recursive: true, force: true });
   for (const [key, value] of Object.entries(savedRegionEnv)) {
     if (value === undefined) {

@@ -522,6 +522,11 @@ export function SettingsModal({
                     the config is complete) without saving. For S3 + Athena it
                     also verifies the Glue table and runs a test query.
                   </Box>
+                  <Alert type="warning">
+                    Queries are written by a model and run with these
+                    credentials. It is your responsibility to use read-only
+                    credentials.
+                  </Alert>
                   {testResult && (
                     <Alert
                       type={testResult.ok ? "success" : "error"}

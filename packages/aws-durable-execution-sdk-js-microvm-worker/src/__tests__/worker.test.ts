@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { getEventListeners } from "node:events";
 import { Readable } from "node:stream";
 import {
@@ -507,13 +516,13 @@ describe("CallbackReporter", () => {
   });
 
   it("ends a completion attempt that stalls after 30 seconds, and retries it", async () => {
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
     });
     try {
       let calls = 0;
       let firstSignal: AbortSignal | undefined;
-      const send = jest.fn(
+      const send = vi.fn(
         (_command: unknown, options?: { abortSignal?: AbortSignal }) => {
           calls++;
           if (calls === 1) {
@@ -532,25 +541,25 @@ describe("CallbackReporter", () => {
       });
 
       const done = target.succeed("ok");
-      await jest.advanceTimersByTimeAsync(29_999);
+      await vi.advanceTimersByTimeAsync(29_999);
       expect(send).toHaveBeenCalledTimes(1);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       await done;
       expect(send).toHaveBeenCalledTimes(2);
       // The attempt also passed an abort signal for its HTTP request.
       expect(firstSignal).toBeDefined();
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   it("treats 'already complete' after an attempt without an answer as delivered", async () => {
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
     });
     try {
       let calls = 0;
-      const send = jest.fn(() => {
+      const send = vi.fn(() => {
         calls++;
         return calls === 1
           ? new Promise(() => {})
@@ -566,7 +575,7 @@ describe("CallbackReporter", () => {
               ),
             );
       });
-      const warn = jest.fn();
+      const warn = vi.fn();
       const target = new CallbackReporter({
         callbackId: "cb-1",
         region: "us-east-1",
@@ -576,14 +585,14 @@ describe("CallbackReporter", () => {
       });
 
       const done = target.succeed("ok");
-      await jest.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
       await expect(done).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining("or the callback timed out first"),
         expect.objectContaining({ callbackId: "cb-1", attempt: 2 }),
       );
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
@@ -636,7 +645,7 @@ describe("CallbackReporter", () => {
 
   it("treats 'already complete' as delivered after an SDK-internal retry that ended in a throttle", async () => {
     const client = new FakeLambdaClient();
-    const warn = jest.fn();
+    const warn = vi.fn();
     client.failures = [
       // The SDK's first try may have been applied; its retry was throttled.
       Object.assign(new Error("slow down"), {
@@ -668,7 +677,7 @@ describe("CallbackReporter", () => {
 
   it("ends a heartbeat at once when it is cancelled, and cancels its request", async () => {
     let signal: AbortSignal | undefined;
-    const send = jest.fn(
+    const send = vi.fn(
       (_command: unknown, options?: { abortSignal?: AbortSignal }) => {
         signal = options?.abortSignal;
         return new Promise(() => {});
@@ -690,7 +699,7 @@ describe("CallbackReporter", () => {
 
   it("ends a heartbeat that has no timeout when it is cancelled", async () => {
     let signal: AbortSignal | undefined;
-    const send = jest.fn(
+    const send = vi.fn(
       (_command: unknown, options?: { abortSignal?: AbortSignal }) => {
         signal = options?.abortSignal;
         return new Promise(() => {});
@@ -712,7 +721,7 @@ describe("CallbackReporter", () => {
   });
 
   it("does not send a heartbeat whose cancel signal already fired", async () => {
-    const send = jest.fn(async () => ({}));
+    const send = vi.fn(async () => ({}));
     const target = new CallbackReporter({
       callbackId: "cb-1",
       region: "us-east-1",
@@ -728,14 +737,14 @@ describe("CallbackReporter", () => {
   });
 
   it("leaves no listener on the cancel signal after a call", async () => {
-    const send = jest.fn(async () => ({}));
+    const send = vi.fn(async () => ({}));
     const target = new CallbackReporter({
       callbackId: "cb-1",
       region: "us-east-1",
       client: { send } as unknown as LambdaClient,
     });
     const cancel = new AbortController();
-    const add = jest.spyOn(cancel.signal, "addEventListener");
+    const add = vi.spyOn(cancel.signal, "addEventListener");
 
     for (let i = 0; i < 3; i++) {
       await target.heartbeat(60_000, cancel.signal);
@@ -748,7 +757,7 @@ describe("CallbackReporter", () => {
 
   it("leaves the request signal unaborted when a call ends normally", async () => {
     let signal: AbortSignal | undefined;
-    const send = jest.fn(
+    const send = vi.fn(
       async (_command: unknown, options?: { abortSignal?: AbortSignal }) => {
         signal = options?.abortSignal;
         return {};
@@ -816,7 +825,7 @@ describe("CallbackReporter", () => {
   });
 
   it("destroys only a client that it created itself", () => {
-    const destroy = jest
+    const destroy = vi
       .spyOn(LambdaClient.prototype, "destroy")
       .mockImplementation(() => undefined);
     try {
@@ -824,7 +833,7 @@ describe("CallbackReporter", () => {
       expect(destroy).toHaveBeenCalledTimes(1);
 
       const own = new FakeLambdaClient();
-      const passed = Object.assign(own.asClient(), { destroy: jest.fn() });
+      const passed = Object.assign(own.asClient(), { destroy: vi.fn() });
       new CallbackReporter({
         callbackId: "cb-1",
         region: "us-east-1",
@@ -838,7 +847,7 @@ describe("CallbackReporter", () => {
 
   it("ends a heartbeat that stalls before its HTTP request", async () => {
     // A stalled credential fetch ignores the abort signal.
-    const send = jest.fn(() => new Promise(() => {}));
+    const send = vi.fn(() => new Promise(() => {}));
     const target = new CallbackReporter({
       callbackId: "cb-1",
       region: "us-east-1",
@@ -852,7 +861,7 @@ describe("CallbackReporter", () => {
 
   it("passes an abort signal that fires at the call timeout", async () => {
     let signal: AbortSignal | undefined;
-    const send = jest.fn(
+    const send = vi.fn(
       (_command: unknown, options?: { abortSignal?: AbortSignal }) => {
         signal = options?.abortSignal;
         return new Promise(() => {});
@@ -940,10 +949,10 @@ describe("CallbackReporter", () => {
 
 describe("Lambda clients", () => {
   it("destroys the default client of each job when the job ends", async () => {
-    const send = jest
+    const send = vi
       .spyOn(LambdaClient.prototype, "send")
       .mockImplementation(async () => ({}));
-    const destroy = jest
+    const destroy = vi
       .spyOn(LambdaClient.prototype, "destroy")
       .mockImplementation(() => undefined);
     const worker = await startMicrovmWorker(
@@ -986,7 +995,7 @@ describe("Lambda clients", () => {
 
   it("creates a client for each job", async () => {
     const client = new FakeLambdaClient();
-    const createClient = jest.fn(() => client.asClient());
+    const createClient = vi.fn(() => client.asClient());
     const worker = await startMicrovmWorker(
       {
         routes: { "/job": async () => "ok" },
@@ -1039,12 +1048,12 @@ describe("heartbeat interval", () => {
 
   describe("after a failed heartbeat", () => {
     beforeEach(() => {
-      jest.useFakeTimers({
-        doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+      vi.useFakeTimers({
+        toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
       });
     });
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     // The job's heartbeat timeout is 40 seconds, so the interval is 13,333 ms.
@@ -1095,7 +1104,7 @@ describe("heartbeat interval", () => {
           } as never,
         );
       });
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       return listener;
     };
 
@@ -1145,19 +1154,19 @@ describe("heartbeat interval", () => {
           } as never,
         );
       });
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       const before = heartbeats.length;
 
       // The first attempt ends after 30 s, and the retry follows after 1 s.
       // With a 10 s interval, heartbeats continue meanwhile.
-      await jest.advanceTimersByTimeAsync(31_000);
+      await vi.advanceTimersByTimeAsync(31_000);
       expect(completions).toBe(2);
       expect(heartbeats.length - before).toBeGreaterThanOrEqual(3);
 
       // After the completion, heartbeats stop.
       await listener.idle();
       const after = heartbeats.length;
-      await jest.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       expect(heartbeats.length).toBe(after);
       listener.close();
     });
@@ -1197,8 +1206,8 @@ describe("heartbeat interval", () => {
               : Promise.resolve({});
           },
         } as unknown as LambdaClient;
-        const onAbort = jest.fn();
-        const info = jest.fn();
+        const onAbort = vi.fn();
+        const info = vi.fn();
         const listener = createMicrovmWorkerListener({
           handler: async (_input, context) => {
             context.signal.addEventListener("abort", onAbort);
@@ -1233,7 +1242,7 @@ describe("heartbeat interval", () => {
             } as never,
           );
         });
-        await jest.advanceTimersByTimeAsync(31_000);
+        await vi.advanceTimersByTimeAsync(31_000);
         await listener.idle();
 
         expect(heartbeatsAfterHandler).toBeGreaterThanOrEqual(1);
@@ -1250,7 +1259,7 @@ describe("heartbeat interval", () => {
     );
 
     it("logs nothing for a heartbeat that fails after the job ended", async () => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const client = {
         send: (command: unknown) =>
           command instanceof SendDurableExecutionCallbackHeartbeatCommand
@@ -1294,7 +1303,7 @@ describe("heartbeat interval", () => {
       void listener.idle().then(() => {
         idle = true;
       });
-      await jest.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
       expect(idle).toBe(true);
       expect(warn).not.toHaveBeenCalledWith(
         "heartbeat failed",
@@ -1306,7 +1315,7 @@ describe("heartbeat interval", () => {
     it("logs no recovery and sends no heartbeat when a heartbeat's success is seen after stop()", async () => {
       let calls = 0;
       let release: (value: unknown) => void = () => {};
-      const send = jest.fn(() => {
+      const send = vi.fn(() => {
         calls++;
         if (calls === 1) {
           return Promise.reject(
@@ -1320,8 +1329,8 @@ describe("heartbeat interval", () => {
           release = resolve;
         });
       });
-      const info = jest.fn();
-      const error = jest.fn();
+      const info = vi.fn();
+      const error = vi.fn();
       const heartbeats = startHeartbeats(
         new CallbackReporter({
           callbackId: "cb-1",
@@ -1334,7 +1343,7 @@ describe("heartbeat interval", () => {
         { info, warn: () => {}, error },
       );
       // The rejection is logged, and the second heartbeat is in flight.
-      await jest.advanceTimersByTimeAsync(3_333);
+      await vi.advanceTimersByTimeAsync(3_333);
       expect(send).toHaveBeenCalledTimes(2);
       expect(error).toHaveBeenCalledTimes(1);
       expect(error).toHaveBeenCalledWith(
@@ -1347,7 +1356,7 @@ describe("heartbeat interval", () => {
       release({});
       const stopped = heartbeats.stop();
       await stopped;
-      await jest.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
 
       expect(info).not.toHaveBeenCalledWith(
         "heartbeats are accepted again",
@@ -1368,9 +1377,9 @@ describe("heartbeat interval", () => {
       const listener = await startJob(client);
       const [retry] = waits("retry");
 
-      await jest.advanceTimersByTimeAsync(retry - 1);
+      await vi.advanceTimersByTimeAsync(retry - 1);
       expect(client.sent).toEqual([]);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
       listener.close();
     });
@@ -1384,9 +1393,9 @@ describe("heartbeat interval", () => {
       expect(retry).toBeGreaterThanOrEqual(Math.floor(INTERVAL_MS / 8));
       expect(retry).toBeLessThanOrEqual(Math.floor(INTERVAL_MS / 4));
 
-      await jest.advanceTimersByTimeAsync(retry - 1);
+      await vi.advanceTimersByTimeAsync(retry - 1);
       expect(client.sent).toEqual([]);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
       listener.close();
     });
@@ -1403,16 +1412,16 @@ describe("heartbeat interval", () => {
       const [retry, normal, secondRetry] = waits("retry", "normal", "retry");
 
       // The quick retry succeeds.
-      await jest.advanceTimersByTimeAsync(retry);
+      await vi.advanceTimersByTimeAsync(retry);
       expect(client.sent).toHaveLength(1);
       // After the success, the next call waits a normal interval.
-      await jest.advanceTimersByTimeAsync(normal - 1);
+      await vi.advanceTimersByTimeAsync(normal - 1);
       expect(client.heartbeatFailures).toHaveLength(1);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(client.heartbeatFailures).toHaveLength(0);
       // That call fails. It is the first failure of a new run, so the retry
       // is quick again.
-      await jest.advanceTimersByTimeAsync(secondRetry);
+      await vi.advanceTimersByTimeAsync(secondRetry);
       expect(client.sent).toHaveLength(2);
       listener.close();
     });
@@ -1428,12 +1437,12 @@ describe("heartbeat interval", () => {
       const [first, second, normal] = waits("retry", "retry", "normal");
 
       // Two quick retries, both failing.
-      await jest.advanceTimersByTimeAsync(first + second);
+      await vi.advanceTimersByTimeAsync(first + second);
       expect(client.heartbeatFailures).toEqual([]);
       // The fourth call waits a normal interval.
-      await jest.advanceTimersByTimeAsync(normal - 1);
+      await vi.advanceTimersByTimeAsync(normal - 1);
       expect(client.sent).toEqual([]);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
       listener.close();
     });
@@ -1454,13 +1463,13 @@ describe("heartbeat interval", () => {
       const [first, second, normal] = waits("retry", "retry", "normal");
 
       // A rejection and a transient failure each get a quick retry.
-      await jest.advanceTimersByTimeAsync(first + second);
+      await vi.advanceTimersByTimeAsync(first + second);
       expect(client.heartbeatFailures).toEqual([]);
       // After the third failure in a row, the fourth call waits a normal
       // interval.
-      await jest.advanceTimersByTimeAsync(normal - 1);
+      await vi.advanceTimersByTimeAsync(normal - 1);
       expect(client.sent).toEqual([]);
-      await jest.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
       listener.close();
     });
@@ -1521,9 +1530,7 @@ describe("startMicrovmWorker", () => {
   it("answers the run hook before the job ends, then reports the result", async () => {
     const client = new FakeLambdaClient();
     let release: (value: unknown) => void = () => {};
-    const handler = jest.fn(
-      () => new Promise((resolve) => (release = resolve)),
-    );
+    const handler = vi.fn(() => new Promise((resolve) => (release = resolve)));
     const target = await start(client, handler);
 
     const response = await post(target, "run", runBody(validPayload()));
@@ -1750,8 +1757,8 @@ describe("startMicrovmWorker", () => {
     });
 
     it("when createMicrovmsClient throws, and it accepts jobs afterwards", async () => {
-      jest.useFakeTimers({
-        doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+      vi.useFakeTimers({
+        toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
       });
       try {
         const listener = createMicrovmWorkerListener({
@@ -1793,7 +1800,7 @@ describe("startMicrovmWorker", () => {
             autoSuspendIdleSeconds: 10,
           }),
         });
-        await jest.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(10_000);
 
         expect(
           await call("/job", {
@@ -1808,7 +1815,7 @@ describe("startMicrovmWorker", () => {
         await settle();
         expect(unhandled).toEqual([]);
       } finally {
-        jest.useRealTimers();
+        vi.useRealTimers();
       }
     });
   });
@@ -1839,7 +1846,7 @@ describe("startMicrovmWorker", () => {
         $metadata: { httpStatusCode: 400 },
       }),
     ];
-    const error = jest.fn();
+    const error = vi.fn();
     const target = await start(client, async () => "ok", undefined, {
       logger: { info: () => {}, warn: () => {}, error },
     });
@@ -1862,7 +1869,7 @@ describe("startMicrovmWorker", () => {
         $metadata: { httpStatusCode: 403 },
       }),
     ];
-    const error = jest.fn();
+    const error = vi.fn();
     const target = await start(client, async () => "ok", 10, {
       logger: { info: () => {}, warn: () => {}, error },
     });
@@ -1891,7 +1898,7 @@ describe("startMicrovmWorker", () => {
       name,
       $metadata: { httpStatusCode: status },
     });
-  const rejectionLogs = (error: jest.Mock): unknown[][] =>
+  const rejectionLogs = (error: Mock): unknown[][] =>
     error.mock.calls.filter(([message]) =>
       String(message).startsWith("the service rejected a heartbeat"),
     );
@@ -1903,9 +1910,9 @@ describe("startMicrovmWorker", () => {
       rejection("AccessDeniedException", 403),
       rejection("AccessDeniedException", 403),
     ];
-    const error = jest.fn();
-    const warn = jest.fn();
-    const info = jest.fn();
+    const error = vi.fn();
+    const warn = vi.fn();
+    const info = vi.fn();
     let signal: AbortSignal | undefined;
     const target = await start(
       client,
@@ -1955,8 +1962,8 @@ describe("startMicrovmWorker", () => {
       undefined as unknown as Error,
       rejection("AccessDeniedException", 403),
     ];
-    const error = jest.fn();
-    const info = jest.fn();
+    const error = vi.fn();
+    const info = vi.fn();
     const target = await start(
       client,
       () => new Promise((resolve) => setTimeout(() => resolve("ok"), 200)),
@@ -1987,7 +1994,7 @@ describe("startMicrovmWorker", () => {
       rejection("ValidationException", 400),
       rejection("AccessDeniedException", 403),
     ];
-    const error = jest.fn();
+    const error = vi.fn();
     const target = await start(
       client,
       () => new Promise((resolve) => setTimeout(() => resolve("ok"), 200)),
@@ -2017,8 +2024,8 @@ describe("startMicrovmWorker", () => {
   ])("treats a heartbeat %s (%d) as transient", async (name, status) => {
     const client = new FakeLambdaClient();
     client.heartbeatFailures = [rejection(name, status)];
-    const error = jest.fn();
-    const warn = jest.fn();
+    const error = vi.fn();
+    const warn = vi.fn();
     const target = await start(
       client,
       () => new Promise((resolve) => setTimeout(() => resolve("ok"), 80)),
@@ -2043,9 +2050,7 @@ describe("startMicrovmWorker", () => {
   it("ignores a second run hook for a running callback", async () => {
     const client = new FakeLambdaClient();
     let release: (value: unknown) => void = () => {};
-    const handler = jest.fn(
-      () => new Promise((resolve) => (release = resolve)),
-    );
+    const handler = vi.fn(() => new Promise((resolve) => (release = resolve)));
     const target = await start(client, handler);
 
     await post(target, "run", runBody(validPayload()));
@@ -2060,7 +2065,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers 400 to an invalid payload and fails the named callback", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn();
+    const handler = vi.fn();
     const target = await start(client, handler);
 
     const response = await post(
@@ -2088,7 +2093,7 @@ describe("startMicrovmWorker", () => {
 
   it("runs only the job of the first valid run hook", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn(async () => "done");
+    const handler = vi.fn(async () => "done");
     const target = await start(client, handler);
 
     const first = await post(target, "run", runBody(validPayload()));
@@ -2108,7 +2113,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers 400 to a run hook with an empty MicroVM ID and fails its job's callback", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn();
+    const handler = vi.fn();
     const target = await start(client, handler);
 
     const response = await post(target, "run", {
@@ -2125,9 +2130,9 @@ describe("startMicrovmWorker", () => {
   });
 
   it("answers 400 with a generic message when reading the body fails", async () => {
-    const error = jest.fn();
+    const error = vi.fn();
     const listener = createMicrovmWorkerListener({
-      handler: jest.fn(),
+      handler: vi.fn(),
       createClient: () => new FakeLambdaClient().asClient(),
       logger: { info: () => {}, warn: () => {}, error },
     });
@@ -2175,7 +2180,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers 400 to a body that is not JSON", async () => {
     const client = new FakeLambdaClient();
-    const target = await start(client, jest.fn());
+    const target = await start(client, vi.fn());
 
     const response = await fetch(
       `http://127.0.0.1:${target.port}${HOOK_PATH_PREFIX}run`,
@@ -2189,13 +2194,13 @@ describe("startMicrovmWorker", () => {
   it.each(["resume", "suspend", "terminate"])(
     "answers the %s hook with 200",
     async (hook) => {
-      const target = await start(new FakeLambdaClient(), jest.fn());
+      const target = await start(new FakeLambdaClient(), vi.fn());
       expect((await post(target, hook, {})).status).toBe(200);
     },
   );
 
   it("answers 404 outside the hook paths", async () => {
-    const target = await start(new FakeLambdaClient(), jest.fn());
+    const target = await start(new FakeLambdaClient(), vi.fn());
     const response = await fetch(`http://127.0.0.1:${target.port}/other`);
     expect(response.status).toBe(404);
   });
@@ -2220,7 +2225,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers a run hook without a job with 200 and does nothing else", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn();
+    const handler = vi.fn();
     const target = await start(client, handler);
 
     const response = await post(
@@ -2239,7 +2244,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers a job request with 202 and completes its callback with the route's result", async () => {
     const client = new FakeLambdaClient();
-    const route = jest.fn(async (input: unknown) => ({ echoed: input }));
+    const route = vi.fn(async (input: unknown) => ({ echoed: input }));
     const target = await start(client, undefined, undefined, {
       routes: { "/clone-build": route },
     });
@@ -2363,7 +2368,7 @@ describe("startMicrovmWorker", () => {
   it("runs a job once when its request arrives twice", async () => {
     const client = new FakeLambdaClient();
     let release: (value: unknown) => void = () => {};
-    const route = jest.fn(() => new Promise((resolve) => (release = resolve)));
+    const route = vi.fn(() => new Promise((resolve) => (release = resolve)));
     const target = await start(client, undefined, undefined, {
       routes: { "/job": route },
     });
@@ -2380,8 +2385,8 @@ describe("startMicrovmWorker", () => {
 
   it("runs a job once when its request arrives again after the job ended", async () => {
     const client = new FakeLambdaClient();
-    const route = jest.fn(async () => "ok");
-    const warn = jest.fn();
+    const route = vi.fn(async () => "ok");
+    const warn = vi.fn();
     const target = await start(client, undefined, undefined, {
       routes: { "/job": route },
       logger: { info: () => {}, warn, error: () => {} },
@@ -2403,7 +2408,7 @@ describe("startMicrovmWorker", () => {
 
   it("runs a run hook job once when the hook arrives again after the job ended", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn(async () => "ok");
+    const handler = vi.fn(async () => "ok");
     const target = await start(client, handler);
 
     await post(target, "run", runBody(validPayload()));
@@ -2418,7 +2423,7 @@ describe("startMicrovmWorker", () => {
 
   it("forgets the oldest finished job after 1,000 others ended", async () => {
     const client = new FakeLambdaClient();
-    const route = jest.fn(async () => "ok");
+    const route = vi.fn(async () => "ok");
     const target = await start(client, undefined, undefined, {
       routes: { "/job": route },
     });
@@ -2438,7 +2443,7 @@ describe("startMicrovmWorker", () => {
 
   it("answers 400 to an invalid job request and fails the named callback", async () => {
     const client = new FakeLambdaClient();
-    const route = jest.fn();
+    const route = vi.fn();
     const target = await start(client, undefined, undefined, {
       routes: { "/job": route },
     });
@@ -2479,7 +2484,7 @@ describe("startMicrovmWorker", () => {
 
   it("runs handler for a job on the default job path", async () => {
     const client = new FakeLambdaClient();
-    const handler = jest.fn(async (input: unknown) => ({ echoed: input }));
+    const handler = vi.fn(async (input: unknown) => ({ echoed: input }));
     const target = await start(client, handler);
 
     const response = await postRoute(target, MICROVM_JOB_PATH, jobRequest());

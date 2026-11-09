@@ -8,7 +8,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the Kinesis Firehose exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface FirehoseExporterConfig {
   /** Firehose delivery stream name. */
@@ -40,8 +39,6 @@ export interface FirehoseExporterConfig {
  *
  * A trailing newline is appended so that when Firehose concatenates records
  * into S3 objects, they remain parseable as newline-delimited JSON (NDJSON).
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class FirehoseExporter implements TelemetryExporter {
   private readonly deliveryStreamName: string;

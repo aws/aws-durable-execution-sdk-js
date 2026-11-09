@@ -1,0 +1,233 @@
+/**
+ * Calls the registered tools through a real MCP client, connected in memory,
+ * with this package's query paths replaced by spies.
+ *
+ * The property under test: until the user confirms, no data tool reaches its
+ * query path. Deleting any tool's `if (blocked) return blocked;` fails a test
+ * here.
+ */
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const {
+  testDestination,
+  checkAthenaResultLocation,
+  runReadOnlyQuery,
+  runGetExecution,
+  runListExecutions,
+} = vi.hoisted(() => ({
+  testDestination: vi.fn(),
+  checkAthenaResultLocation: vi.fn(),
+  runReadOnlyQuery: vi.fn(),
+  runGetExecution: vi.fn(),
+  runListExecutions: vi.fn(),
+}));
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => ({
+  ...(await vi.importActual<
+    typeof import("@aws/durable-execution-sdk-js-telemetry-core")
+  >("@aws/durable-execution-sdk-js-telemetry-core")),
+  testDestination: (...args: unknown[]) => testDestination(...args),
+  checkAthenaResultLocation: (...args: unknown[]) =>
+    checkAthenaResultLocation(...args),
+}));
+vi.mock("./readOnlyQuery", async () => ({
+  ...(await vi.importActual<typeof import("./readOnlyQuery")>(
+    "./readOnlyQuery",
+  )),
+  runReadOnlyQuery: (...args: unknown[]) => runReadOnlyQuery(...args),
+}));
+vi.mock("./tools", async () => ({
+  ...(await vi.importActual<typeof import("./tools")>("./tools")),
+  runGetExecution: (...args: unknown[]) => runGetExecution(...args),
+  runListExecutions: (...args: unknown[]) => runListExecutions(...args),
+}));
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { readConfigFromEnv } from "./config";
+import { registerTools } from "./registerTools";
+
+const CONFIG = readConfigFromEnv({
+  DURABLE_TELEMETRY_DESTINATION_TYPE: "aurora",
+  DURABLE_TELEMETRY_AURORA_RESOURCE_ARN: "arn:aws:rds:us-east-1:1:cluster:c",
+  DURABLE_TELEMETRY_AURORA_SECRET_ARN:
+    "arn:aws:secretsmanager:us-east-1:1:secret:s",
+  DURABLE_TELEMETRY_REGION: "us-east-1",
+}).config;
+
+/** The data tools, each with arguments and the spy for its query path. */
+const DATA_TOOLS = [
+  ["query", { sql: "SELECT 1" }, runReadOnlyQuery],
+  ["get_execution", { executionArn: "arn:x" }, runGetExecution],
+  ["list_executions", {}, runListExecutions],
+] as const;
+
+const S3_CONFIG = readConfigFromEnv({
+  DURABLE_TELEMETRY_DESTINATION_TYPE: "s3",
+  DURABLE_TELEMETRY_ATHENA_DATABASE: "db",
+  DURABLE_TELEMETRY_ATHENA_OUTPUT_LOCATION: "s3://bucket/telemetry/results/",
+  DURABLE_TELEMETRY_REGION: "us-east-1",
+}).config;
+
+async function connect(
+  acceptedByEnv: boolean,
+  config = CONFIG,
+): Promise<Client> {
+  const server = new McpServer({ name: "s", version: "0" });
+  registerTools(server, config, acceptedByEnv);
+  // No elicitation capability, so the gate cannot ask and must block.
+  const client = new Client({ name: "c", version: "0" }, { capabilities: {} });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(a), client.connect(b)]);
+  return client;
+}
+
+function payloadOf(result: Awaited<ReturnType<Client["callTool"]>>) {
+  const content = result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text);
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  runReadOnlyQuery.mockResolvedValue({
+    columns: [],
+    rows: [],
+    count: 0,
+    truncated: false,
+    engine: "PostgreSQL",
+  });
+  runGetExecution.mockResolvedValue({ found: false });
+  runListExecutions.mockResolvedValue({ executions: [] });
+});
+
+describe.each(DATA_TOOLS)("%s", (tool, args, queryPath) => {
+  it("does not reach its query path until the user confirms", async () => {
+    const client = await connect(false);
+    const result = await client.callTool({ name: tool, arguments: args });
+    expect(result.isError).toBe(true);
+    expect(payloadOf(result).error).toContain(
+      "confirm that this server's credentials are read-only.",
+    );
+    expect(queryPath).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("reaches its query path when the environment confirms", async () => {
+    const client = await connect(true);
+    await client.callTool({ name: tool, arguments: args });
+    expect(queryPath).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+});
+
+describe("the S3 result-location warning", () => {
+  it("names Athena results inside the table's data before the first query", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "inside",
+      finding: "Athena writes query results inside the table's data.",
+    });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).toContain(
+      "Athena writes query results inside the table's data.",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("says the check did not complete when the location is undetermined", async () => {
+    checkAthenaResultLocation.mockResolvedValue({
+      kind: "undetermined",
+      reason: "AccessDenied: athena:GetWorkGroup",
+    });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).toContain(
+      "The server could not check whether Athena writes query results " +
+        "inside the table's data: AccessDenied: athena:GetWorkGroup",
+    );
+    expect(runReadOnlyQuery).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("adds nothing when the location is outside the data", async () => {
+    checkAthenaResultLocation.mockResolvedValue({ kind: "outside" });
+    const client = await connect(false, S3_CONFIG);
+    const result = await client.callTool({
+      name: "query",
+      arguments: { sql: "SELECT 1" },
+    });
+    expect(payloadOf(result).error).not.toMatch(/Athena/);
+    expect(checkAthenaResultLocation).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+
+  it("is not checked for other destinations", async () => {
+    const client = await connect(false);
+    await client.callTool({ name: "query", arguments: { sql: "SELECT 1" } });
+    expect(checkAthenaResultLocation).not.toHaveBeenCalled();
+    await client.close();
+  });
+});
+
+describe("test_destination", () => {
+  it("is not blocked by the gate", async () => {
+    testDestination.mockResolvedValue({ ok: true, summary: "s", checks: [] });
+    const client = await connect(false);
+    const result = await client.callTool({
+      name: "test_destination",
+      arguments: {},
+    });
+    expect(result.isError).toBeFalsy();
+    expect(testDestination).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+});
+
+describe.each(DATA_TOOLS)("%s and cancellation", (tool, args, queryPath) => {
+  it("does not query for a call cancelled while it waited for consent", async () => {
+    const server = new McpServer({ name: "s", version: "0" });
+    registerTools(server, CONFIG, false);
+    // A client that supports the prompt, and answers it only when told to.
+    const client = new Client(
+      { name: "c", version: "0" },
+      { capabilities: { elicitation: {} } },
+    );
+    let answer: (() => void) | undefined;
+    const prompted = new Promise<void>((resolve) => {
+      client.setRequestHandler(ElicitRequestSchema, () => {
+        resolve();
+        return new Promise((reply) => {
+          answer = () =>
+            reply({ action: "accept", content: { confirmed: true } });
+        });
+      });
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(a), client.connect(b)]);
+
+    // Two calls share one prompt. The first is cancelled before the answer.
+    const abort = new AbortController();
+    const cancelled = client
+      .callTool({ name: tool, arguments: args }, undefined, {
+        signal: abort.signal,
+      })
+      .catch(() => "cancelled");
+    const kept = client.callTool({ name: tool, arguments: args });
+    await prompted;
+    abort.abort();
+    expect(await cancelled).toBe("cancelled");
+    answer?.();
+    const result = await kept;
+
+    expect(result.isError).toBeFalsy();
+    expect(queryPath).toHaveBeenCalledTimes(1);
+    await client.close();
+  });
+});

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { context, propagation, trace, type Span } from "@opentelemetry/api";
@@ -70,11 +71,11 @@ describe.each([
           ],
         })),
     });
-    const firstStep = jest.fn(async () => {
+    const firstStep = vi.fn(async () => {
       firstBody.open();
       await releaseBodies.opened;
     });
-    const finalStep = jest.fn(async () => {
+    const finalStep = vi.fn(async () => {
       finalBody.open();
       await releaseBodies.opened;
     });

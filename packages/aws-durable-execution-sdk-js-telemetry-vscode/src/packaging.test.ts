@@ -21,6 +21,7 @@
  * another private workspace dependency without adding it to the workflow's staging
  * loop fails here, in ordinary CI, with an explanation.
  */
+import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

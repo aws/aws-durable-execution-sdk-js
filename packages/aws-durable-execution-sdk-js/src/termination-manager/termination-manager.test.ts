@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
 
@@ -6,7 +7,7 @@ describe("TerminationManager", () => {
 
   beforeEach(() => {
     terminationManager = new TerminationManager();
-    jest.resetAllMocks();
+    vi.resetAllMocks();
   });
 
   it("should not be terminated by default", () => {
@@ -68,44 +69,9 @@ describe("TerminationManager", () => {
     expect(result.message).toBe("First termination");
   });
 
-  it("should execute cleanup function if provided", async () => {
-    // Setup
-    const cleanup = jest.fn().mockResolvedValue(undefined);
-    const terminationPromise = terminationManager.getTerminationPromise();
-
-    // Terminate with cleanup
-    terminationManager.terminate({
-      reason: TerminationReason.OPERATION_TERMINATED,
-      cleanup,
-    });
-
-    // Wait for termination to complete
-    await terminationPromise;
-
-    // Verify cleanup was called
-    expect(cleanup).toHaveBeenCalled();
-  });
-
-  it("should handle errors in cleanup function", async () => {
-    // Setup
-    const cleanup = jest.fn().mockRejectedValue(new Error("Cleanup error"));
-    const terminationPromise = terminationManager.getTerminationPromise();
-
-    // Terminate with failing cleanup
-    terminationManager.terminate({
-      reason: TerminationReason.OPERATION_TERMINATED,
-      cleanup,
-    });
-
-    // Verify termination still completes despite cleanup error
-    const result = await terminationPromise;
-    expect(result.reason).toBe(TerminationReason.OPERATION_TERMINATED);
-    expect(cleanup).toHaveBeenCalled();
-  });
-
   it("should win Promise.race against a longer-running promise", async () => {
     // This spy will help us track which promise resolved first
-    const raceSpy = jest.fn();
+    const raceSpy = vi.fn();
 
     // Create a promise that will take some time to resolve
     const longRunningPromise = new Promise<string>((resolve) => {

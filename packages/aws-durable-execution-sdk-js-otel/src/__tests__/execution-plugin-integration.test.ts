@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -323,7 +324,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * which may not expose forceFlush directly. The plugin checks for forceFlush
      * presence and calls it if available.
      */
-    const shutdownSpy = jest.spyOn(provider, "shutdown");
+    const shutdownSpy = vi.spyOn(provider, "shutdown");
 
     const plugin = newPlugin({});
 

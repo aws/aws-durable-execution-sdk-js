@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { handler } from "./parent-context-in-wait-condition";
 import { createTests } from "../../../utils/test-helper";
 import {
@@ -6,7 +7,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 
 // Set shorter timeout for context validation tests since they should fail quickly
-jest.setTimeout(5000);
+vi.setConfig({ testTimeout: 5000 });
 
 createTests({
   handler,

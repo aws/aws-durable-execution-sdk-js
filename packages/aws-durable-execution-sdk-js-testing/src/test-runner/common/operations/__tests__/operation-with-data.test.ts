@@ -1,4 +1,13 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
+import {
   OperationStatus,
   OperationType,
   ErrorObject,
@@ -15,15 +24,15 @@ import { DurableApiClient } from "../../create-durable-api-client";
 describe("OperationWithData", () => {
   const mockIndexedOperations = new IndexedOperations([]);
   const waitManager = new OperationWaitManager(mockIndexedOperations);
-  const mockApiClient: jest.Mocked<DurableApiClient> = {
-    sendCallbackSuccess: jest.fn(),
-    sendCallbackFailure: jest.fn(),
-    sendCallbackHeartbeat: jest.fn(),
+  const mockApiClient: Mocked<DurableApiClient> = {
+    sendCallbackSuccess: vi.fn(),
+    sendCallbackFailure: vi.fn(),
+    sendCallbackHeartbeat: vi.fn(),
   };
-  jest.spyOn(waitManager, "waitForOperation");
+  vi.spyOn(waitManager, "waitForOperation");
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("data", () => {
@@ -583,9 +592,9 @@ describe("OperationWithData", () => {
       ];
 
       // Mock the getOperationChildren method
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue(mockChildOperations);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        mockChildOperations,
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -629,9 +638,9 @@ describe("OperationWithData", () => {
       ];
 
       // Mock the getOperationChildren method
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue(mockChildOperations);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        mockChildOperations,
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -659,9 +668,9 @@ describe("OperationWithData", () => {
 
     it("should throw error when WAIT_FOR_CALLBACK context has empty child operations", () => {
       // Mock the getOperationChildren method to return empty array
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue([]);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        [],
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -705,9 +714,9 @@ describe("OperationWithData", () => {
       ];
 
       // Mock the getOperationChildren method
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue(mockChildOperations);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        mockChildOperations,
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -1669,7 +1678,7 @@ describe("OperationWithData", () => {
 
   describe("waitFor", () => {
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it("should return data immediately when status matches STARTED", async () => {
@@ -1757,7 +1766,7 @@ describe("OperationWithData", () => {
       mockOperation.populateData(initialData);
 
       // Mock wait manager to eventually update to SUCCEEDED status
-      (waitManager.waitForOperation as jest.Mock).mockImplementation(() => {
+      (waitManager.waitForOperation as Mock).mockImplementation(() => {
         mockOperation.populateData(finalData);
         return Promise.resolve(mockOperation);
       });
@@ -1805,7 +1814,7 @@ describe("OperationWithData", () => {
       mockOperation.populateData(initialData);
 
       // Mock wait manager to eventually update with status
-      (waitManager.waitForOperation as jest.Mock).mockImplementation(() => {
+      (waitManager.waitForOperation as Mock).mockImplementation(() => {
         mockOperation.populateData(finalData);
         return Promise.resolve(mockOperation);
       });
@@ -1828,9 +1837,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      (waitManager.waitForOperation as jest.Mock).mockResolvedValue(
-        mockOperation,
-      );
+      (waitManager.waitForOperation as Mock).mockResolvedValue(mockOperation);
 
       const expectedResult: OperationEvents = {
         operation: {
@@ -1844,7 +1851,7 @@ describe("OperationWithData", () => {
 
       // Don't populate data initially - this will trigger wait manager call
       // Mock the wait manager to populate the data when called
-      (waitManager.waitForOperation as jest.Mock).mockImplementation(() => {
+      (waitManager.waitForOperation as Mock).mockImplementation(() => {
         mockOperation.populateData(expectedResult);
         return Promise.resolve(mockOperation);
       });
@@ -1864,9 +1871,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      (waitManager.waitForOperation as jest.Mock).mockResolvedValue(
-        mockOperation,
-      );
+      (waitManager.waitForOperation as Mock).mockResolvedValue(mockOperation);
       const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
@@ -1879,7 +1884,7 @@ describe("OperationWithData", () => {
 
       // Don't populate data initially - this will trigger wait manager call
       // Mock the wait manager to populate the data when called
-      (waitManager.waitForOperation as jest.Mock).mockImplementation(() => {
+      (waitManager.waitForOperation as Mock).mockImplementation(() => {
         mockOperation.populateData(expectedResult);
         return Promise.resolve(mockOperation);
       });
@@ -1902,7 +1907,7 @@ describe("OperationWithData", () => {
         mockApiClient,
       );
       const waitError = new Error("Wait failed");
-      (waitManager.waitForOperation as jest.Mock).mockRejectedValue(waitError);
+      (waitManager.waitForOperation as Mock).mockRejectedValue(waitError);
 
       await expect(mockOperation.waitForData()).rejects.toThrow("Wait failed");
     });
@@ -1932,7 +1937,7 @@ describe("OperationWithData", () => {
         };
       });
 
-      (waitManager.waitForOperation as jest.Mock).mockReturnValue(waitPromise);
+      (waitManager.waitForOperation as Mock).mockReturnValue(waitPromise);
 
       // Start multiple waiters
       const waiter1 = mockOperation.waitForData(WaitingOperationStatus.STARTED);
@@ -1974,7 +1979,7 @@ describe("OperationWithData", () => {
       };
 
       // First call - no data, should wait
-      (waitManager.waitForOperation as jest.Mock).mockImplementation(() => {
+      (waitManager.waitForOperation as Mock).mockImplementation(() => {
         mockOperation.populateData(expectedResult);
         return Promise.resolve(mockOperation);
       });
@@ -1984,7 +1989,7 @@ describe("OperationWithData", () => {
       expect(result1.getOperationData()).toBe(expectedResult.operation);
 
       // Clear the mock to verify it's not called again
-      jest.clearAllMocks();
+      vi.clearAllMocks();
 
       // Second call - data already available, should return immediately
       const result2 = await mockOperation.waitForData();
@@ -1995,7 +2000,7 @@ describe("OperationWithData", () => {
 
   describe("getChildOperations", () => {
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it("should return OperationWithData instances for child operations when data is populated", () => {
@@ -2023,9 +2028,9 @@ describe("OperationWithData", () => {
       ];
 
       // Mock the getOperationChildren method
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue(mockChildOperations);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        mockChildOperations,
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -2077,9 +2082,9 @@ describe("OperationWithData", () => {
 
     it("should return empty array when operation has no children", () => {
       // Mock the getOperationChildren method to return empty array
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue([]);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        [],
+      );
 
       const operation = new OperationWithData(
         waitManager,
@@ -2121,9 +2126,9 @@ describe("OperationWithData", () => {
         },
       ];
 
-      jest
-        .spyOn(mockIndexedOperations, "getOperationChildren")
-        .mockReturnValue(mockChildOperations);
+      vi.spyOn(mockIndexedOperations, "getOperationChildren").mockReturnValue(
+        mockChildOperations,
+      );
 
       const operation = new OperationWithData(
         waitManager,

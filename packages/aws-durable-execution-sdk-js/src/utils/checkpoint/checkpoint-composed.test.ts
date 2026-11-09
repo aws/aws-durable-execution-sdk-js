@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { CheckpointManager } from "./checkpoint-manager";
 import { CheckpointFunction } from "../../testing/mock-checkpoint";
 import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
@@ -10,8 +11,8 @@ import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
 // Mock dependencies
-jest.mock("../../utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("../../utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 describe("Checkpoint Integration Tests", () => {
@@ -25,14 +26,14 @@ describe("Checkpoint Integration Tests", () => {
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
+    vi.spyOn(mockTerminationManager, "terminate");
 
     mockState = {
-      checkpoint: jest.fn().mockResolvedValue({
+      checkpoint: vi.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
     };
@@ -51,7 +52,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn",
       {},
       mockState,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
@@ -91,7 +92,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn",
       {},
       mockState,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
@@ -180,7 +181,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn",
       {},
       mockState,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
@@ -222,7 +223,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn",
       {},
       mockState,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
@@ -261,7 +262,7 @@ describe("Checkpoint Integration Tests", () => {
   it("should use the first execution context when multiple contexts are created", async () => {
     // Create second mock state
     mockState2 = {
-      checkpoint: jest.fn().mockResolvedValue({
+      checkpoint: vi.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
     };
@@ -277,7 +278,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn",
       {},
       mockState,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
@@ -293,7 +294,7 @@ describe("Checkpoint Integration Tests", () => {
       "test-arn-2",
       {},
       mockState2,
-      { terminate: jest.fn() } as any,
+      { terminate: vi.fn() } as any,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,

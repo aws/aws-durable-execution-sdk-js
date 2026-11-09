@@ -79,8 +79,13 @@ export const QUERY_DESCRIPTION =
   "destinations (cloudwatch-logs-exporter, lambda-log-exporter) pass a CloudWatch " +
   "Logs Insights pipe query (e.g. `filter ... | stats ...`), NOT SQL; use " +
   "`lookbackHours` to set the time window. Results are capped at " +
-  `${MAX_ROWS} rows; "truncated" is true when the cap was hit. If required ` +
-  "environment variables are unset it names them and returns without calling AWS.";
+  `${MAX_ROWS} rows; "truncated" is true when the cap was hit. ` +
+  "While the local viewer is on, rows that hold an execution ARN also carry a " +
+  "`viewerLink`: a Markdown link, titled with the execution name, that opens " +
+  "the execution's operations and invocations. Whenever a row has one, show it " +
+  "as-is without being asked, and do not print the raw URL. " +
+  "If required environment variables are unset it names them and returns " +
+  "without calling AWS.";
 
 export const DESCRIBE_SCHEMA_DESCRIPTION =
   "Describe the configured Telemetry destination's record schema and query " +
@@ -95,14 +100,44 @@ export const GET_EXECUTION_DESCRIPTION =
   "return it as machine-readable JSON. A record that does not exist is a " +
   "success with found=false, not an error. For the Athena/S3 destination you " +
   "may also pass year/month/day to prune to one partition and avoid scanning " +
-  "the whole table. Runs as a read-only query behind the same guard as `query`.";
+  "the whole table. Runs as a read-only query behind the same guard as `query`. " +
+  "While the local viewer is on, a found record carries a `viewerLink`: a " +
+  "Markdown link, titled with the execution name, to the execution's " +
+  "operations and invocations. When it is present, include it as-is when you " +
+  "report on the execution; do not print the raw URL.";
 
 export const LIST_EXECUTIONS_DESCRIPTION =
   "List Durable Execution Telemetry execution records as machine-readable JSON, filtered " +
   "by any of status, functionName, since, until, with a bounded limit — no SQL " +
   "required from the caller for the common case. The query is built and " +
   "executed read-only behind the same guard as `query`; results are capped at " +
-  `${MAX_ROWS} rows.`;
+  `${MAX_ROWS} rows. ` +
+  "While the local viewer is on, rows that hold an execution ARN also carry a " +
+  "`viewerLink`: a Markdown link, titled with the execution name, that opens " +
+  "the execution's operations and invocations. Whenever a row has one, show it " +
+  "as-is without being asked, and do not print the raw URL.";
+
+/**
+ * The server's MCP instructions. Some clients load tool schemas only when a
+ * tool looks relevant, and show the agent these instructions instead. So the
+ * instructions name the tools and the viewer links.
+ *
+ * They claim durable executions and durable function runs only. A bare
+ * "list the last 10 executions" could mean Step Functions or CI runs, so the
+ * agent and the user decide which server answers it.
+ */
+export const SERVER_INSTRUCTIONS =
+  "Read-only access to the execution records that AWS Lambda durable " +
+  "functions emit through the Durable Execution Telemetry exporter. Use this " +
+  "server when the user asks about durable executions or durable function " +
+  "runs: recent runs, failures, timing, or step-level errors. Run " +
+  "`test_destination` first: it checks the configuration, and on S3 + Athena " +
+  "it reports when query results would land inside the table's data. Then use " +
+  "`list_executions` or `get_execution`, and call `describe_schema` before " +
+  "writing a `query`. While the local viewer is on, results that hold an " +
+  "execution ARN carry a `viewerLink`, a Markdown link titled with the " +
+  "execution name. When you show such an execution, show its viewerLink as " +
+  "given, and do not print the raw URL.";
 
 /**
  * Every tool this server registers, paired with its description. The single
@@ -375,7 +410,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         from: cfg.athenaTable,
         idColumn: "executionarn",
         listSelect:
-          "executionarn, status, functionname, starttime, endtime, durationms",
+          "executionarn, executionname, status, functionname, starttime, endtime, durationms",
         statusColumn: "status",
         functionNameColumn: "functionname",
         startTimeColumn: "starttime",
@@ -389,7 +424,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         engine: "PartiQL",
         from: `"${cfg.dynamodbTableName}"`,
         idColumn: "pk",
-        listSelect: "pk, status, functionName, startTime, endTime, durationMs",
+        listSelect:
+          "pk, executionName, status, functionName, startTime, endTime, durationMs",
         statusColumn: "status",
         functionNameColumn: "functionName",
         startTimeColumn: "startTime",
@@ -404,7 +440,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         from: cfg.auroraTable,
         idColumn: "execution_arn",
         listSelect:
-          "execution_arn, status, function_name, start_time, end_time, duration_ms",
+          "execution_arn, execution_name, status, function_name, start_time, end_time, duration_ms",
         statusColumn: "status",
         functionNameColumn: "function_name",
         startTimeColumn: "start_time",
@@ -419,7 +455,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         from: redshiftTarget(cfg),
         idColumn: "execution_arn",
         listSelect:
-          "execution_arn, status, function_name, start_time, end_time, duration_ms",
+          "execution_arn, execution_name, status, function_name, start_time, end_time, duration_ms",
         statusColumn: "status",
         functionNameColumn: "function_name",
         startTimeColumn: "start_time",
@@ -435,7 +471,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         from: `\`${cfg.opensearchIndex}\``,
         idColumn: "executionArn",
         listSelect:
-          "executionArn, status, functionName, startTime, endTime, durationMs",
+          "executionArn, executionName, status, functionName, startTime, endTime, durationMs",
         statusColumn: "status",
         functionNameColumn: "functionName",
         startTimeColumn: "startTime",
@@ -799,7 +835,7 @@ export function buildListExecutionsLogsQuery(
     }
     stages.push(`filter ${filters.join(" and ")}`);
     stages.push(
-      "fields executionArn, status, functionName, startTime, endTime, durationMs",
+      "fields executionArn, executionName, status, functionName, startTime, endTime, durationMs",
     );
     stages.push("sort @timestamp desc");
     stages.push(`limit ${limit}`);
@@ -813,6 +849,9 @@ export function buildListExecutionsLogsQuery(
     'filter level = "INFO" and message like /DurableExecutionTelemetry/',
   );
   stages.push('parse message "\\"executionArn\\":\\"*\\"" as executionArn');
+  // executionName is optional in the record; a parse that finds nothing leaves
+  // the field empty rather than dropping the event.
+  stages.push('parse message "\\"executionName\\":\\"*\\"" as executionName');
   stages.push('parse message "\\"status\\":\\"*\\"" as status');
   stages.push('parse message "\\"functionName\\":\\"*\\"" as functionName');
   stages.push('parse message "\\"startTime\\":\\"*\\"" as startTime');
@@ -841,8 +880,10 @@ export function buildListExecutionsLogsQuery(
   if (postFilters.length > 0) {
     stages.push(`filter ${postFilters.join(" and ")}`);
   }
+  // `display`, not `fields`: Logs Insights rejects `fields <name>` after
+  // `parse ... as <name>` with "Ephemeral field is already defined" (#1143).
   stages.push(
-    "fields @timestamp, executionArn, status, functionName, startTime",
+    "display @timestamp, executionArn, executionName, status, functionName, startTime",
   );
   stages.push("sort @timestamp desc");
   stages.push(`limit ${limit}`);

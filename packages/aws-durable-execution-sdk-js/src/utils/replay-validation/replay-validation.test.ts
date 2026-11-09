@@ -1,15 +1,16 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { validateReplayConsistency } from "./replay-validation";
 import { Operation, OperationType } from "../../types/wire";
 import { OperationSubType, ExecutionContext } from "../../types";
 import { terminateForUnrecoverableError } from "../termination-helper/termination-helper";
 
-jest.mock("../termination-helper/termination-helper");
+vi.mock("../termination-helper/termination-helper");
 
 describe("validateReplayConsistency", () => {
   const mockContext = {} as ExecutionContext;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should not validate when checkpoint data is undefined", () => {

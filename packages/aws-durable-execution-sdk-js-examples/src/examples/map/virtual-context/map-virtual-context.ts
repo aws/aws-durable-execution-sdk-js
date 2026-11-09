@@ -7,6 +7,7 @@ export const config = {
   name: "Map Virtual Context",
   description:
     "Demonstrates map operation with flat nesting for cost optimization",
+  testedBy: ["map/flat-summarized-replay"],
 };
 
 export const handler = withDurableExecution(async (event, context) => {

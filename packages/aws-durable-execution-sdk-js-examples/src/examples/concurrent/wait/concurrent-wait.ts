@@ -8,6 +8,7 @@ import { log } from "../../../utils/logger";
 export const config: ExampleConfig = {
   name: "Concurrent Wait",
   description: "Start multiple wait operations with Promise.all",
+  testedBy: ["parallel/wait"],
 };
 
 export const handler = withDurableExecution(

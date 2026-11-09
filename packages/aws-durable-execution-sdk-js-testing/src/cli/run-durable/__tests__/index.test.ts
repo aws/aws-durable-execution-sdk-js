@@ -1,8 +1,9 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 describe("CLI Entry Point (index.ts)", () => {
   const originalConsoleError = console.error;
-  const mockConsoleError = jest.fn();
+  const mockConsoleError = vi.fn();
 
-  const mockExit = jest.spyOn(process, "exit");
+  const mockExit = vi.spyOn(process, "exit");
 
   beforeEach(() => {
     console.error = mockConsoleError;
@@ -16,33 +17,37 @@ describe("CLI Entry Point (index.ts)", () => {
   });
 
   it("should successfully call runDurable when no errors occur", async () => {
-    await jest.isolateModulesAsync(async () => {
-      const runDurableModule = await import("../run-durable");
-      const mockRunDurable = jest
-        .spyOn(runDurableModule, "runDurable")
-        .mockResolvedValue();
+    vi.resetModules();
+    const mockRunDurable = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("../run-durable", async () => ({
+      ...(await vi.importActual<typeof import("../run-durable")>(
+        "../run-durable",
+      )),
+      runDurable: mockRunDurable,
+    }));
 
-      await import("../index");
+    await import("../index");
 
-      expect(mockRunDurable).toHaveBeenCalledTimes(1);
-      expect(mockConsoleError).not.toHaveBeenCalled();
-      expect(mockExit).not.toHaveBeenCalled();
-    });
+    expect(mockRunDurable).toHaveBeenCalledTimes(1);
+    expect(mockConsoleError).not.toHaveBeenCalled();
+    expect(mockExit).not.toHaveBeenCalled();
   });
 
   it("should handle errors from runDurable and exit with code 1", async () => {
-    await jest.isolateModulesAsync(async () => {
-      const testError = new Error("Test CLI error");
-      const runDurableModule = await import("../run-durable");
-      const mockRunDurable = jest
-        .spyOn(runDurableModule, "runDurable")
-        .mockRejectedValue(testError);
+    vi.resetModules();
+    const testError = new Error("Test CLI error");
+    const mockRunDurable = vi.fn().mockRejectedValue(testError);
+    vi.doMock("../run-durable", async () => ({
+      ...(await vi.importActual<typeof import("../run-durable")>(
+        "../run-durable",
+      )),
+      runDurable: mockRunDurable,
+    }));
 
-      await import("../index");
+    await import("../index");
 
-      expect(mockRunDurable).toHaveBeenCalledTimes(1);
-      expect(mockConsoleError).toHaveBeenCalledWith(testError);
-      expect(mockExit).toHaveBeenCalledWith(1);
-    });
+    expect(mockRunDurable).toHaveBeenCalledTimes(1);
+    expect(mockConsoleError).toHaveBeenCalledWith(testError);
+    expect(mockExit).toHaveBeenCalledWith(1);
   });
 });

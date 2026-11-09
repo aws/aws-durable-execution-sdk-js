@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { safeStringify } from "./safe-stringify";
 
 describe("safeStringify", () => {

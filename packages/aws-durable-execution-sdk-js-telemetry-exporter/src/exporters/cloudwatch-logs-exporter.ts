@@ -12,7 +12,6 @@ import { withOperationsByName } from "../operations-index";
 
 /**
  * Configuration for the CloudWatch Logs exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface CloudWatchLogsExporterConfig {
   /** CloudWatch log group name to write records to. */
@@ -45,8 +44,6 @@ export interface CloudWatchLogsExporterConfig {
  *
  * Requires IAM permissions: logs:CreateLogStream, logs:PutLogEvents on the
  * target log group.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class CloudWatchLogsExporter implements TelemetryExporter {
   private readonly logGroupName: string;

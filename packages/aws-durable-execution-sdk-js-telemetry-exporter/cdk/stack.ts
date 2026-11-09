@@ -80,7 +80,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
             ),
             // Grants lambda:CheckpointDurableExecutions and
             // lambda:GetDurableExecutionState — required for the SDK to persist
-            // and resume durable execution state (see AGENTS.md IAM section).
+            // and resume durable execution state.
             iam.ManagedPolicy.fromAwsManagedPolicyName(
               "service-role/AWSLambdaBasicDurableExecutionRolePolicy",
             ),
@@ -795,7 +795,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
           timeout: cdk.Duration.seconds(30),
           environment: envVars,
           // Required: durable execution must be enabled on the function resource
-          // itself (see AGENTS.md IaC checklist) — without this, invocations are
+          // itself — without this, invocations are
           // rejected with "Unexpected payload provided to start the durable
           // execution." executionTimeout bounds the whole execution (including
           // wait time), separate from the per-invocation `timeout` above.

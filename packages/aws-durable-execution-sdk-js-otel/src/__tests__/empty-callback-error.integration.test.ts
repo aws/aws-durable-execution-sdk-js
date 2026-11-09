@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -42,7 +43,7 @@ describe.each([
       let provider!: NodeTracerProvider;
       const submitted = gate();
       const release = gate();
-      const submitter = jest.fn(async () => {
+      const submitter = vi.fn(async () => {
         submitted.open();
         if (!resume) await release.opened;
       });
@@ -125,7 +126,7 @@ describe.each([
   it("replays an errorless failed callback without repeating side effects or terminal export", async () => {
     const exporter = new InMemorySpanExporter();
     let provider!: NodeTracerProvider;
-    const submitter = jest.fn(async () => undefined);
+    const submitter = vi.fn(async () => undefined);
     const failures: Array<{ name: string; message: string }> = [];
     const plugin = Plugin({
       contextExtractor: () => undefined,

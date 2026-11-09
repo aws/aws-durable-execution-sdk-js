@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { normalizeOperation, normalizeOperations } from "./normalize-operation";
 import {
   OperationStatus,

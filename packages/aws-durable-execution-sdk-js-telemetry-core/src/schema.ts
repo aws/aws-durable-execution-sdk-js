@@ -164,7 +164,7 @@ coarse text match like: filter message like /"convert_data"/`;
 
 const DIALECT_NESTED = `Target query language: CloudWatch Logs Insights (NOT SQL).
 Rules:
-- Use Logs Insights commands separated by "|": fields, filter, stats, sort, limit, parse, dedup.
+- Use Logs Insights commands separated by "|": fields, display, filter, stats, sort, limit, parse, dedup.
 - ALWAYS start with: filter level = "INFO" and message like /DurableExecutionTelemetry/
   This isolates telemetry records from platform events and other application logs.
 - To extract fields from the message JSON string, use glob-style parse:
@@ -176,6 +176,7 @@ Rules:
     parse message "\\"error\\":{\\"name\\":\\"*\\"" as error_name
 - Use underscored field aliases (telemetry_status, not telemetryStatus) to avoid conflicts with auto-discovered fields.
 - NEVER define the same alias twice in a query — each "as <name>" must be unique.
+- After parse, list the fields to return with display, NOT fields. fields re-defines a parsed alias, and Logs Insights rejects the query ("Ephemeral field is already defined").
 - Do NOT include a time range in the query; the time range is supplied separately.
 - Always end a non-aggregating query with "| limit" (max 1000).
 - Use "| sort @timestamp desc" for recent-first.
@@ -184,7 +185,7 @@ Rules:
 
 const FEWSHOTS_NESTED = `Examples:
 Q: show the most recent failed executions
-A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /FAILED/ | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | parse message "\\"durationMs\\":*," as duration_ms | parse message "\\"error\\":{\\"name\\":\\"*\\"" as error_name | fields @timestamp, exec_arn, duration_ms, error_name | sort @timestamp desc | limit 50
+A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /FAILED/ | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | parse message "\\"durationMs\\":*," as duration_ms | parse message "\\"error\\":{\\"name\\":\\"*\\"" as error_name | display @timestamp, exec_arn, duration_ms, error_name | sort @timestamp desc | limit 50
 
 Q: average duration of successful executions
 A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /"status":"SUCCEEDED"/ | parse message "\\"durationMs\\":*," as duration_ms | stats avg(duration_ms) as avg_duration_ms
@@ -193,10 +194,10 @@ Q: count executions by status
 A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | parse message "\\"status\\":\\"*\\"" as telemetry_status | stats count(*) as ct by telemetry_status | sort ct desc
 
 Q: executions that took longer than 5 seconds
-A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /"status":"SUCCEEDED"/ | parse message "\\"durationMs\\":*," as duration_ms | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | filter duration_ms > 5000 | fields @timestamp, exec_arn, duration_ms | sort duration_ms desc | limit 50
+A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /"status":"SUCCEEDED"/ | parse message "\\"durationMs\\":*," as duration_ms | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | filter duration_ms > 5000 | display @timestamp, exec_arn, duration_ms | sort duration_ms desc | limit 50
 
 Q: failures with a timeout error
-A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /FAILED/ and message like /Timeout/ | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | parse message "\\"error\\":{\\"name\\":\\"*\\",\\"message\\":\\"*\\"" as error_name, error_msg | fields @timestamp, exec_arn, error_name, error_msg | sort @timestamp desc | limit 50
+A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | filter message like /FAILED/ and message like /Timeout/ | parse message "\\"executionArn\\":\\"*\\"" as exec_arn | parse message "\\"error\\":{\\"name\\":\\"*\\",\\"message\\":\\"*\\"" as error_name, error_msg | display @timestamp, exec_arn, error_name, error_msg | sort @timestamp desc | limit 50
 
 Q: show last 100 records
 A: filter level = "INFO" and message like /DurableExecutionTelemetry/ | fields @timestamp, message | sort @timestamp desc | limit 100`;

@@ -9,6 +9,7 @@ export const config: ExampleConfig = {
   name: "Map Error Preservation",
   description:
     "Demonstrates that errors thrown in map operations preserve their original type and message",
+  testedBy: ["map/error-type-preservation-replay"],
 };
 
 export const handler = withDurableExecution(

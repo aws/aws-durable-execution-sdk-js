@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
 import { OperationAction, OperationType, OperationUpdate } from "../types/wire";

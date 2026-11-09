@@ -8,6 +8,7 @@ export const config: ExampleConfig = {
   name: "Create Callback - Failures",
   description:
     "Demonstrates callback failure scenarios where the error propagates and is handled by framework",
+  testedBy: ["create-callback/simple", "create-callback/error-instance"],
 };
 
 export const handler = withDurableExecution(

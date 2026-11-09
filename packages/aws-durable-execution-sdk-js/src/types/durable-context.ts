@@ -1,21 +1,21 @@
-import { Context } from "aws-lambda";
-import { LoggerConfig } from "./logger";
-import { SerdesConfig } from "../utils/serdes/serdes";
-import { StepFunc, StepConfig } from "./step";
-import { ChildFunc, ChildConfig } from "./child-context";
-import { InvokeConfig } from "./invoke";
-import { Duration } from "./core";
-import {
+import type { Context } from "aws-lambda";
+import type { LoggerConfig } from "./logger";
+import type { SerdesConfig } from "../utils/serdes/serdes";
+import type { StepFunc, StepConfig } from "./step";
+import type { ChildFunc, ChildConfig } from "./child-context";
+import type { InvokeConfig } from "./invoke";
+import type { Duration } from "./core";
+import type {
   CreateCallbackConfig,
   CreateCallbackResult,
   WaitForCallbackSubmitterFunc,
   WaitForCallbackConfig,
 } from "./callback";
-import {
+import type {
   WaitForConditionCheckFunc,
   WaitForConditionConfig,
 } from "./wait-condition";
-import {
+import type {
   MapFunc,
   MapConfig,
   ParallelFunc,
@@ -24,7 +24,7 @@ import {
   BatchResult,
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
-import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * @public
@@ -82,8 +82,8 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @remarks
    * **IMPORTANT**: `step()` is designed for single atomic operations and cannot be used to group
    * multiple durable operations (like other steps, waits, or child contexts). The step function
-   * receives a simple `StepContext` (providing a logger and the current retry `attempt` number),
-   * not a full `DurableContext`.
+   * receives a simple `StepContext` (providing a logger, the current retry `attempt` number and
+   * an abort `signal`), not a full `DurableContext`.
    *
    * **To group multiple durable operations, use `runInChildContext()` instead:**
    * ```typescript
@@ -767,12 +767,13 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
      *   ]
      * );
      *
-     * // ✅ Better: Use parallel() with early completion
+     * // ✅ Better: Use parallel() with early completion.
+     * // Pass the step signal, so the losing fetches stop when one succeeds.
      * const result = await context.parallel(
      *   [
-     *     async (ctx) => ctx.step(async () => fetchFromPrimaryDB(userId)),
-     *     async (ctx) => ctx.step(async () => fetchFromSecondaryDB(userId)),
-     *     async (ctx) => ctx.step(async () => fetchFromCache(userId))
+     *     async (ctx) => ctx.step(async (s) => fetchFromPrimaryDB(userId, s.signal)),
+     *     async (ctx) => ctx.step(async (s) => fetchFromSecondaryDB(userId, s.signal)),
+     *     async (ctx) => ctx.step(async (s) => fetchFromCache(userId, s.signal))
      *   ],
      *   {
      *     completionConfig: { minSuccessful: 1 } // Stop after first success

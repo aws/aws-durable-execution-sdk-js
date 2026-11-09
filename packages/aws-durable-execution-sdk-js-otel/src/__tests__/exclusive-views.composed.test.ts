@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { context, trace, ROOT_CONTEXT } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import {
@@ -15,10 +16,10 @@ import type * as PluginFactory from "../../../aws-durable-execution-sdk-js/dist-
 
 // Run the real core loader and runner. Use their built declarations so this
 // package's typecheck does not compile core sources with OTel compiler options.
-const { loadConfiguredPlugins } = jest.requireActual<typeof PluginLoader>(
+const { loadConfiguredPlugins } = await vi.importActual<typeof PluginLoader>(
   "../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-loader",
 );
-const { createInvocationPluginRunner } = jest.requireActual<
+const { createInvocationPluginRunner } = await vi.importActual<
   typeof PluginFactory
 >("../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-factory");
 import { createExecutionOtelPluginFactory } from "../execution-plugin";
@@ -131,7 +132,7 @@ describe("bundled OTel view registration", () => {
     async (Plugin) => {
       for (const terminal of ["SUCCEEDED", "FAILED"] as const) {
         exporter.reset();
-        const observer = { onInvocationStart: jest.fn(async () => undefined) };
+        const observer = { onInvocationStart: vi.fn(async () => undefined) };
         const plugins = await loadConfiguredPlugins(
           [
             make(Plugin),

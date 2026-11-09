@@ -7,6 +7,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Promise All",
   description: "Waiting for all promises to complete",
+  testedBy: ["promise/combinators"],
 };
 
 export const handler = withDurableExecution(

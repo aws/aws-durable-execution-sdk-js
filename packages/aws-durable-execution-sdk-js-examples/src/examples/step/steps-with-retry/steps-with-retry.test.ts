@@ -1,17 +1,22 @@
+import { vi, type Mock } from "vitest";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./steps-with-retry";
 
 // Mock AWS SDK to return successful responses
-var mockSend: jest.Mock;
-jest.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: jest.fn().mockImplementation(() => {
-    const localMockSend = jest.fn();
+var mockSend: Mock;
+vi.mock("@aws-sdk/client-dynamodb", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: the code calls this mock with `new`, and Vitest cannot construct an arrow function.
+  DynamoDBClient: vi.fn().mockImplementation(function () {
+    const localMockSend = vi.fn();
     mockSend = localMockSend;
     return {
       send: localMockSend,
     };
   }),
-  GetItemCommand: jest.fn().mockImplementation((params) => params),
+  // biome-ignore lint/complexity/useArrowFunction: the code calls this mock with `new`, and Vitest cannot construct an arrow function.
+  GetItemCommand: vi.fn().mockImplementation(function (params) {
+    return params;
+  }),
 }));
 
 beforeAll(() =>
@@ -24,7 +29,7 @@ describe("steps-with-retry", () => {
     handlerFunction: handler,
   });
 
-  jest.spyOn(Math, "random").mockReturnValue(0.5);
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
 
   beforeEach(() => {
     mockSend.mockClear();

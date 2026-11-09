@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { context, trace } from "@opentelemetry/api";
 import type { Tracer } from "@opentelemetry/api";
@@ -86,7 +95,7 @@ describe.each([
       toString: () => "NameSelectiveSampler",
     };
     let nativeTracer!: Tracer;
-    let starts!: jest.SpyInstance;
+    let starts!: MockInstance;
     const factory = createFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory: (ids) => {
@@ -97,7 +106,7 @@ describe.each([
         });
         nativeTracer = provider.getTracer("aws-durable-execution-sdk-js");
         // Calls through to the real SDK tracer. No probe or fabricated Span.
-        starts = jest.spyOn(nativeTracer, "startSpan");
+        starts = vi.spyOn(nativeTracer, "startSpan");
         if (mode !== "opaque") return provider;
         return {
           getTracer: () => ({

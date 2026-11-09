@@ -62,7 +62,7 @@ export const handler = withDurableExecution(
     const first = await context.step("capture-initial-carrier", async () =>
       captureCarrier(context),
     );
-    await context.wait("resume-with-runtime-carrier", { seconds: 30 });
+    await context.wait("resume-with-runtime-carrier", { seconds: 3 });
     const resumed = await context.step("capture-resumed-carrier", async () =>
       captureCarrier(context),
     );

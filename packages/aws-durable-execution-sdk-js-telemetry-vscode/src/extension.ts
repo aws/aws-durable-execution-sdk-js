@@ -172,6 +172,16 @@ class ExplorerPanel {
       null,
       this.disposables,
     );
+    // Keep the Settings form in step with what queries use. VS Code fires this
+    // when the user edits settings.json directly and when the user grants
+    // workspace trust, which brings the folder's settings into effect.
+    vscode.workspace.onDidChangeConfiguration(
+      (e) => {
+        if (e.affectsConfiguration(SECTION)) this.session.refreshConfig();
+      },
+      null,
+      this.disposables,
+    );
   }
 
   private getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {

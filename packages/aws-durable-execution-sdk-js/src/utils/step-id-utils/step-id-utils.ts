@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { Operation } from "../../types/wire";
+import type { Operation } from "../../types/wire";
 
 const HASH_LENGTH = 16;
 

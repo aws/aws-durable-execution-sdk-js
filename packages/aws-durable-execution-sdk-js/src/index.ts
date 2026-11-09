@@ -1,14 +1,22 @@
 export * from "./with-durable-execution";
 export {
+  StepSemantics,
+  InvocationStatus,
+  OperationSubType,
+  JitterStrategy,
+  BatchItemStatus,
+  CompletionOutcome,
+  completeBatch,
+  continueBatch,
+  NestingType,
+} from "./types";
+export type {
   DurableContext,
   StepConfig,
   StepFunc,
-  StepSemantics,
   ChildConfig,
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
-  InvocationStatus,
-  OperationSubType,
   MapFunc,
   MapConfig,
   ConcurrentExecutionItem,
@@ -21,7 +29,6 @@ export {
   DurableLambdaHandler,
   DurableExecutionHandler,
   InvokeConfig,
-  JitterStrategy,
   Duration,
   DurableLogger,
   DurableContextLogger,
@@ -30,7 +37,6 @@ export {
   DurableExecutionConfig,
   DurableExecutionClient,
   BatchItem,
-  BatchItemStatus,
   BatchResult,
   CompletionConfig,
   ThresholdCompletionConfig,
@@ -39,11 +45,7 @@ export {
   CompletionStatus,
   CompletionItemStatus,
   CompletionDecision,
-  CompletionOutcome,
-  completeBatch,
-  continueBatch,
   RetryDecision,
-  NestingType,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 // Wire protocol shapes. These are referenced by the public handler, client and error
@@ -54,6 +56,8 @@ export {
   OperationType,
   OperationStatus,
   OperationAction,
+} from "./types/wire";
+export type {
   WireTimestamp,
   Operation,
   WireOperation,
@@ -84,7 +88,7 @@ export {
  *
  * @internal Exposed for `lambda-runtime-detection-integration-test`, which has to observe
  * the value from a real CommonJS and a real ES module process — the detection relies on
- * `__filename` / `import.meta.url`, which Jest cannot exercise.
+ * `__filename` / `import.meta.url`, which the unit tests cannot exercise.
  */
 export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
@@ -92,9 +96,9 @@ export { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
 export {
   DurableExecutionClientError,
   DurableExecutionClientErrorScope,
-  DurableExecutionClientErrorOptions,
   isDurableExecutionClientError,
 } from "./errors/durable-execution-client-error/durable-execution-client-error";
+export type { DurableExecutionClientErrorOptions } from "./errors/durable-execution-client-error/durable-execution-client-error";
 export {
   DurableOperationError,
   StepError,
@@ -112,6 +116,8 @@ export {
   defaultSerdes,
   createClassSerdes,
   createClassSerdesWithDates,
+} from "./utils/serdes/serdes";
+export type {
   Serdes,
   SerdesContext,
   SerdesConfig,
@@ -122,9 +128,11 @@ export {
   createFileSystemSerdes,
   FileSystemSerdesMode,
   FileSystemPathEncoding,
-  FileSystemSerdesConfig,
   FieldMatchMode,
   PreviewMode,
+} from "./utils/serdes/filesystem-serdes";
+export type {
+  FileSystemSerdesConfig,
   PreviewField,
   PreviewConfig,
 } from "./utils/serdes/filesystem-serdes";
@@ -133,40 +141,37 @@ export { refreshLogConfig } from "./utils/logger/logger";
 export {
   createPowertoolsLogger,
   PowertoolsDurableLogger,
-  PowertoolsLoggerLike,
 } from "./utils/logger/powertools-logger";
+export type { PowertoolsLoggerLike } from "./utils/logger/powertools-logger";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
-export {
-  createWaitStrategy,
-  WaitStrategyConfig,
-} from "./utils/wait-strategy/wait-strategy-config";
-export {
-  createRetryStrategy,
-  RetryStrategyConfig,
-} from "./utils/retry/retry-config";
-export {
-  createLinearRetryStrategy,
-  LinearRetryStrategyConfig,
-} from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
+export { createWaitStrategy } from "./utils/wait-strategy/wait-strategy-config";
+export type { WaitStrategyConfig } from "./utils/wait-strategy/wait-strategy-config";
+export { createRetryStrategy } from "./utils/retry/retry-config";
+export type { RetryStrategyConfig } from "./utils/retry/retry-config";
+export { createLinearRetryStrategy } from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
+export type { LinearRetryStrategyConfig } from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
-export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
+export { withRetry } from "./utils/with-retry";
+export type { WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
 export {
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  PluginInvocationStatus,
+  PluginOperationStatus,
+  AttemptEndInfoOutcome,
+} from "./types/plugin";
+export type {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
-  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   RegisteredDurableInstrumentationPlugin,
   RegisteredDurableInstrumentationPluginFactory,
   PropagationInput,
   PropagationMetadata,
   InvocationInfo,
   InvocationEndInfo,
-  PluginInvocationStatus,
   OperationChangeInfo,
   OperationInfo,
   OperationEndInfo,
-  PluginOperationStatus,
   AttemptInfo,
   AttemptEndInfo,
-  AttemptEndInfoOutcome,
 } from "./types/plugin";

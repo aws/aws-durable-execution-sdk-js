@@ -1,27 +1,25 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { ModeManagement } from "./mode-management";
 import { DurablePromise } from "../../../types";
 import { DurableExecutionMode } from "../../../types/core";
 
 describe("ModeManagement", () => {
   let modeManagement: ModeManagement;
-  let mockCaptureExecutionState: jest.Mock;
-  let mockCheckAndUpdateReplayMode: jest.Mock;
-  let mockCheckForNonResolvingPromise: jest.Mock;
-  let mockGetDurableExecutionMode: jest.Mock;
-  let mockSetDurableExecutionMode: jest.Mock;
+  let mockCaptureExecutionState: Mock;
+  let mockCheckAndUpdateReplayMode: Mock;
+  let mockCheckForNonResolvingPromise: Mock;
+  let mockSetDurableExecutionMode: Mock;
 
   beforeEach(() => {
-    mockCaptureExecutionState = jest.fn();
-    mockCheckAndUpdateReplayMode = jest.fn();
-    mockCheckForNonResolvingPromise = jest.fn();
-    mockGetDurableExecutionMode = jest.fn();
-    mockSetDurableExecutionMode = jest.fn();
+    mockCaptureExecutionState = vi.fn();
+    mockCheckAndUpdateReplayMode = vi.fn();
+    mockCheckForNonResolvingPromise = vi.fn();
+    mockSetDurableExecutionMode = vi.fn();
 
     modeManagement = new ModeManagement(
       mockCaptureExecutionState,
       mockCheckAndUpdateReplayMode,
       mockCheckForNonResolvingPromise,
-      mockGetDurableExecutionMode,
       mockSetDurableExecutionMode,
     );
   });
@@ -31,7 +29,7 @@ describe("ModeManagement", () => {
       mockCaptureExecutionState.mockReturnValue(true);
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
-      const operation = jest.fn().mockResolvedValue("result");
+      const operation = vi.fn().mockResolvedValue("result");
 
       const result = await modeManagement.withModeManagement(operation);
 
@@ -49,7 +47,7 @@ describe("ModeManagement", () => {
       const nonResolvingPromise = new Promise<never>(() => {}); // Never resolves
       mockCheckForNonResolvingPromise.mockReturnValue(nonResolvingPromise);
 
-      const operation = jest.fn();
+      const operation = vi.fn();
 
       const result = modeManagement.withModeManagement(operation);
 
@@ -62,7 +60,7 @@ describe("ModeManagement", () => {
       mockCaptureExecutionState.mockReturnValue(false);
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
-      const operation = jest.fn().mockResolvedValue("result");
+      const operation = vi.fn().mockResolvedValue("result");
 
       await modeManagement.withModeManagement(operation);
 
@@ -73,7 +71,7 @@ describe("ModeManagement", () => {
       mockCaptureExecutionState.mockReturnValue(true);
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
-      const operation = jest
+      const operation = vi
         .fn()
         .mockRejectedValue(new Error("Operation failed"));
 
@@ -93,7 +91,7 @@ describe("ModeManagement", () => {
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
       const durablePromise = new DurablePromise(async () => "result");
-      const operation = jest.fn().mockReturnValue(durablePromise);
+      const operation = vi.fn().mockReturnValue(durablePromise);
 
       const result = modeManagement.withDurableModeManagement(operation);
 
@@ -111,7 +109,7 @@ describe("ModeManagement", () => {
       const nonResolvingPromise = new Promise<never>(() => {}); // Never resolves
       mockCheckForNonResolvingPromise.mockReturnValue(nonResolvingPromise);
 
-      const operation = jest.fn();
+      const operation = vi.fn();
 
       const result = modeManagement.withDurableModeManagement(operation);
 
@@ -125,7 +123,7 @@ describe("ModeManagement", () => {
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
       const durablePromise = new DurablePromise(async () => "result");
-      const operation = jest.fn().mockReturnValue(durablePromise);
+      const operation = vi.fn().mockReturnValue(durablePromise);
 
       modeManagement.withDurableModeManagement(operation);
 
@@ -136,7 +134,7 @@ describe("ModeManagement", () => {
       mockCaptureExecutionState.mockReturnValue(true);
       mockCheckForNonResolvingPromise.mockReturnValue(null);
 
-      const operation = jest.fn().mockImplementation(() => {
+      const operation = vi.fn().mockImplementation(() => {
         throw new Error("Operation failed");
       });
 

@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   type OperationInfo,
@@ -56,7 +57,7 @@ it("keeps a parent recorded despite a suppressed checkpoint, without leaking tha
       let childWork: PromiseLike<unknown> | undefined;
       let snapshot: Record<string, OperationInfo> | undefined;
       let callback: OperationInfo | undefined;
-      const body = jest.fn(async () => {
+      const body = vi.fn(async () => {
         rootLive.open();
         await releaseRoot.opened;
         return "saved";
@@ -225,7 +226,7 @@ it.each(["first flush", "final flush", "never"] as const)(
           ],
         })),
     });
-    const body = jest.fn(async () => {
+    const body = vi.fn(async () => {
       rootLive.open();
       await releaseRoot.opened;
       return "saved";

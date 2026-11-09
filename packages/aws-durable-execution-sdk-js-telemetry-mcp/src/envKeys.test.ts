@@ -7,6 +7,7 @@
  * Tests pass a fake env object into readConfigFromEnv — process.env is never
  * mutated.
  */
+import { describe, it, expect } from "vitest";
 import {
   SETTING_KEYS,
   isSettingKey,

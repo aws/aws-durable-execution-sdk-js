@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 import {
   xRayContextExtractor,

@@ -328,6 +328,29 @@ All settings are under the `durableExecutionTelemetry.*` namespace.
 
 \* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
+### Workspace settings and Restricted Mode
+
+The extension saves settings to your user settings. You can also set them per
+folder in `.vscode/settings.json`. VS Code applies those folder values only
+after you trust the folder:
+
+- **Untrusted folder (Restricted Mode).** The extension ignores every
+  `durableExecutionTelemetry.*` value from the folder and uses your user
+  settings, or the defaults. A repository you open but don't trust cannot
+  change your destination, AWS profile, or LLM endpoint, or turn on
+  `sqsDeleteAfterRead`.
+- **Trusted folder.** The folder's values apply and take precedence over your
+  user settings. Review a repository's `.vscode/settings.json` before you trust
+  it.
+
+Saving the Settings panel writes only the fields you changed, so a trusted
+folder's values are not copied into your user settings. If the folder sets a
+field you change, your value is saved but the folder's value still applies in
+that folder, and the panel tells you which fields are affected.
+
+`aiDisclosureAcceptedVersion` is read only from your user settings, never from
+a folder, trusted or not, so only you can accept the AI notice.
+
 ## AI Features & Data Handling
 
 Durable Execution Telemetry uses generative AI (a large language model) for some features.
@@ -381,16 +404,16 @@ No credentials are stored by the extension.
 
 Depending on your destination:
 
-| Destination     | Permissions needed                                                                                                                                                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                |
-| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                         |
-| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
-| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                   |
-| OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                   |
-| S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
-| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
-| Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                            |
+| Destination     | Permissions needed                                                                                                                                                                                                                                              |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                                       |
+| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                                                |
+| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                                                    |
+| Redshift        | `redshift-data:ExecuteStatement`, `redshift-data:DescribeStatement`, `redshift-data:GetStatementResult`, plus the credential action for your authentication mode (see below the table)                                                                          |
+| OpenSearch      | `es:ESHttpPost` (SQL queries to `_plugins/_sql`) and `es:ESHttpGet` (connection test, document count, record drill-down) on the domain                                                                                                                          |
+| S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `athena:GetWorkGroup`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
+| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                                              |
+| Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                                                   |
 
 Redshift needs one credential action, chosen by how you connect:
 
@@ -419,6 +442,11 @@ Redshift needs one credential action, chosen by how you connect:
 >   and `s3:PutObject`. The extension uses them to create the Glue table on first
 >   save and to write Athena results. Scope `s3:PutObject` to the results bucket.
 >   If the Glue table already exists, omit the two Glue write actions.
+>
+> The Settings page repeats this as a one-line warning. For S3 + Athena,
+> **Test connection** also checks where Athena writes query results. If they
+> would land inside the table's data, every query would add rows, so the test
+> skips its own test query and reports the problem.
 
 ## How Queries Are Generated
 

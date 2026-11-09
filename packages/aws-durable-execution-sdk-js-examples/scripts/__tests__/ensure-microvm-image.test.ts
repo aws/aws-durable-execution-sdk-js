@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   ResourceNotFoundException,
   ValidationException,
@@ -193,7 +194,7 @@ describe("createImageService", () => {
     const commands: string[] = [];
     return {
       commands,
-      send: jest.fn(async (command: object) => {
+      send: vi.fn(async (command: object) => {
         const name = command.constructor.name;
         commands.push(name);
         return handler(name);
@@ -227,11 +228,11 @@ describe("createImageService", () => {
     new ResourceNotFoundException({ message: "not found", $metadata: {} });
 
   beforeEach(() => {
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("carries on when another run deleted the image first", async () => {

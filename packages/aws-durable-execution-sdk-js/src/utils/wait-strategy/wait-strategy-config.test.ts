@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { createWaitStrategy } from "./wait-strategy-config";
 import { JitterStrategy } from "../../types";
 
@@ -281,7 +282,7 @@ describe("createWaitStrategy", () => {
 
   describe("shouldContinuePolling function", () => {
     it("should call shouldContinuePolling with correct result", () => {
-      const mockShouldContinue = jest.fn().mockReturnValue(false);
+      const mockShouldContinue = vi.fn().mockReturnValue(false);
       const strategy = createWaitStrategy({
         shouldContinuePolling: mockShouldContinue,
       });

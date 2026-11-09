@@ -1,4 +1,4 @@
-import { ErrorObject } from "../../types/wire";
+import type { ErrorObject } from "../../types/wire";
 import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 // Type-only import to avoid a runtime circular dependency with types/batch.
 import type { CompletionReason } from "../../types/batch";
@@ -9,14 +9,15 @@ import type { CompletionReason } from "../../types/batch";
  */
 export abstract class DurableOperationError extends Error {
   abstract readonly errorType: string;
-  public cause?: Error;
-  public errorData?: string;
+  // `declare` adds only the type. A plain field would run after super()
+  // and reset the native cause to undefined.
+  declare cause?: Error;
+  public errorData?: string | undefined;
   public stackTrace?: string[];
 
   constructor(message: string, cause?: Error, errorData?: string) {
-    super(message);
+    super(message, { cause });
     this.name = this.constructor.name;
-    this.cause = cause;
     this.errorData = errorData;
 
     // Preserve original stack trace if cause exists and stack traces are enabled
@@ -31,7 +32,8 @@ export abstract class DurableOperationError extends Error {
   static fromErrorObject(errorObject: ErrorObject): DurableOperationError {
     const cause = new Error(errorObject.ErrorMessage);
     cause.name = errorObject.ErrorType || "Error";
-    cause.stack = errorObject.StackTrace?.join("\n");
+    // Error.stack is typed without undefined. A missing trace clears the stack.
+    Object.assign(cause, { stack: errorObject.StackTrace?.join("\n") });
 
     // Determine error type and create appropriate instance
     switch (errorObject.ErrorType) {

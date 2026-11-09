@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DurableInstrumentationPlugin,
@@ -50,10 +51,10 @@ function moduleNotFoundError(
 describe("createDefaultModuleImporter", () => {
   it("does not fall back when a resolved provider fails during evaluation", async () => {
     const evaluationError = new Error("provider evaluation failed");
-    const importModule = jest.fn(async (): Promise<unknown> => {
+    const importModule = vi.fn(async (): Promise<unknown> => {
       throw evaluationError;
     });
-    const resolveModule = jest.fn();
+    const resolveModule = vi.fn();
     const importer = createDefaultModuleImporter(
       {},
       { importModule, resolveModule },
@@ -65,10 +66,10 @@ describe("createDefaultModuleImporter", () => {
 
   it("does not fall back when a provider dependency is missing", async () => {
     const dependencyError = moduleNotFoundError("@example/missing-peer");
-    const importModule = jest.fn(async (): Promise<unknown> => {
+    const importModule = vi.fn(async (): Promise<unknown> => {
       throw dependencyError;
     });
-    const resolveModule = jest.fn();
+    const resolveModule = vi.fn();
     const importer = createDefaultModuleImporter(
       {},
       { importModule, resolveModule },
@@ -82,11 +83,11 @@ describe("createDefaultModuleImporter", () => {
     const nativeImportError = moduleNotFoundError("@example/plugin");
     const importedModule = { provider: true };
     const resolvedPath = "/opt/nodejs/node_modules/@example/plugin/index.mjs";
-    const importModule = jest
-      .fn<Promise<unknown>, [string]>()
+    const importModule = vi
+      .fn<(s: string) => Promise<unknown>>()
       .mockRejectedValueOnce(nativeImportError)
       .mockResolvedValueOnce(importedModule);
-    const resolveModule = jest.fn(() => resolvedPath);
+    const resolveModule = vi.fn(() => resolvedPath);
     const importer = createDefaultModuleImporter(
       {},
       { importModule, resolveModule },
@@ -137,7 +138,7 @@ describe("createDefaultModuleImporter", () => {
 describe("loadConfiguredPlugins", () => {
   it("preserves explicit factories without importing modules when configuration is unset", async () => {
     const explicitFactory = factoryFor(() => new ExplicitPlugin());
-    const importModule = jest.fn();
+    const importModule = vi.fn();
 
     const result = await loadConfiguredPlugins([explicitFactory], {
       environment: {},
@@ -150,7 +151,7 @@ describe("loadConfiguredPlugins", () => {
 
   it("treats a blank environment variable as disabled", async () => {
     const explicitFactory = factoryFor(() => new ExplicitPlugin());
-    const importModule = jest.fn();
+    const importModule = vi.fn();
 
     const result = await loadConfiguredPlugins([explicitFactory], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "  " },
@@ -169,7 +170,7 @@ describe("loadConfiguredPlugins", () => {
       "@example/first": moduleFor(firstFactory),
       "@example/second/provider": moduleFor(secondFactory),
     };
-    const importModule = jest.fn(
+    const importModule = vi.fn(
       async (specifier: string): Promise<unknown> => modules[specifier],
     );
 
@@ -208,7 +209,7 @@ describe("loadConfiguredPlugins", () => {
           environment: {
             [PLUGIN_ENVIRONMENT_VARIABLE]: configuredPlugins,
           },
-          importModule: jest.fn(),
+          importModule: vi.fn(),
         }),
       ).rejects.toThrow(
         `${PLUGIN_ENVIRONMENT_VARIABLE} must contain non-empty, comma-separated package or module specifiers.`,
@@ -222,7 +223,7 @@ describe("loadConfiguredPlugins", () => {
         environment: {
           [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin, @example/plugin",
         },
-        importModule: jest.fn(),
+        importModule: vi.fn(),
       }),
     ).rejects.toThrow(
       `${PLUGIN_ENVIRONMENT_VARIABLE} contains duplicate module specifier '@example/plugin'.`,
@@ -409,7 +410,7 @@ describe("loadConfiguredPlugins returns factories, not plugins", () => {
     });
 
   it("does not construct a plugin while loading a provider", async () => {
-    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const createPlugin = vi.fn(() => new FirstDynamicPlugin());
     const factory = { createPlugin };
 
     const [loaded] = await loadProvider(factory);
@@ -436,7 +437,7 @@ describe("loadConfiguredPlugins returns factories, not plugins", () => {
   });
 
   it("passes the invocation info straight through to createPlugin", async () => {
-    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const createPlugin = vi.fn(() => new FirstDynamicPlugin());
     const [loaded] = await loadProvider({ createPlugin });
 
     loaded.createPlugin(invocationInfo);
@@ -500,7 +501,7 @@ describe("loadConfiguredPlugins validates explicit entries", () => {
   });
 
   it("fails an invalid explicit entry before any module is imported", async () => {
-    const importModule = jest.fn();
+    const importModule = vi.fn();
 
     await expect(
       loadConfiguredPlugins(
@@ -517,7 +518,7 @@ describe("loadConfiguredPlugins validates explicit entries", () => {
   });
 
   it("accepts a factory entry and calls it no earlier than the provider path does", async () => {
-    const createPlugin = jest.fn(() => new ExplicitPlugin());
+    const createPlugin = vi.fn(() => new ExplicitPlugin());
     const factory = { createPlugin };
 
     const [loaded] = await loadExplicit(factory);
@@ -566,7 +567,7 @@ describe("loadConfiguredPlugins rejects a class where a factory belongs", () => 
   });
 
   it("fails a class in plugins before any module is imported", async () => {
-    const importModule = jest.fn();
+    const importModule = vi.fn();
 
     await expect(
       loadConfiguredPlugins(
@@ -775,7 +776,7 @@ describe("SDK 3.x legacy provider migration", () => {
   it.each(["explicit", "environment"] as const)(
     "rejects declared v1 providers in %s registration without calling them",
     async (registration) => {
-      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const createPlugin = vi.fn(() => new FirstDynamicPlugin());
       const legacy = {
         pluginApiVersion: 1,
         pluginType: FirstDynamicPlugin,
@@ -801,7 +802,7 @@ describe("SDK 3.x legacy provider migration", () => {
   it.each(["explicit", "environment"] as const)(
     "recognizes legacy metadata whose removed version import is undefined (%s)",
     async (registration) => {
-      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const createPlugin = vi.fn(() => new FirstDynamicPlugin());
       const legacy = {
         pluginApiVersion: undefined,
         pluginType: FirstDynamicPlugin,
@@ -820,7 +821,7 @@ describe("SDK 3.x legacy provider migration", () => {
   );
 
   it("does not call a legacy metadata getter while rejecting its declared contract", async () => {
-    const getter = jest.fn(() => {
+    const getter = vi.fn(() => {
       throw new Error("should not run");
     });
     const legacy = Object.defineProperty(
@@ -835,7 +836,7 @@ describe("SDK 3.x legacy provider migration", () => {
   });
 
   it("accepts a migrated factory and creates fresh instances for separate invocations", async () => {
-    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const createPlugin = vi.fn(() => new FirstDynamicPlugin());
     const [factory] = await loadConfiguredPlugins([{ createPlugin }], {
       environment: {},
     });
@@ -856,7 +857,7 @@ describe("SDK 3.x legacy provider migration", () => {
 describe("exclusive factory registration", () => {
   function view(name: string, exclusiveGroup = "views") {
     return {
-      createPlugin: jest.fn(() => new FirstDynamicPlugin()),
+      createPlugin: vi.fn(() => new FirstDynamicPlugin()),
       [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: { name, exclusiveGroup },
     };
   }
@@ -902,7 +903,7 @@ describe("exclusive factory registration", () => {
   );
 
   it("deduplicates inherited groups within one factory and preserves getter receivers", async () => {
-    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const createPlugin = vi.fn(() => new FirstDynamicPlugin());
     const receivers: unknown[] = [];
     const base = {
       createPlugin,
@@ -958,7 +959,7 @@ describe("exclusive factory registration", () => {
   it("rejects explicit conflicts before importing any configured module", async () => {
     const first = view("first view");
     const second = view("second view");
-    const importModule = jest.fn(async () =>
+    const importModule = vi.fn(async () =>
       moduleFor(view("metrics", "metrics")),
     );
     await expect(
@@ -1024,7 +1025,7 @@ describe("exclusive factory registration", () => {
     ];
     const loaded = await loadConfiguredPlugins(factories, { environment: {} });
     expect(loaded).toHaveLength(factories.length);
-    // Compare identities without Jest itself probing the guarded symbol getter.
+    // Compare identities without the test runner itself probing the guarded symbol getter.
     expect(loaded.every((factory, index) => factory === factories[index])).toBe(
       true,
     );

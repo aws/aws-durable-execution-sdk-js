@@ -1,3 +1,14 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -19,12 +30,12 @@ import { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
 import { TerminationReason } from "./termination-manager/types";
 import { NonDeterministicExecutionError } from "./errors/non-deterministic-error/non-deterministic-error";
 
-jest.mock("./context/execution-context/execution-context");
-jest.mock("./context/durable-context/durable-context");
-jest.mock("./utils/checkpoint/checkpoint-manager");
-jest.mock("./utils/logger/logger", () => ({ log: jest.fn() }));
-jest.mock("./utils/plugin/plugin-loader", () => ({
-  loadConfiguredPlugins: jest.fn(),
+vi.mock("./context/execution-context/execution-context");
+vi.mock("./context/durable-context/durable-context");
+vi.mock("./utils/checkpoint/checkpoint-manager");
+vi.mock("./utils/logger/logger", () => ({ log: vi.fn() }));
+vi.mock("./utils/plugin/plugin-loader", () => ({
+  loadConfiguredPlugins: vi.fn(),
 }));
 
 const mockEvent: DurableExecutionInvocationInput = {
@@ -48,9 +59,9 @@ const flushMicrotasks = async (): Promise<void> => {
   }
 };
 const mockTerminationManager = {
-  getTerminationPromise: jest.fn(),
-  terminate: jest.fn(),
-  setCheckpointTerminatingCallback: jest.fn(),
+  getTerminationPromise: vi.fn(),
+  terminate: vi.fn(),
+  setCheckpointTerminatingCallback: vi.fn(),
 };
 const mockExecutionContext = {
   _stepData: {
@@ -67,51 +78,54 @@ const mockExecutionContext = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  jest.useFakeTimers();
+  vi.clearAllMocks();
+  vi.useFakeTimers();
   (
-    loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+    loadConfiguredPlugins as MockedFunction<typeof loadConfiguredPlugins>
   ).mockImplementation(async (plugins) => [...(plugins ?? [])]);
-  (initializeExecutionContext as jest.Mock).mockResolvedValue({
+  (initializeExecutionContext as Mock).mockResolvedValue({
     executionContext: mockExecutionContext,
     checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
     durableExecutionMode: DurableExecutionMode.ExecutionMode,
   });
-  (createDurableContext as jest.Mock).mockReturnValue({});
-  (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-    checkpoint: jest.fn().mockResolvedValue(undefined),
-    setTerminating: jest.fn(),
-    isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-    checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
-    dispose: jest.fn(),
-    waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-  }));
+  (createDurableContext as Mock).mockReturnValue({});
+  // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+  (CheckpointManager as unknown as Mock).mockImplementation(function () {
+    return {
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      setTerminating: vi.fn(),
+      isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+      checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
+      dispose: vi.fn(),
+      waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+    };
+  });
   mockTerminationManager.getTerminationPromise.mockReturnValue(
     new Promise(() => {}),
   );
 });
 
-afterEach(() => jest.useRealTimers());
+afterEach(() => vi.useRealTimers());
 
 describe("plugin hooks", () => {
-  let plugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let plugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
     plugin = {
-      onInvocationStart: jest.fn(),
-      onInvocationEnd: jest.fn(),
+      onInvocationStart: vi.fn(),
+      onInvocationEnd: vi.fn(),
     };
   });
 
   it("forwards each runtime X-Ray header to invocation hooks on initial and resumed calls", async () => {
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factoryFor(plugin)],
     });
     for (const mode of [
       DurableExecutionMode.ExecutionMode,
       DurableExecutionMode.ReplayMode,
     ]) {
-      (initializeExecutionContext as jest.Mock).mockResolvedValue({
+      (initializeExecutionContext as Mock).mockResolvedValue({
         executionContext: mockExecutionContext,
         checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
         durableExecutionMode: mode,
@@ -127,10 +141,10 @@ describe("plugin hooks", () => {
   it.each([undefined, null, ""])(
     "keeps an available runtime carrier authoritative when it returns %s",
     async (value) => {
-      const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
         plugins: [factoryFor(plugin)],
       });
-      const carrier = jest.fn(() => value);
+      const carrier = vi.fn(() => value);
       const runtimeContext = Object.assign(
         Object.create(
           Object.defineProperty({}, "xRayTraceId", { get: carrier }),
@@ -146,13 +160,13 @@ describe("plugin hooks", () => {
   );
 
   it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
 
     expect(
-      jest.mocked(plugin.onInvocationStart!).mock.calls[0][0],
+      vi.mocked(plugin.onInvocationStart!).mock.calls[0][0],
     ).not.toHaveProperty("xRayTraceId");
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
@@ -166,13 +180,13 @@ describe("plugin hooks", () => {
   });
 
   it("calls onInvocationStart without isFirstInvocation on replay invocations", async () => {
-    (initializeExecutionContext as jest.Mock).mockResolvedValue({
+    (initializeExecutionContext as Mock).mockResolvedValue({
       executionContext: mockExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
       durableExecutionMode: DurableExecutionMode.ReplayMode,
     });
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
@@ -190,7 +204,7 @@ describe("plugin hooks", () => {
 
   it("calls onInvocationEnd with SUCCEEDED status on normal completion", async () => {
     const result = { ok: true };
-    const handler = withDurableExecution(jest.fn().mockResolvedValue(result), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue(result), {
       plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
@@ -210,7 +224,7 @@ describe("plugin hooks", () => {
 
   it("calls onInvocationEnd with FAILED status when handler throws", async () => {
     const error = new Error("handler error");
-    const handler = withDurableExecution(jest.fn().mockRejectedValue(error), {
+    const handler = withDurableExecution(vi.fn().mockRejectedValue(error), {
       plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
@@ -230,7 +244,7 @@ describe("plugin hooks", () => {
 
   it("calls onInvocationEnd exactly once per invocation even when handler throws", async () => {
     const handler = withDurableExecution(
-      jest.fn().mockRejectedValue(new Error("boom")),
+      vi.fn().mockRejectedValue(new Error("boom")),
       { plugins: [factoryFor(plugin)] },
     );
     await handler(mockEvent, mockContext);
@@ -255,7 +269,7 @@ describe("plugin hooks", () => {
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
       { plugins: [factoryFor(asyncPlugin)] },
     );
 
@@ -292,7 +306,7 @@ describe("plugin hooks", () => {
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockRejectedValue(new Error("handler error")),
+      vi.fn().mockRejectedValue(new Error("handler error")),
       { plugins: [factoryFor(asyncPlugin)] },
     );
 
@@ -314,13 +328,13 @@ describe("plugin hooks", () => {
   });
 
   it("fans out hooks to multiple plugins", async () => {
-    const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-      onInvocationStart: jest.fn(),
-      onInvocationEnd: jest.fn(),
+    const plugin2: Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: vi.fn(),
+      onInvocationEnd: vi.fn(),
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
       {
         plugins: [factoryFor(plugin), factoryFor(plugin2)],
       },
@@ -346,16 +360,16 @@ describe("plugin hooks", () => {
   });
 
   it("loads configured plugins once when the wrapped handler is initialized", async () => {
-    const dynamicPlugin: jest.Mocked<DurableInstrumentationPlugin> = {
-      onInvocationStart: jest.fn(),
-      onInvocationEnd: jest.fn(),
+    const dynamicPlugin: Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: vi.fn(),
+      onInvocationEnd: vi.fn(),
     };
     const explicitFactory = factoryFor(plugin);
     (
-      loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+      loadConfiguredPlugins as MockedFunction<typeof loadConfiguredPlugins>
     ).mockResolvedValueOnce([explicitFactory, factoryFor(dynamicPlugin)]);
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [explicitFactory],
     });
 
@@ -377,10 +391,10 @@ describe("plugin hooks", () => {
       "invalid dynamic plugin configuration",
     );
     (
-      loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+      loadConfiguredPlugins as MockedFunction<typeof loadConfiguredPlugins>
     ).mockRejectedValueOnce(pluginLoadError);
 
-    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+    const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
 
     await expect(handler(mockEvent, mockContext)).resolves.toEqual({
       Status: InvocationStatus.FAILED,
@@ -406,7 +420,7 @@ describe("plugin hooks", () => {
     };
 
     const handler = withDurableExecution(
-      jest.fn().mockResolvedValue({ ok: true }),
+      vi.fn().mockResolvedValue({ ok: true }),
       { plugins: [factoryFor(throwingPlugin)] },
     );
 
@@ -415,7 +429,7 @@ describe("plugin hooks", () => {
     });
   });
 
-  it("enrichLogContext merges results from all plugins", () => {
+  it("enrichLogContext merges results from all plugins", async () => {
     const pluginA: DurableInstrumentationPlugin = {
       enrichLogContext: () => ({ traceId: "abc" }),
     };
@@ -423,9 +437,9 @@ describe("plugin hooks", () => {
       enrichLogContext: () => ({ spanId: "xyz" }),
     };
 
-    const { createPluginRunner } = jest.requireActual(
-      "./utils/plugin/plugin-runner",
-    );
+    const { createPluginRunner } = await vi.importActual<
+      typeof import("./utils/plugin/plugin-runner")
+    >("./utils/plugin/plugin-runner");
     const runner = createPluginRunner([pluginA, pluginB]);
 
     expect(runner.enrichLogContext?.()).toEqual({
@@ -453,19 +467,19 @@ describe("onInvocationEnd receives correct InvocationEndInfo on success", () => 
   ])(
     "onInvocationEnd receives SUCCEEDED with $desc",
     async ({ returnValue }) => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
-        onInvocationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
+        onInvocationEnd: vi.fn(),
       };
 
       const handler = withDurableExecution(
-        jest.fn().mockResolvedValue(returnValue),
+        vi.fn().mockResolvedValue(returnValue),
         { plugins: [factoryFor(plugin)] },
       );
       await handler(mockEvent, mockContext);
 
       expect(plugin.onInvocationEnd).toHaveBeenCalledTimes(1);
-      const endInfo = (plugin.onInvocationEnd as jest.Mock).mock.calls[0][0];
+      const endInfo = (plugin.onInvocationEnd as Mock).mock.calls[0][0];
 
       expect(endInfo.status).toBe(PluginInvocationStatus.SUCCEEDED);
       expect(endInfo.executionResult).toEqual(returnValue);
@@ -492,7 +506,7 @@ describe("RETRYING never appears in Lambda response output", () => {
     "output Status is never RETRYING for successful handler: $desc",
     async ({ returnValue }) => {
       const handler = withDurableExecution(
-        jest.fn().mockResolvedValue(returnValue),
+        vi.fn().mockResolvedValue(returnValue),
         { plugins: [] },
       );
       const output = await handler(mockEvent, mockContext);
@@ -512,7 +526,7 @@ describe("RETRYING never appears in Lambda response output", () => {
     "output Status is never RETRYING for failing handler: $desc",
     async ({ errorMessage }) => {
       const handler = withDurableExecution(
-        jest.fn().mockRejectedValue(new Error(errorMessage)),
+        vi.fn().mockRejectedValue(new Error(errorMessage)),
         { plugins: [] },
       );
       const output = await handler(mockEvent, mockContext);
@@ -534,20 +548,20 @@ describe("onInvocationEnd receives correct InvocationEndInfo on failure", () => 
   ])(
     "onInvocationEnd receives FAILED with correct error: $desc",
     async ({ errorMessage }) => {
-      const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationStart: jest.fn(),
-        onInvocationEnd: jest.fn(),
+      const plugin: Mocked<DurableInstrumentationPlugin> = {
+        onInvocationStart: vi.fn(),
+        onInvocationEnd: vi.fn(),
       };
 
       const thrownError = new Error(errorMessage);
       const handler = withDurableExecution(
-        jest.fn().mockRejectedValue(thrownError),
+        vi.fn().mockRejectedValue(thrownError),
         { plugins: [factoryFor(plugin)] },
       );
       await handler(mockEvent, mockContext);
 
       expect(plugin.onInvocationEnd).toHaveBeenCalledTimes(1);
-      const endInfo = (plugin.onInvocationEnd as jest.Mock).mock.calls[0][0];
+      const endInfo = (plugin.onInvocationEnd as Mock).mock.calls[0][0];
 
       expect(endInfo.status).toBe(PluginInvocationStatus.FAILED);
       expect(endInfo.executionError).toBeInstanceOf(Error);
@@ -565,9 +579,9 @@ describe("onInvocationEnd reflects the class of a termination", () => {
     reason: TerminationReason,
     details: { message: string; error?: Error },
   ): Promise<Record<string, unknown>> => {
-    const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-      onInvocationStart: jest.fn(),
-      onInvocationEnd: jest.fn(),
+    const plugin: Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: vi.fn(),
+      onInvocationEnd: vi.fn(),
     };
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason,
@@ -575,13 +589,13 @@ describe("onInvocationEnd reflects the class of a termination", () => {
     });
 
     const handler = withDurableExecution(
-      jest.fn().mockReturnValue(new Promise(() => {})), // never resolves
+      vi.fn().mockReturnValue(new Promise(() => {})), // never resolves
       { plugins: [factoryFor(plugin)] },
     );
     await handler(mockEvent, mockContext);
 
     expect(plugin.onInvocationEnd).toHaveBeenCalledTimes(1);
-    return (plugin.onInvocationEnd as jest.Mock).mock.calls[0][0];
+    return (plugin.onInvocationEnd as Mock).mock.calls[0][0];
   };
 
   it("reports FAILED with the error for NON_DETERMINISM", async () => {

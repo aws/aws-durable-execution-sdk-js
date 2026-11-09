@@ -1,0 +1,350 @@
+import { randomUUID } from "node:crypto";
+import {
+  type DurableContext,
+  DurablePromise,
+} from "@aws/durable-execution-sdk-js";
+import {
+  createJobCallback,
+  createScope,
+  deliverJob,
+  durationToSeconds,
+  type LaunchResult,
+  launch,
+  measuredJob,
+  type OperationScope,
+  suspendMicrovm,
+  terminate,
+  validateBaseConfig,
+  validateJobInput,
+  validateRequest,
+  validateSuspendAfter,
+  validateTimeout,
+} from "./shared";
+import { inStage, microvmErrorMapper, sessionErrorMapper } from "./errors";
+import { MicrovmOperationSubType } from "./subtypes";
+import type {
+  MicrovmInvokeOptions,
+  MicrovmRunHookPayload,
+  MicrovmSession,
+  MicrovmSessionConfig,
+  MicrovmSessionHandler,
+} from "./types";
+
+/**
+ * Runs a handler that sends several jobs to one AWS Lambda MicroVM, and
+ * returns the handler's value.
+ *
+ * @remarks
+ * The jobs share the MicroVM's files and processes. So a later job can use
+ * what an earlier job wrote. The operation creates its durable operations
+ * inside one child context named `name`:
+ *
+ * 1. `<name>.session` generates a session ID and checkpoints it.
+ * 2. `<name>.launch` calls RunMicrovm. The client token is the SHA-256 hex
+ *    digest of the session ID. A client token must be unique per launch and
+ *    stable across retries. The session ID is random, so it is unique. It is
+ *    checkpointed, so every retry and replay reads the same ID.
+ * 3. The handler runs with a {@link MicrovmSession} and the child context.
+ *    Each `vm.invoke` delivers one job over HTTP and waits for its result.
+ *    The handler can use the child context for durable operations between
+ *    jobs, such as waits and approvals.
+ * 4. `<name>.terminate` calls TerminateMicrovm after the handler returns or
+ *    throws.
+ *
+ * With `autoSuspendOnIdle: true`, the worker in the MicroVM suspends its own
+ * MicroVM between jobs, when no job has run for `autoSuspendIdleTime`. The
+ * default idle time is 60 seconds, or the session `timeout` if that is
+ * shorter. Suspending is off by default. See
+ * {@link MicrovmSessionConfig.autoSuspendOnIdle}.
+ *
+ * To suspend a MicroVM, set `idlePolicy` with `autoResumeEnabled: true`.
+ * The SDK does not resume a MicroVM; the service resumes it on the next
+ * request. See {@link MicrovmSessionConfig.idlePolicy}.
+ *
+ * Each durable operation records a subtype from
+ * {@link MicrovmOperationSubType}: `MicrovmSession` on the child context,
+ * `MicrovmSessionId`, `MicrovmLaunch`, and `MicrovmTerminate` on its steps,
+ * and `MicrovmSessionJob` on each job's child context. The operations that
+ * the handler creates keep their own subtypes.
+ *
+ * The session sends its first job right after the launch. The MicroVM
+ * endpoint holds or refuses requests until the `run` hook returns. The request
+ * step retries a refused request inside its own attempt. So the session needs
+ * no separate readiness wait, which would cost one more invocation.
+ *
+ * A job with `suspendAfter` makes the durable function call SuspendMicrovm
+ * after the job's result arrives. See
+ * {@link MicrovmInvokeOptions.suspendAfter}. Every job checks the MicroVM
+ * state after a sign that the MicroVM does not run: no answer, or an HTTP
+ * 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The check fails the
+ * job of a MicroVM that has ended, and lets the job retry otherwise. A
+ * booting MicroVM gives neither sign, unless the worker takes more than 10
+ * seconds to start listening. Then the first delivery gets no answer, and
+ * the operation makes one GetMicrovm call. So a session whose MicroVM runs
+ * makes no extra call, except in that case.
+ *
+ * A failed `vm.invoke` rejects inside the handler. The handler can catch the
+ * error and continue with the same MicroVM. An error that leaves the handler
+ * ends the session and reaches the caller.
+ *
+ * The session's value is the handler's return value, checkpointed as the
+ * child context result. So it must be JSON-serializable, and it counts toward
+ * the checkpoint size limit.
+ *
+ * Pass the context that the call runs in, such as a child context or a
+ * `map` item's context. `vm.invoke` takes its context the same way:
+ * ```typescript
+ * const result = await microvmSession(context, "pipeline", config, async (vm, ctx) => {
+ *   const build = await vm.invoke(ctx, "build", input, { path: "/build", timeout: { minutes: 15 } });
+ *   return vm.invoke(ctx, "test", build, { path: "/test", timeout: { minutes: 10 } });
+ * });
+ * ```
+ *
+ * @param context - The context to create the durable operations in.
+ * @param name - The child context name. It also prefixes the session's own
+ * operation names.
+ * @param config - The MicroVM configuration. `timeout` bounds the whole
+ * session.
+ * @param handler - Sends the jobs. It receives the session handle and the
+ * session's child context. It must be a function. The session calls it after
+ * the launch, inside the child context. So a value that is not a function
+ * fails the session with a `TypeError`, wrapped in `ChildContextError`, and
+ * the terminate step still ends the MicroVM.
+ * @returns The handler's return value.
+ * @throws \{TypeError\} When `name` is invalid, or `executionRoleArn` is
+ * missing.
+ * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
+ * or `autoSuspendIdleTime` is shorter than 10 seconds or longer than
+ * `timeout`.
+ * @throws \{TypeError\} When `autoSuspendIdleTime` is set while
+ * `autoSuspendOnIdle` is not `true`.
+ * @throws \{MicrovmLaunchError\} When the launch fails after all retries.
+ * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
+ * `RunMicrovm` rejects it with `ValidationException`.
+ *
+ * @public
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export function microvmSession<TOutput = unknown>(
+  context: DurableContext,
+  name: string,
+  config: MicrovmSessionConfig,
+  handler: MicrovmSessionHandler<TOutput>,
+): DurablePromise<TOutput> {
+  let timeoutSeconds: number;
+  let scope: OperationScope;
+  let autoSuspendIdleSeconds: number | undefined;
+  try {
+    timeoutSeconds = validateBaseConfig(name, config);
+    autoSuspendIdleSeconds = validateAutoSuspend(name, config, timeoutSeconds);
+    scope = createScope(context, name, config);
+  } catch (error) {
+    return new DurablePromise<TOutput>(() => Promise.reject(error));
+  }
+
+  return context.runInChildContext<TOutput>(
+    name,
+    async (child) => {
+      const sessionId = await child.step(
+        `${name}.session`,
+        async () => randomUUID(),
+        { subType: MicrovmOperationSubType.SESSION_ID },
+      );
+
+      const payload: MicrovmRunHookPayload = {
+        version: 1,
+        region: scope.region,
+        ...(autoSuspendIdleSeconds !== undefined && { autoSuspendIdleSeconds }),
+      };
+      const launched = await inStage(name, "launch", () =>
+        launch(child, scope, {
+          tokenSource: sessionId,
+          timeoutSeconds,
+          defaultIngress: "ALL_INGRESS",
+          runHookPayload: JSON.stringify(payload),
+          delivery: "http",
+          extra: config.idlePolicy ? { idlePolicy: config.idlePolicy } : {},
+        }),
+      );
+
+      try {
+        return await handler(createSession(scope, launched), child);
+      } finally {
+        await terminate(child, scope, launched.microvmId);
+      }
+    },
+    {
+      subType: MicrovmOperationSubType.SESSION,
+      errorMapper: sessionErrorMapper,
+    },
+  );
+}
+
+/**
+ * The default {@link MicrovmSessionConfig.autoSuspendIdleTime}, in seconds.
+ *
+ * A resume took about 1 second in us-east-1. So 60 seconds keeps back-to-back
+ * jobs from paying for a suspend and a resume that they do not need. A long
+ * wait costs at most 60 seconds of compute before the MicroVM suspends. A
+ * session whose `timeout` is shorter uses its `timeout`. A session whose
+ * `timeout` is under 10 seconds does not suspend by default.
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const DEFAULT_AUTO_SUSPEND_IDLE_SECONDS = 60;
+
+/**
+ * The shortest idle time a session accepts. A resumed MicroVM runs its
+ * `resume` hook, and then receives the job. The request that resumes it can
+ * follow a few seconds of retries. A shorter idle time could suspend the
+ * MicroVM again before its job arrives.
+ */
+const MIN_AUTO_SUSPEND_IDLE_SECONDS = 10;
+
+/**
+ * Checks the auto-suspend settings, and returns the idle time in seconds, or
+ * `undefined` when the MicroVM must not suspend itself.
+ */
+function validateAutoSuspend(
+  name: string,
+  config: MicrovmSessionConfig,
+  timeoutSeconds: number,
+): number | undefined {
+  // Suspending is opt-in. It needs an idle policy with autoResumeEnabled,
+  // and lambda:SuspendMicrovm in the MicroVM's role. It also stops
+  // background processes between jobs.
+  if (config.autoSuspendOnIdle !== true) {
+    if (config.autoSuspendIdleTime !== undefined) {
+      throw new TypeError(
+        `MicroVM session "${name}": autoSuspendIdleTime is set, but autoSuspendOnIdle is not true`,
+      );
+    }
+    return undefined;
+  }
+  if (config.autoSuspendIdleTime === undefined) {
+    // A session shorter than the minimum idle time does not suspend. Its
+    // MicroVM would suspend again before a resumed job arrives.
+    if (timeoutSeconds < MIN_AUTO_SUSPEND_IDLE_SECONDS) {
+      return undefined;
+    }
+    return Math.min(DEFAULT_AUTO_SUSPEND_IDLE_SECONDS, timeoutSeconds);
+  }
+  const idleSeconds = durationToSeconds(config.autoSuspendIdleTime);
+  if (
+    !Number.isFinite(idleSeconds) ||
+    idleSeconds < MIN_AUTO_SUSPEND_IDLE_SECONDS
+  ) {
+    throw new RangeError(
+      `MicroVM session "${name}": autoSuspendIdleTime must be at least ${MIN_AUTO_SUSPEND_IDLE_SECONDS} seconds`,
+    );
+  }
+  if (idleSeconds > timeoutSeconds) {
+    throw new RangeError(
+      `MicroVM session "${name}": autoSuspendIdleTime must not be longer than timeout`,
+    );
+  }
+  return idleSeconds;
+}
+
+/**
+ * Creates the session handle.
+ *
+ * Each `invoke` creates its durable operations in the context that the caller
+ * passes, as `microvm` does. A durable operation created in a parent context
+ * from inside a child context fails the execution. So the handle holds no
+ * context of its own, and one handle works in the session's child context,
+ * in a nested child context, and in `map` and `parallel` items.
+ */
+function createSession(
+  scope: OperationScope,
+  launched: LaunchResult,
+): MicrovmSession {
+  return {
+    microvmId: launched.microvmId,
+    invoke: <TOutput = unknown, TInput = unknown>(
+      context: DurableContext,
+      jobName: string,
+      input: TInput,
+      options: MicrovmInvokeOptions,
+    ): DurablePromise<TOutput> =>
+      invokeJob<TOutput, TInput>(
+        context,
+        scope,
+        launched,
+        jobName,
+        input,
+        options,
+      ),
+  };
+}
+
+/**
+ * Delivers one job to the session's MicroVM and waits for its result.
+ *
+ * The job has the same shape as `microvm` with HTTP delivery, without its own
+ * launch and terminate: a child context named `jobName` with subtype
+ * `MicrovmSessionJob`, a callback `<jobName>.callback`, and a request step
+ * `<jobName>.request`.
+ */
+function invokeJob<TOutput, TInput>(
+  context: DurableContext,
+  scope: OperationScope,
+  launched: LaunchResult,
+  jobName: string,
+  input: TInput,
+  options: MicrovmInvokeOptions,
+): DurablePromise<TOutput> {
+  let inputJson: string | undefined;
+  let suspendAfter: boolean;
+  try {
+    if (typeof jobName !== "string" || jobName.length === 0) {
+      throw new TypeError(
+        `MicroVM session "${scope.name}": invoke requires a non-empty job name`,
+      );
+    }
+    validateRequest(jobName, options);
+    validateTimeout(jobName, "timeout", options.timeout);
+    suspendAfter = validateSuspendAfter(jobName, options.suspendAfter);
+    inputJson = validateJobInput(jobName, input);
+  } catch (error) {
+    return new DurablePromise<TOutput>(() => Promise.reject(error));
+  }
+
+  return context.runInChildContext<TOutput>(
+    jobName,
+    async (jobContext) => {
+      const [result, callbackId] = await createJobCallback<TOutput>(
+        jobContext,
+        jobName,
+        options.timeout,
+        options.heartbeatTimeout,
+      );
+      await inStage(jobName, "delivery", () =>
+        deliverJob(
+          jobContext,
+          scope,
+          jobName,
+          launched,
+          options,
+          // The request sends the input's JSON text from
+          // validateJobInput. So `input` is encoded once per call.
+          measuredJob(callbackId, inputJson, options.heartbeatTimeout),
+        ),
+      );
+      try {
+        return await inStage(jobName, "job", () => result);
+      } finally {
+        // The job has an outcome, a result or a failure. A delivery failure
+        // throws above, and the job did not run, so it does not suspend.
+        if (suspendAfter) {
+          await suspendMicrovm(jobContext, scope, jobName, launched.microvmId);
+        }
+      }
+    },
+    {
+      subType: MicrovmOperationSubType.SESSION_JOB,
+      errorMapper: microvmErrorMapper(jobName),
+    },
+  );
+}

@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createInvokeHandler } from "./invoke-handler";
 import {
   ExecutionContext,
@@ -12,47 +21,45 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
 
 describe("InvokeHandler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let mockCreateStepId: jest.Mock;
-  let checkAndUpdateReplayMode: jest.Mock;
+  let mockCreateStepId: Mock;
+  let checkAndUpdateReplayMode: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    mockCreateStepId = jest.fn().mockReturnValue("test-step-1");
-    checkAndUpdateReplayMode = jest.fn();
+    mockCreateStepId = vi.fn().mockReturnValue("test-step-1");
+    checkAndUpdateReplayMode = vi.fn();
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(undefined),
+      getStepData: vi.fn().mockReturnValue(undefined),
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
       durableExecutionArn: "test-arn",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
@@ -61,7 +68,7 @@ describe("InvokeHandler", () => {
 
   describe("invoke", () => {
     it("should return cached result for completed invoke", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
         ChainedInvokeDetails: {
           Result: '{"result":"success"}',
@@ -94,7 +101,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should handle invoke with name parameter", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
         ChainedInvokeDetails: {
           Result: '{"result":"named"}',
@@ -125,7 +132,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should handle undefined result for void functions", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
         ChainedInvokeDetails: {
           Result: undefined,
@@ -158,7 +165,7 @@ describe("InvokeHandler", () => {
       OperationStatus.TIMED_OUT,
       OperationStatus.STOPPED,
     ])("should throw error when operation status is %s", async (status) => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: status,
         ChainedInvokeDetails: {
           Error: {
@@ -206,7 +213,7 @@ describe("InvokeHandler", () => {
             },
           },
         };
-        const mock = mockContext.getStepData as jest.Mock;
+        const mock = mockContext.getStepData as Mock;
         for (const value of stepData(failed)) mock.mockReturnValueOnce(value);
         mock.mockReturnValue(failed);
 
@@ -236,7 +243,7 @@ describe("InvokeHandler", () => {
       [{ ErrorMessage: "boom" }, "Error"],
       [{ ErrorType: "PaymentError" }, "PaymentError"],
     ])("names the cause %j as %s", async (error, expectedName) => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: OperationStatus.FAILED,
         ChainedInvokeDetails: { Error: error },
       });
@@ -253,7 +260,7 @@ describe("InvokeHandler", () => {
     });
 
     it("creates no cause when the error has neither a message nor a type", async () => {
-      (mockContext.getStepData as jest.Mock).mockReturnValue({
+      (mockContext.getStepData as Mock).mockReturnValue({
         Status: OperationStatus.FAILED,
         ChainedInvokeDetails: { Error: { ErrorData: "d" } },
       });
@@ -277,7 +284,7 @@ describe("InvokeHandler", () => {
     ])(
       "should throw error with default message when %s status has no error details",
       async (status) => {
-        (mockContext.getStepData as jest.Mock).mockReturnValue({
+        (mockContext.getStepData as Mock).mockReturnValue({
           Status: status,
           ChainedInvokeDetails: {},
         });
@@ -298,7 +305,7 @@ describe("InvokeHandler", () => {
       // Phase 1: first check (null)
       // After checkpoint: STARTED
       // Phase 2: after waitForStatusChange (SUCCEEDED)
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(null) // Phase 1 - initial check, triggers checkpoint
         .mockReturnValueOnce({
           Status: OperationStatus.STARTED,
@@ -329,7 +336,7 @@ describe("InvokeHandler", () => {
     });
 
     it("keeps the invoke EXECUTING until a result that arrived during the invocation is deserialized", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(null)
         .mockReturnValueOnce({
           Status: OperationStatus.STARTED,
@@ -343,8 +350,7 @@ describe("InvokeHandler", () => {
       // Record the last lifecycle state set before deserialization finishes.
       let stateDuringDeserialize: unknown;
       mockSafeDeserialize.mockImplementation(async () => {
-        const calls = (mockCheckpoint.markOperationState as jest.Mock).mock
-          .calls;
+        const calls = (mockCheckpoint.markOperationState as Mock).mock.calls;
         stateDuringDeserialize = calls[calls.length - 1][1];
         return { result: "success" };
       });
@@ -358,7 +364,7 @@ describe("InvokeHandler", () => {
       await invokeHandler("test-function", { test: "data" });
 
       expect(stateDuringDeserialize).toBe(OperationLifecycleState.EXECUTING);
-      const calls = (mockCheckpoint.markOperationState as jest.Mock).mock.calls;
+      const calls = (mockCheckpoint.markOperationState as Mock).mock.calls;
       expect(calls[calls.length - 1]).toEqual([
         "test-step-1",
         OperationLifecycleState.COMPLETED,
@@ -366,7 +372,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint for new invoke without name and without input", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -409,7 +415,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint for new invoke with name and without input", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -452,7 +458,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint for new invoke without name", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -495,7 +501,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint for new invoke with name", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -531,7 +537,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should pass tenantId through ChainedInvokeOptions when provided", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -570,7 +576,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should not include TenantId in ChainedInvokeOptions when not provided", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -588,7 +594,7 @@ describe("InvokeHandler", () => {
 
       await invokeHandler("test-function", { test: "data" });
 
-      const checkpointCall = (mockCheckpoint.checkpoint as jest.Mock).mock
+      const checkpointCall = (mockCheckpoint.checkpoint as Mock).mock
         .calls[0][1];
       expect(checkpointCall.ChainedInvokeOptions).toEqual({
         FunctionName: "test-function",
@@ -599,7 +605,7 @@ describe("InvokeHandler", () => {
     });
 
     it("should handle invoke with custom serdes", async () => {
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValue({
           Status: OperationStatus.SUCCEEDED,
@@ -617,8 +623,8 @@ describe("InvokeHandler", () => {
 
       const config = {
         payloadSerdes: {
-          serialize: jest.fn().mockResolvedValue("custom"),
-          deserialize: jest.fn().mockResolvedValue({}),
+          serialize: vi.fn().mockResolvedValue("custom"),
+          deserialize: vi.fn().mockResolvedValue({}),
         },
       };
 

@@ -1,4 +1,13 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+} from "vitest";
+import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
   NodeTracerProvider,
@@ -764,14 +773,14 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       // Create a provider that throws on forceFlush
       const mockProvider = {
         getTracer: provider.getTracer.bind(provider),
-        forceFlush: jest.fn().mockRejectedValue(new Error("flush failed")),
+        forceFlush: vi.fn().mockRejectedValue(new Error("flush failed")),
       };
 
       const plugin = newPlugin({
         tracerProviderFactory: () => mockProvider as any,
       });
 
-      const consoleErrorSpy = jest
+      const consoleErrorSpy = vi
         .spyOn(console, "error")
         .mockImplementation(() => {});
 
@@ -796,14 +805,14 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it("logs non-Error objects when forceFlush throws them", async () => {
       const mockProvider = {
         getTracer: provider.getTracer.bind(provider),
-        forceFlush: jest.fn().mockRejectedValue("string error"),
+        forceFlush: vi.fn().mockRejectedValue("string error"),
       };
 
       const plugin = newPlugin({
         tracerProviderFactory: () => mockProvider as any,
       });
 
-      const consoleErrorSpy = jest
+      const consoleErrorSpy = vi
         .spyOn(console, "error")
         .mockImplementation(() => {});
 

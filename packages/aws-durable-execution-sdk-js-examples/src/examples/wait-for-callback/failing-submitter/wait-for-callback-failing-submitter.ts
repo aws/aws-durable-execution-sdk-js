@@ -8,6 +8,7 @@ export const config: ExampleConfig = {
   name: "Wait for Callback - Failing Submitter",
   description:
     "Demonstrates waitForCallback with submitter function that fails",
+  testedBy: ["wait-for-callback/submitter-failure-catchable"],
 };
 
 export const handler = withDurableExecution(

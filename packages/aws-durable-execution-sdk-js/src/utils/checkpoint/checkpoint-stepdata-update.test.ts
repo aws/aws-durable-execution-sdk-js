@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import { CheckpointManager } from "./checkpoint-manager";
 import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
@@ -23,7 +24,7 @@ describe("CheckpointManager - StepData Update", () => {
   beforeEach(() => {
     mockEmitter = new EventEmitter();
     mockState = {
-      checkpoint: jest.fn(),
+      checkpoint: vi.fn(),
     };
 
     const stepData = {
@@ -42,10 +43,10 @@ describe("CheckpointManager - StepData Update", () => {
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,

@@ -25,6 +25,7 @@
  * declared type (`DurableInstrumentationPluginFactory`) is what ties the two
  * together at compile time.
  */
+import { vi, describe, it, expect, afterEach } from "vitest";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -212,7 +213,7 @@ describe.each([
       });
       try {
         const failed = sdkInvocation(factory, ARN_A);
-        const flush = jest.spyOn(tracerProvider!, "forceFlush");
+        const flush = vi.spyOn(tracerProvider!, "forceFlush");
         await expect(failed.start()).rejects.toThrow("extractor failed");
         // The runner contains the failed start hook and continues dispatching.
         await failed.operation();
@@ -424,7 +425,7 @@ describe.each([
     it("resolves the tracer provider and installs the ID generator once for all invocations", async () => {
       const exporter = new InMemorySpanExporter();
       let tracerProvider: NodeTracerProvider | undefined;
-      const tracerProviderFactory = jest.fn((createIdGenerator) => {
+      const tracerProviderFactory = vi.fn((createIdGenerator) => {
         tracerProvider ??= new NodeTracerProvider({
           idGenerator: createIdGenerator(),
           spanProcessors: [new SimpleSpanProcessor(exporter)],

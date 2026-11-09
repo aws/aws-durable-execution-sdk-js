@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { TraceFlags, context, trace, ROOT_CONTEXT } from "@opentelemetry/api";
 import type { SpanContext, Tracer } from "@opentelemetry/api";
 import {

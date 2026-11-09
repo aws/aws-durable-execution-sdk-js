@@ -1,4 +1,14 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type MockedFunction,
+} from "vitest";
+import {
   Event,
   EventType,
   ExecutionStatus,
@@ -78,22 +88,22 @@ function createMockHistoryResponse(
 
 function createHistoryPoller(options: CreateHistoryPollerOptions = {}): {
   poller: HistoryPoller;
-  mockApiClient: jest.Mocked<HistoryApiClient>;
+  mockApiClient: Mocked<HistoryApiClient>;
   testExecutionState: TestExecutionState;
-  onOperationEventsReceived: jest.MockedFunction<ReceivedOperationEventsCallback>;
+  onOperationEventsReceived: MockedFunction<ReceivedOperationEventsCallback>;
 } {
   const testExecutionState = new TestExecutionState();
 
   // Create an unhandled promise by default which may create an unhandled rejection if something breaks
   void testExecutionState.createExecutionPromise();
 
-  const onOperationEventsReceived = jest.fn();
+  const onOperationEventsReceived = vi.fn();
 
   // Create simple Jest mocks for the API client
   let historyCallCount = 0;
 
-  const mockApiClient: jest.Mocked<HistoryApiClient> = {
-    getHistory: jest.fn().mockImplementation(() => {
+  const mockApiClient: Mocked<HistoryApiClient> = {
+    getHistory: vi.fn().mockImplementation(() => {
       if (options.historyError) {
         return Promise.reject(options.historyError);
       }
@@ -131,18 +141,18 @@ async function waitForPollerCycles(
   pollInterval = 100,
 ): Promise<void> {
   for (let i = 0; i < cycles; i++) {
-    await jest.advanceTimersByTimeAsync(pollInterval);
+    await vi.advanceTimersByTimeAsync(pollInterval);
   }
 }
 
 describe("HistoryPoller", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
+    vi.useFakeTimers();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("startPolling", () => {
@@ -184,12 +194,12 @@ describe("HistoryPoller", () => {
       const { poller, mockApiClient } = createHistoryPoller();
 
       poller.startPolling();
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       const initialHistoryCalls = mockApiClient.getHistory.mock.calls.length;
 
       poller.stopPolling();
-      await jest.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(200);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
         initialHistoryCalls,
@@ -321,9 +331,9 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
       // First cycle starts the polling
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
       // Wait for pagination delay between pages
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(2);
     });
@@ -354,9 +364,9 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
       // Wait for initial polling delay
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
       // Wait for pagination delay
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(onOperationEventsReceived).toHaveBeenCalledWith(expect.any(Array));
       const callArgs = onOperationEventsReceived.mock.calls[0][0];
@@ -484,10 +494,10 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
 
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
 
       await Promise.all([
-        jest.advanceTimersByTimeAsync(30000),
+        vi.advanceTimersByTimeAsync(30000),
         expect(executionPromise).rejects.toThrow("History API failed"),
       ]);
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
@@ -507,10 +517,10 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
 
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
 
       await Promise.all([
-        jest.advanceTimersByTimeAsync(30000),
+        vi.advanceTimersByTimeAsync(30000),
         expect(executionPromise).rejects.toThrow("Execution API failed"),
       ]);
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
@@ -548,9 +558,9 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
       // Wait for initial polling delay
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
       // Wait for pagination delay
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(2);
       expect(mockApiClient.getHistory).toHaveBeenNthCalledWith(
@@ -664,14 +674,14 @@ describe("HistoryPoller", () => {
 
       // Advance through multiple polling cycles
       // First poll starts at 100ms
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
       // API call takes 300ms, so it completes at 400ms
-      await jest.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(300);
       // Next poll should only start after the previous completes
       // Second poll starts at 400ms + poll interval = 500ms
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100);
       // Second poll completes, execution becomes SUCCEEDED, so polling stops
-      await jest.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(300);
 
       // Verify calls happened sequentially, not overlapping
       // Should be 2 calls since execution completes after second check
@@ -742,9 +752,9 @@ describe("HistoryPoller", () => {
 
       poller.startPolling();
       // Wait for first polling cycle with multiple pages
-      await jest.advanceTimersByTimeAsync(100); // Start poll
-      await jest.advanceTimersByTimeAsync(100); // Page 1->2 delay
-      await jest.advanceTimersByTimeAsync(100); // Page 2->3 delay
+      await vi.advanceTimersByTimeAsync(100); // Start poll
+      await vi.advanceTimersByTimeAsync(100); // Page 1->2 delay
+      await vi.advanceTimersByTimeAsync(100); // Page 2->3 delay
 
       // Should have added pages 1-2 immediately, but NOT page 3 (last page)
       const eventsAfterFirstPoll = poller.getEvents();
@@ -822,9 +832,9 @@ describe("HistoryPoller", () => {
       poller.startPolling();
 
       // First polling cycle - multiple pages, execution running
-      await jest.advanceTimersByTimeAsync(100); // Start poll
-      await jest.advanceTimersByTimeAsync(100); // Page 1->2 delay
-      await jest.advanceTimersByTimeAsync(100); // Page 2->3 delay
+      await vi.advanceTimersByTimeAsync(100); // Start poll
+      await vi.advanceTimersByTimeAsync(100); // Page 1->2 delay
+      await vi.advanceTimersByTimeAsync(100); // Page 2->3 delay
 
       // After first cycle: should have pages 1-2 but NOT page 3 (last page is held back)
       const eventsAfterFirstPoll = poller.getEvents();
@@ -834,7 +844,7 @@ describe("HistoryPoller", () => {
       );
 
       // Second polling cycle - execution completes, re-fetches the last page with new events
-      await jest.advanceTimersByTimeAsync(100); // Next poll starts
+      await vi.advanceTimersByTimeAsync(100); // Next poll starts
 
       // After completion: should have early pages + the re-fetched last page with new events
       const finalEvents = poller.getEvents();

@@ -24,7 +24,9 @@ env:
 
 jobs:
   deploy:
+    name: Deploy and test
     permissions:
+      actions: read # Required to read timings saved by earlier runs
       contents: read
       id-token: write # Required for AWS credentials
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
@@ -35,7 +37,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
 
       - name: Get AWS Credentials
         id: credentials
@@ -48,6 +49,10 @@ jobs:
 
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v3
+        with:
+          # Native installer instead of pip: pip built a venv and resolved ~60 packages
+          # on every run (~39s). The installer is one verified zip, cached across runs.
+          use-installer: true
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8
@@ -56,7 +61,7 @@ jobs:
           path: .
 
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/npm-ci
 
       - name: Deploy functions with SAM
         id: deploy-functions
@@ -67,45 +72,32 @@ jobs:
           TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
 
-  jest-integration-test:
-    needs: deploy
-    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
-    name: Jest Integration Tests
-    permissions:
-      contents: read
-      id-token: write # Required for AWS credentials
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: "npm"
-
-      - name: Get AWS Credentials
-        id: credentials
-        if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
-          role-session-name: githubIntegrationTest
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Install dependencies
-        run: |
-          npm ci
-
-      - name: Run Jest integration tests
+      # Same job as the deploy: a separate job waited ~45s for a new runner and
+      # repeated Node setup, credentials and npm ci before ~60s of tests.
+      - name: Run Vitest integration tests
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INTEG_TIMINGS_FILE: ${{ runner.temp }}/integration-results.json
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}
+
+      # Writes per-file timings to the job summary and flags files that got much
+      # slower than on recent successful runs. Advisory: it never fails the job.
+      - name: Report test timings
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node .github/workflows/scripts/integration-test/timing-report.mjs \
+            "${{ runner.temp }}/integration-results.json" \
+            "integration-test-timings-${{ inputs.node-version }}"
+
+      # Later runs compare with this.
+      - name: Upload test timings
+        if: always() && hashFiles('integration-timings.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-timings-${{ inputs.node-version }}
+          path: integration-timings.json
+          retention-days: 30

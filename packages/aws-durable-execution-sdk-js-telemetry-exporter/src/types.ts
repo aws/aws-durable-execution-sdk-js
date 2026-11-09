@@ -1,6 +1,5 @@
 /**
  * Any value that can appear in execution data.
- * @experimental This type is experimental and may change in future releases.
  */
 export type JsonValue =
   | string
@@ -18,18 +17,14 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-/** @experimental This type is experimental and may change in future releases. */
 export type ExecutionInput = JsonValue;
 
-/** @experimental This type is experimental and may change in future releases. */
 export type ExecutionOutput = JsonValue;
 
-/** @experimental This type is experimental and may change in future releases. */
 export type OperationResult = JsonValue;
 
 /**
  * Per-operation override for controlling inclusion and result transformation.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface OperationOverride {
   operationName: string;
@@ -52,8 +47,6 @@ export interface OperationOverride {
 
 /**
  * Controls what data is included in emitted records.
- *
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface ContentConfig {
   input?: boolean | ((input: ExecutionInput) => ExecutionInput);
@@ -70,7 +63,6 @@ export interface ContentConfig {
 
 /**
  * Interface for exporting durable execution telemetry records to a destination.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface TelemetryExporter {
   export(record: DurableExecutionTelemetryRecord): Promise<void>;
@@ -159,7 +151,6 @@ export interface TelemetryExporter {
 
 /**
  * Configuration for the Durable Execution Telemetry plugin.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface DurableExecutionTelemetryConfig {
   exporters?: TelemetryExporter[];
@@ -176,8 +167,6 @@ export interface DurableExecutionTelemetryConfig {
    * decision and produces fragmented records.
    *
    * Out-of-range or non-numeric values are clamped/defaulted with a warning.
-   *
-   * @experimental This field is experimental and may change in future releases.
    */
   samplingRate?: number;
 
@@ -214,16 +203,12 @@ export interface DurableExecutionTelemetryConfig {
    *   `DurableExecutionConfig.pluginsConfig.childOperationsDepth` on
    *   `withDurableExecution` (this replays preserved contexts on resume to keep
    *   their children in state — see that field's cost note).
-   *
-   * @experimental This field is experimental and may change in future releases.
    */
   operationDetail?: "full-tree" | "top-level";
 
   /**
    * Control what data is included in records (input/output transforms,
    * operation overrides, error inclusion).
-   *
-   * @experimental This field is experimental and may change in future releases.
    */
   content?: ContentConfig;
 }
@@ -238,8 +223,6 @@ export interface DurableExecutionTelemetryConfig {
  * languages. `cause` is present only when the error has one (`Error.cause`, or
  * the cause the SDK built when it rebuilt the error from a checkpoint), has the
  * same shape, and is cut after 16 levels or at a cause already written.
- *
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface ErrorRecord {
   name: string;
@@ -249,7 +232,6 @@ export interface ErrorRecord {
 
 /**
  * A single operation within an execution (step, wait, invoke, callback, or context).
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface OperationRecord {
   id: string;
@@ -281,8 +263,6 @@ export interface OperationRecord {
  * - `"array"`: the canonical `operations` array (lossless; default).
  * - `"by-name"`: replace it with the `operationsByName` map (name-keyed summary).
  * - `"both"`: include the `operations` array and the `operationsByName` map.
- *
- * @experimental This type is experimental and may change in future releases.
  */
 export type OperationsFormat = "array" | "by-name" | "both";
 
@@ -296,8 +276,6 @@ export type OperationsFormat = "array" | "by-name" | "both";
  * and `status` reflect the most recently seen occurrence. `result` and `error`
  * are included only when the name occurs exactly ONCE in the execution — for a
  * repeated name there is no single representative value, so both are omitted.
- *
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface OperationSummary {
   type: string;
@@ -322,7 +300,6 @@ export interface OperationSummary {
 
 /**
  * The curated execution record emitted to destinations.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface DurableExecutionTelemetryRecord {
   /** Fixed identifier to distinguish telemetry records from other log data. */

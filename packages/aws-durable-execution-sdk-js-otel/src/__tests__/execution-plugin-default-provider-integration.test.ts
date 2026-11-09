@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -353,7 +354,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("no shutdown is called on the globally registered provider", async () => {
-    const shutdownSpy = jest.spyOn(provider, "shutdown");
+    const shutdownSpy = vi.spyOn(provider, "shutdown");
 
     const plugin = newPlugin({});
 

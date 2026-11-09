@@ -9,13 +9,22 @@
  * `formatWithOptions` is resolved once at module scope, so each test re-imports the module to
  * pick up a different `node:util`.
  */
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 
 describe("default logger on a runtime without util.formatWithOptions", () => {
   const mockConsole = {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
   };
 
   const loggingContext = {
@@ -25,23 +34,26 @@ describe("default logger on a runtime without util.formatWithOptions", () => {
   };
 
   beforeEach(() => {
-    jest.resetModules();
-    jest.clearAllMocks();
-    jest.doMock("node:console", () => ({
-      Console: jest.fn().mockImplementation(() => mockConsole),
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.doMock("node:console", () => ({
+      // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+      Console: vi.fn().mockImplementation(function () {
+        return mockConsole;
+      }),
     }));
   });
 
   afterEach(() => {
-    jest.dontMock("node:console");
-    jest.dontMock("node:util");
-    jest.resetModules();
+    vi.doUnmock("node:console");
+    vi.doUnmock("node:util");
+    vi.resetModules();
   });
 
   /** A `node:util` shaped like LLRT's: `format` present, `formatWithOptions` absent. */
-  const mockPartialUtil = (): jest.Mock => {
-    const format = jest.fn((...args: unknown[]) => args.map(String).join(" "));
-    jest.doMock("node:util", () => ({ __esModule: true, default: { format } }));
+  const mockPartialUtil = (): Mock => {
+    const format = vi.fn((...args: unknown[]) => args.map(String).join(" "));
+    vi.doMock("node:util", () => ({ __esModule: true, default: { format } }));
     return format;
   };
 
@@ -72,9 +84,9 @@ describe("default logger on a runtime without util.formatWithOptions", () => {
   });
 
   it("prefers the runtime's formatWithOptions when it exists", async () => {
-    const format = jest.fn(() => "unused");
-    const formatWithOptions = jest.fn(() => "from formatWithOptions");
-    jest.doMock("node:util", () => ({
+    const format = vi.fn(() => "unused");
+    const formatWithOptions = vi.fn(() => "from formatWithOptions");
+    vi.doMock("node:util", () => ({
       __esModule: true,
       default: { format, formatWithOptions },
     }));

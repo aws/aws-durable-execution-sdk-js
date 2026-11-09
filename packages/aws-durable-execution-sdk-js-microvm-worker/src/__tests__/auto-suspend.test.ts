@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { Readable } from "node:stream";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
 import { LambdaMicrovmsClient } from "@aws-sdk/client-lambda-microvms";
@@ -110,8 +119,8 @@ describe("auto-suspend when idle", () => {
   beforeEach(() => {
     // The requests go straight to the listener, so no socket timer runs.
     // Stream reads use nextTick and microtasks, which stay real.
-    jest.useFakeTimers({
-      doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
+    vi.useFakeTimers({
+      toNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
     });
     started = [];
     releases = new Map();
@@ -122,10 +131,10 @@ describe("auto-suspend when idle", () => {
     for (const release of releases.values()) {
       release();
     }
-    await jest.runOnlyPendingTimersAsync();
+    await vi.runOnlyPendingTimersAsync();
     await target?.idle();
     target = undefined;
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   const start = (
@@ -194,8 +203,6 @@ describe("auto-suspend when idle", () => {
     terminating: boolean;
     closed: boolean;
     refusingJobs: boolean;
-    /** Defaults to `idle`, the trigger of every test in this suite. */
-    trigger?: "idle" | "job";
   }
 
   /**
@@ -204,7 +211,7 @@ describe("auto-suspend when idle", () => {
    * state fields. `index` is the position of the warning among all warnings.
    */
   const expectFailedSuspendWarning = (
-    warn: jest.Mock,
+    warn: Mock,
     state: FailedSuspendState,
     index = 0,
   ): void => {
@@ -214,13 +221,12 @@ describe("auto-suspend when idle", () => {
         microvmId: "mvm-1",
         error: expect.anything(),
         ...state,
-        trigger: state.trigger ?? "idle",
       },
     ]);
   };
 
   /** A logger that records warnings and drops the other lines. */
-  const warnLogger = (warn: jest.Mock): MicrovmWorkerLogger => ({
+  const warnLogger = (warn: Mock): MicrovmWorkerLogger => ({
     info: () => {},
     warn,
     error: () => {},
@@ -239,10 +245,10 @@ describe("auto-suspend when idle", () => {
   });
 
   it("destroys the default client after each suspend, and never a provided one", async () => {
-    const send = jest
+    const send = vi
       .spyOn(LambdaMicrovmsClient.prototype, "send")
       .mockImplementation(async () => ({}));
-    const destroy = jest.spyOn(LambdaMicrovmsClient.prototype, "destroy");
+    const destroy = vi.spyOn(LambdaMicrovmsClient.prototype, "destroy");
     try {
       // No createMicrovmsClient, so the worker creates the client itself.
       target = createMicrovmWorkerListener({
@@ -730,8 +736,8 @@ describe("auto-suspend when idle", () => {
     /** Starts a listener with the given MicroVMs client factory. */
     const listen = (
       createMicrovmsClient?: (region: string) => LambdaMicrovmsClient,
-      warn: jest.Mock = jest.fn(),
-      info: jest.Mock = jest.fn(),
+      warn: Mock = vi.fn(),
+      info: Mock = vi.fn(),
     ): MicrovmWorkerListener => {
       target = createMicrovmWorkerListener({
         routes: {
@@ -763,7 +769,7 @@ describe("auto-suspend when idle", () => {
       // reads its attempt limit. Everything else is the AWS SDK.
       const original = LambdaMicrovmsClient.prototype.send;
       const maxAttempts: number[] = [];
-      const send = jest
+      const send = vi
         .spyOn(LambdaMicrovmsClient.prototype, "send")
         .mockImplementation(async function (
           this: LambdaMicrovmsClient,
@@ -780,6 +786,14 @@ describe("auto-suspend when idle", () => {
         const worker = listen();
         await runHook(worker, IDLE_SECONDS);
         await advance(IDLE_MS);
+        // This client has no explicit credentials or endpoint, so the AWS
+        // SDK resolves its config before the first attempt. That can need
+        // real I/O, which fake time cannot advance. Wait for the attempt on
+        // the real event loop (setImmediate is not faked).
+        for (let i = 0; i < 200 && handler.attempts.length === 0; i++) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          await advance(0);
+        }
         expect(handler.attempts).toEqual([[]]);
 
         // The service suspended the MicroVM. The answer was lost, and after
@@ -803,7 +817,7 @@ describe("auto-suspend when idle", () => {
     });
 
     it("aborts the call when the resume hook arrives, so a retrying client sends no attempt during the next job", async () => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = listen(retryingClient, warn);
       await runHook(worker, IDLE_SECONDS);
       await advance(IDLE_MS);
@@ -866,12 +880,12 @@ describe("auto-suspend when idle", () => {
     const STOPPING = "stopping the suspend call: the MicroVM resumed during it";
 
     it("aborts the call and logs it once when a second resume hook arrives during the same call", async () => {
-      const info = jest.fn();
-      const warn = jest.fn();
+      const info = vi.fn();
+      const warn = vi.fn();
       // The aborted attempt fails only when the test settles it. So the call
       // still runs when the second hook arrives.
       handler.holdAbort = true;
-      const abort = jest.spyOn(AbortController.prototype, "abort");
+      const abort = vi.spyOn(AbortController.prototype, "abort");
       try {
         const worker = listen(retryingClient, warn, info);
         await runHook(worker, IDLE_SECONDS);
@@ -923,7 +937,7 @@ describe("auto-suspend when idle", () => {
      */
     const suspendHookDuringAbortedCall = async (
       worker: MicrovmWorkerListener,
-      warn: jest.Mock,
+      warn: Mock,
     ): Promise<void> => {
       handler.holdAbort = true;
       await runHook(worker, IDLE_SECONDS);
@@ -953,7 +967,7 @@ describe("auto-suspend when idle", () => {
     };
 
     it("keeps the refusal of a suspend hook that arrives before the aborted call ends, until the next resume hook", async () => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = listen(retryingClient, warn);
       await suspendHookDuringAbortedCall(worker, warn);
 
@@ -968,7 +982,7 @@ describe("auto-suspend when idle", () => {
     });
 
     it("keeps the refusal of a suspend hook that arrives before the aborted call ends, for 30 seconds without a resume hook", async () => {
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = listen(retryingClient, warn);
       await suspendHookDuringAbortedCall(worker, warn);
 
@@ -989,7 +1003,7 @@ describe("auto-suspend when idle", () => {
     microvms.failure = Object.assign(new Error("not authorized"), {
       name: "AccessDeniedException",
     });
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, {
       info: () => {},
       warn,
@@ -1014,8 +1028,6 @@ describe("auto-suspend when idle", () => {
         error: { name: "AccessDeniedException", message: "not authorized" },
       }),
     );
-    // The Python worker logs the same fields in the same order. `trigger`
-    // comes last.
     expect(Object.keys(warn.mock.calls[0][1])).toEqual([
       "microvmId",
       "error",
@@ -1024,7 +1036,6 @@ describe("auto-suspend when idle", () => {
       "terminating",
       "closed",
       "refusingJobs",
-      "trigger",
     ]);
     expect(await job(worker, "cb-1")).toBe(202);
   });
@@ -1035,7 +1046,7 @@ describe("auto-suspend when idle", () => {
       name: "SomeServiceError",
       $metadata: { httpStatusCode: 403 },
     });
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, warnLogger(warn));
 
     await runHook(worker, IDLE_SECONDS);
@@ -1124,7 +1135,7 @@ describe("auto-suspend when idle", () => {
     async (_label, failure) => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = failure;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -1161,7 +1172,7 @@ describe("auto-suspend when idle", () => {
   ])("accepts jobs at once after %s", async (_label, failure) => {
     const microvms = new FakeMicrovmsClient();
     microvms.failure = failure;
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, warnLogger(warn));
 
     await runHook(worker, IDLE_SECONDS);
@@ -1237,7 +1248,7 @@ describe("auto-suspend when idle", () => {
     async (_label, failure) => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = failure;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -1275,7 +1286,7 @@ describe("auto-suspend when idle", () => {
     // status decides, and a 400 is a rejection.
     const microvms = new FakeMicrovmsClient();
     microvms.failure = firstAttempt("SomeServiceError", 400);
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
     await runHook(worker, IDLE_SECONDS);
@@ -1308,8 +1319,8 @@ describe("auto-suspend when idle", () => {
   it("writes the warning and its fields as one JSON line without a logger", async () => {
     // Without a logger, the worker writes each warning to console.warn as
     // one JSON object. Log queries read the fields from that object.
-    const warnLine = jest.spyOn(console, "warn").mockImplementation(() => {});
-    const infoLine = jest.spyOn(console, "log").mockImplementation(() => {});
+    const warnLine = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const infoLine = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = firstAttempt("AccessDeniedException", 403);
@@ -1335,7 +1346,6 @@ describe("auto-suspend when idle", () => {
         "terminating",
         "closed",
         "refusingJobs",
-        "trigger",
       ]);
       expect(line).toEqual({
         level: "WARN",
@@ -1350,7 +1360,6 @@ describe("auto-suspend when idle", () => {
         terminating: false,
         closed: false,
         refusingJobs: false,
-        trigger: "idle",
       });
     } finally {
       warnLine.mockRestore();
@@ -1370,8 +1379,8 @@ describe("auto-suspend when idle", () => {
     it("waits 30 seconds after each refused call when the idle time is shorter", async () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
-      const warn = jest.fn();
-      const info = jest.fn();
+      const warn = vi.fn();
+      const info = vi.fn();
       const worker = start(microvms, { info, warn, error: () => {} });
 
       await runHook(worker, SHORT_IDLE_SECONDS);
@@ -1427,7 +1436,7 @@ describe("auto-suspend when idle", () => {
     it("waits one idle time when the idle time is longer than 30 seconds", async () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
       const longIdleMs = GRACE_MS * 2;
 
@@ -1459,7 +1468,7 @@ describe("auto-suspend when idle", () => {
     it("uses the normal idle time after a job that ends during the 30 seconds", async () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
 
       await runHook(worker, SHORT_IDLE_SECONDS);
@@ -1492,7 +1501,7 @@ describe("auto-suspend when idle", () => {
     it("uses the normal idle time after a resume hook during the 30 seconds", async () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
 
       await runHook(worker, SHORT_IDLE_SECONDS);
@@ -1529,7 +1538,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
       microvms.hold = true;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
 
       await runHook(worker, IDLE_SECONDS);
@@ -1560,7 +1569,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
       microvms.hold = true;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
 
       await runHook(worker, IDLE_SECONDS);
@@ -1593,7 +1602,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.failure = refusal;
       microvms.hold = true;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, warnLogger(warn));
 
       await runHook(worker, SHORT_IDLE_SECONDS);
@@ -1626,7 +1635,7 @@ describe("auto-suspend when idle", () => {
     const microvms = new FakeMicrovmsClient();
     microvms.hold = true;
     microvms.failure = firstAttempt("ThrottlingException", 400);
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
     await runHook(worker, IDLE_SECONDS);
@@ -1677,7 +1686,7 @@ describe("auto-suspend when idle", () => {
         const microvms = new FakeMicrovmsClient();
         microvms.hold = true;
         microvms.failure = firstAttempt("ThrottlingException", 400);
-        const warn = jest.fn();
+        const warn = vi.fn();
         const worker = start(microvms, {
           info: () => {},
           warn,
@@ -1707,7 +1716,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = firstAttempt("ThrottlingException", 400);
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -1759,7 +1768,7 @@ describe("auto-suspend when idle", () => {
         const microvms = new FakeMicrovmsClient();
         microvms.hold = true;
         microvms.failure = refusal;
-        const warn = jest.fn();
+        const warn = vi.fn();
         const worker = start(microvms, {
           info: () => {},
           warn,
@@ -1796,7 +1805,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = refusal;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -1835,7 +1844,7 @@ describe("auto-suspend when idle", () => {
         const microvms = new FakeMicrovmsClient();
         microvms.hold = true;
         microvms.failure = firstAttempt("AccessDeniedException", 403);
-        const warn = jest.fn();
+        const warn = vi.fn();
         const worker = start(microvms, {
           info: () => {},
           warn,
@@ -1875,7 +1884,7 @@ describe("auto-suspend when idle", () => {
         name: "InternalServerException",
         $metadata: { httpStatusCode: 500, attempts: 3 },
       });
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -1929,7 +1938,7 @@ describe("auto-suspend when idle", () => {
         const microvms = new FakeMicrovmsClient();
         microvms.hold = true;
         microvms.failure = firstAttempt("AccessDeniedException", 403);
-        const warn = jest.fn();
+        const warn = vi.fn();
         const worker = start(microvms, {
           info: () => {},
           warn,
@@ -1983,7 +1992,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = firstAttempt("AccessDeniedException", 403);
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2059,7 +2068,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.deadline = true;
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2081,7 +2090,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2108,7 +2117,7 @@ describe("auto-suspend when idle", () => {
       microvms.failure = Object.assign(new Error("socket hang up"), {
         code: "ECONNRESET",
       });
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2137,7 +2146,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2164,7 +2173,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2194,7 +2203,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2226,7 +2235,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2255,7 +2264,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2278,7 +2287,7 @@ describe("auto-suspend when idle", () => {
       const microvms = new FakeMicrovmsClient();
       microvms.hold = true;
       microvms.failure = serverError();
-      const warn = jest.fn();
+      const warn = vi.fn();
       const worker = start(microvms, { info: () => {}, warn, error: () => {} });
 
       await runHook(worker, IDLE_SECONDS);
@@ -2331,7 +2340,7 @@ describe("auto-suspend when idle", () => {
         const microvms = new FakeMicrovmsClient();
         microvms.hold = true;
         microvms.failure = serverError();
-        const warn = jest.fn();
+        const warn = vi.fn();
         const worker = start(microvms, {
           info: () => {},
           warn,
@@ -2365,7 +2374,7 @@ describe("auto-suspend when idle", () => {
       name: "InternalServerException",
       $metadata: { httpStatusCode: 500, attempts: 3 },
     });
-    const warn = jest.fn();
+    const warn = vi.fn();
     const worker = start(microvms, warnLogger(warn));
 
     await runHook(worker, IDLE_SECONDS);

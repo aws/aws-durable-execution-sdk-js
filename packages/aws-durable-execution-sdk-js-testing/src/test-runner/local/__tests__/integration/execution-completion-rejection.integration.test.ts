@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   DurableLambdaHandler,
   InvocationStatus,
@@ -23,7 +24,7 @@ describe("execution completion when the runner rejects", () => {
       Status: InvocationStatus.PENDING,
     });
 
-    const warn = jest.spyOn(defaultLogger, "warn");
+    const warn = vi.spyOn(defaultLogger, "warn");
 
     // The first run includes module loading and the worker's first request. Warm those up,
     // so the measured runs isolate the rejection path.

@@ -11,6 +11,7 @@
  * addressed a different host. Hence these tests, which assert the guidance names
  * only tools that exist here.
  */
+import { describe, it, expect } from "vitest";
 import { buildDescribeSchemaResult } from "./tools";
 import { TOOL_DESCRIPTIONS } from "./tools";
 import type { TelemetryConfig } from "@aws/durable-execution-sdk-js-telemetry-core";

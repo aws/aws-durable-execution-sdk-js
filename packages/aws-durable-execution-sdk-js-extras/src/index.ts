@@ -1,1 +1,1 @@
-export * from "./microvm";
+export { ComputeError } from "./compute/errors";

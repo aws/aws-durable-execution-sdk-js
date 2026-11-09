@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   CheckpointDurableExecutionRequest,
@@ -19,8 +20,8 @@ import {
 import { encodeCheckpointToken } from "../../utils/checkpoint-token";
 
 // Mock only external dependencies we can't control
-jest.mock("crypto", () => ({
-  randomUUID: jest.fn().mockReturnValue("mocked-uuid-token"),
+vi.mock("crypto", () => ({
+  randomUUID: vi.fn().mockReturnValue("mocked-uuid-token"),
 }));
 
 describe("checkpoint handlers", () => {
@@ -51,7 +52,7 @@ describe("checkpoint handlers", () => {
   beforeEach(() => {
     executionManager = new ExecutionManager();
     mockExecutionId = createExecutionId("test-execution-id");
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -62,11 +63,11 @@ describe("checkpoint handlers", () => {
     it("should look up storage and return pending checkpoint updates", async () => {
       const { storage } = createExecutionWithOperations();
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByExecution",
       );
-      const getPendingSpy = jest.spyOn(storage, "getPendingCheckpointUpdates");
+      const getPendingSpy = vi.spyOn(storage, "getPendingCheckpointUpdates");
 
       // Mock getPendingCheckpointUpdates to resolve immediately with test data
       const mockOperations = [
@@ -96,7 +97,7 @@ describe("checkpoint handlers", () => {
     });
 
     it("should throw error when execution manager cannot find storage", async () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByExecution")
         .mockReturnValue(undefined);
 
@@ -114,12 +115,12 @@ describe("checkpoint handlers", () => {
     it("should look up storage and update specific operation", () => {
       const { storage } = createExecutionWithOperations();
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByExecution",
       );
-      const hasOperationSpy = jest.spyOn(storage, "hasOperation");
-      const updateOperationSpy = jest.spyOn(storage, "updateOperation");
+      const hasOperationSpy = vi.spyOn(storage, "hasOperation");
+      const updateOperationSpy = vi.spyOn(storage, "updateOperation");
 
       const operationData = { Status: OperationStatus.SUCCEEDED };
       const payload = '{"result": "success"}';
@@ -168,7 +169,7 @@ describe("checkpoint handlers", () => {
     });
 
     it("should throw error when execution not found", () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByExecution")
         .mockReturnValue(undefined);
 
@@ -191,7 +192,7 @@ describe("checkpoint handlers", () => {
     it("should throw error when operation not found in storage", () => {
       const { storage } = createExecutionWithOperations();
 
-      const hasOperationSpy = jest
+      const hasOperationSpy = vi
         .spyOn(storage, "hasOperation")
         .mockReturnValue(false);
 
@@ -217,11 +218,11 @@ describe("checkpoint handlers", () => {
       const { storage, invocationResult } =
         createExecutionWithOperations(executionId);
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByExecution",
       );
-      const registerUpdatesSpy = jest.spyOn(storage, "registerUpdates");
+      const registerUpdatesSpy = vi.spyOn(storage, "registerUpdates");
 
       const input: CheckpointDurableExecutionRequest = {
         DurableExecutionArn: executionArn,
@@ -315,7 +316,7 @@ describe("checkpoint handlers", () => {
     });
 
     it("should throw error when execution not found", () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByExecution")
         .mockReturnValue(undefined);
 
@@ -364,7 +365,7 @@ describe("checkpoint handlers", () => {
       const { storage, invocationResult } =
         createExecutionWithOperations(executionId);
 
-      const registerUpdatesSpy = jest.spyOn(storage, "registerUpdates");
+      const registerUpdatesSpy = vi.spyOn(storage, "registerUpdates");
 
       const input: CheckpointDurableExecutionRequest = {
         DurableExecutionArn: executionArn,
@@ -491,7 +492,7 @@ describe("checkpoint handlers", () => {
       const { storage, invocationResult } =
         createExecutionWithOperations(executionId);
 
-      const getDirtyOperationsSpy = jest.spyOn(storage, "getDirtyOperations");
+      const getDirtyOperationsSpy = vi.spyOn(storage, "getDirtyOperations");
       getDirtyOperationsSpy.mockReturnValue([
         {
           Id: "dirty-op-1",

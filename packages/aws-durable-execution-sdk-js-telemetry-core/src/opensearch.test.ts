@@ -1,12 +1,17 @@
 // Mock the SigV4 signer so no real credentials/crypto are needed; capture the
 // signed request shape. fetch is stubbed per test.
-const signMock = jest.fn().mockResolvedValue({
-  headers: { authorization: "AWS4-HMAC-SHA256 ...", host: "d.example" },
-});
-jest.mock("@smithy/signature-v4", () => ({
-  SignatureV4: jest.fn().mockImplementation(() => ({ sign: signMock })),
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+const signMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    headers: { authorization: "AWS4-HMAC-SHA256 ...", host: "d.example" },
+  }),
+);
+vi.mock("@smithy/signature-v4", () => ({
+  SignatureV4: vi.fn(function () {
+    return { sign: signMock };
+  }),
 }));
-jest.mock("@aws-crypto/sha256-js", () => ({ Sha256: jest.fn() }));
+vi.mock("@aws-crypto/sha256-js", () => ({ Sha256: vi.fn() }));
 
 import {
   runOpenSearchQuery,
@@ -27,7 +32,7 @@ function mockFetchOnce(res: {
   statusText?: string;
   body: string;
 }) {
-  (global.fetch as jest.Mock).mockResolvedValueOnce({
+  (global.fetch as Mock).mockResolvedValueOnce({
     ok: res.ok,
     status: res.status,
     statusText: res.statusText ?? "",
@@ -36,7 +41,7 @@ function mockFetchOnce(res: {
 }
 
 beforeEach(() => {
-  global.fetch = jest.fn();
+  global.fetch = vi.fn();
   signMock.mockClear();
 });
 
@@ -67,7 +72,7 @@ describe("runOpenSearchQuery", () => {
     ]);
     expect(res.count).toBe(2);
     // POSTs to the SQL plugin endpoint
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toBe(`${conn.endpoint}/_plugins/_sql`);
     expect(init.method).toBe("POST");
   });
@@ -132,7 +137,7 @@ describe("fetchOpenSearchRecord", () => {
     expect(out!.status).toBe("SUCCEEDED");
     expect(out!.input).toBe(JSON.stringify({ claimType: "auto" }));
     // GET to the _doc endpoint with URL-encoded id
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toContain("/durable-execution-telemetry/_doc/arn%3A1");
     expect(init.method).toBe("GET");
   });
@@ -173,7 +178,7 @@ describe("countOpenSearchDocs", () => {
     });
     const n = await countOpenSearchDocs(conn, "durable-execution-telemetry");
     expect(n).toBe(42);
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toBe(`${conn.endpoint}/durable-execution-telemetry/_count`);
     expect(init.method).toBe("GET");
   });

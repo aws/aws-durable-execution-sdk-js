@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import * as indexModule from "../index";
 
 describe("Index module", () => {

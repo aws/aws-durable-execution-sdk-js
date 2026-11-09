@@ -29,6 +29,7 @@
  * The same two mistakes, in the same shapes, as the host-module scan in core:
  * an invariant named too narrowly, and a scanner that flagged its own prose.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import * as ts from "typescript";
@@ -68,6 +69,7 @@ const QUERY_EXECUTING_EXPORTS = [
   "fetchRedshiftRecord",
   // Metadata and DDL.
   "tableExists",
+  "getTableLocation",
   "ensureAthenaTable",
 ] as const;
 
@@ -91,7 +93,7 @@ const PERMITTED_OUTSIDE_CHOKE_POINT: Record<
       "reason the choke point omits it on that path.",
   },
   testDestination: {
-    file: "server.ts",
+    file: "registerTools.ts",
     reason:
       "the test_destination tool. Core's own connectivity probe; it issues fixed " +
       "read-only statements that no caller can influence.",
@@ -295,8 +297,14 @@ describe("query choke point", () => {
       // whole thing this file exists to prevent.
       "sendConverse",
       "listBedrockModels",
+      // Reads an Athena workgroup's result settings for the result-location check.
+      "getWorkGroupOutput",
       "listenToQueue",
       "verifyResult",
+      // The Lambda read of one execution (lambdaExecutions.ts). It takes an
+      // execution ARN, never a query, so there is nothing for `assertReadOnly`
+      // to inspect.
+      "getExecution",
     ]);
     const unclassified = derived.filter((n) => !known.has(n));
     expect(unclassified).toEqual([]);

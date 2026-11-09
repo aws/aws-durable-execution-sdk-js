@@ -19,6 +19,7 @@
  * re-implemented: two divergent copies of a correctness-critical regex is the
  * duplication this whole stack exists to remove.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import {

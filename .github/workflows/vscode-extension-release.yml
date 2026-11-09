@@ -121,7 +121,7 @@ jobs:
           # platform) — so each target's .vsix must be built on a runner that
           # actually matches that target; there is no cross-compiling this.
           - target: darwin-arm64
-            os: macos-14
+            os: macos-15
           - target: win32-x64
             os: windows-latest
           - target: win32-arm64
@@ -220,7 +220,11 @@ jobs:
           # tarball pulls the full dependency tree, which the bundle needs.
           for PRIVATE_DEP in aws-durable-execution-sdk-js-telemetry-core; do
             TGZ="$(cd "$WORKSPACE_DIR/../$PRIVATE_DEP" && npm pack --pack-destination "$ISOLATED" | tail -1)"
-            DEP_NAME="$(node -p "require('$WORKSPACE_DIR/../$PRIVATE_DEP/package.json').name")"
+            # Resolve the name from inside the package directory with a relative
+            # path. node.exe is a native Windows binary. It cannot open the MSYS
+            # POSIX path (/d/a/...) that $(pwd) returns under Git Bash, and MSYS
+            # does not convert a path embedded inside a JavaScript string argument.
+            DEP_NAME="$(cd "$WORKSPACE_DIR/../$PRIVATE_DEP" && node -p "require('./package.json').name")"
             npm pkg set "dependencies.$DEP_NAME=file:./$TGZ"
           done
           npm install --no-workspaces

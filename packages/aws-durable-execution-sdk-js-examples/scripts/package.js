@@ -13,7 +13,8 @@ const fileName = handlerFile.replace(".handler", "");
 
 console.log(`Packaging ${fileName}...`);
 
-const tempDir = path.resolve(__dirname, "../temp-package");
+// One directory per handler, so several handlers can be packaged at once.
+const tempDir = path.resolve(__dirname, `../temp-package-${fileName}`);
 
 // Clean up any existing temp directory
 if (fs.existsSync(tempDir)) {

@@ -1,31 +1,36 @@
+import { vi, describe, test, expect, beforeEach, type Mock } from "vitest";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
 import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 // Mock the LambdaClient
-jest.mock("@aws-sdk/client-lambda", () => {
-  const originalModule = jest.requireActual("@aws-sdk/client-lambda");
+vi.mock("@aws-sdk/client-lambda", async () => {
+  const originalModule = await vi.importActual("@aws-sdk/client-lambda");
   return {
     ...originalModule,
-    LambdaClient: jest.fn().mockImplementation(() => ({
-      send: jest.fn(),
-    })),
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    LambdaClient: vi.fn().mockImplementation(function () {
+      return {
+        send: vi.fn(),
+      };
+    }),
   };
 });
 
 describe("DurableExecutionApiClient Caching", () => {
   beforeEach(() => {
     // Reset all mocks for each test
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test("should cache and reuse default LambdaClient across multiple instances", async () => {
     // Track call count for this test
     let callCount = 0;
-    const send = jest.fn().mockResolvedValue({});
+    const send = vi.fn().mockResolvedValue({});
 
     // Replace the mock implementation to track calls
-    (LambdaClient as jest.Mock).mockImplementation(() => {
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (LambdaClient as Mock).mockImplementation(function () {
       callCount++;
       return { send };
     });
@@ -78,10 +83,10 @@ describe("DurableExecutionApiClient Caching", () => {
   test("should not use cached client when custom client is provided", async () => {
     // Create custom clients with mock send methods
     const customClient1 = {
-      send: jest.fn().mockResolvedValue({ _stepData: [] }),
+      send: vi.fn().mockResolvedValue({ _stepData: [] }),
     };
     const customClient2 = {
-      send: jest.fn().mockResolvedValue({ taskToken: "test-token" }),
+      send: vi.fn().mockResolvedValue({ taskToken: "test-token" }),
     };
 
     // Create instances with custom clients (should not use cached default client)

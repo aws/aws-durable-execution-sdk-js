@@ -18,7 +18,7 @@
   //    previously used `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`
   //    at error severity, and that package's `prebuild` ran `npm run lint` while CI
   //    runs `npm run build` -- so this whole set failed the build job on every pull
-  //    request, exactly as the core SDK's three rules did (see gap 4). Treating it as
+  //    request, exactly as the core SDK's three rules did (see gap 3). Treating it as
   //    a pre-commit-only concern would understate what was lost.
   //
   //    Three async-safety rules are recovered via the `types` domain below
@@ -78,15 +78,7 @@
   //    `tsc --noEmit` still runs and still catches type errors, but it does not
   //    implement any of these rules.
   //
-  // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
-  //    equivalent, and nothing automated replaces it. API Extractor used to parse TSDoc
-  //    here, but it was removed once its only consumer (api-documenter, generating
-  //    docs/api-reference/) was dropped in favour of aws/aws-durable-execution-docs --
-  //    and it was never a backstop anyway, since `api:extract` ran in no workflow. Note
-  //    tsdoc/syntax was "warn" before, so nothing regressed -- this is an unfilled gap,
-  //    not a loss.
-  //
-  // 3. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
+  // 2. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
   //    no formatter for either, and Prettier was dropped rather than retained just for
   //    them. The reasoning: almost nothing in this repo hand-writes those files -- the
   //    conformance CloudFormation templates, the issue templates and most docs are
@@ -107,7 +99,7 @@
   //    its own decision about whether to gate it. Everything Biome can format, Biome
   //    formats, and that is now the whole story.
   //
-  // 4. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
+  // 3. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
   //    section accounts for `...typescriptEslint.configs.recommended.rules` only. The
   //    other two gated error-level sets -- strictTypeChecked and eslint-plugin-jest's
   //    recommended -- are accounted for separately, in gap 1 and the `test` domain note
@@ -166,7 +158,7 @@
   //    Both are genuine regressions rather than unfilled gaps: a violation used to
   //    fail the build job and now fails nothing.
   //
-  // 5. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
+  // 4. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
   //    wrongly implied it was -- the claim "the only two net losses" was corrected four
   //    times, each time because someone enumerated from a direction this file had not.
   //    Read it as "what has been measured so far", and re-derive rather than trust it.
@@ -483,21 +475,10 @@
         // ones CI will produce.
         //
         // TRIAGE BACKLOG -> then raise noFloatingPromises to "error".
-        // 77 total = noFloatingPromises 74, noMisusedPromises 2, useAwaitThenable 1,
-        // split 57 in test files, 18 in shipped package src (below), and 2 in a script
-        // and a packaging smoke test. The 18 that ship:
-        //   5  utils/checkpoint/checkpoint-manager.ts                      noFloatingPromises
-        //   3  handlers/run-in-child-context-handler/...-handler.ts         noFloatingPromises
-        //   3  utils/replay-validation/replay-validation.ts                noFloatingPromises
-        //   2  context/durable-context/mode-management/mode-management.ts   noMisusedPromises
-        //   1  handlers/step-handler/step-handler.ts                       noFloatingPromises
-        //   1  handlers/wait-for-callback-handler/...-handler.ts            useAwaitThenable
-        //   1  handlers/wait-for-condition-handler/...-handler.ts          noFloatingPromises
-        //   1  run-durable.ts                                             noFloatingPromises
-        //   1  termination-manager/termination-manager.ts                  noFloatingPromises
-        // A deliberately un-awaited promise should get an explicit `void` or a
-        // suppression comment carrying a reason; the rest are likely real. Until that
-        // pass happens, these stay at "warn".
+        // These rules are "error" for all non-test source. Every deliberately
+        // un-awaited promise carries `void` and a one-line reason. Test files keep
+        // "warn" through the override for test files below: 58 findings remain there,
+        // 53 in the core package and 5 in the OTel package.
         //
         // FOOTGUN when writing those suppressions: Biome requires the reason to sit on
         // the SAME line as the directive. If it wraps onto a following `//` line, the
@@ -508,9 +489,9 @@
         // not silent.
         //
         // Like all nursery rules these are outside Biome's semver guarantees.
-        "noFloatingPromises": "warn",
-        "noMisusedPromises": "warn",
-        "useAwaitThenable": "warn"
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useAwaitThenable": "error"
       }
     }
   },
@@ -526,6 +507,26 @@
   },
 
   "overrides": [
+    {
+      // Test files keep the promise rules at "warn" until their 58 findings are triaged.
+      // This override comes first, so the testing package override below still sets
+      // "error" for that package's tests.
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test.mts",
+        "**/__tests__/**"
+      ],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noFloatingPromises": "warn",
+            "noMisusedPromises": "warn",
+            "useAwaitThenable": "warn"
+          }
+        }
+      }
+    },
     {
       /**
        * These files ARE CommonJS: jest configs, build scripts and the CJS integration
@@ -577,7 +578,7 @@
             // The real equivalent of eslint:recommended's `no-empty`, which this package
             // gated. It is NOT in Biome's recommended set, so it is OFF by default -- a
             // THIRD failure mode beyond "recommended but below error", which the
-            // enumeration in gap 5 does not find. 100 violations repo-wide, 0 here.
+            // enumeration in gap 4 does not find. 100 violations repo-wide, 0 here.
             // (Biome's `noEmptyBlock` is a CSS rule and is NOT this one.)
             "noEmptyBlockStatements": "error"
           },
@@ -634,6 +635,23 @@
           "style": {
             "noNonNullAssertion": "error"
           }
+        }
+      }
+    },
+    {
+      // The shipped core SDK source holds no `any` and no `!`. A site that needs one
+      // carries a suppression with its reason. Test files and src/testing keep the
+      // repo-wide levels.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/*.test.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/__tests__/**",
+        "!packages/aws-durable-execution-sdk-js/src/testing/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "error" },
+          "suspicious": { "noExplicitAny": "error" }
         }
       }
     },

@@ -9,6 +9,7 @@
  * the SDK stops calling, and the invocation resolves PENDING rather than throwing or
  * claiming the execution finished.
  */
+import { describe, it, expect } from "vitest";
 
 import { withDurableExecution } from "../../with-durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../durable-execution-invocation-input/durable-execution-invocation-input";
@@ -222,7 +223,7 @@ describe("checkpoint response without a CheckpointToken", () => {
         return outcome();
       };
 
-    /** Rejects if `promise` has not settled within `ms`, instead of waiting for Jest's timeout. */
+    /** Rejects if `promise` has not settled within `ms`, instead of waiting for Vitest's timeout. */
     const within = <T>(promise: Promise<T>, ms: number): Promise<T> =>
       Promise.race([
         promise,

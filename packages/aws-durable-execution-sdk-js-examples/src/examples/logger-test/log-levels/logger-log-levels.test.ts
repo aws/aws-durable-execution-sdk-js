@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { handler } from "./logger-log-levels";
 import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
@@ -15,12 +16,12 @@ createTests({
     } else {
       it("should execute successfully with all log levels", async () => {
         // Spy on process stdout and stderr to capture log output
-        const stdoutSpy = jest
+        const stdoutSpy = vi
           .spyOn(process.stdout, "write")
-          .mockImplementation();
-        const stderrSpy = jest
+          .mockImplementation(() => true);
+        const stderrSpy = vi
           .spyOn(process.stderr, "write")
-          .mockImplementation();
+          .mockImplementation(() => true);
 
         try {
           const execution = await runner.run();
@@ -288,12 +289,12 @@ createTests({
         const originalEnv = process.env.AWS_LAMBDA_LOG_LEVEL;
         process.env.AWS_LAMBDA_LOG_LEVEL = "INFO";
 
-        const stdoutSpy = jest
+        const stdoutSpy = vi
           .spyOn(process.stdout, "write")
-          .mockImplementation();
-        const stderrSpy = jest
+          .mockImplementation(() => true);
+        const stderrSpy = vi
           .spyOn(process.stderr, "write")
-          .mockImplementation();
+          .mockImplementation(() => true);
 
         try {
           const execution = await runner.run();
@@ -335,12 +336,12 @@ createTests({
         const originalEnv = process.env.AWS_LAMBDA_LOG_LEVEL;
         process.env.AWS_LAMBDA_LOG_LEVEL = "WARN";
 
-        const stdoutSpy = jest
+        const stdoutSpy = vi
           .spyOn(process.stdout, "write")
-          .mockImplementation();
-        const stderrSpy = jest
+          .mockImplementation(() => true);
+        const stderrSpy = vi
           .spyOn(process.stderr, "write")
-          .mockImplementation();
+          .mockImplementation(() => true);
 
         try {
           const execution = await runner.run();
@@ -379,12 +380,12 @@ createTests({
         const originalEnv = process.env.AWS_LAMBDA_LOG_LEVEL;
         process.env.AWS_LAMBDA_LOG_LEVEL = "ERROR";
 
-        const stdoutSpy = jest
+        const stdoutSpy = vi
           .spyOn(process.stdout, "write")
-          .mockImplementation();
-        const stderrSpy = jest
+          .mockImplementation(() => true);
+        const stderrSpy = vi
           .spyOn(process.stderr, "write")
-          .mockImplementation();
+          .mockImplementation(() => true);
 
         try {
           const execution = await runner.run();

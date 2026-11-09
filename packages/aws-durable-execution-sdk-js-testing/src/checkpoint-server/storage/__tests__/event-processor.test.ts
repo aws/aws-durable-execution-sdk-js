@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { EventType } from "@aws-sdk/client-lambda";
 import {
   OperationUpdate,
@@ -9,20 +10,20 @@ import { EventProcessor } from "../event-processor";
 import * as historyEventDetails from "../../utils/history-event-details";
 
 // Mock the history-event-details module
-jest.mock("../../utils/history-event-details");
+vi.mock("../../utils/history-event-details");
 
 describe("EventProcessor", () => {
   let eventProcessor: EventProcessor;
-  const mockGetHistoryEventDetail = jest.mocked(
+  const mockGetHistoryEventDetail = vi.mocked(
     historyEventDetails.getHistoryEventDetail,
   );
-  const mockGetRetryHistoryEventDetail = jest.mocked(
+  const mockGetRetryHistoryEventDetail = vi.mocked(
     historyEventDetails.getRetryHistoryEventDetail,
   );
 
   beforeEach(() => {
     eventProcessor = new EventProcessor();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should create an instance without execution timeout", () => {
@@ -135,7 +136,7 @@ describe("EventProcessor", () => {
     const mockHistoryDetails = {
       eventType: EventType.ExecutionStarted,
       detailPlace: "ExecutionStartedDetails" as const,
-      getDetails: jest.fn(),
+      getDetails: vi.fn(),
     };
 
     beforeEach(() => {
@@ -353,7 +354,7 @@ describe("EventProcessor", () => {
       const mockRetryHistoryDetails = {
         eventType: EventType.StepFailed,
         detailPlace: "StepFailedDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Error: {
             Payload: { ErrorType: "TestError", ErrorMessage: "Test error" },
           },
@@ -396,7 +397,7 @@ describe("EventProcessor", () => {
       const mockSuccessRetryDetails = {
         eventType: EventType.StepSucceeded,
         detailPlace: "StepSucceededDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Result: { Payload: "test-result" },
           RetryDetails: {
             NextAttemptDelaySeconds: 5,
@@ -438,7 +439,7 @@ describe("EventProcessor", () => {
       const mockSuccessRetryDetails = {
         eventType: EventType.StepSucceeded,
         detailPlace: "StepSucceededDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Result: { Payload: "test-result" },
           RetryDetails: {
             NextAttemptDelaySeconds: 5,
@@ -481,7 +482,7 @@ describe("EventProcessor", () => {
     const mockHistoryDetails = {
       eventType: EventType.ExecutionStarted,
       detailPlace: "ExecutionStartedDetails" as const,
-      getDetails: jest.fn(),
+      getDetails: vi.fn(),
     };
 
     beforeEach(() => {
@@ -599,7 +600,7 @@ describe("EventProcessor", () => {
       mockGetHistoryEventDetail.mockReturnValue({
         eventType: EventType.ExecutionStarted,
         detailPlace: "ExecutionStartedDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Input: { Payload: "test-payload" },
         }),
       });
@@ -655,7 +656,7 @@ describe("EventProcessor", () => {
       mockGetHistoryEventDetail.mockReturnValue({
         eventType: EventType.ExecutionStarted,
         detailPlace: "ExecutionStartedDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Input: { Payload: "" },
         }),
       });
@@ -688,7 +689,7 @@ describe("EventProcessor", () => {
       mockGetHistoryEventDetail.mockReturnValue({
         eventType: EventType.ExecutionStarted,
         detailPlace: "ExecutionStartedDetails" as const,
-        getDetails: jest.fn().mockReturnValue({
+        getDetails: vi.fn().mockReturnValue({
           Input: { Payload: undefined },
         }),
       });

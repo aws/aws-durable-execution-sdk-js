@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { ConcurrencyController } from "./concurrent-execution-handler";
 import {
   DurableLogger,
@@ -11,21 +20,21 @@ import { NestingType } from "../../types/batch";
 
 describe("ConcurrencyController - Replay Mode", () => {
   let controller: ConcurrencyController<DurableLogger>;
-  let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockSkipNextOperation: jest.Mock;
+  let mockParentContext: Mocked<DurableContext<DurableLogger>>;
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockSkipNextOperation: Mock;
 
   beforeEach(() => {
     // Summarized replay skips items it does not re-execute by advancing the
     // step cursor of the context runInChildContext runs on (parentContext).
-    mockSkipNextOperation = jest.fn();
+    mockSkipNextOperation = vi.fn();
     controller = new ConcurrencyController("test-operation");
     mockParentContext = {
-      runInChildContext: jest.fn(),
+      runInChildContext: vi.fn(),
       skipNextOperation: mockSkipNextOperation,
     } as any;
     mockExecutionContext = {
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
     } as any;
   });
 
@@ -35,7 +44,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "data2", index: 1 },
       { id: "item-2", data: "data3", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -100,7 +109,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       data: index,
       index,
     }));
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
     const summary = JSON.stringify({
       type: "MapResult",
@@ -176,7 +185,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "d0", index: 0 },
       { id: "item-1", data: "d1", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -269,7 +278,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "d1", index: 1 },
       { id: "item-2", data: "d2", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -339,7 +348,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "d0", index: 0 },
       { id: "item-1", data: "d1", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -417,7 +426,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "d1", index: 1 },
       { id: "item-2", data: "d2", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const fullResultPayload = JSON.stringify({
@@ -476,7 +485,7 @@ describe("ConcurrencyController - Replay Mode", () => {
     // alphabet must not be read as terminality; replay falls back to the item's
     // own records instead.
     const items = [{ id: "item-0", data: "d0", index: 0 }];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const craftedSummary = JSON.stringify({
@@ -549,7 +558,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "d0", index: 0 },
       { id: "item-1", data: "d1", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -623,7 +632,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "data1", index: 0 },
       { id: "item-1", data: "data2", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -701,7 +710,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-2", data: "data3", index: 2 },
       { id: "item-3", data: "data4", index: 3 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -757,7 +766,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "data2", index: 1 },
       { id: "item-2", data: "data3", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     // Items 0 and 2 completed, item 1 was incomplete
@@ -829,7 +838,7 @@ describe("ConcurrencyController - Replay Mode", () => {
     // no child checkpoints, the single item was never started in the live run,
     // so it is omitted rather than re-executed.
     const items = [{ id: "item-0", data: "data1", index: 0 }];
-    const executor = jest.fn().mockResolvedValue("result");
+    const executor = vi.fn().mockResolvedValue("result");
     const entityId = "parent-step";
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -865,7 +874,7 @@ describe("ConcurrencyController - Replay Mode", () => {
 
   it("should reconstruct from checkpoints when the summary is unparseable (no concurrent fallback)", async () => {
     const items = [{ id: "item-0", data: "data1", index: 0 }];
-    const executor = jest.fn().mockResolvedValue("result");
+    const executor = vi.fn().mockResolvedValue("result");
     const entityId = "parent-step";
 
     mockExecutionContext.getStepData.mockReturnValue({
@@ -895,7 +904,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "data1", index: 0 },
       { id: "item-1", data: "data2", index: 1 },
     ];
-    const executor = jest.fn().mockResolvedValue("result");
+    const executor = vi.fn().mockResolvedValue("result");
 
     mockParentContext.runInChildContext.mockResolvedValue("result");
 
@@ -913,7 +922,7 @@ describe("ConcurrencyController - Replay Mode", () => {
 
   it("should handle non-Error thrown values during replay", async () => {
     const items = [{ id: "item-0", data: "data1", index: 0 }];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -969,7 +978,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "data2", index: 1 },
       { id: "item-2", data: "data3", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -1037,7 +1046,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "data2", index: 1 },
       { id: "item-2", data: "data3", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -1114,7 +1123,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "data2", index: 1 },
       { id: "item-2", data: "data3", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -1191,7 +1200,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "data1", index: 0 },
       { id: "item-1", data: "data2", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -1249,7 +1258,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-0", data: "data1", index: 0 },
       { id: "item-1", data: "data2", index: 1 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
@@ -1316,7 +1325,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-3", data: "d3", index: 3 },
       { id: "item-4", data: "d4", index: 4 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     // Envelope written by the default (composed) generator on the live run.
@@ -1401,7 +1410,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "d1", index: 1 },
       { id: "item-2", data: "d2", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     // A legacy/free-form custom-generator payload (pre-fix): not JSON.
@@ -1469,7 +1478,7 @@ describe("ConcurrencyController - Replay Mode", () => {
       { id: "item-1", data: "d1", index: 1 },
       { id: "item-2", data: "d2", index: 2 },
     ];
-    const executor = jest.fn();
+    const executor = vi.fn();
     const entityId = "parent-step";
 
     // A malformed / hand-authored summary carrying a bogus completionReason.

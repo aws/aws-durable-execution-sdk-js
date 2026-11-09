@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
 import { OperationStorage, TrackedOperation } from "../operation-storage";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
@@ -9,7 +10,7 @@ import {
 import { DurableApiClient } from "../create-durable-api-client";
 
 // Mock the OperationWaitManager
-jest.mock("../../local/operations/operation-wait-manager");
+vi.mock("../../local/operations/operation-wait-manager");
 
 describe("OperationStorage", () => {
   let mockWaitManager: OperationWaitManager;
@@ -51,7 +52,7 @@ describe("OperationStorage", () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockIndexedOperations = new IndexedOperations([]);
     mockWaitManager = new OperationWaitManager(mockIndexedOperations);
     mockApiClient = {} as DurableApiClient;
@@ -246,7 +247,7 @@ describe("OperationStorage", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+      const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -273,7 +274,7 @@ describe("OperationStorage", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+      const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -301,7 +302,7 @@ describe("OperationStorage", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+      const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -325,7 +326,7 @@ describe("OperationStorage", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+      const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -352,15 +353,15 @@ describe("OperationStorage", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+        const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
         // Mock the IndexedOperations to track which lookup methods are called
-        const getByIdSpy = jest.spyOn(mockIndexedOperations, "getById");
-        const getByNameAndIndexSpy = jest.spyOn(
+        const getByIdSpy = vi.spyOn(mockIndexedOperations, "getById");
+        const getByNameAndIndexSpy = vi.spyOn(
           mockIndexedOperations,
           "getByNameAndIndex",
         );
-        const getByIndexSpy = jest.spyOn(mockIndexedOperations, "getByIndex");
+        const getByIndexSpy = vi.spyOn(mockIndexedOperations, "getByIndex");
 
         const trackedOperation: TrackedOperation<OperationWithData> = {
           operation: mockOperation,
@@ -393,15 +394,15 @@ describe("OperationStorage", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+        const populateDataSpy = vi.spyOn(mockOperation, "populateData");
 
         // Mock the IndexedOperations to track which lookup methods are called
-        const getByIdSpy = jest.spyOn(mockIndexedOperations, "getById");
-        const getByNameAndIndexSpy = jest.spyOn(
+        const getByIdSpy = vi.spyOn(mockIndexedOperations, "getById");
+        const getByNameAndIndexSpy = vi.spyOn(
           mockIndexedOperations,
           "getByNameAndIndex",
         );
-        const getByIndexSpy = jest.spyOn(mockIndexedOperations, "getByIndex");
+        const getByIndexSpy = vi.spyOn(mockIndexedOperations, "getByIndex");
 
         const trackedOperation: TrackedOperation<OperationWithData> = {
           operation: mockOperation,

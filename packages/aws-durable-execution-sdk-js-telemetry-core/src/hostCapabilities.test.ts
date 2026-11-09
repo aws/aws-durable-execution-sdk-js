@@ -14,6 +14,7 @@
  * that capabilities are *detected*, and that the provider the session uses is
  * the same one it reports.
  */
+import { describe, it, expect, afterEach } from "vitest";
 import { ExplorerSession } from "./explorerSession";
 import { setCopilotBridge } from "./copilotBridge";
 import {

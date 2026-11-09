@@ -8,6 +8,7 @@
  * the first one wins. Which one it is decides whether runHandler's `throw result.error` has
  * an error to throw, so there is a test per caller.
  */
+import { describe, it, expect } from "vitest";
 
 import { withDurableExecution } from "../../with-durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../durable-execution-invocation-input/durable-execution-invocation-input";

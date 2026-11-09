@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { Logger } from "@aws-lambda-powertools/logger";
 import {
   createPowertoolsLogger,
@@ -27,8 +28,12 @@ function captureEntries(): {
   entries: () => Record<string, unknown>[];
   restore: () => void;
 } {
-  const stdout = jest.spyOn(process.stdout, "write").mockImplementation();
-  const stderr = jest.spyOn(process.stderr, "write").mockImplementation();
+  const stdout = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation(() => true);
+  const stderr = vi
+    .spyOn(process.stderr, "write")
+    .mockImplementation(() => true);
   return {
     entries: () =>
       [...stdout.mock.calls, ...stderr.mock.calls].map((call) =>
@@ -238,10 +243,10 @@ describe("createPowertoolsLogger in a durable execution with a plugin", () => {
       writes.push(String(chunk));
       return true;
     };
-    const stdout = jest
+    const stdout = vi
       .spyOn(process.stdout, "write")
       .mockImplementation(capture);
-    const stderr = jest
+    const stderr = vi
       .spyOn(process.stderr, "write")
       .mockImplementation(capture);
     try {
@@ -337,10 +342,10 @@ describe("one createPowertoolsLogger shared by two handlers with different plugi
       writes.push(String(chunk));
       return true;
     };
-    const stdout = jest
+    const stdout = vi
       .spyOn(process.stdout, "write")
       .mockImplementation(capture);
-    const stderr = jest
+    const stderr = vi
       .spyOn(process.stderr, "write")
       .mockImplementation(capture);
     try {

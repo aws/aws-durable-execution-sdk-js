@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -8,10 +9,10 @@ import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 import { TerminationReason } from "./termination-manager/types";
 
 // Mock dependencies
-jest.mock("./context/execution-context/execution-context");
-jest.mock("./context/durable-context/durable-context");
-jest.mock("./utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("./context/execution-context/execution-context");
+vi.mock("./context/durable-context/durable-context");
+vi.mock("./utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 describe("withDurableExecution Queue Completion", () => {
@@ -29,12 +30,12 @@ describe("withDurableExecution Queue Completion", () => {
   let mockExecutionContext: any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockTerminationManager = {
-      getTerminationPromise: jest.fn().mockReturnValue(new Promise(() => {})),
-      terminate: jest.fn(),
-      setCheckpointTerminatingCallback: jest.fn(),
+      getTerminationPromise: vi.fn().mockReturnValue(new Promise(() => {})),
+      terminate: vi.fn(),
+      setCheckpointTerminatingCallback: vi.fn(),
     };
 
     mockExecutionContext = {
@@ -46,13 +47,13 @@ describe("withDurableExecution Queue Completion", () => {
       pendingCompletions: new Set(),
     };
 
-    (initializeExecutionContext as jest.Mock).mockResolvedValue({
+    (initializeExecutionContext as Mock).mockResolvedValue({
       executionContext: mockExecutionContext,
       durableExecutionMode: "NORMAL",
       checkpointToken: "test-token",
     });
 
-    (createDurableContext as jest.Mock).mockImplementation(
+    (createDurableContext as Mock).mockImplementation(
       (_ctx, _lambdaCtx, _mode, _logger, _opts, _durableExecution) => {
         return {};
       },
@@ -60,12 +61,12 @@ describe("withDurableExecution Queue Completion", () => {
   });
 
   it("should wait for checkpoint queue completion on successful handler execution", async () => {
-    const waitSpy = jest
+    const waitSpy = vi
       .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
       .mockResolvedValue(undefined);
-    const clearSpy = jest.spyOn(CheckpointManager.prototype, "clearQueue");
+    const clearSpy = vi.spyOn(CheckpointManager.prototype, "clearQueue");
 
-    const mockHandler = jest.fn().mockResolvedValue("success");
+    const mockHandler = vi.fn().mockResolvedValue("success");
     const wrappedHandler = withDurableExecution(mockHandler);
 
     await wrappedHandler(mockEvent, mockContext);
@@ -79,12 +80,12 @@ describe("withDurableExecution Queue Completion", () => {
   });
 
   it("should wait for queue completion even on termination", async () => {
-    const waitSpy = jest
+    const waitSpy = vi
       .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
       .mockResolvedValue(undefined);
 
     // Mock handler to take longer so termination wins the race
-    const mockHandler = jest
+    const mockHandler = vi
       .fn()
       .mockImplementation(
         () =>
@@ -107,11 +108,11 @@ describe("withDurableExecution Queue Completion", () => {
   });
 
   it("should handle waitForQueueCompletion errors gracefully", async () => {
-    const waitSpy = jest
+    const waitSpy = vi
       .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
       .mockRejectedValue(new Error("Queue completion failed"));
 
-    const mockHandler = jest.fn().mockResolvedValue("success");
+    const mockHandler = vi.fn().mockResolvedValue("success");
     const wrappedHandler = withDurableExecution(mockHandler);
 
     // Should not throw despite waitForQueueCompletion error

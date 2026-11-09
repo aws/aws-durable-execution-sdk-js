@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import { InvocationTracker } from "../invocation-tracker";
 import {
   createExecutionId,
@@ -7,20 +8,20 @@ import { CheckpointApiClient } from "../../api-client/checkpoint-api-client";
 
 describe("InvocationTracker", () => {
   let invocationTracker: InvocationTracker;
-  let mockCheckpointApi: jest.Mocked<CheckpointApiClient>;
+  let mockCheckpointApi: Mocked<CheckpointApiClient>;
 
   const mockExecutionId = createExecutionId();
 
   beforeEach(() => {
     mockCheckpointApi = {
-      pauseExecution: jest.fn().mockResolvedValue(undefined),
-      resumeExecution: jest.fn().mockResolvedValue(undefined),
-      startDurableExecution: jest.fn(),
-      pollCheckpointData: jest.fn(),
-      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
-      updateCheckpointData: jest.fn(),
-      startInvocation: jest.fn(),
-      completeInvocation: jest.fn((_executionId, invocationId, error) =>
+      pauseExecution: vi.fn().mockResolvedValue(undefined),
+      resumeExecution: vi.fn().mockResolvedValue(undefined),
+      startDurableExecution: vi.fn(),
+      pollCheckpointData: vi.fn(),
+      drainCheckpointData: vi.fn().mockResolvedValue({ operations: [] }),
+      updateCheckpointData: vi.fn(),
+      startInvocation: vi.fn(),
+      completeInvocation: vi.fn((_executionId, invocationId, error) =>
         Promise.resolve({
           event: {
             InvocationCompletedDetails: {

@@ -1,3 +1,11 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   DurableLogger,
@@ -8,18 +16,16 @@ import { DurablePromise } from "../../types/durable-promise";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
+vi.mock("../../utils/logger/logger");
+vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
+const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize
 >;
 
@@ -30,21 +36,21 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
   let stepIdCounter = 0;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
@@ -66,7 +72,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       undefined,
     );
 
-    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = jest
+    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = vi
       .fn()
       .mockResolvedValue(10);
 
@@ -94,7 +100,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       undefined,
     );
 
-    const checkFn: WaitForConditionCheckFunc<string, DurableLogger> = jest
+    const checkFn: WaitForConditionCheckFunc<string, DurableLogger> = vi
       .fn()
       .mockResolvedValue("completed");
 
@@ -123,7 +129,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     );
 
     const executionOrder: string[] = [];
-    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = jest.fn(
+    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn(
       async () => {
         executionOrder.push("check-executed");
         return 42;

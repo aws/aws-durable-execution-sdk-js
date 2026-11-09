@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedClass,
+} from "vitest";
 import { MessagePort } from "worker_threads";
 import { serializeWorkerApiError } from "../../worker-api/worker-api-error";
 import { CheckpointWorker } from "../checkpoint-worker";
@@ -16,38 +25,41 @@ import {
 import { InvocationResult } from "../../storage/execution-manager";
 
 // Mock external dependencies
-jest.mock("worker_threads", () => ({
+vi.mock("worker_threads", () => ({
   workerData: {
     checkpointDelaySettings: 100,
   },
 }));
-jest.mock("../../worker-api/worker-server-api-handler");
+vi.mock("../../worker-api/worker-server-api-handler");
 
-const mockWorkerServerApiHandler = WorkerServerApiHandler as jest.MockedClass<
+const mockWorkerServerApiHandler = WorkerServerApiHandler as MockedClass<
   typeof WorkerServerApiHandler
 >;
 
 describe("CheckpointWorker", () => {
   let worker: CheckpointWorker;
-  let mockMessagePort: jest.Mocked<MessagePort>;
-  let mockApiHandlerInstance: jest.Mocked<WorkerServerApiHandler>;
+  let mockMessagePort: Mocked<MessagePort>;
+  let mockApiHandlerInstance: Mocked<WorkerServerApiHandler>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create mock MessagePort
     mockMessagePort = {
-      on: jest.fn(),
-      postMessage: jest.fn(),
-    } as unknown as jest.Mocked<MessagePort>;
+      on: vi.fn(),
+      postMessage: vi.fn(),
+    } as unknown as Mocked<MessagePort>;
 
     // Create mock WorkerServerApiHandler instance
     mockApiHandlerInstance = {
-      performApiCall: jest.fn(),
-    } as unknown as jest.Mocked<WorkerServerApiHandler>;
+      performApiCall: vi.fn(),
+    } as unknown as Mocked<WorkerServerApiHandler>;
 
     // Mock constructor to return our instance
-    mockWorkerServerApiHandler.mockImplementation(() => mockApiHandlerInstance);
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    mockWorkerServerApiHandler.mockImplementation(function () {
+      return mockApiHandlerInstance;
+    });
 
     worker = new CheckpointWorker(mockMessagePort);
   });

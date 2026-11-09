@@ -1,4 +1,4 @@
-import {
+import type {
   DurableInstrumentationPlugin,
   AttemptEndInfo,
   AttemptInfo,
@@ -11,7 +11,7 @@ import {
   CustomerFnResult,
   CustomerFn,
 } from "../../types/plugin";
-import { DurableExecutionInvocationOutput } from "../../types/core";
+import type { DurableExecutionInvocationOutput } from "../../types/core";
 import { MAX_TIMER_DELAY_MS } from "../constants/constants";
 import { collectPropagationMetadata } from "./propagation-metadata";
 
@@ -354,16 +354,17 @@ export function createPluginRunner(
       fireAndForget("onOperationAttemptEnd", info),
     onOperationChange: (info: OperationChangeInfo): Promise<void> =>
       fireAndForget("onOperationChange", info),
-    enrichLogContext: () =>
-      plugins.reduce(
-        (acc, p) => {
-          try {
-            return { ...acc, ...p.enrichLogContext?.() };
-          } catch {
-            return acc;
-          }
-        },
-        {} as Record<string, string | number | boolean>,
-      ),
+    enrichLogContext: (): Record<string, string | number | boolean> => {
+      const fields: Record<string, string | number | boolean> = {};
+      for (const p of plugins) {
+        try {
+          // Copy first, so a throwing plugin adds no fields.
+          Object.assign(fields, { ...p.enrichLogContext?.() });
+        } catch {
+          // A failing plugin adds no fields.
+        }
+      }
+      return fields;
+    },
   };
 }

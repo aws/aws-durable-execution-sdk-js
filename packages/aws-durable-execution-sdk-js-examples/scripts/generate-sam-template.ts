@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
@@ -264,9 +264,13 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
       (catalog: {
         excludeRuntimes?: string[];
         localOnly?: boolean;
+        testedBy?: string[];
         usesMicrovm?: boolean;
       }) =>
         !catalog.localOnly &&
+        // The integration template (built with a function name map) leaves out
+        // examples with no test of their own. The published template keeps them.
+        !(normalizedOptions.functionNameMap && catalog.testedBy) &&
         (!catalog.usesMicrovm || hasMicrovmImage) &&
         !catalog.excludeRuntimes?.includes(normalizedOptions.runtime ?? "22.x"),
     )

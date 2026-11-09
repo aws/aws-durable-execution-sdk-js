@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { createErrorObjectFromError } from "./error-object";
 import { StepError } from "../../errors/durable-error/durable-error";
 

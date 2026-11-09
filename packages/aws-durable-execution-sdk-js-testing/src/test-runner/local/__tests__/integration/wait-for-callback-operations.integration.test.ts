@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import {

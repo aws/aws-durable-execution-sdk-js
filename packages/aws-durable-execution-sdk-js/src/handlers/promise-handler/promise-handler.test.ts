@@ -1,12 +1,13 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createPromiseHandler } from "./promise-handler";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Promise Handler", () => {
-  let mockRunInChildContext: jest.Mock;
+  let mockRunInChildContext: Mock;
   let promiseHandler: ReturnType<typeof createPromiseHandler>;
 
   beforeEach(() => {
-    mockRunInChildContext = jest.fn();
+    mockRunInChildContext = vi.fn();
     promiseHandler = createPromiseHandler(mockRunInChildContext);
   });
 

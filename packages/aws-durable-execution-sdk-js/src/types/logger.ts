@@ -1,4 +1,4 @@
-import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * Log data passed to the durable logger when `getDurableLogData` is called.
@@ -7,10 +7,10 @@ import { DurableContextLogger, DurableLogger } from "./durable-logger";
 export interface DurableLogData {
   requestId: string;
   executionArn: string;
-  tenantId?: string;
-  operationId?: string;
-  operationName?: string;
-  attempt?: number;
+  tenantId?: string | undefined;
+  operationId?: string | undefined;
+  operationName?: string | undefined;
+  attempt?: number | undefined;
   // We aren't attaching any additional properties, but this is
   // added for type-compatibility with popular loggers like powertools
   [key: string]: unknown;
@@ -50,7 +50,9 @@ export interface LoggerConfig<Logger extends DurableLogger> {
  * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
  * @public
  */
-export interface OperationContext<Logger extends DurableLogger> {
+export interface OperationContext<
+  Logger extends DurableContextLogger<DurableLogger>,
+> {
   logger: Logger; // Basic durable logger which will be parsed by the enriched durable logger
 }
 
@@ -68,6 +70,50 @@ export interface StepContext<Logger extends DurableLogger>
    * fallback path once earlier attempts have failed.
    */
   attempt: number;
+
+  /**
+   * Aborted when the invocation terminates, or when a non-virtual context
+   * that holds this step finishes.
+   *
+   * The SDK aborts this signal in two cases only:
+   *
+   * 1. The SDK terminates the invocation, for example to suspend for a wait or
+   *    to fail after a checkpoint error.
+   * 2. A non-virtual context that holds this step finishes. For example, a
+   *    `map` or `parallel` call returns early because its `completionConfig`
+   *    is met, while some items still run.
+   *
+   * All steps in one context share this signal. So the signal also aborts
+   * for a step that already returned, when its context finishes later. The
+   * result of that step is still recorded.
+   *
+   * A virtual context does not abort this signal when it finishes. A `map` or
+   * `parallel` item with `NestingType.FLAT` runs in a virtual context. So its
+   * steps share the signal of the batch's context, and that signal aborts
+   * when the batch's context finishes.
+   *
+   * Returning or throwing from the handler does not abort this signal. So a
+   * step that the handler did not await keeps a live signal after the
+   * handler ends.
+   *
+   * When the signal aborts while the step still runs, the SDK drops the
+   * result of the step. But the step function keeps running until it
+   * returns. So pass this signal to `fetch`, to AWS SDK calls
+   * (`client.send(command, { abortSignal })`) and to your own loops to stop
+   * work that nobody uses.
+   *
+   * The SDK never aborts a step by force. A step that ignores the signal
+   * behaves as before.
+   *
+   * @example
+   * ```ts
+   * await context.step("fetch-quote", async (ctx) => {
+   *   const res = await fetch(url, { signal: ctx.signal });
+   *   return res.json();
+   * });
+   * ```
+   */
+  signal: AbortSignal;
 }
 
 /**

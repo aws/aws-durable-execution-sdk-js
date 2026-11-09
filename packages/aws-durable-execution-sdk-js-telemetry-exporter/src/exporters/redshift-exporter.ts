@@ -20,7 +20,6 @@ function sanitizeIdentifier(name: string): string {
 
 /**
  * Configuration for the Redshift exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface RedshiftExporterConfig {
   /**
@@ -75,8 +74,6 @@ export interface RedshiftExporterConfig {
  *
  * Requires IAM: redshift-data:ExecuteStatement (and redshift-serverless:GetCredentials
  * for Serverless, or redshift:GetClusterCredentialsWithIAM for provisioned).
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class RedshiftExporter implements TelemetryExporter {
   private readonly database: string;

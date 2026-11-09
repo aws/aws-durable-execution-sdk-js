@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { CheckpointManager } from "./checkpoint-manager";
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import {
@@ -14,8 +15,8 @@ import { OperationType } from "../../types/wire";
 import { log } from "../logger/logger";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
-jest.mock("../logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("../logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 describe("CheckpointManager Termination Behavior", () => {
@@ -25,20 +26,20 @@ describe("CheckpointManager Termination Behavior", () => {
 
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
-    jest.useRealTimers();
+    vi.clearAllMocks();
+    vi.useRealTimers();
 
     stepDataEmitter = new EventEmitter();
     mockContext = {
       durableExecutionClient: {
-        checkpoint: jest.fn(),
-        getExecutionState: jest.fn(),
+        checkpoint: vi.fn(),
+        getExecutionState: vi.fn(),
       },
       _stepData: {},
       terminationManager: new TerminationManager(),
       durableExecutionArn: "test-arn",
-      getStepData: jest.fn(),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      getStepData: vi.fn(),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "",
       getRemainingTimeMs: (): number => Infinity,
       tenantId: "",
@@ -78,12 +79,12 @@ describe("CheckpointManager Termination Behavior", () => {
 
     it("should resolve normally when not terminating", async () => {
       // Mock successful checkpoint
-      (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
-      ).mockResolvedValue({
-        CheckpointToken: "new-token",
-        NewExecutionState: { Operations: [] },
-      });
+      (mockContext.durableExecutionClient.checkpoint as Mock).mockResolvedValue(
+        {
+          CheckpointToken: "new-token",
+          NewExecutionState: { Operations: [] },
+        },
+      );
 
       // Call checkpoint without terminating
       const checkpointPromise = checkpointHandler.checkpoint("test-step", {
@@ -118,12 +119,12 @@ describe("CheckpointManager Termination Behavior", () => {
 
     it("should resolve normally when not terminating", async () => {
       // Mock successful checkpoint
-      (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
-      ).mockResolvedValue({
-        CheckpointToken: "new-token",
-        NewExecutionState: { Operations: [] },
-      });
+      (mockContext.durableExecutionClient.checkpoint as Mock).mockResolvedValue(
+        {
+          CheckpointToken: "new-token",
+          NewExecutionState: { Operations: [] },
+        },
+      );
 
       // Call forceCheckpoint without terminating
       const forcePromise = checkpointHandler.forceCheckpoint();
@@ -136,12 +137,12 @@ describe("CheckpointManager Termination Behavior", () => {
   describe("setTerminating()", () => {
     it("should prevent new checkpoints from resolving", async () => {
       // First checkpoint should work normally
-      (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
-      ).mockResolvedValue({
-        CheckpointToken: "new-token",
-        NewExecutionState: { Operations: [] },
-      });
+      (mockContext.durableExecutionClient.checkpoint as Mock).mockResolvedValue(
+        {
+          CheckpointToken: "new-token",
+          NewExecutionState: { Operations: [] },
+        },
+      );
 
       const firstCheckpoint = checkpointHandler.checkpoint("step1", {
         Action: "START",
@@ -172,7 +173,7 @@ describe("CheckpointManager Termination Behavior", () => {
     it("should handle termination during checkpoint processing", async () => {
       // Mock slow checkpoint
       (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
+        mockContext.durableExecutionClient.checkpoint as Mock
       ).mockImplementation(
         () =>
           new Promise((resolve) =>
@@ -217,17 +218,17 @@ describe("CheckpointManager Termination Behavior", () => {
     });
 
     it("should cancel termination when checkpoint processing starts during cooldown period", async () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
-      const mockTerminate = jest.fn();
+      const mockTerminate = vi.fn();
       mockContext.terminationManager.terminate = mockTerminate;
 
       // Mock checkpoint API with delayed resolution to simulate network latency
       const checkpointPromise = new Promise(() => {});
 
-      (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
-      ).mockReturnValue(checkpointPromise);
+      (mockContext.durableExecutionClient.checkpoint as Mock).mockReturnValue(
+        checkpointPromise,
+      );
 
       // Step 1: Create scenario where termination would be scheduled
       // Mark operation as awaited - with clean queue/processing state, this schedules termination
@@ -261,7 +262,7 @@ describe("CheckpointManager Termination Behavior", () => {
       });
 
       // Step 3: Advance time past the termination cooldown
-      await jest.advanceTimersByTimeAsync(
+      await vi.advanceTimersByTimeAsync(
         CHECKPOINT_TERMINATION_COOLDOWN_MS + 10,
       );
 
@@ -288,10 +289,10 @@ describe("CheckpointManager Termination Behavior", () => {
 
     beforeEach(() => {
       warningLogger = {
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
       };
 
       revokingHandler = createTestCheckpointManager(
@@ -301,12 +302,12 @@ describe("CheckpointManager Termination Behavior", () => {
         warningLogger,
       );
 
-      (
-        mockContext.durableExecutionClient.checkpoint as jest.Mock
-      ).mockResolvedValue({
-        CheckpointToken: undefined,
-        NewExecutionState: { Operations: [] },
-      });
+      (mockContext.durableExecutionClient.checkpoint as Mock).mockResolvedValue(
+        {
+          CheckpointToken: undefined,
+          NewExecutionState: { Operations: [] },
+        },
+      );
     });
 
     /** Sends one checkpoint, deliberately unawaited, and waits for the response to land. */
@@ -322,7 +323,7 @@ describe("CheckpointManager Termination Behavior", () => {
     };
 
     it("terminates with EXECUTION_SUSPENDED_BY_SERVICE", async () => {
-      const mockTerminate = jest.fn();
+      const mockTerminate = vi.fn();
       mockContext.terminationManager.terminate = mockTerminate;
 
       await sendRevokedCheckpoint("test-step");
@@ -355,7 +356,7 @@ describe("CheckpointManager Termination Behavior", () => {
       // token the service has already rejected. forceCheckpoint is the case that reaches
       // the queue without enqueueing an update, so a guard on the queue alone misses it.
       const checkpointClient = mockContext.durableExecutionClient
-        .checkpoint as jest.Mock;
+        .checkpoint as Mock;
 
       await sendRevokedCheckpoint("first-step");
       expect(checkpointClient).toHaveBeenCalledTimes(1);

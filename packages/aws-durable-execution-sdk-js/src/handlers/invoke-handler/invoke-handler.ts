@@ -1,27 +1,27 @@
 import {
-  ExecutionContext,
-  InvokeConfig,
+  type ExecutionContext,
+  type InvokeConfig,
   OperationSubType,
   DurablePromise,
   OperationLifecycleState,
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 import {
-  ErrorObject,
+  type ErrorObject,
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,
@@ -44,7 +44,8 @@ function toInvokeError(error: ErrorObject | undefined): InvokeError {
   if (error.ErrorMessage || error.ErrorType) {
     cause = new Error(error.ErrorMessage);
     cause.name = error.ErrorType || "Error";
-    cause.stack = error.StackTrace?.join("\n");
+    // Error.stack is typed without undefined. A missing trace clears the stack.
+    Object.assign(cause, { stack: error.StackTrace?.join("\n") });
   }
   return new InvokeError(
     error.ErrorMessage || "Invoke failed",

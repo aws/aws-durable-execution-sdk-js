@@ -13,7 +13,7 @@
  *
  * `@aws-sdk/client-lambda` is imported here for **types only**, and this file is never
  * reachable from `src/index.ts`, so it contributes nothing to the published bundle. The
- * type assertions are checked by `npm run build:types` as well as by ts-jest, so drift
+ * type assertions are checked by `npm run build:types`, so drift
  * fails the build rather than being discovered at runtime.
  *
  * Three kinds of assertion are made, according to the direction each shape travels:
@@ -37,6 +37,7 @@
  * constraint to place on a model shared by several. Treat the assertions here as a check on
  * today's single transport, not as policy for the model.
  */
+import { describe, it, expect } from "vitest";
 
 import type * as Sdk from "@aws-sdk/client-lambda";
 import { OperationAction, OperationStatus, OperationType } from "./wire-enums";

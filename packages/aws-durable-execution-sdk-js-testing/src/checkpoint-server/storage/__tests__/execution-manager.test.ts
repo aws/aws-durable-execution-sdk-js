@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { randomUUID } from "node:crypto";
 import { EventType } from "@aws-sdk/client-lambda";
 import {
@@ -22,29 +23,29 @@ import {
 import { decodeCallbackId } from "../../utils/callback-id";
 
 // Mock dependencies
-jest.mock("node:crypto", () => ({
-  randomUUID: jest.fn().mockReturnValue("mocked-uuid"),
+vi.mock("node:crypto", () => ({
+  randomUUID: vi.fn().mockReturnValue("mocked-uuid"),
 }));
 
 // Mock the callback-id utilities
-jest.mock("../../utils/callback-id", () => ({
-  decodeCallbackId: jest.fn(),
+vi.mock("../../utils/callback-id", () => ({
+  decodeCallbackId: vi.fn(),
 }));
 
 // Mock the checkpoint-token functions
-jest.mock("../../utils/checkpoint-token", () => {
-  const original = jest.requireActual<
+vi.mock("../../utils/checkpoint-token", async () => {
+  const original = await vi.importActual<
     typeof import("../../utils/checkpoint-token")
   >("../../utils/checkpoint-token");
   return {
     ...original,
-    encodeCheckpointToken: jest
+    encodeCheckpointToken: vi
       .fn()
       .mockImplementation(
         (data): CheckpointToken =>
           `encoded-${JSON.stringify(data)}` as CheckpointToken,
       ),
-    decodeCheckpointToken: jest
+    decodeCheckpointToken: vi
       .fn()
       .mockImplementation((token: string): CheckpointTokenData => {
         if (token === "invalid-token") {
@@ -66,8 +67,8 @@ jest.mock("../../utils/checkpoint-token", () => {
 describe("execution-manager", () => {
   // Reset mocks before each test
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe("createExecutionId", () => {
@@ -109,7 +110,7 @@ describe("execution-manager", () => {
 
     beforeEach(() => {
       executionManager = new ExecutionManager();
-      (randomUUID as jest.Mock).mockReturnValue("mocked-uuid");
+      (randomUUID as Mock).mockReturnValue("mocked-uuid");
     });
 
     describe("startExecution", () => {
@@ -135,7 +136,7 @@ describe("execution-manager", () => {
         };
 
         // Mock the initialize method of CheckpointStorage
-        const initializeSpy = jest
+        const initializeSpy = vi
           .spyOn(CheckpointManager.prototype, "initialize")
           .mockReturnValue({
             operation: mockInitialOperation,
@@ -174,7 +175,7 @@ describe("execution-manager", () => {
           invocationId: createInvocationId("test-invocation-id"),
         };
 
-        const initializeSpy = jest.spyOn(
+        const initializeSpy = vi.spyOn(
           CheckpointManager.prototype,
           "initialize",
         );
@@ -207,7 +208,7 @@ describe("execution-manager", () => {
         executionManager.startExecution({ executionId, invocationId });
 
         // Reset mocks to track new calls
-        jest.clearAllMocks();
+        vi.clearAllMocks();
 
         const newInvocationId = createInvocationId("new-invocation-id");
         // Start a new invocation
@@ -253,7 +254,7 @@ describe("execution-manager", () => {
 
         // Mock the operationDataMap getter - using non-null assertion because we've verified storage exists
         Object.defineProperty(storage!, "operationDataMap", {
-          get: jest.fn().mockReturnValue(
+          get: vi.fn().mockReturnValue(
             new Map([
               ["op1", { operation: mockOps[0], update: {} }],
               ["op2", { operation: mockOps[1], update: {} }],
@@ -286,9 +287,10 @@ describe("execution-manager", () => {
         const invocationId = createInvocationId("test-invocation-id");
         executionManager.startExecution({ executionId, invocationId });
 
-        jest
-          .spyOn(CheckpointManager.prototype, "isExecutionCompleted")
-          .mockReturnValue(true);
+        vi.spyOn(
+          CheckpointManager.prototype,
+          "isExecutionCompleted",
+        ).mockReturnValue(true);
 
         const newInvocationId = createInvocationId("new-invocation-id");
         expect(() =>
@@ -324,7 +326,7 @@ describe("execution-manager", () => {
     describe("getCheckpointsByToken", () => {
       it("should return undefined for non-existent execution ID in token", () => {
         // Mock decodeCheckpointToken to return a token with non-existent execution ID
-        (decodeCheckpointToken as jest.Mock).mockReturnValueOnce({
+        (decodeCheckpointToken as Mock).mockReturnValueOnce({
           executionId: createExecutionId("non-existent"),
           invocationId: createInvocationId("test-invocation"),
           token: "test-token",
@@ -359,7 +361,7 @@ describe("execution-manager", () => {
         };
 
         // Mock decodeCheckpointToken to return our token data
-        (decodeCheckpointToken as jest.Mock).mockReturnValueOnce(tokenData);
+        (decodeCheckpointToken as Mock).mockReturnValueOnce(tokenData);
 
         // Get checkpoints by token
         const result = executionManager.getCheckpointsByToken(
@@ -377,7 +379,7 @@ describe("execution-manager", () => {
         const callbackId = createCallbackId("invalid-callback-id");
 
         // Mock decodeCallbackId to throw an error
-        (decodeCallbackId as jest.Mock).mockImplementationOnce(() => {
+        (decodeCallbackId as Mock).mockImplementationOnce(() => {
           throw new Error("Invalid callback ID format");
         });
 
@@ -391,7 +393,7 @@ describe("execution-manager", () => {
         const callbackId = createCallbackId("valid-callback-id");
 
         // Mock decodeCallbackId to return callback data with non-existent execution ID
-        (decodeCallbackId as jest.Mock).mockReturnValueOnce({
+        (decodeCallbackId as Mock).mockReturnValueOnce({
           executionId: createExecutionId("non-existent-execution"),
           operationId: "test-operation-id",
           token: "test-token",
@@ -412,7 +414,7 @@ describe("execution-manager", () => {
         const callbackId = createCallbackId("valid-callback-id");
 
         // Mock decodeCallbackId to return callback data with existing execution ID
-        (decodeCallbackId as jest.Mock).mockReturnValueOnce({
+        (decodeCallbackId as Mock).mockReturnValueOnce({
           executionId,
           operationId: "test-operation-id",
           token: "test-token",
@@ -433,7 +435,7 @@ describe("execution-manager", () => {
         const callbackId = createCallbackId("valid-callback-id");
 
         // Mock decodeCallbackId to return callback data with existing execution ID
-        (decodeCallbackId as jest.Mock).mockReturnValueOnce({
+        (decodeCallbackId as Mock).mockReturnValueOnce({
           executionId,
           operationId: "test-operation-id",
           token: "test-token",
@@ -452,7 +454,7 @@ describe("execution-manager", () => {
         const callbackId = createCallbackId("malformed-callback-id");
 
         // Mock decodeCallbackId to throw a specific error
-        (decodeCallbackId as jest.Mock).mockImplementationOnce(() => {
+        (decodeCallbackId as Mock).mockImplementationOnce(() => {
           throw new Error("Failed to decode CallbackIdData");
         });
 
@@ -492,7 +494,7 @@ describe("execution-manager", () => {
           endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
         };
 
-        const completeInvocationSpy = jest
+        const completeInvocationSpy = vi
           .spyOn(storage!, "completeInvocation")
           .mockReturnValue(mockTimestamps);
 
@@ -510,7 +512,7 @@ describe("execution-manager", () => {
           },
         };
 
-        const createHistoryEventSpy = jest
+        const createHistoryEventSpy = vi
           .spyOn(storage!.eventProcessor, "createHistoryEvent")
           .mockReturnValue(mockHistoryEvent);
 
@@ -568,7 +570,7 @@ describe("execution-manager", () => {
           endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
         };
 
-        const completeInvocationSpy = jest
+        const completeInvocationSpy = vi
           .spyOn(storage!, "completeInvocation")
           .mockReturnValue(mockTimestamps);
 
@@ -586,7 +588,7 @@ describe("execution-manager", () => {
           },
         };
 
-        const createHistoryEventSpy = jest
+        const createHistoryEventSpy = vi
           .spyOn(storage!.eventProcessor, "createHistoryEvent")
           .mockReturnValue(mockHistoryEvent);
 
@@ -632,7 +634,7 @@ describe("execution-manager", () => {
         expect(storage).toBeDefined();
 
         // Mock the completeInvocation method to throw an error
-        const completeInvocationSpy = jest
+        const completeInvocationSpy = vi
           .spyOn(storage!, "completeInvocation")
           .mockImplementation(() => {
             throw new Error("Invocation completion failed");
@@ -674,7 +676,7 @@ describe("execution-manager", () => {
           endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
         };
 
-        const completeInvocationSpy = jest
+        const completeInvocationSpy = vi
           .spyOn(storage!, "completeInvocation")
           .mockReturnValue(mockTimestamps);
 
@@ -692,12 +694,12 @@ describe("execution-manager", () => {
           },
         };
 
-        const createHistoryEventSpy = jest
+        const createHistoryEventSpy = vi
           .spyOn(storage!.eventProcessor, "createHistoryEvent")
           .mockReturnValue(mockHistoryEvent);
 
         // Mock hasDirtyOperations to return true
-        const hasDirtyOperationsSpy = jest
+        const hasDirtyOperationsSpy = vi
           .spyOn(storage!, "hasDirtyOperations")
           .mockReturnValue(true);
 

@@ -26,7 +26,7 @@
     "build:types": "tsc --project tsconfig.build.json --outDir dist-types",
     "prepublishOnly": "npm run build && npm run test",
     "lint": "biome check src --diagnostic-level=error",
-    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
+    "test": "vitest run --coverage",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
     "lint:fix": "biome check --write src"
   },
@@ -47,13 +47,14 @@
     "@rollup/plugin-replace": "^6.0.3",
     "@types/aws-lambda": "^8.10.164",
     "@types/semver": "^7.8.0",
-    "jest": "^30.5.2",
-    "semver": "^7.8.5",
+    "@vitest/coverage-v8": "^5.1.0",
+    "semver": "^7.8.6",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1150.0",
+    "@aws-sdk/client-lambda": "^3.1164.0",
     "@sinonjs/fake-timers": "^15.4.0",
     "commander": "^14.0.3"
   },

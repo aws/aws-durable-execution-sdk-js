@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { Operation } from "@aws/durable-execution-sdk-js";
 import { addOperationDetails } from "../operation-details";
 

@@ -17,6 +17,7 @@
  * core proves the shared code reaches no host API, this proves the host reaches only
  * its own.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import {

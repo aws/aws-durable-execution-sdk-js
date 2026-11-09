@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext, OperationSubType, StepSemantics } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
@@ -7,7 +8,7 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
+vi.mock("../../utils/logger/logger");
 
 // StepConfig.subType replaces the default "Step" subtype everywhere the step
 // handler records one: checkpoints, replay validation, lifecycle metadata,
@@ -32,29 +33,29 @@ describe("Step Handler subType", () => {
     );
 
   const checkpointedSubTypes = (): unknown[] =>
-    (mockCheckpoint.checkpoint as jest.Mock).mock.calls.map(
+    (mockCheckpoint.checkpoint as Mock).mock.calls.map(
       (call) => call[1].SubType,
     );
 
   const lifecycleSubTypes = (): unknown[] =>
-    (mockCheckpoint.markOperationState as jest.Mock).mock.calls
+    (mockCheckpoint.markOperationState as Mock).mock.calls
       .map((call) => call[2]?.metadata?.subType)
       .filter((subType) => subType !== undefined);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(undefined),
+      getStepData: vi.fn().mockReturnValue(undefined),
       _stepData: {},
       durableExecutionArn: "test-arn",
-      terminationManager: { terminate: jest.fn() },
+      terminationManager: { terminate: vi.fn() },
     } as unknown as ExecutionContext;
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as unknown as Checkpoint;
   });
 
@@ -72,7 +73,7 @@ describe("Step Handler subType", () => {
     await handler()("launch", async () => "ok", { subType: "OrderLaunch" });
 
     expect(
-      (mockCheckpoint.checkpoint as jest.Mock).mock.calls.map((call) => [
+      (mockCheckpoint.checkpoint as Mock).mock.calls.map((call) => [
         call[1].Action,
         call[1].Type,
         call[1].SubType,
@@ -105,7 +106,7 @@ describe("Step Handler subType", () => {
 
     await expect(promise).rejects.toThrow("boom");
     expect(
-      (mockCheckpoint.checkpoint as jest.Mock).mock.calls.map((call) => [
+      (mockCheckpoint.checkpoint as Mock).mock.calls.map((call) => [
         call[1].Action,
         call[1].SubType,
       ]),
@@ -120,7 +121,7 @@ describe("Step Handler subType", () => {
 
   it("records the custom subtype for an interrupted at-most-once step", async () => {
     const stepId = hashId("step-1");
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: stepId,
       Type: OperationType.STEP,
       Name: "terminate",
@@ -140,8 +141,8 @@ describe("Step Handler subType", () => {
   });
 
   it("passes the custom subtype to plugin events", async () => {
-    const onOperationStart = jest.fn();
-    const onOperationEnd = jest.fn();
+    const onOperationStart = vi.fn();
+    const onOperationEnd = vi.fn();
 
     await handler({ onOperationStart, onOperationEnd })(
       "launch",
@@ -158,7 +159,7 @@ describe("Step Handler subType", () => {
   });
 
   it("replays a completed step whose checkpoint has the same subtype", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: hashId("step-1"),
       Type: OperationType.STEP,
       Name: "launch",
@@ -166,7 +167,7 @@ describe("Step Handler subType", () => {
       Status: OperationStatus.SUCCEEDED,
       StepDetails: { Result: JSON.stringify("cached") },
     });
-    const fn = jest.fn();
+    const fn = vi.fn();
 
     const result = await handler()("launch", fn, { subType: "OrderLaunch" });
 
@@ -176,7 +177,7 @@ describe("Step Handler subType", () => {
   });
 
   it("terminates as non-deterministic when the replayed subtype differs", () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Id: hashId("step-1"),
       Type: OperationType.STEP,
       Name: "launch",

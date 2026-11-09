@@ -35,6 +35,13 @@ export interface ExampleConfig {
    */
   localOnly?: boolean;
   /**
+   * Examples (paths under src/examples) whose tests already cover this one.
+   * Set it on an example kept as a customer sample that has no test of its own.
+   * Such an example is left out of the integration deployment, since nothing
+   * would invoke it, but stays in the published SAM template.
+   */
+  testedBy?: string[];
+  /**
    * If provided, this example will be excluded from cloud deployment and integration
    * tests for the specified runtimes. Use Node.js runtime version strings like "24.x".
    * The example will still run locally and on other runtimes not listed here.

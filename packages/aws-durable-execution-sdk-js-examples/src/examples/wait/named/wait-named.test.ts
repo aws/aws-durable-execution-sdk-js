@@ -11,7 +11,11 @@ createTests({
       expect(execution.getResult()).toBe("wait finished");
       expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(2);
 
-      assertEventSignatures(execution);
+      // The cloud poller stops at ExecutionSucceeded, which the service can
+      // record before the final InvocationCompleted, so allow it to be missing.
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 1,
+      });
     });
   },
 });

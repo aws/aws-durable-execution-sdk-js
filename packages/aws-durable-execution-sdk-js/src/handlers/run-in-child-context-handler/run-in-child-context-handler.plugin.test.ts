@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createRunInChildContextHandler } from "./run-in-child-context-handler";
 import { ExecutionContext } from "../../types";
 import { getStepData } from "../../utils/step-id-utils/step-id-utils";
@@ -11,49 +21,49 @@ import {
   PluginOperationStatus,
 } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
+vi.mock("../../utils/logger/logger");
 
 const flushMicrotasks = () =>
   new Promise<void>((resolve) => setImmediate(resolve));
 
 describe("RunInChildContext Handler - plugin hooks", () => {
-  let mockExecutionContext: jest.Mocked<ExecutionContext>;
-  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockExecutionContext: Mocked<ExecutionContext>;
+  let mockCheckpoint: MockedFunction<CheckpointFunction>;
   let mockParentContext: any;
-  let createStepId: jest.Mock;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
-  let mockGetLogger: jest.Mock;
-  let mockCreateChildContext: jest.Mock;
+  let createStepId: Mock;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
+  let mockGetLogger: Mock;
+  let mockCreateChildContext: Mock;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     mockExecutionContext = {
       _stepData: {},
-      terminationManager: { terminate: jest.fn() },
-      getStepData: jest.fn((stepId: string) => {
+      terminationManager: { terminate: vi.fn() },
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
-    } as unknown as jest.Mocked<ExecutionContext>;
+    } as unknown as Mocked<ExecutionContext>;
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
-    createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
+    createStepId = vi.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
     mockPlugin = {
-      onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
-      wrapChildContextFn: jest.fn(),
+      onOperationStart: vi.fn(),
+      onOperationEnd: vi.fn(),
+      wrapChildContextFn: vi.fn(),
     };
 
-    (mockPlugin.wrapChildContextFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapChildContextFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
     );
-    mockGetLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+    mockGetLogger = vi.fn().mockReturnValue({
+      log: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
     });
-    mockCreateChildContext = jest.fn().mockReturnValue({
+    mockCreateChildContext = vi.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
   });
@@ -71,7 +81,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const childFn = jest.fn().mockResolvedValue("result");
+    const childFn = vi.fn().mockResolvedValue("result");
     await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
     await flushMicrotasks();
 
@@ -109,7 +119,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const childFn = jest.fn().mockRejectedValue(new Error("child failed"));
+    const childFn = vi.fn().mockRejectedValue(new Error("child failed"));
 
     await expect(
       handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
@@ -137,12 +147,10 @@ describe("RunInChildContext Handler - plugin hooks", () => {
   it("should propagate errors thrown within wrapChildContextFn", async () => {
     const wrapError = new Error("wrapChildContextFn exploded");
 
-    (mockPlugin.wrapChildContextFn as jest.Mock).mockImplementation(
-      (info, fn) => {
-        fn();
-        throw wrapError;
-      },
-    );
+    (mockPlugin.wrapChildContextFn as Mock).mockImplementation((info, fn) => {
+      fn();
+      throw wrapError;
+    });
 
     const handler = createRunInChildContextHandler(
       mockExecutionContext,
@@ -156,7 +164,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const childFn = jest.fn().mockResolvedValue("result");
+    const childFn = vi.fn().mockResolvedValue("result");
 
     await expect(
       handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
@@ -178,7 +186,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
       {},
     );
 
-    const childFn = jest.fn().mockResolvedValue("result");
+    const childFn = vi.fn().mockResolvedValue("result");
     const result = await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
     expect(result).toBe("result");
   });
@@ -197,7 +205,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         mockPlugin,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
       await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
         virtualContext: true,
       });
@@ -222,7 +230,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         mockPlugin,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
       await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
         virtualContext: true,
       });
@@ -250,7 +258,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         mockPlugin,
       );
 
-      const childFn = jest.fn().mockRejectedValue(new Error("child failed"));
+      const childFn = vi.fn().mockRejectedValue(new Error("child failed"));
 
       await expect(
         handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
@@ -287,7 +295,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         mockPlugin,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
       await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
         virtualContext: true,
       });
@@ -317,7 +325,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         mockPlugin,
       );
 
-      const childFn = jest.fn().mockResolvedValue("result");
+      const childFn = vi.fn().mockResolvedValue("result");
       await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
       await flushMicrotasks();
 

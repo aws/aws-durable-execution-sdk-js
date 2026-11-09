@@ -1,3 +1,4 @@
+import { vi, describe, test, expect, beforeEach } from "vitest";
 import {
   createDurableContext,
   DurableExecution,
@@ -19,7 +20,7 @@ import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
-jest.mock("../../termination-manager/termination-manager");
+vi.mock("../../termination-manager/termination-manager");
 
 /**
  * Composed tests for child context ser/des round-trip behavior.
@@ -53,50 +54,48 @@ describe("runInChildContext serdes round-trip", () => {
   };
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     checkpointCalls = [];
 
     mockDurableExecution = {
       checkpointManager: {
-        checkpoint: jest
-          .fn()
-          .mockImplementation((_stepId: string, data: any) => {
-            const checkpointData = {
-              CheckpointToken: "mock-token",
-              Updates: [data],
-            };
-            checkpointCalls.push({
-              checkpointToken: "mock-token",
-              data: checkpointData,
-            });
-            return Promise.resolve({ CheckpointToken: "mock-token" });
-          }),
-        force: jest.fn(),
-        setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
-        markAncestorFinished: jest.fn(),
-        markOperationState: jest.fn(),
-        markOperationAwaited: jest.fn(),
-        waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-        waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
-        getOperationState: jest.fn(),
-        getAllOperations: jest.fn().mockReturnValue([]),
+        checkpoint: vi.fn().mockImplementation((_stepId: string, data: any) => {
+          const checkpointData = {
+            CheckpointToken: "mock-token",
+            Updates: [data],
+          };
+          checkpointCalls.push({
+            checkpointToken: "mock-token",
+            data: checkpointData,
+          });
+          return Promise.resolve({ CheckpointToken: "mock-token" });
+        }),
+        force: vi.fn(),
+        setTerminating: vi.fn(),
+        hasPendingAncestorCompletion: vi.fn(),
+        markAncestorFinished: vi.fn(),
+        markOperationState: vi.fn(),
+        markOperationAwaited: vi.fn(),
+        waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+        waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
+        getOperationState: vi.fn(),
+        getAllOperations: vi.fn().mockReturnValue([]),
       },
     } as any;
 
     const mockTerminationManager = {
-      terminate: jest.fn(),
-      getTerminationPromise: jest.fn().mockResolvedValue({}),
+      terminate: vi.fn(),
+      getTerminationPromise: vi.fn().mockResolvedValue({}),
       isTerminated: false,
       terminationPromise: Promise.resolve(),
-      handleTermination: jest.fn(),
-      addListener: jest.fn(),
+      handleTermination: vi.fn(),
+      addListener: vi.fn(),
     } as unknown as TerminationManager;
 
     mockExecutionContext = {
       durableExecutionClient: {
-        getExecutionState: jest.fn().mockResolvedValue({}),
-        checkpoint: jest
+        getExecutionState: vi.fn().mockResolvedValue({}),
+        checkpoint: vi
           .fn()
           .mockImplementation((data: CheckpointDurableExecutionRequest) => {
             const checkpointToken = data.CheckpointToken;
@@ -108,10 +107,10 @@ describe("runInChildContext serdes round-trip", () => {
       terminationManager: mockTerminationManager,
       durableExecutionArn: "mock-execution-arn",
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,

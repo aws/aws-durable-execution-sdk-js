@@ -4,6 +4,14 @@
  * separately in `injection.test.ts`.
  */
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
+import {
   configFromWireSettings,
   runAthenaQuery,
   runDynamoDBQuery,
@@ -16,49 +24,47 @@ import {
 import { MAX_ROWS } from "./readOnlyQuery";
 import {
   buildDescribeSchemaResult,
+  buildListExecutionsLogsQuery,
+  buildListExecutionsSql,
   runGetExecution,
   runListExecutions,
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
-  const actual = jest.requireActual<
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => {
+  const actual = await vi.importActual<
     typeof import("@aws/durable-execution-sdk-js-telemetry-core")
   >("@aws/durable-execution-sdk-js-telemetry-core");
   return {
     ...actual,
-    runAthenaQuery: jest.fn(),
-    runDynamoDBQuery: jest.fn(),
-    runAuroraQuery: jest.fn(),
-    runRedshiftQuery: jest.fn(),
-    runLogsInsightsQuery: jest.fn(),
-    fetchLogsInsightsRecord: jest.fn(),
-    resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
+    runAthenaQuery: vi.fn(),
+    runDynamoDBQuery: vi.fn(),
+    runAuroraQuery: vi.fn(),
+    runRedshiftQuery: vi.fn(),
+    runLogsInsightsQuery: vi.fn(),
+    fetchLogsInsightsRecord: vi.fn(),
+    resolveCredentials: vi.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
-const runAuroraMock = runAuroraQuery as jest.MockedFunction<
-  typeof runAuroraQuery
->;
-const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+const runAuroraMock = runAuroraQuery as MockedFunction<typeof runAuroraQuery>;
+const runRedshiftMock = runRedshiftQuery as MockedFunction<
   typeof runRedshiftQuery
 >;
-const runLogsMock = runLogsInsightsQuery as jest.MockedFunction<
+const runLogsMock = runLogsInsightsQuery as MockedFunction<
   typeof runLogsInsightsQuery
 >;
-const logsRecordMock = fetchLogsInsightsRecord as jest.MockedFunction<
+const logsRecordMock = fetchLogsInsightsRecord as MockedFunction<
   typeof fetchLogsInsightsRecord
 >;
 /** A representative execution ARN for point lookups. */
 const ARN = "arn:aws:lambda:us-east-1:123456789012:function:fn:1#exec-1";
-const runAthenaMock = runAthenaQuery as jest.MockedFunction<
-  typeof runAthenaQuery
->;
-const runDynamoDBMock = runDynamoDBQuery as jest.MockedFunction<
+const runAthenaMock = runAthenaQuery as MockedFunction<typeof runAthenaQuery>;
+const runDynamoDBMock = runDynamoDBQuery as MockedFunction<
   typeof runDynamoDBQuery
 >;
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 function cfgFor(destinationType: string): TelemetryConfig {
   return configFromWireSettings({
@@ -438,5 +444,66 @@ describe("redshift targets are schema-qualified", () => {
     expect(runRedshiftMock.mock.calls[0][0].sql).toContain(
       "public.durable_execution_telemetry",
     );
+  });
+});
+
+describe("list_executions returns each execution's name", () => {
+  // The name titles each row's viewer link.
+  it.each([
+    ["s3", "executionarn, executionname, status"],
+    ["dynamodb", "pk, executionName, status"],
+    ["aurora", "execution_arn, execution_name, status"],
+    ["redshift", "execution_arn, execution_name, status"],
+    ["opensearch", "executionArn, executionName, status"],
+  ])("%s selects the name column", (destination, select) => {
+    expect(buildListExecutionsSql(cfgFor(destination), {})).toContain(
+      `SELECT ${select}`,
+    );
+  });
+
+  it("cloudwatch-logs-exporter returns the top-level name field", () => {
+    expect(
+      buildListExecutionsLogsQuery(cfgFor("cloudwatch-logs-exporter"), {}),
+    ).toContain("| fields executionArn, executionName, status");
+  });
+
+  it("lambda-log-exporter parses the name and returns it", () => {
+    const q = buildListExecutionsLogsQuery(cfgFor("lambda-log-exporter"), {});
+    expect(q).toContain(
+      'parse message "\\"executionName\\":\\"*\\"" as executionName',
+    );
+    expect(q).toContain("| display @timestamp, executionArn, executionName,");
+  });
+});
+
+describe("list_executions on lambda-log-exporter is a query Logs Insights accepts", () => {
+  // Logs Insights rejects `fields <name>` after `parse ... as <name>` with
+  // MalformedQueryException "Ephemeral field is already defined" (#1143).
+  // Measured with StartQuery on a real log group: `parse @message "a*b" as q1
+  // | fields q1` is rejected, and the same query with `display q1` is accepted.
+  it.each([
+    [{}],
+    [
+      {
+        status: "FAILED",
+        functionName: "orders",
+        since: "2025-01-01T00:00:00Z",
+      },
+    ],
+  ])("lists no parsed field with `fields` (%p)", (params) => {
+    const stages = buildListExecutionsLogsQuery(
+      cfgFor("lambda-log-exporter"),
+      params,
+    )
+      .split(" | ")
+      .map((s) => s.trim());
+    const parsed = stages.flatMap((s) =>
+      s.startsWith("parse ") ? [s.slice(s.lastIndexOf(" as ") + 4)] : [],
+    );
+    expect(parsed).toContain("executionArn");
+    for (const stage of stages.filter((s) => s.startsWith("fields "))) {
+      const listed = stage.slice("fields ".length).split(/,\s*/);
+      expect(listed.filter((f) => parsed.includes(f))).toEqual([]);
+    }
   });
 });

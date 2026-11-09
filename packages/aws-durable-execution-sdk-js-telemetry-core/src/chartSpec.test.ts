@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { parseChartSpec, extractJsonObject } from "./chartSpec";
 
 const COLS = ["product_category", "hour_bucket", "record_count"];

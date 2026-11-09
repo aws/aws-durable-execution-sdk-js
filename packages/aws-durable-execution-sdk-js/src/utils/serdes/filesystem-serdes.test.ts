@@ -1,3 +1,11 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
 import { SerdesContext } from "./serdes";
 import {
   createFileSystemSerdes,
@@ -10,17 +18,17 @@ import {
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { createHash } from "node:crypto";
 
-jest.mock("node:fs/promises", () => ({
-  mkdir: jest.fn().mockResolvedValue(undefined),
-  writeFile: jest.fn().mockResolvedValue(undefined),
-  readFile: jest.fn(),
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  readFile: vi.fn(),
 }));
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 
-const mockMkdir = mkdir as jest.MockedFunction<typeof mkdir>;
-const mockWriteFile = writeFile as jest.MockedFunction<typeof writeFile>;
-const mockReadFile = readFile as jest.MockedFunction<typeof readFile>;
+const mockMkdir = mkdir as MockedFunction<typeof mkdir>;
+const mockWriteFile = writeFile as MockedFunction<typeof writeFile>;
+const mockReadFile = readFile as MockedFunction<typeof readFile>;
 
 const mockContext: SerdesContext = {
   entityId: TEST_CONSTANTS.STEP_ID,
@@ -32,7 +40,7 @@ const ENCODED_ARN = encodeURIComponent(TEST_CONSTANTS.DURABLE_EXECUTION_ARN);
 const EXPECTED_DIR = `${BASE_PATH}/${ENCODED_ARN}`;
 const EXPECTED_FILE = `${EXPECTED_DIR}/${TEST_CONSTANTS.STEP_ID}.json`;
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe("createFileSystemSerdes", () => {
   describe("ALWAYS mode (default)", () => {

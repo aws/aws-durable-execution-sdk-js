@@ -7,7 +7,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the OpenTelemetry log exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface OTelExporterConfig {
   /**
@@ -53,8 +52,6 @@ export interface OTelExporterConfig {
  *
  * Uses native `fetch` (available in Node 22+ / Lambda runtime) — no
  * additional dependencies required.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class OTelExporter implements TelemetryExporter {
   private readonly endpoint: string;

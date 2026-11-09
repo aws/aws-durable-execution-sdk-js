@@ -19,7 +19,6 @@ function sanitizeIdentifier(name: string): string {
 
 /**
  * Configuration for the Aurora exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface AuroraExporterConfig {
   /** Aurora cluster ARN. */
@@ -55,8 +54,6 @@ export interface AuroraExporterConfig {
  * execution overwrite the previous row. No VPC or connection pooling required.
  *
  * Requires the Aurora cluster to have the Data API enabled.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class AuroraExporter implements TelemetryExporter {
   private readonly resourceArn: string;

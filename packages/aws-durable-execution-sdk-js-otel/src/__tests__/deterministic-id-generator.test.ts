@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import {
   DeterministicIdGenerator,
   deriveTraceIdFromXRayRoot,
@@ -15,8 +16,8 @@ describe("DeterministicIdGenerator", () => {
 
   beforeEach(() => {
     generator = new DeterministicIdGenerator({
-      generateTraceId: jest.fn(() => fallbackTraceId),
-      generateSpanId: jest.fn(() => fallbackSpanId),
+      generateTraceId: vi.fn(() => fallbackTraceId),
+      generateSpanId: vi.fn(() => fallbackSpanId),
     });
   });
 

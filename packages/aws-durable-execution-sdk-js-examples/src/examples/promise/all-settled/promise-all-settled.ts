@@ -8,6 +8,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Promise All Settled",
   description: "Waiting for all promises to settle (success or failure)",
+  testedBy: ["promise/combinators"],
 };
 
 const stepConfig: StepConfig<any> = {

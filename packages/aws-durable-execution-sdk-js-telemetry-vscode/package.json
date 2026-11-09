@@ -2,7 +2,7 @@
   "name": "aws-durable-execution-sdk-js-telemetry-vscode",
   "displayName": "Durable Execution Telemetry VSCode",
   "description": "Query AWS Durable Execution Durable Execution Telemetry data from CloudWatch Logs using plain English.",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "license": "Apache-2.0",
   "publisher": "aws",
   "private": true,
@@ -12,7 +12,7 @@
     "directory": "packages/aws-durable-execution-sdk-js-telemetry-vscode"
   },
   "engines": {
-    "vscode": "^1.90.0",
+    "vscode": "^1.140.0",
     "node": ">=22.12.0"
   },
   "categories": [
@@ -20,7 +20,43 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "In Restricted Mode the extension ignores durableExecutionTelemetry.* values from the workspace settings and uses your user settings, or the defaults. A folder you have not trusted cannot change where queries run, which AWS profile is used, which LLM endpoint receives your data, or whether SQS messages are deleted. AI consent is only ever read from your user settings.",
+      "restrictedConfigurations": [
+        "durableExecutionTelemetry.region",
+        "durableExecutionTelemetry.logGroupName",
+        "durableExecutionTelemetry.destinationType",
+        "durableExecutionTelemetry.sqsQueueUrl",
+        "durableExecutionTelemetry.sqsDeleteAfterRead",
+        "durableExecutionTelemetry.dynamodbTableName",
+        "durableExecutionTelemetry.auroraResourceArn",
+        "durableExecutionTelemetry.auroraSecretArn",
+        "durableExecutionTelemetry.auroraDatabase",
+        "durableExecutionTelemetry.auroraTable",
+        "durableExecutionTelemetry.redshiftWorkgroupName",
+        "durableExecutionTelemetry.redshiftClusterIdentifier",
+        "durableExecutionTelemetry.redshiftDbUser",
+        "durableExecutionTelemetry.redshiftSecretArn",
+        "durableExecutionTelemetry.redshiftDatabase",
+        "durableExecutionTelemetry.redshiftTable",
+        "durableExecutionTelemetry.redshiftSchema",
+        "durableExecutionTelemetry.opensearchEndpoint",
+        "durableExecutionTelemetry.opensearchIndex",
+        "durableExecutionTelemetry.athenaDatabase",
+        "durableExecutionTelemetry.athenaTable",
+        "durableExecutionTelemetry.athenaWorkgroup",
+        "durableExecutionTelemetry.athenaOutputLocation",
+        "durableExecutionTelemetry.athenaS3Location",
+        "durableExecutionTelemetry.awsProfile",
+        "durableExecutionTelemetry.llmProvider",
+        "durableExecutionTelemetry.bedrockModelId",
+        "durableExecutionTelemetry.localServerUrl",
+        "durableExecutionTelemetry.localServerModel",
+        "durableExecutionTelemetry.localModel",
+        "durableExecutionTelemetry.agenticMaxIterations",
+        "durableExecutionTelemetry.queryMode",
+        "durableExecutionTelemetry.aiDisclosureAcceptedVersion"
+      ]
     }
   },
   "enabledApiProposals": [],
@@ -263,45 +299,23 @@
     "build": "cd webview-ui && npm run build && cd .. && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "vitest run",
     "package": "mkdir -p vsix && npx --yes @vscode/vsce@3.9.2 package --out vsix/",
     "package:target": "mkdir -p vsix && VER=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce@3.9.2 package --target \"$VSCE_TARGET\" --out \"vsix/aws-durable-execution-sdk-js-telemetry-vscode-${VER}-${VSCE_TARGET}.vsix\"",
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0",
-    "node-llama-cpp": "^3.22.1"
+    "node-llama-cpp": "^3.22.3"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.43",
     "@types/vscode": "^1.140.0",
     "esbuild": "^0.28.2",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.14",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "simple-git": "4.0.2"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/src/**/*.test.ts"
-    ],
-    "modulePathIgnorePatterns": [
-      "<rootDir>/webview-ui"
-    ],
-    "transform": {
-      "^.+\\.ts$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.test.json",
-          "diagnostics": false,
-          "isolatedModules": true
-        }
-      ]
-    }
   }
 }

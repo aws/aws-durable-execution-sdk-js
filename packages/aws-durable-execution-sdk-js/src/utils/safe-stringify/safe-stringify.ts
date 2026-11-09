@@ -3,7 +3,7 @@ export const safeStringify = (data: unknown): string => {
     const seen = new WeakSet();
     return JSON.stringify(
       data,
-      (key, value) => {
+      (_key, value) => {
         if (typeof value === "object" && value !== null) {
           if (seen.has(value)) return "[Circular]";
           seen.add(value);

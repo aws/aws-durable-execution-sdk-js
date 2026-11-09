@@ -1,3 +1,4 @@
+import { vi, type MockedFunction } from "vitest";
 import { OperationUpdate } from "../types/wire";
 import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 
@@ -16,26 +17,26 @@ export const createMockCheckpoint = (
     stepId: string,
     data: Partial<OperationUpdate>,
   ) => Promise<void>,
-): jest.MockedFunction<CheckpointFunction> => {
-  const mockFn = jest.fn(
-    mockImplementation || jest.fn().mockResolvedValue(undefined),
+): MockedFunction<CheckpointFunction> => {
+  const mockFn = vi.fn(
+    mockImplementation || vi.fn().mockResolvedValue(undefined),
   );
 
   const mockCheckpoint = Object.assign(mockFn, {
     checkpoint: mockFn, // Same function so calls are tracked together
-    force: jest.fn().mockResolvedValue(undefined),
-    setTerminating: jest.fn(),
-    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
-    waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-    markAncestorFinished: jest.fn(),
+    force: vi.fn().mockResolvedValue(undefined),
+    setTerminating: vi.fn(),
+    hasPendingAncestorCompletion: vi.fn().mockReturnValue(false),
+    waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+    markAncestorFinished: vi.fn(),
     // New lifecycle methods (stubs)
-    markOperationState: jest.fn(),
-    waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
-    waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-    markOperationAwaited: jest.fn(),
-    getOperationState: jest.fn().mockReturnValue(undefined),
-    getAllOperations: jest.fn().mockReturnValue(new Map()),
-  }) as jest.MockedFunction<CheckpointFunction>;
+    markOperationState: vi.fn(),
+    waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
+    waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+    markOperationAwaited: vi.fn(),
+    getOperationState: vi.fn().mockReturnValue(undefined),
+    getAllOperations: vi.fn().mockReturnValue(new Map()),
+  }) as MockedFunction<CheckpointFunction>;
 
   return mockCheckpoint;
 };

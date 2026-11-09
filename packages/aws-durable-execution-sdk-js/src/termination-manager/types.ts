@@ -98,16 +98,13 @@ export const classifyTermination = (
 export interface TerminationResponse {
   reason: TerminationReason;
   message: string;
-  error?: Error;
+  error?: Error | undefined;
 }
 
 export interface TerminationOptions {
   reason?: TerminationReason;
   message?: string;
   error?: Error;
-  cleanup?: () => Promise<void>;
 }
 
-export interface TerminationDetails extends TerminationResponse {
-  cleanup?: () => Promise<void>;
-}
+export type TerminationDetails = TerminationResponse;

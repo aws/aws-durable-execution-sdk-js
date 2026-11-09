@@ -1,9 +1,9 @@
-import { Operation } from "../../types/wire";
+import type { Operation } from "../../types/wire";
 import {
-  OperationInfo,
+  type OperationInfo,
   PluginOperationStatus,
-  AttemptInfo,
-  AttemptEndInfo,
+  type AttemptInfo,
+  type AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";

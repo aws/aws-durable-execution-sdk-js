@@ -58,3 +58,27 @@ const EXCLUDED_SET: ReadonlySet<string> = new Set(MCP_EXCLUDED_SETTING_KEYS);
 export const MCP_SETTING_KEYS: readonly string[] = SETTING_KEYS.filter(
   (k) => !EXCLUDED_SET.has(k),
 );
+
+/**
+ * Set to `true` in the server's `env` block to confirm, permanently, that
+ * giving this server read-only credentials is the user's responsibility (see
+ * writeAccessGate.ts). It is not a setting key: the extension and desktop app
+ * only show a warning, so they have no such setting.
+ */
+export const CONFIRMED_READONLY_ENV_VAR =
+  "DURABLE_TELEMETRY_CONFIRMED_READONLY";
+
+/**
+ * Set to `true` to turn off the local execution viewer (executionViewer.ts):
+ * no port is opened and results carry no `viewerLink`.
+ */
+export const VIEWER_DISABLED_ENV_VAR = "DURABLE_TELEMETRY_VIEWER_DISABLED";
+
+/**
+ * `DURABLE_TELEMETRY_*` variables this host reads that are not derived from
+ * {@link SETTING_KEYS}.
+ */
+export const MCP_HOST_ONLY_ENV_VARS: readonly string[] = [
+  CONFIRMED_READONLY_ENV_VAR,
+  VIEWER_DISABLED_ENV_VAR,
+];

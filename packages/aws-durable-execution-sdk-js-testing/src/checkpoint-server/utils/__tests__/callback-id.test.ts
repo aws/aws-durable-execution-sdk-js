@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { encodeCallbackId, decodeCallbackId } from "../callback-id";
 import { createCallbackId, createExecutionId } from "../tagged-strings";
 

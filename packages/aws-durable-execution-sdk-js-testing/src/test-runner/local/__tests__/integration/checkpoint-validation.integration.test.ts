@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import {
@@ -30,7 +31,7 @@ describe("operation name validation in the local checkpoint server", () => {
   ])(
     "fails the execution for a step name %s",
     async (_label, name, constraint) => {
-      const after = jest.fn();
+      const after = vi.fn();
       const handler = withDurableExecution(
         async (_event: unknown, context: DurableContext) => {
           await context.step(name, async () => "ok");
@@ -84,8 +85,8 @@ describe("chained invoke function name validation in the local checkpoint server
       "Value 'bad name!' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must satisfy regular expression pattern:",
     ],
   ])("fails the execution for %s", async (_label, functionName, error) => {
-    const child = jest.fn(async () => "child result");
-    const after = jest.fn();
+    const child = vi.fn(async () => "child result");
+    const after = vi.fn();
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         await context.invoke("call child", functionName, {});

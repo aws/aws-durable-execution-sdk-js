@@ -8,12 +8,14 @@
  * The missing-config assertion deliberately runs with an incomplete environment
  * and NO AWS credentials, exercising the path that returns before any AWS call.
  */
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SERVER_INSTRUCTIONS } from "./tools";
 
 const SERVER_PATH = path.resolve(__dirname, "..", "dist", "server.js");
 const SERVER_BUILT = existsSync(SERVER_PATH);
@@ -59,7 +61,7 @@ describeIfBuilt("durable-telemetry MCP server (spawned binary)", () => {
   }, TIMEOUT_MS);
 
   afterAll(async () => {
-    // Closing the transport terminates the child process; without this jest
+    // Closing the transport terminates the child process; without this vitest
     // could hang waiting on an open handle.
     await client?.close();
   });
@@ -69,6 +71,14 @@ describeIfBuilt("durable-telemetry MCP server (spawned binary)", () => {
     () => {
       const info = client.getServerVersion();
       expect(info?.name).toBe("durable-telemetry");
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "sends its instructions in the handshake",
+    () => {
+      expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
     },
     TIMEOUT_MS,
   );

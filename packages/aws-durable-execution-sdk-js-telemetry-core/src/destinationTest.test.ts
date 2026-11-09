@@ -1,41 +1,61 @@
-const ddbSend = jest.fn();
-jest.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: jest.fn(() => ({ send: ddbSend })),
-  DescribeTableCommand: jest.fn((i) => ({ __t: "descTable", i })),
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+const ddbSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-dynamodb", () => ({
+  DynamoDBClient: vi.fn(function () {
+    return { send: ddbSend };
+  }),
+  DescribeTableCommand: vi.fn(function (i) {
+    return { __t: "descTable", i };
+  }),
 }));
-const logsSend = jest.fn();
-jest.mock("@aws-sdk/client-cloudwatch-logs", () => ({
-  CloudWatchLogsClient: jest.fn(() => ({ send: logsSend })),
-  DescribeLogGroupsCommand: jest.fn((i) => ({ __t: "descLog", i })),
+const logsSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-cloudwatch-logs", () => ({
+  CloudWatchLogsClient: vi.fn(function () {
+    return { send: logsSend };
+  }),
+  DescribeLogGroupsCommand: vi.fn(function (i) {
+    return { __t: "descLog", i };
+  }),
 }));
-const sqsSend = jest.fn();
-jest.mock("@aws-sdk/client-sqs", () => ({
-  SQSClient: jest.fn(() => ({ send: sqsSend })),
-  GetQueueAttributesCommand: jest.fn((i) => ({ __t: "getAttrs", i })),
+const sqsSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-sqs", () => ({
+  SQSClient: vi.fn(function () {
+    return { send: sqsSend };
+  }),
+  GetQueueAttributesCommand: vi.fn(function (i) {
+    return { __t: "getAttrs", i };
+  }),
 }));
-jest.mock("./athena", () => ({
-  tableExists: jest.fn(),
-  runAthenaQuery: jest.fn(),
+vi.mock("./athena", () => ({
+  tableExists: vi.fn(),
+  runAthenaQuery: vi.fn(),
 }));
-jest.mock("./aurora", () => ({
-  runAuroraQuery: jest.fn(),
+vi.mock("./aurora", () => ({
+  runAuroraQuery: vi.fn(),
 }));
-jest.mock("./redshift", () => ({
-  runRedshiftQuery: jest.fn(),
+vi.mock("./redshift", () => ({
+  runRedshiftQuery: vi.fn(),
 }));
-jest.mock("./opensearch", () => ({
-  pingOpenSearch: jest.fn(),
-  countOpenSearchDocs: jest.fn(),
+vi.mock("./opensearch", () => ({
+  pingOpenSearch: vi.fn(),
+  countOpenSearchDocs: vi.fn(),
 }));
 // Must target ./configCore, which is where destinationTest.ts imports
 // resolveCredentials from. Pointing this at ./config made it a no-op and let the
 // real provider chain run in tests.
-jest.mock("./configCore", () => ({
-  resolveCredentials: jest.fn(() => ({})),
+vi.mock("./configCore", () => ({
+  resolveCredentials: vi.fn(function () {
+    return {};
+  }),
+}));
+vi.mock("./athenaResultLocation", () => ({
+  // Default: results land outside the data, so the Athena probe may run.
+  checkAthenaResultLocation: vi.fn(async () => ({ kind: "outside" })),
 }));
 
 import type { TelemetryConfig } from "./configCore";
 import { testDestination } from "./destinationTest";
+import { checkAthenaResultLocation } from "./athenaResultLocation";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
@@ -80,7 +100,7 @@ function baseCfg(overrides: Partial<TelemetryConfig>): TelemetryConfig {
   };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe("testDestination — S3/Athena", () => {
   const complete = {
@@ -101,9 +121,37 @@ describe("testDestination — S3/Athena", () => {
     expect(runAthenaQuery).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "inside the table's data",
+      { kind: "inside", finding: "Athena writes inside." },
+      /Athena writes inside\./,
+    ],
+    [
+      "undetermined",
+      { kind: "undetermined", reason: "No location." },
+      /No location\./,
+    ],
+  ] as const)(
+    "skips the Athena probe when the result location is %s",
+    async (_name, result, detail) => {
+      (tableExists as Mock).mockResolvedValue(true);
+      (checkAthenaResultLocation as Mock).mockResolvedValueOnce(result);
+      const r = await testDestination(baseCfg(complete));
+      expect(runAthenaQuery).not.toHaveBeenCalled();
+      expect(r.ok).toBe(false);
+      const probe = r.checks.find(
+        (c) => c.label === "Athena test query (SELECT 1)",
+      );
+      expect(probe?.ok).toBe(false);
+      expect(probe?.detail).toMatch(/^Skipped/);
+      expect(probe?.detail).toMatch(detail);
+    },
+  );
+
   it("passes when the table exists and the test query succeeds", async () => {
-    (tableExists as jest.Mock).mockResolvedValue(true);
-    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    (tableExists as Mock).mockResolvedValue(true);
+    (runAthenaQuery as Mock).mockResolvedValue({ columns: [], rows: [] });
     const r = await testDestination(baseCfg(complete));
     expect(r.ok).toBe(true);
     expect(runAthenaQuery).toHaveBeenCalledWith(
@@ -112,8 +160,8 @@ describe("testDestination — S3/Athena", () => {
   });
 
   it("still passes (with a note) when the table doesn't exist yet", async () => {
-    (tableExists as jest.Mock).mockResolvedValue(false);
-    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    (tableExists as Mock).mockResolvedValue(false);
+    (runAthenaQuery as Mock).mockResolvedValue({ columns: [], rows: [] });
     const r = await testDestination(baseCfg(complete));
     expect(r.ok).toBe(true);
     const tbl = r.checks.find((c) => c.label === "Glue table exists");
@@ -126,8 +174,8 @@ describe("testDestination — S3/Athena", () => {
     const { athenaS3Location: _unused, ...withoutS3Location } = complete;
 
     it("does not require the S3 location", async () => {
-      (tableExists as jest.Mock).mockResolvedValue(true);
-      (runAthenaQuery as jest.Mock).mockResolvedValue({
+      (tableExists as Mock).mockResolvedValue(true);
+      (runAthenaQuery as Mock).mockResolvedValue({
         columns: [],
         rows: [],
       });
@@ -138,8 +186,8 @@ describe("testDestination — S3/Athena", () => {
     });
 
     it("fails when the table does not exist, because nothing will create it", async () => {
-      (tableExists as jest.Mock).mockResolvedValue(false);
-      (runAthenaQuery as jest.Mock).mockResolvedValue({
+      (tableExists as Mock).mockResolvedValue(false);
+      (runAthenaQuery as Mock).mockResolvedValue({
         columns: [],
         rows: [],
       });
@@ -161,8 +209,8 @@ describe("testDestination — S3/Athena", () => {
   });
 
   it("fails when the Athena test query errors (e.g. no result location)", async () => {
-    (tableExists as jest.Mock).mockResolvedValue(true);
-    (runAthenaQuery as jest.Mock).mockRejectedValue(
+    (tableExists as Mock).mockResolvedValue(true);
+    (runAthenaQuery as Mock).mockRejectedValue(
       new Error("No output location provided"),
     );
     const r = await testDestination(baseCfg(complete));
@@ -173,8 +221,8 @@ describe("testDestination — S3/Athena", () => {
   });
 
   it("notes primary-workgroup usage when neither workgroup nor location set", async () => {
-    (tableExists as jest.Mock).mockResolvedValue(true);
-    (runAthenaQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    (tableExists as Mock).mockResolvedValue(true);
+    (runAthenaQuery as Mock).mockResolvedValue({ columns: [], rows: [] });
     const r = await testDestination(
       baseCfg({
         destinationType: "s3",
@@ -222,7 +270,7 @@ describe("testDestination — Aurora", () => {
   });
 
   it("passes SELECT 1 against the Data API", async () => {
-    (runAuroraQuery as jest.Mock).mockResolvedValue({ columns: [], rows: [] });
+    (runAuroraQuery as Mock).mockResolvedValue({ columns: [], rows: [] });
     const r = await testDestination(
       baseCfg({
         destinationType: "aurora",
@@ -246,7 +294,7 @@ describe("testDestination — Redshift", () => {
   });
 
   it("passes SELECT 1 against the Data API (Serverless workgroup)", async () => {
-    (runRedshiftQuery as jest.Mock).mockResolvedValue({
+    (runRedshiftQuery as Mock).mockResolvedValue({
       columns: [],
       rows: [],
     });
@@ -268,7 +316,7 @@ describe("testDestination — Redshift", () => {
   });
 
   it("fails when the Data API statement errors", async () => {
-    (runRedshiftQuery as jest.Mock).mockRejectedValue(
+    (runRedshiftQuery as Mock).mockRejectedValue(
       new Error("Redshift statement failed: relation does not exist"),
     );
     const r = await testDestination(
@@ -291,10 +339,8 @@ describe("testDestination — OpenSearch", () => {
   });
 
   it("passes when the SigV4 ping and index count succeed", async () => {
-    (pingOpenSearch as jest.Mock).mockResolvedValue(
-      'Connected to cluster "x".',
-    );
-    (countOpenSearchDocs as jest.Mock).mockResolvedValue(5);
+    (pingOpenSearch as Mock).mockResolvedValue('Connected to cluster "x".');
+    (countOpenSearchDocs as Mock).mockResolvedValue(5);
     const r = await testDestination(
       baseCfg({
         destinationType: "opensearch",
@@ -311,10 +357,8 @@ describe("testDestination — OpenSearch", () => {
   });
 
   it("soft-passes the index check when the index doesn't exist yet (404)", async () => {
-    (pingOpenSearch as jest.Mock).mockResolvedValue(
-      'Connected to cluster "x".',
-    );
-    (countOpenSearchDocs as jest.Mock).mockResolvedValue(undefined);
+    (pingOpenSearch as Mock).mockResolvedValue('Connected to cluster "x".');
+    (countOpenSearchDocs as Mock).mockResolvedValue(undefined);
     const r = await testDestination(
       baseCfg({
         destinationType: "opensearch",
@@ -326,10 +370,10 @@ describe("testDestination — OpenSearch", () => {
   });
 
   it("fails when the ping errors (e.g. 403 not authorized)", async () => {
-    (pingOpenSearch as jest.Mock).mockRejectedValue(
+    (pingOpenSearch as Mock).mockRejectedValue(
       new Error("OpenSearch connection failed (403 Forbidden)"),
     );
-    (countOpenSearchDocs as jest.Mock).mockResolvedValue(0);
+    (countOpenSearchDocs as Mock).mockResolvedValue(0);
     const r = await testDestination(
       baseCfg({
         destinationType: "opensearch",

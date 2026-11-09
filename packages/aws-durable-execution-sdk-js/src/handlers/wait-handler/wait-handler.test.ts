@@ -1,37 +1,38 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createWaitHandler } from "./wait-handler";
 import { OperationStatus } from "../../types/wire";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-jest.mock("../../utils/logger/logger");
+vi.mock("../../utils/logger/logger");
 
 describe("Wait Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
+  let createStepId: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
-    createStepId = jest.fn().mockReturnValue("test-step-id");
+    createStepId = vi.fn().mockReturnValue("test-step-id");
   });
 
   it("should skip execution if step is already completed", async () => {
@@ -41,7 +42,7 @@ describe("Wait Handler", () => {
       Status: OperationStatus.SUCCEEDED,
     };
 
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       stepData[hashId("test-step-id")],
     );
 
