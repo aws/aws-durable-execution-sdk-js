@@ -31,6 +31,7 @@ import {
 } from "../../errors/durable-error/durable-error";
 import type { DurableLogger } from "../../types/durable-logger";
 import {
+  type CustomerFnResult,
   type DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
   PluginOperationStatus,
@@ -264,7 +265,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
           attemptInfo.startTimestamp = new Date();
-          const checkFunc = () => check(currentState, waitForConditionContext);
+          const checkFunc = (): Promise<T> =>
+            check(currentState, waitForConditionContext);
 
           await plugin.onOperationAttemptStart?.(attemptInfo);
 
@@ -273,7 +275,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             stepId,
             parentId,
             wrapOperationAttemptFn
-              ? () =>
+              ? (): CustomerFnResult =>
                   wrapOperationAttemptFn.call(plugin, attemptInfo, checkFunc)
               : checkFunc,
             currentAttempt,

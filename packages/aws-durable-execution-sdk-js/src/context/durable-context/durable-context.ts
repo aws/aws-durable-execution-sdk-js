@@ -159,7 +159,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
       this.captureExecutionState.bind(this),
       this.checkAndUpdateReplayMode.bind(this),
       this.checkForNonResolvingPromise.bind(this),
-      () => this.durableExecutionMode,
       (mode) => {
         this.durableExecutionMode = mode;
       },
@@ -318,6 +317,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
    * gate does not fire on the pending in-flight step (issue #751).
    * @internal
    */
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: ConcurrencyController calls it through a cast during replay.
   private skipNextOperation(): void {
     this._stepCounter++;
   }
@@ -808,7 +808,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this._executionContext,
         this.runInChildContext.bind(this),
-        () => this._defaultSerdes,
       );
       const promise = concurrentExecutionHandler(
         nameOrItems,

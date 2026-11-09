@@ -17,6 +17,7 @@ function pluginIdentity(
 
 function warn(message: string, details: Record<string, string | number>): void {
   try {
+    // biome-ignore lint/suspicious/noConsole: this diagnostic is for the developer and has no logger here.
     console.warn(message, details);
   } catch {
     // A diagnostic failure must not change the invocation outcome.

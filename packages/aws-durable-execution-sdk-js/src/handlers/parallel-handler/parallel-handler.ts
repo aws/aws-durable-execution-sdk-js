@@ -18,7 +18,7 @@ import {
 } from "../../utils/summary-generators/summary-generators";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
-  context: ExecutionContext,
+  _context: ExecutionContext,
   executeConcurrently: <TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],

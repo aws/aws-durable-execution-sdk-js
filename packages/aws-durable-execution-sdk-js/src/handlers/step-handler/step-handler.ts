@@ -53,7 +53,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: Checkpoint,
-  parentContext: Context,
+  _parentContext: Context,
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
@@ -329,10 +329,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptInfo, opInfo);
           attemptInfo.startTimestamp = new Date();
           await plugin.onOperationAttemptStart?.(attemptInfo);
-          let result: T;
           const stepFn = (): Promise<T> => fn(stepContext);
           const wrapOperationAttemptFn = plugin.wrapOperationAttemptFn;
-          result = (await runWithContext(
+          const result = (await runWithContext(
             stepId,
             parentId,
             wrapOperationAttemptFn

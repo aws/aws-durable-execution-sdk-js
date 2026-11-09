@@ -24,7 +24,6 @@ import {
   restoreBatchResult,
   createBatchResultSerdes,
 } from "./batch-result";
-import type { AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -112,11 +111,7 @@ function validateMaxConcurrency(
 }
 
 export class ConcurrencyController<Logger extends DurableLogger> {
-  constructor(
-    private readonly operationName: string,
-
-    private readonly getDefaultSerdes?: () => AnySerdes,
-  ) {}
+  constructor(private readonly operationName: string) {}
 
   /**
    * Advance the step cursor of the context that {@link replayItems} re-drives
@@ -1032,8 +1027,6 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
-
-  getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
@@ -1115,7 +1108,6 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
       ): Promise<BatchResult<TResult>> => {
         const concurrencyController = new ConcurrencyController<Logger>(
           "concurrent-execution",
-          getDefaultSerdes,
         );
 
         // Access durableExecutionMode from the context - it's set by runInChildContext
