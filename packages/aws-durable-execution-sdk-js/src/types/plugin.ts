@@ -200,13 +200,35 @@ export interface OperationChangeInfo {
  *
  * So `onInvocationEnd` keeps its time even when earlier hook work is slow, and
  * an invocation that ends close to its timeout still flushes. Work that has not
- * settled by its deadline is abandoned, and the invocation returns. In Lambda
- * the execution environment is then frozen, so abandoned work may never
- * complete. If the context reports no deadline, both waits last until
- * everything settles.
+ * settled by its deadline is abandoned, and the invocation returns. On standard
+ * Lambda the execution environment is then frozen, so abandoned work may never
+ * complete. On Lambda Managed Instances the environment keeps running, so
+ * abandoned work keeps running too. If the context reports no deadline, both
+ * waits last until everything settles.
  *
  * Errors thrown or promises rejected by any hook are swallowed by the SDK and
  * never affect the execution outcome.
+ *
+ * **Lambda Managed Instances.** On Lambda Managed Instances (LMI), the
+ * execution environment does not freeze between invocations. Several
+ * invocations run at the same time in one Node.js worker. Code from an ended
+ * invocation can keep running and keep calling its plugin's hooks. So a plugin
+ * follows these rules:
+ *
+ * 1. A hook can run after `onInvocationEnd`. The plugin ignores that call. It
+ *    never changes the spans or buffers of another invocation.
+ * 2. A `wrap` hook calls `fn` exactly once, inline, and returns its result. It
+ *    never stores `fn` to call later.
+ * 3. Every export has its own timeout. The SDK does not wait for operation
+ *    hooks. An export without a timeout keeps its sockets and timers open while
+ *    the environment keeps running. Node.js `fetch` waits up to 300 seconds for
+ *    a response by default.
+ * 4. `onInvocationEnd` finishes before the deadline. It starts no work that
+ *    needs the invocation to keep running.
+ * 5. Plugin state lives on the instance. It never lives in module-level maps
+ *    keyed by execution ARN.
+ *
+ * {@link DurableInstrumentationPluginFactory} states the rule for the factory.
  */
 export interface DurableInstrumentationPlugin {
   /**
@@ -243,10 +265,12 @@ export interface DurableInstrumentationPlugin {
    * invocation. Errors thrown (or rejected promises) are swallowed by the SDK
    * and never affect the execution outcome.
    *
-   * Do not start fire-and-forget work here and leave it un-awaited: this hook
-   * runs right before the Lambda response is returned, so the environment is
-   * frozen immediately afterward and such work will not complete. This is the
-   * place to flush exporters and other buffered work.
+   * Do not start fire-and-forget work here and leave it un-awaited. This hook
+   * runs right before the Lambda response is returned. On standard Lambda the
+   * environment is frozen right after that, so such work does not complete. On
+   * Lambda Managed Instances the environment keeps running, so such work runs
+   * after the invocation ended, next to other invocations. This is the place to
+   * flush exporters and other buffered work.
    *
    * @param info - Details about the completed invocation, including status,
    * result or error, input, and operations.
@@ -291,6 +315,11 @@ export interface PropagationMetadata {
  * instance never has to key its per-execution state by execution ARN, and two
  * executions running concurrently in one execution environment (as Lambda
  * Managed Instances makes routine) cannot observe each other's state.
+ *
+ * So `createPlugin` returns a new instance on every call. It never returns a
+ * cached or shared instance. A shared instance would serve several
+ * invocations, and on Lambda Managed Instances those invocations run at the
+ * same time.
  *
  * State that belongs to the execution environment rather than to one
  * invocation — a shared exporter, a tracer provider, a scheduler — belongs on
