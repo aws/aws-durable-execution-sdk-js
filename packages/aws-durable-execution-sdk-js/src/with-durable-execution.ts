@@ -175,9 +175,15 @@ async function runHandler<
     };
   }
 
+  // Aborted when the invocation terminates. Every context links its signal to
+  // this one, so every running step sees the abort (StepContext.signal). It is
+  // aborted after setTerminating, so a step that stops on it cannot checkpoint.
+  const terminated = new AbortController();
+
   // Set the checkpoint terminating callback on the termination manager
   executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
     checkpointManager.setTerminating();
+    terminated.abort();
   });
 
   const durableExecution = {
@@ -205,6 +211,7 @@ async function runHandler<
     durableExecution,
     undefined,
     rootPreserveChildDepth,
+    terminated.signal,
   );
 
   const executeInvocation =

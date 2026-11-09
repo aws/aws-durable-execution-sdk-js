@@ -1,0 +1,160 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "69a33146-897f-4f53-a5ea-a0b5d319955b",
+    "EventTimestamp": "2026-11-08T18:47:17.412Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "race",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "fast",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "slow",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "2f221a18eb863803",
+    "Name": "fast",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "slow",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "2f221a18eb863803",
+    "Name": "fast",
+    "EventTimestamp": "2026-11-08T18:47:17.520Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"fast\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 8,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "fast",
+    "EventTimestamp": "2026-11-08T18:47:17.524Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"fast\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "race",
+    "EventTimestamp": "2026-11-08T18:47:17.524Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"fast\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"STARTED\"}],\"completionReason\":\"MIN_SUCCESSFUL_REACHED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "pause",
+    "EventTimestamp": "2026-11-08T18:47:17.524Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-11-08T18:47:18.524Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-11-08T18:47:17.528Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-08T18:47:17.412Z",
+      "EndTimestamp": "2026-11-08T18:47:17.528Z",
+      "Error": {},
+      "RequestId": "f5f3f9b5-818e-497e-8995-eda6a1e4ed03"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 12,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "pause",
+    "EventTimestamp": "2026-11-08T18:47:18.525Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-11-08T18:47:18.527Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-08T18:47:18.526Z",
+      "EndTimestamp": "2026-11-08T18:47:18.527Z",
+      "Error": {},
+      "RequestId": "4184ffca-b796-4fcf-8173-92f44257fa8a"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "69a33146-897f-4f53-a5ea-a0b5d319955b",
+    "EventTimestamp": "2026-11-08T18:47:18.527Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "[\"fast\"]"
+      }
+    }
+  }
+]
