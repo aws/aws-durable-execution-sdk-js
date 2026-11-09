@@ -44,8 +44,9 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
  * - `microvm`: one job over HTTP, because the config sets `request.path`.
  * - `session`: a session with the default config. It makes no GetMicrovm
  *   call.
- * - `checking session`: a session with `autoSuspendOnIdle: true`. It calls
- *   GetMicrovm before each job.
+ * - `checking session`: a session whose first request gets an HTTP 502 with
+ *   `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the request step calls
+ *   GetMicrovm.
  */
 type Kind = "microvm" | "session" | "checking session";
 
@@ -64,6 +65,14 @@ function runCatching(
   retryStrategy?: RetryStrategy,
 ): { runner: LocalDurableTestRunner<unknown>; caught: unknown[] } {
   const caught: unknown[] = [];
+  if (kind === "checking session") {
+    endpoint.responses.unshift(
+      new Response(null, {
+        status: 502,
+        headers: { "x-aws-proxy-error": "MICROVM_CONNECT_FAILED" },
+      }),
+    );
+  }
   const config = {
     ...baseConfig(client),
     fetch: endpoint.fetch,
@@ -85,7 +94,6 @@ function runCatching(
               {
                 ...config,
                 timeout: { hours: 1 },
-                autoSuspendOnIdle: kind === "checking session",
               },
               (vm, ctx) =>
                 vm.invoke(ctx, "job", 1, {
@@ -126,6 +134,8 @@ const removed =
   "MicroVM mvm-1 no longer exists. A MicroVM lives at most its `timeout` plus 5 minutes, and never longer than 8 hours.";
 const delivery = 'MicroVM "job": the job could not be delivered: ';
 const launchFailed = 'MicroVM "job": the launch failed: ';
+const getDenied =
+  "MicroVM mvm-1 gave a sign that it does not run. GetMicrovm was denied, so the operation cannot check its state. The function's execution role needs lambda:GetMicrovm.";
 
 const token = (): Handler => async () => ({
   authToken: { "X-aws-proxy-auth": "token" },
@@ -364,28 +374,11 @@ const scenarios: Record<string, Scenario> = {
     notRunning: false,
     prefix: delivery,
     step: "job.request",
-    stepErrorType: "AccessDeniedException",
-    stepMessage: ["denied", "denied. GetMicrovm request ID: req-1."],
+    stepErrorType: "MicrovmPermissionDeniedError",
+    stepMessage: [getDenied, `${getDenied} GetMicrovm request ID: req-1.`],
     // A thrown GetMicrovm records no event. So the test counts the calls
     // with its own handler.
     calls: (client) => (client as unknown as { getCalls: number }).getCalls,
-    expectedCalls: 1,
-  },
-  "ResumeMicrovm denies access": {
-    kind: "checking session",
-    setup: (client, _endpoint, meta) => {
-      client.getResponses = [async () => ({ state: "SUSPENDED" })];
-      client.resumeResponses = [
-        throwing(new AccessDeniedException({ message: "denied", ...meta })),
-      ];
-    },
-    errorClass: MicrovmDeliveryError,
-    notRunning: false,
-    prefix: delivery,
-    step: "job.request",
-    stepErrorType: "AccessDeniedException",
-    stepMessage: ["denied", "denied. ResumeMicrovm request ID: req-1."],
-    calls: (client) => client.events.filter((e) => e === "resume").length,
     expectedCalls: 1,
   },
   "CreateMicrovmAuthToken denies access": {

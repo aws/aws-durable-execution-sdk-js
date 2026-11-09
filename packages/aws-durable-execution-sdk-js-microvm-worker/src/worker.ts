@@ -81,8 +81,9 @@ const SUSPEND_CALL_TIMEOUT_MS = 10_000;
  *
  * The call returns before the MicroVM freezes, and the worker cannot see the
  * freeze. A job accepted in between would freeze with the MicroVM, and
- * nothing would resume it. So the worker answers such a job with 503, and
- * the durable function resumes the MicroVM and delivers the job again. The
+ * nothing would resume it. So the worker answers such a job with 503. The
+ * durable function delivers the job again, and the service resumes the
+ * MicroVM on a later request. The
  * `resume` hook ends the refusal at once. This period covers an image that
  * does not enable that hook, and a suspend that the service did not carry
  * out. It fits inside the durable function's default delivery retry window.
@@ -268,7 +269,7 @@ export interface MicrovmWorkerOptions<TInput = unknown, TOutput = unknown> {
    *
    * 1. An attempt suspends the MicroVM, and its answer is lost across the
    *    freeze.
-   * 2. The durable function resumes the MicroVM. The `resume` hook ends the
+   * 2. The service resumes the MicroVM. The `resume` hook ends the
    *    worker's refusal, and the next job starts.
    * 3. The client then retries. The retry suspends the MicroVM with the job
    *    inside, and nothing resumes it.
@@ -360,13 +361,14 @@ export interface MicrovmWorkerListener {
  * this way:
  *
  * - A finished job gets HTTP 202 in every state. Its outcome is reported. A
- *   503 would make the durable function resume the MicroVM for nothing.
+ *   503 would make the durable function send the job again for nothing.
  * - A running job gets HTTP 202 while the listener runs normally or the
  *   MicroVM terminates.
  * - A running job gets HTTP 503 while the listener refuses jobs for a
  *   suspend. The job can freeze with the MicroVM. A 202 would end the
  *   delivery, and nothing would resume the MicroVM. The 503 makes the
- *   durable function check the state and resume the MicroVM.
+ *   durable function send the job again, and the service resumes the
+ *   MicroVM on a later request.
  *
  * The listener remembers the last 1,000 finished callback IDs. When a job
  * ends and the listener already holds 1,000 IDs, it removes the oldest one.
@@ -387,13 +389,14 @@ export interface MicrovmWorkerListener {
  *    the MicroVM during a job.
  * 3. When the idle time ends, the listener calls SuspendMicrovm with the
  *    MicroVM's own ID. The call returns before the MicroVM freezes. The
- *    MicroVM keeps its memory and files, and the durable function resumes it
- *    before the next job.
+ *    MicroVM keeps its memory and files. The service resumes it on the next
+ *    job request, if the MicroVM was launched with
+ *    `idlePolicy.autoResumeEnabled: true`.
  * 4. From the moment the idle time ends, the listener answers every new job
  *    with HTTP 503 and does not start it. A job accepted then would freeze
- *    with the MicroVM. After a 503, the durable function checks the
- *    MicroVM's state, resumes it, and delivers the job again. No job runs
- *    then. So a second delivery belongs to a finished job, and gets HTTP
+ *    with the MicroVM. After a 503, the durable function delivers the job
+ *    again, and the service resumes the MicroVM on a later request. No job
+ *    runs then. So a second delivery belongs to a finished job, and gets HTTP
  *    202, because it starts no job.
  * 5. The refusal ends when the `resume` lifecycle hook arrives, or 30 seconds
  *    after the call returned. The 30-second case covers an image without the
@@ -1159,13 +1162,13 @@ export function createMicrovmWorkerListener<
     // job. Three cases follow:
     //
     // 1. A finished job gets 202 in every state. Its outcome is reported. A
-    //    503 would make the durable function resume the MicroVM for nothing.
+    //    503 would make the durable function send the job again for nothing.
     // 2. A known job gets 202 while the MicroVM terminates. A running job
     //    reports its outcome, or the terminate hook fails its callback.
     // 3. A running job gets 503 while the worker refuses jobs for a suspend.
     //    The job can freeze with the MicroVM. A 202 would end the delivery,
     //    and nothing would resume the MicroVM. The 503 makes the durable
-    //    function check the state and resume the MicroVM.
+    //    function send the job again, and the service resumes the MicroVM.
     //
     const running = jobs.has(job.callbackId);
     if (
@@ -1183,8 +1186,8 @@ export function createMicrovmWorkerListener<
       return;
     }
     if (suspending) {
-      // The MicroVM is about to freeze. The durable function resumes it and
-      // delivers the job again.
+      // The MicroVM is about to freeze. The durable function delivers the
+      // job again, and the service resumes the MicroVM.
       logger.info("job refused: the MicroVM is suspending", { microvmId });
       respond(response, 503, { error: "the MicroVM is suspending" });
       return;

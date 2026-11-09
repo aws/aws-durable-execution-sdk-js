@@ -101,22 +101,17 @@ export class MicrovmDeliveryError extends MicrovmError {
  * {@link microvm}. The platform then terminates and removes it. A
  * TerminateMicrovm call from outside the operation ends it too.
  *
- * The request step reports this error in three cases:
+ * The request step reports this error in two cases:
  *
- * 1. A session that checks the MicroVM state before each job. It checks when
- *    `autoSuspendOnIdle` is `true`, when an `idlePolicy` is set, and after a
- *    job with `suspendAfter`. The check calls GetMicrovm. It also calls
- *    ResumeMicrovm when the MicroVM is suspended. GetMicrovm can report a
- *    terminating or terminated MicroVM. Either call can report a MicroVM
- *    that no longer exists.
- * 2. Any job that goes over HTTP, from {@link microvm} or from a session,
+ * 1. Any job that goes over HTTP, from {@link microvm} or from a session,
  *    after a request without an answer, or after an HTTP 502 with
  *    `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step then
  *    calls GetMicrovm after each such answer, at most once per 2 seconds.
  *    The endpoint of a terminated MicroVM answers that 502, measured in
  *    us-east-1. So a MicroVM that ends before its job arrives fails the job
- *    after one request.
- * 3. Any job that goes over HTTP. The request step calls
+ *    after one request. GetMicrovm can report a terminating or terminated
+ *    MicroVM, or a MicroVM that no longer exists.
+ * 2. Any job that goes over HTTP. The request step calls
  *    CreateMicrovmAuthToken before the first request, and again after a 401
  *    or 403. The API model lists `ResourceNotFoundException` for that call.
  *    So it can report a MicroVM that no longer exists. For a terminated
@@ -128,13 +123,12 @@ export class MicrovmDeliveryError extends MicrovmError {
  * MicroVM.
  *
  * The message ends with the request ID of the call that reported the state,
- * in the form `GetMicrovm request ID: <id>.`,
- * `ResumeMicrovm request ID: <id>.`, or
+ * in the form `GetMicrovm request ID: <id>.` or
  * `CreateMicrovmAuthToken request ID: <id>.`. A support case can quote it.
  * The message has no request ID when the AWS SDK error or output carries
  * none, or when the error does not come from the Lambda MicroVMs service.
  *
- * A denied GetMicrovm call in the check of case 2 does not report the
+ * A denied GetMicrovm call in the check of case 1 does not report the
  * state. The job then fails at once with a plain
  * {@link MicrovmDeliveryError}, and the message names `lambda:GetMicrovm`.
  * A GetMicrovm call that fails otherwise does not report the state either.
