@@ -6,5 +6,10 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true
   },
-  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "src/testing/**"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test-d.ts",
+    "src/**/__tests__/**",
+    "src/testing/**"
+  ]
 }

@@ -554,7 +554,7 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
           ? ReturnType
           : never
     >,
-  ): Promise<
+  ): DurablePromise<
     BatchResult<
       Branches[number] extends ParallelFunc<infer ReturnType, TLogger>
         ? ReturnType
