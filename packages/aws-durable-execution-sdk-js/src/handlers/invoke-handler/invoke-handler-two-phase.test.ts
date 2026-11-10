@@ -1,29 +1,14 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { OperationStatus } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
+// A fake Serdes. The handler passes it to the real safeSerialize and
+// safeDeserialize, so the tests stub and assert on its methods.
+let fakeSerdes: { serialize: Mock; deserialize: Mock };
+const getFakeSerdes = () => fakeSerdes;
 
 describe("Invoke Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
@@ -34,6 +19,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    fakeSerdes = { serialize: vi.fn(), deserialize: vi.fn() };
     stepIdCounter = 0;
 
     mockContext = {
@@ -55,8 +41,8 @@ describe("Invoke Handler Two-Phase Execution", () => {
     createStepId = (): string => `step-${++stepIdCounter}`;
     checkAndUpdateReplayMode = vi.fn();
 
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue({ result: "success" });
+    fakeSerdes.serialize.mockResolvedValue('{"serialized":"data"}');
+    fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
   });
 
   it("should execute invoke logic in phase 1 without awaiting", async () => {
@@ -64,6 +50,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -93,6 +82,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -116,6 +108,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invoke1 = invokeHandler("function1", { input: "data1" });
@@ -141,12 +136,15 @@ describe("Invoke Handler Two-Phase Execution", () => {
       },
     });
 
-    mockSafeDeserialize.mockResolvedValue({ cached: "result" });
+    fakeSerdes.deserialize.mockResolvedValue({ cached: "result" });
 
     const invokeHandler = createInvokeHandler(
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -158,14 +156,10 @@ describe("Invoke Handler Two-Phase Execution", () => {
     const result = await invokePromise;
     expect(result).toEqual({ cached: "result" });
 
-    expect(mockSafeDeserialize).toHaveBeenCalledWith(
-      expect.anything(),
-      '{"cached":"result"}',
-      "step-1",
-      undefined,
-      mockContext.terminationManager,
-      "test-arn",
-    );
+    expect(fakeSerdes.deserialize).toHaveBeenCalledWith('{"cached":"result"}', {
+      entityId: "step-1",
+      durableExecutionArn: "test-arn",
+    });
   });
 
   it("should only checkpoint once when stepData doesn't exist", async () => {
@@ -180,6 +174,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -205,6 +202,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       undefined,
       checkAndUpdateReplayMode,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -235,6 +233,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const invokePromise = invokeHandler("test-function", { input: "data" });
@@ -257,6 +258,9 @@ describe("Invoke Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
+      undefined,
+      undefined,
+      getFakeSerdes,
     );
 
     const _invokePromise = invokeHandler("test-function", { input: "data" });

@@ -23,7 +23,7 @@ import {
   safeGet,
   TRANSIENT_4XX_NAMES,
   textOr,
-} from "./callback-reporter";
+} from "../callback-reporter";
 import {
   InvalidRunHookPayloadError,
   type MicrovmJobDocument,

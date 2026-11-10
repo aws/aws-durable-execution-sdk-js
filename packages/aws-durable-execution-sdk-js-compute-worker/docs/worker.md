@@ -1,6 +1,6 @@
 # MicroVM worker reference
 
-Detailed behavior of `@aws/durable-execution-sdk-js-microvm-worker`. For a quick start, see the [package README](../README.md).
+Detailed behavior of `@aws/durable-execution-sdk-js-compute-worker/microvm`. For a quick start, see the [package README](../README.md).
 
 ## Image configuration
 
