@@ -248,6 +248,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # A failed run may skip the slow file, so it must not clear a warning.
+          TESTS_PASSED: ${{ needs.integration-tests.result == 'success' }}
         run: node .github/workflows/scripts/integration-test/timing-report.mjs --comment timings
 
   capacity-provider-tests:

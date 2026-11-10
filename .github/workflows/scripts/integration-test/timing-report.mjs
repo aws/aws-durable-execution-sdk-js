@@ -17,7 +17,7 @@
 // Usage: node timing-report.mjs <vitest-json-file> <artifact-name>
 //        node timing-report.mjs --comment <folder-of-downloaded-artifacts>
 // Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY,
-//      PR_NUMBER (--comment only)
+//      PR_NUMBER and TESTS_PASSED (--comment only)
 
 import { execFileSync } from "node:child_process";
 import {
@@ -188,7 +188,7 @@ const fmt = (seconds) => `${seconds.toFixed(1)}s`;
 
 /**
  * @typedef {{ name: string, seconds: number, median: number }} Outlier
- * @typedef {{ version: string, outliers: Outlier[] }} VersionReport
+ * @typedef {{ version: string, baselineRuns: number, outliers: Outlier[] }} VersionReport
  */
 
 // The first line of the PR comment. It is hidden, and lets a later run find
@@ -198,9 +198,10 @@ const COMMENT_MARKER = "<!-- integration-test-timings -->";
 /**
  * Body of the PR comment: one row per slow file, one column per Node.js
  * version, so a file that is slow on both versions is listed once.
- * @param {VersionReport[]} reports
+ * @param {VersionReport[]} reports Only versions that have a baseline.
+ * @param {boolean} complete Whether every integration test job passed.
  */
-export function commentBody(reports) {
+export function commentBody(reports, complete) {
   /** @type {Map<string, Map<string, Outlier>>} */
   const slow = new Map();
   for (const { version, outliers } of reports) {
@@ -210,6 +211,12 @@ export function commentBody(reports) {
     }
   }
   const lines = [COMMENT_MARKER, "### Slow integration tests", ""];
+  if (!complete) {
+    lines.push(
+      "Some integration tests failed or stopped early. So test files that did not run are not checked.",
+      "",
+    );
+  }
   if (slow.size === 0) {
     lines.push("No test file is slower than usual in the latest run.");
   } else {
@@ -243,7 +250,6 @@ export function commentBody(reports) {
 
 /**
  * Reads the timings that each Node.js version's job saved in this run.
- * Versions without a baseline are left out: they have nothing to compare.
  * @param {string} dir One folder per integration-test-timings-* artifact, as
  *   download-artifact writes them.
  * @returns {VersionReport[]}
@@ -258,8 +264,11 @@ export function loadReports(dir) {
         readFileSync(join(dir, name, TIMINGS_FILE_IN_ARTIFACT), "utf8"),
       ),
     }))
-    .filter(({ saved }) => saved.baselineRuns > 0)
-    .map(({ version, saved }) => ({ version, outliers: saved.outliers ?? [] }));
+    .map(({ version, saved }) => ({
+      version,
+      baselineRuns: saved.baselineRuns,
+      outliers: saved.outliers,
+    }));
 }
 
 // The GITHUB_TOKEN posts as this user. Only its comments are updated, so a
@@ -269,11 +278,20 @@ const COMMENT_AUTHOR = "github-actions[bot]";
 /**
  * Creates or updates the PR comment. Posts nothing when no file is slow and
  * no comment exists yet.
+ *
+ * It changes an old warning to "no file is slow" only after a full check:
+ * every job passed, and every version had a baseline. A failed or stopped run
+ * may skip the slow file, so it must not clear the warning.
  * @param {VersionReport[]} reports
+ * @param {boolean} complete Whether every integration test job passed.
  */
-export async function updatePrComment(reports) {
+export async function updatePrComment(reports, complete) {
   const marker = COMMENT_MARKER;
+  const compared = reports.filter((r) => r.baselineRuns > 0);
   const anySlow = reports.some((r) => r.outliers.length > 0);
+  const fullCheck =
+    complete && reports.length > 0 && compared.length === reports.length;
+  if (!anySlow && !fullCheck) return;
   /** @type {{ id: number } | undefined} */
   let existing;
   for (let page = 1; !existing; page++) {
@@ -289,7 +307,7 @@ export async function updatePrComment(reports) {
     if (comments.length < 100) break;
   }
   if (!existing && !anySlow) return;
-  const body = commentBody(reports);
+  const body = commentBody(compared, complete);
   if (existing) {
     await github(`/repos/${GITHUB_REPOSITORY}/issues/comments/${existing.id}`, {
       method: "PATCH",
@@ -388,7 +406,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const run =
     jsonPath === "--comment"
       ? // Here the second argument is the folder of downloaded artifacts.
-        async () => updatePrComment(loadReports(artifactName))
+        async () =>
+          updatePrComment(
+            loadReports(artifactName),
+            process.env.TESTS_PASSED === "true",
+          )
       : main;
   run().catch((error) => {
     // Timings are advisory; never fail the job because of the report.
