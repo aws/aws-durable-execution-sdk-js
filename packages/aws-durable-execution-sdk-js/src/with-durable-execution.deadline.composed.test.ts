@@ -24,6 +24,7 @@ import {
   OperationType,
   WireOperation,
 } from "./types/wire";
+import { MAX_TIMER_DELAY_MS } from "./utils/constants/constants";
 
 const DEADLINE_MS = 40;
 
@@ -48,11 +49,14 @@ const executionOp = {
 } as unknown as WireOperation;
 
 /** A client that records the action and name of every checkpoint update it receives. */
-const recordingClient = (): {
+const recordingClient = (
+  holdFirstResponse?: Promise<void>,
+): {
   client: DurableExecutionClient;
   updates: string[];
 } => {
   const updates: string[] = [];
+  let calls = 0;
   const client: DurableExecutionClient = {
     getExecutionState: async (): Promise<GetDurableExecutionStateResponse> => ({
       Operations: [],
@@ -63,6 +67,10 @@ const recordingClient = (): {
     ): Promise<CheckpointDurableExecutionResponse> => {
       for (const update of request.Updates ?? []) {
         updates.push(`${update.Action} ${update.Name ?? update.Type}`);
+      }
+      calls++;
+      if (calls === 1 && holdFirstResponse) {
+        await holdFirstResponse;
       }
       return { CheckpointToken: "next-token", NewExecutionState: undefined };
     },
@@ -143,6 +151,80 @@ describe("invocation deadline", () => {
     await sleep(DEADLINE_MS * 4);
     expect(afterRan).toBe(false);
     expect(updates).toEqual(["START ignores-signal"]);
+  });
+
+  it("does not send a checkpoint that was queued behind a request in flight at the deadline", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { client, updates } = recordingClient(held);
+
+    const pending = invoke(
+      async (_event, context) =>
+        // The START is sent and held. The SUCCEED queues behind it.
+        await context.step("held", async () => {
+          await sleep(5);
+          return "value";
+        }),
+      contextWithDeadline(DEADLINE_MS),
+      client,
+    );
+    await sleep(DEADLINE_MS * 2);
+    release();
+
+    expect(((await pending) as Error).name).toBe("InvocationDeadlineError");
+    await sleep(DEADLINE_MS);
+    expect(updates).toEqual(["START held"]);
+  });
+
+  it("refuses an operation that an abort listener starts at the deadline", async () => {
+    const { client } = recordingClient();
+    let lateRan = false;
+
+    const outcome = await invoke(
+      async (_event, context) => {
+        let signal: AbortSignal | undefined;
+        await context.step("capture", async (ctx) => {
+          signal = ctx.signal;
+        });
+        signal?.addEventListener("abort", () => {
+          void context.step("from-abort-listener", async () => {
+            lateRan = true;
+          });
+        });
+        await context.step("ignores-signal", async () => {
+          await sleep(DEADLINE_MS * 3);
+        });
+      },
+      contextWithDeadline(DEADLINE_MS),
+      client,
+    );
+
+    expect((outcome as Error).name).toBe("InvocationDeadlineError");
+    await sleep(DEADLINE_MS * 3);
+    expect(lateRan).toBe(false);
+  });
+
+  it("never asks setTimeout for a delay above its limit", async () => {
+    const { client } = recordingClient();
+    const lambdaContext = {
+      awsRequestId: "request-1",
+      getRemainingTimeInMillis: () => MAX_TIMER_DELAY_MS + 10_000,
+    } as unknown as Context;
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    try {
+      const outcome = await invoke(async () => "done", lambdaContext, client);
+
+      expect(outcome).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: JSON.stringify("done"),
+      });
+      const delays = setTimeoutSpy.mock.calls.map(([, delay]) => delay ?? 0);
+      expect(delays.filter((delay) => delay > MAX_TIMER_DELAY_MS)).toEqual([]);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it("sets no deadline when the context reports no finite remaining time", async () => {
