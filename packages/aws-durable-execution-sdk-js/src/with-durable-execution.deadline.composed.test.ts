@@ -233,22 +233,29 @@ describe("invocation deadline", () => {
       awsRequestId: "request-1",
       getRemainingTimeInMillis: () => Number.NaN,
     } as unknown as Context;
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    try {
+      const outcome = await invoke(
+        async (_event, context) => {
+          await context.step("work", async () => {
+            await sleep(20);
+          });
+          return "done";
+        },
+        lambdaContext,
+        client,
+      );
 
-    const outcome = await invoke(
-      async (_event, context) => {
-        await context.step("work", async () => {
-          await sleep(20);
-        });
-        return "done";
-      },
-      lambdaContext,
-      client,
-    );
-
-    expect(outcome).toEqual({
-      Status: InvocationStatus.SUCCEEDED,
-      Result: JSON.stringify("done"),
-    });
+      expect(outcome).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: JSON.stringify("done"),
+      });
+      // Without a deadline, the deadline timer would be set at the setTimeout limit.
+      const delays = setTimeoutSpy.mock.calls.map(([, delay]) => delay);
+      expect(delays).not.toContain(MAX_TIMER_DELAY_MS);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it("keeps running when the timer fires but the context reports time left", async () => {

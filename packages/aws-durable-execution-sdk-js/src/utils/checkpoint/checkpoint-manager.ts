@@ -491,6 +491,17 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
+    // checkpoint() refuses new updates once the invocation terminates. Updates that were
+    // queued before it, behind a batch still in flight, are dropped for the same reason:
+    // the invocation has ended, for example because its deadline passed.
+    if (this.isTerminating) {
+      log("⚠️", "Checkpoint skipped - termination in progress", {
+        queueLength: this.queue.length,
+      });
+      this.clearQueue();
+      return;
+    }
+
     const hasQueuedItems = this.queue.length > 0;
     const hasForceRequests = this.forceCheckpointPromises.length > 0;
 

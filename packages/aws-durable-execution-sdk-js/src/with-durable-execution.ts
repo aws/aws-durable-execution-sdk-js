@@ -7,6 +7,7 @@ import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { InvocationDeadlineError } from "./errors/invocation-deadline-error/invocation-deadline-error";
+import { MAX_TIMER_DELAY_MS } from "./utils/constants/constants";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import {
@@ -608,8 +609,9 @@ async function runHandler<
   // The context decides whether the deadline passed, not the timer. So when the timer fires,
   // the remaining time is read again, and the timer is set again while time is left. A timer
   // can fire before the context's deadline: fake timers advance it, and the local test
-  // runner's context reports a constant remaining time. A reading of Infinity means no
-  // deadline, so no timer is set: setTimeout would turn Infinity into 1 ms.
+  // runner's context reports a constant remaining time. Each delay is capped at the
+  // setTimeout limit, because setTimeout turns a larger delay into 1 ms. A reading of
+  // Infinity means no deadline, so no timer is set.
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const watchDeadline = (): void => {
     const remainingTimeMs = executionContext.getRemainingTimeMs();
@@ -617,7 +619,10 @@ async function runHandler<
       return;
     }
     if (remainingTimeMs > 0) {
-      deadlineTimer = setTimeout(watchDeadline, remainingTimeMs);
+      deadlineTimer = setTimeout(
+        watchDeadline,
+        Math.min(remainingTimeMs, MAX_TIMER_DELAY_MS),
+      );
       return;
     }
     executionContext.terminationManager.terminate({
