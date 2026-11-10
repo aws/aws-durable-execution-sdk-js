@@ -19,7 +19,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 
 vi.mock("../../errors/serdes-errors/serdes-errors");
-vi.mock("../../utils/logger/logger");
 
 const mockSafeDeserialize = safeDeserialize as MockedFunction<
   typeof safeDeserialize

@@ -21,7 +21,6 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 vi.mock("../../utils/context-tracker/context-tracker");
 

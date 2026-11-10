@@ -24,7 +24,6 @@ import {
 import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 vi.mock("../../utils/context-tracker/context-tracker");
 

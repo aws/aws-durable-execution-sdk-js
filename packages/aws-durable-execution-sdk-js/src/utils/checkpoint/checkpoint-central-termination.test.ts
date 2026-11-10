@@ -17,8 +17,6 @@ import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
-vi.mock("../logger/logger");
-
 describe("CheckpointManager - Centralized Termination", () => {
   let checkpointManager: CheckpointManager;
   let mockTerminationManager: Mocked<TerminationManager>;

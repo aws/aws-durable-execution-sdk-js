@@ -4,8 +4,6 @@ import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../utils/logger/logger");
-
 describe("Wait Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;

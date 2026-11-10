@@ -21,8 +21,6 @@ import {
   PluginOperationStatus,
 } from "../../types/plugin";
 
-vi.mock("../../utils/logger/logger");
-
 const flushMicrotasks = () =>
   new Promise<void>((resolve) => setImmediate(resolve));
 

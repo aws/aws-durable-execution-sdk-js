@@ -23,7 +23,6 @@ import {
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 
 const mockSafeDeserialize = safeDeserialize as MockedFunction<
