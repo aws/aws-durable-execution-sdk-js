@@ -1,128 +1,117 @@
-import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
-import { initializeExecutionContext } from "./context/execution-context/execution-context";
-import { createDurableContext } from "./context/durable-context/durable-context";
 import { Context } from "aws-lambda";
-import { DurableExecutionInvocationInput } from "./types";
-import { log } from "./utils/logger/logger";
+import {
+  DurableExecutionInvocationInput,
+  type DurableExecutionClient,
+} from "./types";
+import { refreshLogConfig } from "./utils/logger/logger";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
-import { TerminationReason } from "./termination-manager/types";
 
-// Mock dependencies
-vi.mock("./context/execution-context/execution-context");
-vi.mock("./context/durable-context/durable-context");
-vi.mock("./utils/logger/logger", () => ({
-  log: vi.fn(),
-}));
+// An in-memory transport. It accepts every checkpoint and never reads more state.
+function fakeClient(): DurableExecutionClient {
+  return {
+    async checkpoint() {
+      return { CheckpointToken: "next-token", NewExecutionState: {} };
+    },
+    async getExecutionState() {
+      throw new Error("unexpected state request");
+    },
+  };
+}
 
 describe("withDurableExecution Queue Completion", () => {
   const mockEvent: DurableExecutionInvocationInput = {
     CheckpointToken: "test-token",
     DurableExecutionArn: "test-arn",
     InitialExecutionState: {
-      Operations: [],
+      Operations: [
+        {
+          Id: "execution",
+          Type: "EXECUTION",
+          Status: "STARTED",
+          StartTimestamp: new Date("2026-01-01T00:00:00Z"),
+          ExecutionDetails: { InputPayload: "{}" },
+        },
+      ],
       NextMarker: "",
     },
   };
 
-  const mockContext = {} as Context;
-  let mockTerminationManager: any;
-  let mockExecutionContext: any;
+  const mockContext = {
+    awsRequestId: "request",
+    getRemainingTimeInMillis: () => 30_000,
+  } as Context;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    mockTerminationManager = {
-      getTerminationPromise: vi.fn().mockReturnValue(new Promise(() => {})),
-      terminate: vi.fn(),
-      setCheckpointTerminatingCallback: vi.fn(),
-    };
-
-    mockExecutionContext = {
-      state: {},
-      _stepData: {},
-      terminationManager: mockTerminationManager,
-      durableExecutionArn: "test-arn",
-
-      pendingCompletions: new Set(),
-    };
-
-    (initializeExecutionContext as Mock).mockResolvedValue({
-      executionContext: mockExecutionContext,
-      durableExecutionMode: "NORMAL",
-      checkpointToken: "test-token",
-    });
-
-    (createDurableContext as Mock).mockImplementation(
-      (_ctx, _lambdaCtx, _mode, _logger, _opts, _durableExecution) => {
-        return {};
-      },
-    );
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.DURABLE_VERBOSE_MODE;
+    refreshLogConfig();
   });
 
   it("should wait for checkpoint queue completion on successful handler execution", async () => {
-    const waitSpy = vi
-      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
-      .mockResolvedValue(undefined);
+    const waitSpy = vi.spyOn(
+      CheckpointManager.prototype,
+      "waitForQueueCompletion",
+    );
     const clearSpy = vi.spyOn(CheckpointManager.prototype, "clearQueue");
 
     const mockHandler = vi.fn().mockResolvedValue("success");
-    const wrappedHandler = withDurableExecution(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler, {
+      durableExecutionClient: fakeClient(),
+    });
 
-    await wrappedHandler(mockEvent, mockContext);
+    await expect(wrappedHandler(mockEvent, mockContext)).resolves.toEqual({
+      Status: "SUCCEEDED",
+      Result: '"success"',
+    });
 
-    // waitForQueueCompletion is called once in the success path
+    // waitForQueueCompletion is called in the success path
     expect(waitSpy).toHaveBeenCalled();
     expect(clearSpy).not.toHaveBeenCalled();
-
-    waitSpy.mockRestore();
-    clearSpy.mockRestore();
   });
 
   it("should wait for queue completion even on termination", async () => {
-    const waitSpy = vi
-      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
-      .mockResolvedValue(undefined);
+    const waitSpy = vi.spyOn(
+      CheckpointManager.prototype,
+      "waitForQueueCompletion",
+    );
 
-    // Mock handler to take longer so termination wins the race
-    const mockHandler = vi
-      .fn()
-      .mockImplementation(
-        () =>
-          new Promise((resolve) => setTimeout(() => resolve("success"), 1000)),
-      );
+    // The wait schedules a timer and terminates the invocation, so termination wins the race
+    const wrappedHandler = withDurableExecution(
+      async (_event, context) => {
+        await context.wait("pause", { seconds: 60 });
+        return "success";
+      },
+      { durableExecutionClient: fakeClient() },
+    );
 
-    // Mock termination promise to resolve immediately
-    mockTerminationManager.getTerminationPromise.mockResolvedValue({
-      reason: TerminationReason.WAIT_SCHEDULED,
-      message: "Wait scheduled",
+    await expect(wrappedHandler(mockEvent, mockContext)).resolves.toEqual({
+      Status: "PENDING",
     });
 
-    const wrappedHandler = withDurableExecution(mockHandler);
-
-    await wrappedHandler(mockEvent, mockContext);
-
     expect(waitSpy).toHaveBeenCalledTimes(1);
-
-    waitSpy.mockRestore();
   });
 
   it("should handle waitForQueueCompletion errors gracefully", async () => {
-    const waitSpy = vi
-      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
-      .mockRejectedValue(new Error("Queue completion failed"));
+    process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    vi.spyOn(
+      CheckpointManager.prototype,
+      "waitForQueueCompletion",
+    ).mockRejectedValue(new Error("Queue completion failed"));
 
     const mockHandler = vi.fn().mockResolvedValue("success");
-    const wrappedHandler = withDurableExecution(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler, {
+      durableExecutionClient: fakeClient(),
+    });
 
     // Should not throw despite waitForQueueCompletion error
     await expect(wrappedHandler(mockEvent, mockContext)).resolves.toBeDefined();
-    expect(log).toHaveBeenCalledWith(
-      "⚠️",
-      "Error waiting for checkpoint completion:",
-      expect.any(Error),
+    expect(debugSpy).toHaveBeenCalledWith(
+      "⚠️ Error waiting for checkpoint completion:",
+      expect.any(String),
     );
-
-    waitSpy.mockRestore();
   });
 });
