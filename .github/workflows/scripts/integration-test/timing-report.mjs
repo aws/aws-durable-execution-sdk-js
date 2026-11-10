@@ -4,8 +4,8 @@
 //
 // It reads Vitest's JSON reporter output from this run, and the same output saved as
 // an artifact by recent successful Build runs, and writes a table to the job
-// summary. Files that are slower than their recent median by both
-// OUTLIER_RATIO and OUTLIER_MIN_EXTRA_SECONDS get a warning annotation.
+// summary. A file is slow when it meets either rule (see findOutliers), and
+// each slow file gets a warning annotation.
 // It never fails the job: timings vary from run to run.
 //
 // When PR_NUMBER is set, it also keeps one PR comment per Node.js version
@@ -29,7 +29,10 @@ import { join, relative } from "node:path";
 
 const BASELINE_RUNS = 10;
 const OUTLIER_RATIO = 1.5;
+// Added to the ratio rule, so tiny tests (e.g. 0.02s to 0.04s) are not flagged.
+const OUTLIER_RATIO_EXTRA_SECONDS = 1;
 const OUTLIER_MIN_EXTRA_SECONDS = 5;
+const OUTLIER_RULE = `≥${OUTLIER_RATIO}x the median + ${OUTLIER_RATIO_EXTRA_SECONDS}s, or ≥${OUTLIER_MIN_EXTRA_SECONDS}s over the median`;
 const TIMINGS_FILE_IN_ARTIFACT = "integration-timings.json";
 
 const [jsonPath, artifactName] = process.argv.slice(2);
@@ -88,7 +91,10 @@ export function median(values) {
 }
 
 /**
- * Files slower than their baseline median by both the ratio and the margin.
+ * Files that meet either rule, compared with their baseline median:
+ * - at least OUTLIER_RATIO x the median, plus OUTLIER_RATIO_EXTRA_SECONDS
+ * - at least OUTLIER_MIN_EXTRA_SECONDS over the median
+ * The first rule catches short tests. The second catches long tests.
  * @param {Record<string, number>} files
  * @param {Record<string, number[]>} baseline
  */
@@ -102,7 +108,7 @@ export function findOutliers(files, baseline) {
     }))
     .filter(
       ({ seconds, median: base }) =>
-        seconds >= base * OUTLIER_RATIO &&
+        seconds >= base * OUTLIER_RATIO + OUTLIER_RATIO_EXTRA_SECONDS ||
         seconds - base >= OUTLIER_MIN_EXTRA_SECONDS,
     )
     .sort((a, b) => b.seconds - b.median - (a.seconds - a.median));
@@ -193,7 +199,7 @@ export function commentBody(artifactName, outliers) {
     lines.push("No test file is slower than usual in the latest run.");
   } else {
     lines.push(
-      `Each file took at least ${OUTLIER_RATIO}x its median time on recent runs, and at least ${OUTLIER_MIN_EXTRA_SECONDS}s more.`,
+      `Slow means ${OUTLIER_RULE}. The median is from recent runs.`,
       "",
       "| Test file | This run | Median | Change |",
       "|---|---|---|---|",
@@ -274,7 +280,7 @@ async function main() {
   ];
   if (outliers.length > 0) {
     lines.push(
-      `### Slower than usual (≥${OUTLIER_RATIO}x and ≥${OUTLIER_MIN_EXTRA_SECONDS}s over the median)`,
+      `### Slower than usual (${OUTLIER_RULE})`,
       "",
       "| Test file | This run | Median | Change |",
       "|---|---|---|---|",
