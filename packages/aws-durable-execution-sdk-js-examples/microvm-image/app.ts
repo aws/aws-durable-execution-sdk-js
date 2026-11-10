@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { startMicrovmWorker } from "@aws/durable-execution-sdk-js-microvm-worker";
+import { startMicrovmWorker } from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 
 const SESSION_DIR = "/tmp/session";
 

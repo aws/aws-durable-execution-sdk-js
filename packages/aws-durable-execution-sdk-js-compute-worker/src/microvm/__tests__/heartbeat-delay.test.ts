@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
-import { CallbackReporter } from "../callback-reporter";
+import { CallbackReporter } from "../../callback-reporter";
 import {
   heartbeatCallTimeoutMs,
   heartbeatDelayMs,

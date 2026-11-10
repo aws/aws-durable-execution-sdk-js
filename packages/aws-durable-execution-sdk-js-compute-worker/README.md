@@ -1,19 +1,21 @@
-# AWS Durable Execution SDK MicroVM Worker
+# AWS Durable Execution SDK Compute Worker
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
 Run job handlers inside an AWS Lambda MicroVM for the [`microvm` and `microvmSession` operations](../aws-durable-execution-sdk-js-extras). The worker receives each job, sends heartbeats while it runs, and reports its result to the durable function.
 
+The package root exports the code that every compute type shares, such as `CallbackReporter`. The MicroVM worker is in the `@aws/durable-execution-sdk-js-compute-worker/microvm` subpath. That subpath also exports the shared code.
+
 ## Install
 
 ```bash
-npm install @aws/durable-execution-sdk-js-microvm-worker
+npm install @aws/durable-execution-sdk-js-compute-worker
 ```
 
 ## Quick start
 
 ```typescript
-import { startMicrovmWorker } from "@aws/durable-execution-sdk-js-microvm-worker";
+import { startMicrovmWorker } from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 
 await startMicrovmWorker<{ repo: string }, { passed: boolean }>({
   handler: async (input, context) => {
@@ -95,7 +97,7 @@ await startMicrovmWorker({
 
 ```typescript
 import { createServer } from "node:http";
-import { createMicrovmWorkerListener } from "@aws/durable-execution-sdk-js-microvm-worker";
+import { createMicrovmWorkerListener } from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 
 const { listener } = createMicrovmWorkerListener({ handler: runJob });
 createServer(listener).listen(8080);
@@ -133,4 +135,4 @@ A session with `autoSuspendOnIdle: true` also needs `lambda:SuspendMicrovm` on t
 - [MicroVM worker reference](docs/worker.md): hook handling, heartbeats, result reporting, duplicate jobs, idle suspend, suspend and terminate hooks, and best practices.
 - [MicroVM operations reference](../aws-durable-execution-sdk-js-extras/docs/microvm.md): the contract between the operations and the worker.
 - Lower-level exports: `parseRunHookRequest`, `parseJobRequest`, and `CallbackReporter`.
-- Source: [`src/worker.ts`](src/worker.ts), [`src/callback-reporter.ts`](src/callback-reporter.ts), and [`src/payload.ts`](src/payload.ts).
+- Source: [`src/microvm/worker.ts`](src/microvm/worker.ts), [`src/callback-reporter.ts`](src/callback-reporter.ts), and [`src/microvm/payload.ts`](src/microvm/payload.ts).
