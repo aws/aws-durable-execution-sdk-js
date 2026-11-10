@@ -30,6 +30,7 @@ const SCRIPT = join(
 );
 const MARKER = "<!-- integration-test-timings -->";
 const BOT = "github-actions[bot]";
+const VERSIONS = ["22.x", "24.x"];
 const slowA = { name: "a.test.ts", seconds: 30, median: 10 };
 
 /** @param {string} version @param {import("./timing-report.mjs").Outlier[]} outliers */
@@ -188,7 +189,7 @@ describe("updatePrComment", () => {
   const notSlow = [report("22.x", []), report("24.x", [])];
 
   test("posts a new comment when a file is slow and none exists", async () => {
-    await updatePrComment(slow, true);
+    await updatePrComment(slow, true, VERSIONS);
     assert.deepEqual(
       writes().map((c) => [c.method, c.path]),
       [["POST", "/repos/aws/repo/issues/5/comments"]],
@@ -197,13 +198,13 @@ describe("updatePrComment", () => {
   });
 
   test("posts nothing when no file is slow and none exists", async () => {
-    await updatePrComment(notSlow, true);
+    await updatePrComment(notSlow, true, VERSIONS);
     assert.deepEqual(writes(), []);
   });
 
   test("updates its own comment after a full check finds no slow file", async () => {
     pages = [[comment(7, BOT)]];
-    await updatePrComment(notSlow, true);
+    await updatePrComment(notSlow, true, VERSIONS);
     assert.deepEqual(
       writes().map((c) => [c.method, c.path]),
       [["PATCH", "/repos/aws/repo/issues/comments/7"]],
@@ -213,24 +214,28 @@ describe("updatePrComment", () => {
 
   test("keeps the old warning when a test job failed", async () => {
     pages = [[comment(7, BOT)]];
-    await updatePrComment(notSlow, false);
+    await updatePrComment(notSlow, false, VERSIONS);
     assert.deepEqual(calls, []);
   });
 
   test("keeps the old warning when a version had no baseline", async () => {
     pages = [[comment(7, BOT)]];
-    await updatePrComment([report("22.x", []), report("24.x", [], 0)], true);
+    await updatePrComment(
+      [report("22.x", []), report("24.x", [], 0)],
+      true,
+      VERSIONS,
+    );
     assert.deepEqual(calls, []);
   });
 
   test("keeps the old warning when no artifact was found", async () => {
     pages = [[comment(7, BOT)]];
-    await updatePrComment([], true);
+    await updatePrComment([], true, VERSIONS);
     assert.deepEqual(calls, []);
   });
 
   test("still reports a slow file from a failed run, with a note", async () => {
-    await updatePrComment(slow, false);
+    await updatePrComment(slow, false, VERSIONS);
     assert.deepEqual(
       writes().map((c) => c.method),
       ["POST"],
@@ -242,13 +247,35 @@ describe("updatePrComment", () => {
     await updatePrComment(
       [report("22.x", [slowA]), report("24.x", [], 0)],
       true,
+      VERSIONS,
     );
     assert.doesNotMatch(writes()[0].body ?? "", /24\.x/);
   });
 
+  test("keeps the old warning when a version's artifact is missing", async () => {
+    pages = [[comment(7, BOT)]];
+    await updatePrComment([report("22.x", [])], true, VERSIONS);
+    assert.deepEqual(calls, []);
+  });
+
+  test("keeps the old warning when no versions are expected", async () => {
+    pages = [[comment(7, BOT)]];
+    await updatePrComment(notSlow, true, []);
+    assert.deepEqual(calls, []);
+  });
+
+  test("ignores its own comments that lack the marker", async () => {
+    pages = [[comment(10, BOT, "<!-- something else -->")]];
+    await updatePrComment(slow, true, VERSIONS);
+    assert.deepEqual(
+      writes().map((c) => c.method),
+      ["POST"],
+    );
+  });
+
   test("ignores a person's comment that starts with the marker", async () => {
     pages = [[comment(9, "someone")]];
-    await updatePrComment(slow, true);
+    await updatePrComment(slow, true, VERSIONS);
     assert.deepEqual(
       writes().map((c) => c.method),
       ["POST"],
@@ -260,7 +287,7 @@ describe("updatePrComment", () => {
       comment(i, "someone", "x"),
     );
     pages = [filler, [comment(200, BOT)]];
-    await updatePrComment(slow, true);
+    await updatePrComment(slow, true, VERSIONS);
     assert.deepEqual(
       writes().map((c) => [c.method, c.path]),
       [["PATCH", "/repos/aws/repo/issues/comments/200"]],
@@ -269,24 +296,32 @@ describe("updatePrComment", () => {
 
   test("rejects when the GitHub API fails", async () => {
     failWith = 403;
-    await assert.rejects(updatePrComment(slow, true), /GET .*: 403/);
+    await assert.rejects(updatePrComment(slow, true, VERSIONS), /GET .*: 403/);
   });
 });
 
 // These run the script as the workflow does, with a fake GitHub API.
 describe("command line", () => {
   const fakeGithub = join(mkdtempSync(join(tmpdir(), "fake-")), "fake.mjs");
-  // FAKE_STATUS: status for every request. Writes are printed as "CALL ...".
+  // FAKE_STATUS: status for every request. FAKE_WRITE_STATUS: status for
+  // POST and PATCH. FAKE_COMMENTS: JSON list of PR comments. Writes are
+  // printed as "CALL ...".
   writeFileSync(
     fakeGithub,
     `globalThis.fetch = async (url, init = {}) => {
-      const status = Number(process.env.FAKE_STATUS ?? 200);
       const method = init.method ?? "GET";
+      let status = Number(process.env.FAKE_STATUS ?? 200);
       if (method !== "GET") {
+        status = Number(process.env.FAKE_WRITE_STATUS ?? status);
         const note = String(init.body).includes("stopped early") ? " INCOMPLETE" : "";
         console.log("CALL " + method + " " + new URL(url).pathname + note);
       }
-      const body = new URL(url).pathname.endsWith("/runs") ? { workflow_runs: [] } : [];
+      const path = new URL(url).pathname;
+      const body = path.endsWith("/runs")
+        ? { workflow_runs: [] }
+        : path.endsWith("/5/comments") && method === "GET"
+          ? JSON.parse(process.env.FAKE_COMMENTS ?? "[]")
+          : {};
       return new Response(JSON.stringify(body), { status });
     };`,
   );
@@ -296,7 +331,12 @@ describe("command line", () => {
     spawnSync(process.execPath, ["--import", fakeGithub, SCRIPT, ...args], {
       cwd,
       encoding: "utf8",
-      env: { ...process.env, TESTS_PASSED: "true", ...env },
+      env: {
+        ...process.env,
+        TESTS_PASSED: "true",
+        NODE_VERSIONS: "22.x",
+        ...env,
+      },
     });
 
   test("--comment reads the artifacts and posts the comment", () => {
@@ -311,13 +351,56 @@ describe("command line", () => {
     );
   });
 
-  test("--comment passes when the GitHub API fails", () => {
+  test("--comment passes when reading comments fails", () => {
     const dir = artifactFolder({
       "integration-test-timings-22.x": { baselineRuns: 3, outliers: [slowA] },
     });
     const result = run(["--comment", dir], { FAKE_STATUS: "500" });
     assert.equal(result.status, 0);
-    assert.match(result.stdout, /Timing report failed: .*500/);
+    assert.match(result.stdout, /Timing report failed: .*GET .*500/);
+  });
+
+  test("--comment passes when posting the comment fails", () => {
+    const dir = artifactFolder({
+      "integration-test-timings-22.x": { baselineRuns: 3, outliers: [slowA] },
+    });
+    const result = run(["--comment", dir], { FAKE_WRITE_STATUS: "403" });
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /CALL POST/);
+    assert.match(result.stdout, /Timing report failed: .*POST .*403/);
+  });
+
+  test("--comment passes when updating the comment fails", () => {
+    const dir = artifactFolder({
+      "integration-test-timings-22.x": { baselineRuns: 3, outliers: [] },
+    });
+    const result = run(["--comment", dir], {
+      FAKE_WRITE_STATUS: "403",
+      FAKE_COMMENTS: JSON.stringify([
+        { id: 7, user: { login: BOT }, body: `${MARKER}\nold` },
+      ]),
+    });
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /Timing report failed: .*PATCH .*403/);
+  });
+
+  test("--comment reads NODE_VERSIONS", () => {
+    const dir = artifactFolder({
+      "integration-test-timings-22.x": { baselineRuns: 3, outliers: [] },
+    });
+    const env = {
+      FAKE_COMMENTS: JSON.stringify([
+        { id: 7, user: { login: BOT }, body: `${MARKER}\nold` },
+      ]),
+    };
+    assert.match(
+      run(["--comment", dir], { ...env, NODE_VERSIONS: "22.x" }).stdout,
+      /CALL PATCH/,
+    );
+    assert.doesNotMatch(
+      run(["--comment", dir], { ...env, NODE_VERSIONS: "22.x,24.x" }).stdout,
+      /CALL/,
+    );
   });
 
   test("--comment reads TESTS_PASSED", () => {

@@ -17,7 +17,7 @@
 // Usage: node timing-report.mjs <vitest-json-file> <artifact-name>
 //        node timing-report.mjs --comment <folder-of-downloaded-artifacts>
 // Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY,
-//      PR_NUMBER and TESTS_PASSED (--comment only)
+//      PR_NUMBER, TESTS_PASSED and NODE_VERSIONS (--comment only)
 
 import { execFileSync } from "node:child_process";
 import {
@@ -280,17 +280,21 @@ const COMMENT_AUTHOR = "github-actions[bot]";
  * no comment exists yet.
  *
  * It changes an old warning to "no file is slow" only after a full check:
- * every job passed, and every version had a baseline. A failed or stopped run
- * may skip the slow file, so it must not clear the warning.
+ * every job passed, and every expected version has a report with a baseline.
+ * A failed or stopped run may skip the slow file, and a job can pass without
+ * uploading its timings. So neither case may clear the warning.
  * @param {VersionReport[]} reports
  * @param {boolean} complete Whether every integration test job passed.
+ * @param {string[]} versions The Node.js versions the test jobs run.
  */
-export async function updatePrComment(reports, complete) {
+export async function updatePrComment(reports, complete, versions) {
   const marker = COMMENT_MARKER;
   const compared = reports.filter((r) => r.baselineRuns > 0);
   const anySlow = reports.some((r) => r.outliers.length > 0);
   const fullCheck =
-    complete && reports.length > 0 && compared.length === reports.length;
+    complete &&
+    versions.length > 0 &&
+    versions.every((v) => compared.some((r) => r.version === v));
   if (!anySlow && !fullCheck) return;
   /** @type {{ id: number } | undefined} */
   let existing;
@@ -410,6 +414,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
           updatePrComment(
             loadReports(artifactName),
             process.env.TESTS_PASSED === "true",
+            (process.env.NODE_VERSIONS ?? "").split(",").filter(Boolean),
           )
       : main;
   run().catch((error) => {
