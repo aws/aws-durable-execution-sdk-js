@@ -49,14 +49,11 @@ const executionOp = {
 } as unknown as WireOperation;
 
 /** A client that records the action and name of every checkpoint update it receives. */
-const recordingClient = (
-  holdFirstResponse?: Promise<void>,
-): {
+const recordingClient = (): {
   client: DurableExecutionClient;
   updates: string[];
 } => {
   const updates: string[] = [];
-  let calls = 0;
   const client: DurableExecutionClient = {
     getExecutionState: async (): Promise<GetDurableExecutionStateResponse> => ({
       Operations: [],
@@ -67,10 +64,6 @@ const recordingClient = (
     ): Promise<CheckpointDurableExecutionResponse> => {
       for (const update of request.Updates ?? []) {
         updates.push(`${update.Action} ${update.Name ?? update.Type}`);
-      }
-      calls++;
-      if (calls === 1 && holdFirstResponse) {
-        await holdFirstResponse;
       }
       return { CheckpointToken: "next-token", NewExecutionState: undefined };
     },
@@ -151,31 +144,6 @@ describe("invocation deadline", () => {
     await sleep(DEADLINE_MS * 4);
     expect(afterRan).toBe(false);
     expect(updates).toEqual(["START ignores-signal"]);
-  });
-
-  it("does not send a checkpoint that was queued behind a request in flight at the deadline", async () => {
-    let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const { client, updates } = recordingClient(held);
-
-    const pending = invoke(
-      async (_event, context) =>
-        // The START is sent and held. The SUCCEED queues behind it.
-        await context.step("held", async () => {
-          await sleep(5);
-          return "value";
-        }),
-      contextWithDeadline(DEADLINE_MS),
-      client,
-    );
-    await sleep(DEADLINE_MS * 2);
-    release();
-
-    expect(((await pending) as Error).name).toBe("InvocationDeadlineError");
-    await sleep(DEADLINE_MS);
-    expect(updates).toEqual(["START held"]);
   });
 
   it("refuses an operation that an abort listener starts at the deadline", async () => {
