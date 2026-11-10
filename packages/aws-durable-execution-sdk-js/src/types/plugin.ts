@@ -19,9 +19,10 @@ export const PluginInvocationStatus = {
    * execution timeout, while a step runs. On Lambda Managed Instances the
    * invocation keeps running, and the service then rejects its next
    * checkpoint. The SDK cannot tell that rejection from one that Lambda
-   * retries, so it reports `RETRYING`, and no later invocation comes. So do not
-   * keep state open while waiting for the retry. The execution's own status is
-   * available from the `GetDurableExecution` API.
+   * retries, so it reports `RETRYING`, and no later invocation comes. So in
+   * `onInvocationEnd`, end every operation that is still in progress or
+   * retrying, with its status in `info.operations`. Do not wait for a later
+   * invocation to end it.
    */
   RETRYING: "RETRYING",
 } as const;
@@ -240,7 +241,9 @@ export interface OperationChangeInfo {
  * 5. Plugin state lives on the instance. It never lives in module-level maps
  *    keyed by execution ARN.
  * 6. `RETRYING` does not promise a later invocation. A stop or an execution
- *    timeout during a step can end the last invocation with `RETRYING`. See
+ *    timeout during a step can end the last invocation with `RETRYING`. So
+ *    `onInvocationEnd` ends every operation that is still in progress or
+ *    retrying, with its status in `info.operations`. See
  *    {@link PluginInvocationStatus}.
  *
  * {@link DurableInstrumentationPluginFactory} states the rule for the factory.
