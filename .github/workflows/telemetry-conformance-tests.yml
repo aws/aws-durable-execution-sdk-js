@@ -50,7 +50,7 @@ jobs:
     # workflow installs, so it must be reachable from a branch. It is the head of branch
     # feat/telemetry-4-full-tree-map in aws-durable-execution-conformance-tests (issue #184).
     # Re-pin to the merge commit on main once that PR merges.
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@c7abf1b46c301c3a92308a63d4954447060db44d
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@5c75e3f2d8e31d959114547bedad9c18afa0884b
     with:
       language: js
       resource_prefix: js
