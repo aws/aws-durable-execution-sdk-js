@@ -46,11 +46,6 @@ const createCheckpoint = (
   return checkpoint;
 };
 
-// Mock dependencies
-vi.mock("../../utils/logger/logger", () => ({
-  log: vi.fn(),
-}));
-
 describe("CheckpointManager", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: Mocked<DurableExecutionClient>;

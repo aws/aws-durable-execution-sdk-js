@@ -6,7 +6,7 @@
 // was terminated.
 //
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
-// workspace (npm run build in the SDK, extras, and microvm-worker packages).
+// workspace (npm run build in the SDK, extras, and compute-worker packages).
 //
 // Usage: node e2e/run-e2e.mjs            (from the extras package)
 //        AWS_REGION=us-east-1 node e2e/run-e2e.mjs

@@ -1,11 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   DurableLogger,
@@ -15,18 +8,6 @@ import {
 import { DurablePromise } from "../../types/durable-promise";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("WaitForCondition Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
@@ -53,13 +34,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
   });
 
   it("should execute check function in phase 1 immediately", async () => {

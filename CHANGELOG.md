@@ -33,6 +33,12 @@ below describe each change in detail.
 
 ### Changed
 
+- **Breaking (experimental).** `@aws/durable-execution-sdk-js-microvm-worker` is renamed to
+  `@aws/durable-execution-sdk-js-compute-worker`. The MicroVM worker is in the `./microvm`
+  subpath. Change `from "@aws/durable-execution-sdk-js-microvm-worker"` to
+  `from "@aws/durable-execution-sdk-js-compute-worker/microvm"`. The exported names do not change.
+  The package root exports only `CallbackReporter` and the other names that every compute type
+  shares.
 - **Breaking (experimental).** The MicroVM operations in `@aws/durable-execution-sdk-js-extras`
   no longer resume a suspended MicroVM. To suspend a MicroVM, set `idlePolicy` with
   `autoResumeEnabled: true`. The SDK does not resume a MicroVM; the service resumes it on the
