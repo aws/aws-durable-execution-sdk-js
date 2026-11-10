@@ -65,7 +65,7 @@ export interface MicrovmBaseConfig {
    * The ARN or ID of the MicroVM image to run.
    *
    * The image must enable the `run` lifecycle hook. The service then also
-   * requires the `ready` image hook. `@aws/durable-execution-sdk-js-microvm-worker`
+   * requires the `ready` image hook. `@aws/durable-execution-sdk-js-compute-worker/microvm`
    * answers both.
    */
   imageIdentifier: string;
@@ -538,7 +538,7 @@ export interface MicrovmJobDocument<TInput = unknown> {
  *
  * @remarks
  * This is the same contract as `MicrovmRunHookPayload` in
- * `@aws/durable-execution-sdk-js-microvm-worker`. The two packages do not
+ * `@aws/durable-execution-sdk-js-compute-worker/microvm`. The two packages do not
  * depend on each other, because one runs in the function and the other in
  * the MicroVM. So a change to one declaration must be made in the other too.
  *

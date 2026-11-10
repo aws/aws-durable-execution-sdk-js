@@ -25,7 +25,7 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prebuild": "rm -rf dist dist-cjs dist-types",
-    "pretest": "npm run build --workspace=@aws/durable-execution-sdk-js-microvm-worker",
+    "pretest": "npm run build --workspace=@aws/durable-execution-sdk-js-compute-worker",
     "test": "tsc --noEmit && vitest run --coverage"
   },
   "exports": {
@@ -47,7 +47,7 @@
   ],
   "devDependencies": {
     "@aws-sdk/client-lambda-microvms": "^3.1164.0",
-    "@aws/durable-execution-sdk-js-microvm-worker": "0.1.0-alpha.0",
+    "@aws/durable-execution-sdk-js-compute-worker": "0.1.0-alpha.0",
     "@aws/durable-execution-sdk-js-testing": "*",
     "@biomejs/biome": "2.5.15",
     "@vitest/coverage-v8": "^5.1.0",
