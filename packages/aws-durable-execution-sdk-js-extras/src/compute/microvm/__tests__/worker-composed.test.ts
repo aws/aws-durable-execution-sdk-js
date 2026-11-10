@@ -22,7 +22,7 @@ import {
   createMicrovmWorkerListener,
   HOOK_PATH_PREFIX,
   type MicrovmWorkerListener,
-} from "@aws/durable-execution-sdk-js-microvm-worker";
+} from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 import {
   CreateMicrovmAuthTokenCommand,
   GetMicrovmCommand,
