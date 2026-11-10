@@ -8,8 +8,13 @@
 // OUTLIER_RATIO and OUTLIER_MIN_EXTRA_SECONDS get a warning annotation.
 // It never fails the job: timings vary from run to run.
 //
+// When PR_NUMBER is set, it also keeps one PR comment per Node.js version
+// that lists the slow files. It posts the comment only when a file is slow.
+// If a later run finds no slow file, it updates the old comment to say so.
+//
 // Usage: node timing-report.mjs <vitest-json-file> <artifact-name>
-// Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY
+// Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY,
+//      PR_NUMBER (optional)
 
 import { execFileSync } from "node:child_process";
 import {
@@ -28,8 +33,13 @@ const OUTLIER_MIN_EXTRA_SECONDS = 5;
 const TIMINGS_FILE_IN_ARTIFACT = "integration-timings.json";
 
 const [jsonPath, artifactName] = process.argv.slice(2);
-const { GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY } =
-  process.env;
+const {
+  GITHUB_TOKEN,
+  GITHUB_REPOSITORY,
+  GITHUB_RUN_ID,
+  GITHUB_STEP_SUMMARY,
+  PR_NUMBER,
+} = process.env;
 
 /**
  * Per-file wall time in seconds, keyed by path relative to the examples
@@ -98,15 +108,21 @@ export function findOutliers(files, baseline) {
     .sort((a, b) => b.seconds - b.median - (a.seconds - a.median));
 }
 
-/** @param {string} path */
-async function github(path) {
+/**
+ * @param {string} path
+ * @param {{ method?: string, body?: unknown }} [options]
+ */
+async function github(path, { method = "GET", body } = {}) {
   const response = await fetch(`https://api.github.com${path}`, {
+    method,
     headers: {
       authorization: `Bearer ${GITHUB_TOKEN}`,
       accept: "application/vnd.github+json",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`GET ${path}: ${response.status}`);
+  if (!response.ok) throw new Error(`${method} ${path}: ${response.status}`);
   return response;
 }
 
@@ -159,6 +175,75 @@ async function loadBaseline() {
 
 /** @param {number} seconds */
 const fmt = (seconds) => `${seconds.toFixed(1)}s`;
+
+/**
+ * Body of the PR comment. The first line is a hidden marker, so a later run
+ * can find this comment and update it.
+ * @param {string} artifactName
+ * @param {{ name: string, seconds: number, median: number }[]} outliers
+ */
+export function commentBody(artifactName, outliers) {
+  const nodeVersion = artifactName.replace(/^integration-test-timings-/, "");
+  const lines = [
+    `<!-- ${artifactName} -->`,
+    `### Slow integration tests (Node.js ${nodeVersion})`,
+    "",
+  ];
+  if (outliers.length === 0) {
+    lines.push("No test file is slower than usual in the latest run.");
+  } else {
+    lines.push(
+      `Each file took at least ${OUTLIER_RATIO}x its median time on recent runs, and at least ${OUTLIER_MIN_EXTRA_SECONDS}s more.`,
+      "",
+      "| Test file | This run | Median | Change |",
+      "|---|---|---|---|",
+      ...outliers.map(
+        ({ name, seconds, median: base }) =>
+          `| ${name} | ${fmt(seconds)} | ${fmt(base)} | +${fmt(seconds - base)} |`,
+      ),
+    );
+  }
+  lines.push(
+    "",
+    `[Run details](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})`,
+  );
+  return lines.join("\n");
+}
+
+/**
+ * Creates or updates this Node.js version's PR comment. Posts nothing when no
+ * file is slow and no comment exists yet.
+ * @param {{ name: string, seconds: number, median: number }[]} outliers
+ */
+async function updatePrComment(outliers) {
+  const marker = `<!-- ${artifactName} -->`;
+  /** @type {{ id: number } | undefined} */
+  let existing;
+  for (let page = 1; !existing; page++) {
+    const comments = await (
+      await github(
+        `/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100&page=${page}`,
+      )
+    ).json();
+    existing = comments.find((/** @type {{ body?: string }} */ c) =>
+      c.body?.startsWith(marker),
+    );
+    if (comments.length < 100) break;
+  }
+  if (!existing && outliers.length === 0) return;
+  const body = commentBody(artifactName, outliers);
+  if (existing) {
+    await github(`/repos/${GITHUB_REPOSITORY}/issues/comments/${existing.id}`, {
+      method: "PATCH",
+      body: { body },
+    });
+  } else {
+    await github(`/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments`, {
+      method: "POST",
+      body: { body },
+    });
+  }
+}
 
 async function main() {
   if (!jsonPath || !existsSync(jsonPath)) {
@@ -235,6 +320,15 @@ async function main() {
   const markdown = lines.join("\n");
   if (GITHUB_STEP_SUMMARY) appendFileSync(GITHUB_STEP_SUMMARY, markdown);
   else console.log(markdown);
+
+  // Without a baseline there is nothing to compare, so leave the PR alone.
+  if (PR_NUMBER && baseline.runs > 0) {
+    try {
+      await updatePrComment(outliers);
+    } catch (error) {
+      console.log(`Could not update the PR comment: ${error}`);
+    }
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

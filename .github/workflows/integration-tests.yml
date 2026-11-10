@@ -29,6 +29,7 @@ jobs:
       actions: read # Required to read timings saved by earlier runs
       contents: read
       id-token: write # Required for AWS credentials
+      pull-requests: write # Required to comment on slow tests
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
@@ -88,6 +89,8 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Empty on push runs, so no comment is posted there.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node .github/workflows/scripts/integration-test/timing-report.mjs \
             "${{ runner.temp }}/integration-results.json" \

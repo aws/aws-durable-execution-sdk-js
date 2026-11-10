@@ -207,6 +207,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
+      pull-requests: write # Lets the timing report comment on slow tests
     strategy:
       fail-fast: false
       matrix:
