@@ -47,10 +47,9 @@ jobs:
       contents: read
       id-token: write
     # The pinned SHA also selects the runner and telemetry-extension revision the shared
-    # workflow installs, so it must be reachable from a branch. It is the head of branch
-    # feat/telemetry-4-full-tree-map in aws-durable-execution-conformance-tests (issue #184).
-    # Re-pin to the merge commit on main once that PR merges.
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@5c75e3f2d8e31d959114547bedad9c18afa0884b
+    # workflow installs, so it must be reachable from a branch. It is the merge commit of
+    # aws-durable-execution-conformance-tests PR #185 on that repository's main branch.
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@b380cbf19bbc4f08a2d7c593d4bf24f585946415
     with:
       language: js
       resource_prefix: js
