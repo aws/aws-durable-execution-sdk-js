@@ -1,11 +1,14 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-} from "vitest";
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, sep } from "node:path";
 import { SerdesContext } from "./serdes";
 import {
   createFileSystemSerdes,
@@ -18,33 +21,43 @@ import {
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { createHash } from "node:crypto";
 
-vi.mock("node:fs/promises", () => ({
-  mkdir: vi.fn().mockResolvedValue(undefined),
-  writeFile: vi.fn().mockResolvedValue(undefined),
-  readFile: vi.fn(),
-}));
-
-import { mkdir, writeFile, readFile } from "node:fs/promises";
-
-const mockMkdir = mkdir as MockedFunction<typeof mkdir>;
-const mockWriteFile = writeFile as MockedFunction<typeof writeFile>;
-const mockReadFile = readFile as MockedFunction<typeof readFile>;
-
 const mockContext: SerdesContext = {
   entityId: TEST_CONSTANTS.STEP_ID,
   durableExecutionArn: TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
 };
 
-const BASE_PATH = "/mnt/s3";
 const ENCODED_ARN = encodeURIComponent(TEST_CONSTANTS.DURABLE_EXECUTION_ARN);
-const EXPECTED_DIR = `${BASE_PATH}/${ENCODED_ARN}`;
-const EXPECTED_FILE = `${EXPECTED_DIR}/${TEST_CONSTANTS.STEP_ID}.json`;
 
-beforeEach(() => vi.clearAllMocks());
+// Each test gets a new real directory under the OS temp directory as the serdes base path.
+// So the tests check the files on disk, and no test sees files from another test.
+let BASE_PATH: string;
+let EXPECTED_DIR: string;
+let EXPECTED_FILE: string;
+
+beforeEach(async () => {
+  BASE_PATH = await mkdtemp(join(tmpdir(), "filesystem-serdes-test-"));
+  EXPECTED_DIR = join(BASE_PATH, ENCODED_ARN);
+  EXPECTED_FILE = join(EXPECTED_DIR, `${TEST_CONSTANTS.STEP_ID}.json`);
+});
+
+afterEach(async () => {
+  await rm(BASE_PATH, { recursive: true, force: true });
+});
+
+const readText = (path: string): Promise<string> => readFile(path, "utf-8");
+
+// Writes a value to a file in the same format as the serdes, for the deserialize tests.
+const writeJsonFile = async (path: string, value: unknown): Promise<void> => {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(value), "utf-8");
+};
 
 describe("createFileSystemSerdes", () => {
   describe("ALWAYS mode (default)", () => {
-    const serdes = createFileSystemSerdes(BASE_PATH);
+    let serdes: ReturnType<typeof createFileSystemSerdes>;
+    beforeEach(() => {
+      serdes = createFileSystemSerdes(BASE_PATH);
+    });
 
     it("should return undefined for undefined value", async () => {
       expect(await serdes.serialize(undefined, mockContext)).toBeUndefined();
@@ -54,23 +67,20 @@ describe("createFileSystemSerdes", () => {
       const value = { id: 1, name: "Alice" };
       const result = await serdes.serialize(value, mockContext);
 
-      expect(mockMkdir).toHaveBeenCalledWith(EXPECTED_DIR, { recursive: true });
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        EXPECTED_FILE,
-        JSON.stringify(value),
-        "utf-8",
-      );
+      expect(await readdir(EXPECTED_DIR)).toEqual([
+        `${TEST_CONSTANTS.STEP_ID}.json`,
+      ]);
+      expect(await readText(EXPECTED_FILE)).toBe(JSON.stringify(value));
       expect(JSON.parse(result!)).toEqual({ file: EXPECTED_FILE });
     });
 
     it("should deserialize by reading file from pointer envelope", async () => {
       const value = { id: 1, name: "Alice" };
-      mockReadFile.mockResolvedValueOnce(JSON.stringify(value) as never);
+      await writeJsonFile(EXPECTED_FILE, value);
 
       const envelope = JSON.stringify({ file: EXPECTED_FILE });
       const result = await serdes.deserialize(envelope, mockContext);
 
-      expect(mockReadFile).toHaveBeenCalledWith(EXPECTED_FILE, "utf-8");
       expect(result).toEqual(value);
     });
 
@@ -80,15 +90,18 @@ describe("createFileSystemSerdes", () => {
   });
 
   describe("OVERFLOW mode", () => {
-    const serdes = createFileSystemSerdes(BASE_PATH, {
-      storageMode: FileSystemSerdesMode.OVERFLOW,
+    let serdes: ReturnType<typeof createFileSystemSerdes>;
+    beforeEach(() => {
+      serdes = createFileSystemSerdes(BASE_PATH, {
+        storageMode: FileSystemSerdesMode.OVERFLOW,
+      });
     });
 
     it("should store small values inline", async () => {
       const value = { id: 1 };
       const result = await serdes.serialize(value, mockContext);
 
-      expect(mockWriteFile).not.toHaveBeenCalled();
+      expect(await readdir(BASE_PATH)).toEqual([]);
       expect(JSON.parse(result!)).toEqual({ data: JSON.stringify(value) });
     });
 
@@ -97,27 +110,28 @@ describe("createFileSystemSerdes", () => {
       const value = { data: "x".repeat(256 * 1024) };
       const result = await serdes.serialize(value, mockContext);
 
-      expect(mockWriteFile).toHaveBeenCalled();
+      expect(await readText(EXPECTED_FILE)).toBe(JSON.stringify(value));
       expect(JSON.parse(result!)).toEqual({ file: EXPECTED_FILE });
     });
 
     it("should deserialize inline data envelope", async () => {
       const value = { id: 1 };
+      // A file with other content at the step's path shows that the inline data is used,
+      // not the file.
+      await writeJsonFile(EXPECTED_FILE, { id: "from-file" });
       const envelope = JSON.stringify({ data: JSON.stringify(value) });
       const result = await serdes.deserialize(envelope, mockContext);
 
-      expect(mockReadFile).not.toHaveBeenCalled();
       expect(result).toEqual(value);
     });
 
     it("should deserialize file pointer envelope", async () => {
       const value = { id: 1 };
-      mockReadFile.mockResolvedValueOnce(JSON.stringify(value) as never);
+      await writeJsonFile(EXPECTED_FILE, value);
 
       const envelope = JSON.stringify({ file: EXPECTED_FILE });
       const result = await serdes.deserialize(envelope, mockContext);
 
-      expect(mockReadFile).toHaveBeenCalledWith(EXPECTED_FILE, "utf-8");
       expect(result).toEqual(value);
     });
 
@@ -150,7 +164,7 @@ describe("createFileSystemSerdes", () => {
       const result = await serdes.serialize(value, mockContext);
 
       // The serialized result should overflow to file, not inline
-      expect(mockWriteFile).toHaveBeenCalled();
+      expect(await readText(EXPECTED_FILE)).toBe(inlineJson);
       expect(JSON.parse(result!)).toEqual({ file: EXPECTED_FILE });
     });
   });
@@ -180,15 +194,19 @@ describe("createFileSystemSerdes path encoding", () => {
       const serdes = createFileSystemSerdes(BASE_PATH);
       const result = await serdes.serialize({ id: 1 }, realisticContext);
 
-      const expectedDir = `${BASE_PATH}/${FUNCTION_NAME}/${EXECUTION_NAME}/${INVOCATION_ID}`;
-      const expectedFile = `${expectedDir}/${TEST_CONSTANTS.STEP_ID}.json`;
-
-      expect(mockMkdir).toHaveBeenCalledWith(expectedDir, { recursive: true });
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        expectedFile,
-        JSON.stringify({ id: 1 }),
-        "utf-8",
+      const expectedDir = join(
+        BASE_PATH,
+        FUNCTION_NAME,
+        EXECUTION_NAME,
+        INVOCATION_ID,
       );
+      const expectedFile = join(expectedDir, `${TEST_CONSTANTS.STEP_ID}.json`);
+
+      expect(await readdir(BASE_PATH)).toEqual([FUNCTION_NAME]);
+      expect(await readdir(expectedDir)).toEqual([
+        `${TEST_CONSTANTS.STEP_ID}.json`,
+      ]);
+      expect(await readText(expectedFile)).toBe(JSON.stringify({ id: 1 }));
       // The whole ARN must NOT appear as a single encoded directory segment.
       expect(expectedDir).not.toContain("%3A");
       expect(JSON.parse(result!)).toEqual({ file: expectedFile });
@@ -200,30 +218,23 @@ describe("createFileSystemSerdes path encoding", () => {
 
       // TEST ARN is not in the expected shape, so the whole ARN is encoded into
       // a single directory segment (legacy layout) and the file name is unchanged.
-      expect(mockMkdir).toHaveBeenCalledWith(EXPECTED_DIR, { recursive: true });
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        EXPECTED_FILE,
-        JSON.stringify({ id: 1 }),
-        "utf-8",
-      );
+      expect(await readdir(BASE_PATH)).toEqual([ENCODED_ARN]);
+      expect(await readText(EXPECTED_FILE)).toBe(JSON.stringify({ id: 1 }));
     });
 
     it("encodes the entityId so an unsafe name stays a single flat file", async () => {
       const serdes = createFileSystemSerdes(BASE_PATH);
       const result = await serdes.serialize({ id: 1 }, unsafeContext);
 
-      const expectedFile = `${EXPECTED_DIR}/${encodeURIComponent(
-        unsafeContext.entityId,
-      )}.json`;
+      const expectedFileName = `${encodeURIComponent(unsafeContext.entityId)}.json`;
+      const expectedFile = join(EXPECTED_DIR, expectedFileName);
 
       // The written path must be the flat encoded file directly under the
       // ARN directory — no extra directories, no traversal.
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        expectedFile,
-        JSON.stringify({ id: 1 }),
-        "utf-8",
-      );
-      expect(expectedFile.startsWith(`${EXPECTED_DIR}/`)).toBe(true);
+      expect(await readdir(BASE_PATH)).toEqual([ENCODED_ARN]);
+      expect(await readdir(EXPECTED_DIR)).toEqual([expectedFileName]);
+      expect(await readText(expectedFile)).toBe(JSON.stringify({ id: 1 }));
+      expect(expectedFile.startsWith(`${EXPECTED_DIR}${sep}`)).toBe(true);
       expect(expectedFile).not.toContain("/../");
       expect(JSON.parse(result!)).toEqual({ file: expectedFile });
     });
@@ -234,17 +245,16 @@ describe("createFileSystemSerdes path encoding", () => {
 
       // STEP_ID has no special chars, so encodeURIComponent is a no-op and the
       // on-disk path is unchanged from the pre-fix behavior.
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        EXPECTED_FILE,
-        JSON.stringify({ id: 1 }),
-        "utf-8",
-      );
+      expect(await readText(EXPECTED_FILE)).toBe(JSON.stringify({ id: 1 }));
     });
   });
 
   describe("HASH encoding", () => {
-    const serdes = createFileSystemSerdes(BASE_PATH, {
-      pathEncoding: FileSystemPathEncoding.HASH,
+    let serdes: ReturnType<typeof createFileSystemSerdes>;
+    beforeEach(() => {
+      serdes = createFileSystemSerdes(BASE_PATH, {
+        pathEncoding: FileSystemPathEncoding.HASH,
+      });
     });
 
     const sha256 = (v: string): string =>
@@ -253,17 +263,17 @@ describe("createFileSystemSerdes path encoding", () => {
     it("hashes the whole ARN directory and the entityId file name", async () => {
       const result = await serdes.serialize({ id: 1 }, realisticContext);
 
-      const expectedDir = `${BASE_PATH}/${sha256(REALISTIC_ARN)}`;
-      const expectedFile = `${expectedDir}/${sha256(
-        TEST_CONSTANTS.STEP_ID,
-      )}.json`;
-
-      expect(mockMkdir).toHaveBeenCalledWith(expectedDir, { recursive: true });
-      expect(mockWriteFile).toHaveBeenCalledWith(
-        expectedFile,
-        JSON.stringify({ id: 1 }),
-        "utf-8",
+      const expectedDir = join(BASE_PATH, sha256(REALISTIC_ARN));
+      const expectedFile = join(
+        expectedDir,
+        `${sha256(TEST_CONSTANTS.STEP_ID)}.json`,
       );
+
+      expect(await readdir(BASE_PATH)).toEqual([sha256(REALISTIC_ARN)]);
+      expect(await readdir(expectedDir)).toEqual([
+        `${sha256(TEST_CONSTANTS.STEP_ID)}.json`,
+      ]);
+      expect(await readText(expectedFile)).toBe(JSON.stringify({ id: 1 }));
       expect(JSON.parse(result!)).toEqual({ file: expectedFile });
     });
 
@@ -276,8 +286,9 @@ describe("createFileSystemSerdes path encoding", () => {
         },
       );
 
-      const writtenPath = mockWriteFile.mock.calls[0][0] as string;
-      const fileName = writtenPath.split("/").pop()!;
+      const fileNames = await readdir(join(BASE_PATH, sha256(REALISTIC_ARN)));
+      expect(fileNames).toHaveLength(1);
+      const fileName = fileNames[0]!;
       expect(fileName).toBe(`${sha256("x".repeat(10_000))}.json`);
       expect(fileName.length).toBe(64 + ".json".length);
     });
@@ -438,7 +449,7 @@ describe("createFileSystemSerdes with preview", () => {
 
   it("deserialize ignores preview field and reads from file", async () => {
     const value = { id: "abc" };
-    mockReadFile.mockResolvedValueOnce(JSON.stringify(value) as never);
+    await writeJsonFile(EXPECTED_FILE, value);
 
     const envelope = JSON.stringify({
       file: EXPECTED_FILE,
@@ -450,7 +461,6 @@ describe("createFileSystemSerdes with preview", () => {
     );
 
     expect(result).toEqual(value);
-    expect(mockReadFile).toHaveBeenCalledWith(EXPECTED_FILE, "utf-8");
   });
 
   it("OVERFLOW mode: includes preview when payload overflows to file", async () => {
