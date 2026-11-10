@@ -24,6 +24,7 @@ part: the handler and the SAM template that maps it to the requirement ID.
 | `telemetry` | `telemetry-1` | One successful single-step execution emits one `SUCCEEDED` record with `input`, `output`, ARN-derived identity fields, and `operationsByName`. |
 | `telemetry` | `telemetry-2` | One failed execution emits one `FAILED` record with an `error` on the execution and on `operationsByName.charge`.                              |
 | `telemetry` | `telemetry-3` | One successful execution with `input`/`output` disabled emits one record whose `operationsByName.fetch-user.result` is exactly `{userId}`.     |
+| `telemetry` | `telemetry-4` | One successful `map` execution with `full-tree` detail emits one record whose `operationsByName` includes the map, its iterations, and each iteration's step. |
 
 ## Layout
 
@@ -32,6 +33,7 @@ handlers/
   telemetry_1_success.ts           # single step "increment"; plugin + CloudWatchLogsExporter
   telemetry_2_failure.ts           # step "charge" fails; handler rethrows with the step error as cause
   telemetry_3_result_select.ts     # step "fetch-user" returns three keys; override keeps only userId
+  telemetry_4_full_tree_map.ts     # map "process-items" over [1, 2], one step per item; full-tree detail
 template.yaml                    # telemetry suite; declares TelemetryLogGroupName and creates the group
 rollup.config.mjs                # bundles handlers/telemetry_*.ts -> dist/<name>.js (CJS)
 __tests__/templates.test.ts      # guards template -> handler wiring and the parameter contract

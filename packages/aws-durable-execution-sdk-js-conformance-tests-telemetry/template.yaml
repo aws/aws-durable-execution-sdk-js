@@ -68,3 +68,15 @@ Resources:
       Handler: telemetry_3_result_select.handler
       FunctionName: !Sub "${AWS::StackName}-telemetry-3"
       Role: !Ref LambdaExecutionRoleArn
+
+  Telemetry4FullTreeMap:
+    Type: AWS::Serverless::Function
+    DependsOn: TelemetryLogGroup
+    TestingMetadata:
+      TestDescription:
+        - telemetry-4
+    Properties:
+      CodeUri: dist/
+      Handler: telemetry_4_full_tree_map.handler
+      FunctionName: !Sub "${AWS::StackName}-telemetry-4"
+      Role: !Ref LambdaExecutionRoleArn
