@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createCallbackPromise } from "./callback-promise";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { OperationStatus } from "../../types/wire";
@@ -16,13 +8,6 @@ import {
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
@@ -50,7 +35,9 @@ describe("createCallbackPromise", () => {
   });
 
   it("should handle succeeded callback with callback ID", async () => {
-    const mockSerdes = { deserialize: vi.fn() };
+    const mockSerdes = {
+      deserialize: vi.fn().mockResolvedValue("deserialized-result"),
+    };
 
     (mockContext.getStepData as Mock).mockReturnValue({
       Id: "test-id",
@@ -60,8 +47,6 @@ describe("createCallbackPromise", () => {
         Result: "serialized-result",
       },
     });
-
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
 
     const promise = createCallbackPromise(
       mockContext,
@@ -85,14 +70,10 @@ describe("createCallbackPromise", () => {
       "test-step-id",
       OperationLifecycleState.COMPLETED,
     );
-    expect(mockSafeDeserialize).toHaveBeenCalledWith(
-      mockSerdes,
-      "serialized-result",
-      "test-step-id",
-      "test-step",
-      mockContext.terminationManager,
-      mockContext.durableExecutionArn,
-    );
+    expect(mockSerdes.deserialize).toHaveBeenCalledWith("serialized-result", {
+      entityId: "test-step-id",
+      durableExecutionArn: "test-arn",
+    });
     expect(mockCheckAndUpdateReplayMode).toHaveBeenCalled();
   });
 
@@ -108,19 +89,21 @@ describe("createCallbackPromise", () => {
 
     // Record the lifecycle calls made before deserialization finishes.
     let callsDuringDeserialize: unknown[][] = [];
-    mockSafeDeserialize.mockImplementation(async () => {
-      callsDuringDeserialize = [
-        ...(mockCheckpoint.markOperationState as Mock).mock.calls,
-      ];
-      return "deserialized-result";
-    });
+    const recordingSerdes = {
+      deserialize: vi.fn(async () => {
+        callsDuringDeserialize = [
+          ...(mockCheckpoint.markOperationState as Mock).mock.calls,
+        ];
+        return "deserialized-result";
+      }),
+    };
 
     await createCallbackPromise(
       mockContext,
       mockCheckpoint,
       "test-step-id",
       "test-step",
-      { deserialize: vi.fn() },
+      recordingSerdes,
       mockCheckAndUpdateReplayMode,
     );
 

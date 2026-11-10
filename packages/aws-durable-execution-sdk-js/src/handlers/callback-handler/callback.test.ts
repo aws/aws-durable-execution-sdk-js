@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createCallback, createPassThroughSerdes } from "./callback";
 import {
   ExecutionContext,
@@ -16,24 +8,19 @@ import {
 import { OperationStatus, OperationType, Operation } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
   CallbackExternalError,
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
-
 describe("Callback Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let createStepId: Mock;
   let checkAndUpdateReplayMode: Mock;
+  let defaultSerdes: { serialize: Mock; deserialize: Mock };
+  const getDefaultSerdes = () => defaultSerdes;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +45,10 @@ describe("Callback Handler", () => {
     createStepId = vi.fn().mockReturnValue("test-callback-id");
     checkAndUpdateReplayMode = vi.fn();
 
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
+    defaultSerdes = {
+      serialize: vi.fn(),
+      deserialize: vi.fn().mockResolvedValue("deserialized-result"),
+    };
   });
 
   describe("Completed Callback Scenarios", () => {
@@ -85,6 +75,8 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         checkAndUpdateReplayMode,
+        undefined,
+        getDefaultSerdes,
       );
 
       const result = await handler<string>("test-callback");
@@ -92,13 +84,12 @@ describe("Callback Handler", () => {
 
       expect(callbackId).toBe("callback-123");
       expect(await promise).toBe("deserialized-result");
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.any(Object),
+      expect(defaultSerdes.deserialize).toHaveBeenCalledWith(
         "completed-result",
-        stepId,
-        "test-callback",
-        mockContext.terminationManager,
-        "test-arn",
+        {
+          entityId: stepId,
+          durableExecutionArn: "test-arn",
+        },
       );
       expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
       expect(checkAndUpdateReplayMode).toHaveBeenCalled();
@@ -126,6 +117,8 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         checkAndUpdateReplayMode,
+        undefined,
+        getDefaultSerdes,
       );
 
       const result = await handler<string>("test-callback");
@@ -133,14 +126,10 @@ describe("Callback Handler", () => {
 
       expect(callbackId).toBe("callback-123");
       expect(await promise).toBe("deserialized-result");
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.any(Object),
-        undefined,
-        stepId,
-        "test-callback",
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(defaultSerdes.deserialize).toHaveBeenCalledWith(undefined, {
+        entityId: stepId,
+        durableExecutionArn: "test-arn",
+      });
     });
 
     it("should handle completed callback without name", async () => {
@@ -166,6 +155,8 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         checkAndUpdateReplayMode,
+        undefined,
+        getDefaultSerdes,
       );
 
       const result = await handler<string>();
@@ -173,14 +164,10 @@ describe("Callback Handler", () => {
 
       expect(callbackId).toBe("callback-456");
       expect(await promise).toBe("deserialized-result");
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.any(Object),
-        "result-data",
-        stepId,
-        undefined,
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(defaultSerdes.deserialize).toHaveBeenCalledWith("result-data", {
+        entityId: stepId,
+        durableExecutionArn: "test-arn",
+      });
     });
 
     it("should use pass-through serdes that preserves data unchanged", async () => {
@@ -264,6 +251,8 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         checkAndUpdateReplayMode,
+        undefined,
+        getDefaultSerdes,
       );
 
       const result = await handler<string>("custom-callback", config);
@@ -272,14 +261,11 @@ describe("Callback Handler", () => {
       expect(callbackId).toBe("callback-custom");
       await promise;
 
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        customSerdes,
-        "custom-result",
-        stepId,
-        "custom-callback",
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(customSerdes.deserialize).toHaveBeenCalledWith("custom-result", {
+        entityId: stepId,
+        durableExecutionArn: "test-arn",
+      });
+      expect(defaultSerdes.deserialize).not.toHaveBeenCalled();
     });
   });
 

@@ -5,7 +5,6 @@ import {
   expect,
   beforeEach,
   type Mocked,
-  type MockedFunction,
   type Mock,
 } from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
@@ -23,23 +22,6 @@ import {
 } from "../../types/plugin";
 import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-
-vi.mock("../../errors/serdes-errors/serdes-errors");
-vi.mock("../../utils/context-tracker/context-tracker");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
-const mockRunWithContext = runWithContext as MockedFunction<
-  typeof runWithContext
->;
 
 describe("WaitForCondition Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
@@ -73,17 +55,6 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       onOperationAttemptEnd: vi.fn(),
       wrapOperationAttemptFn: vi.fn(),
     };
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
-
-    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
-      return await fn();
-    });
   });
 
   it("should call onOperationAttemptStart and onOperationAttemptEnd with succeeded on condition met", async () => {
@@ -152,12 +123,6 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       (_info: unknown, fn: () => unknown) => fn(),
     );
 
-    mockRunWithContext.mockImplementationOnce(
-      async (_stepId, _parentId, fn) => {
-        return await fn();
-      },
-    );
-
     const handler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
@@ -206,13 +171,14 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    let callCount = 0;
-    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
-      callCount++;
-      return callCount;
-    });
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
 
-    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn();
+    let callCount = 0;
+    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn(
+      async () => ++callCount,
+    );
     const config: WaitForConditionConfig<number> = {
       waitStrategy: vi
         .fn()
@@ -255,12 +221,6 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       (_info: unknown, fn: () => unknown) => {
         fn();
         throw wrapError;
-      },
-    );
-
-    mockRunWithContext.mockImplementationOnce(
-      async (_stepId, _parentId, fn) => {
-        return await fn();
       },
     );
 
@@ -347,10 +307,6 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     mockPlugin.onOperationStart = vi.fn();
 
     let checkCallCount = 0;
-    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
-      checkCallCount++;
-      return checkCallCount;
-    });
 
     const handler = createWaitForConditionHandler(
       mockContext,
@@ -362,7 +318,9 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn();
+    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn(
+      async () => ++checkCallCount,
+    );
     const config: WaitForConditionConfig<number> = {
       waitStrategy: vi
         .fn()

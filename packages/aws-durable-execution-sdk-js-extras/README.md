@@ -40,7 +40,7 @@ export const handler = withDurableExecution(
 
 The function invocation ends while the MicroVM works. So Lambda does not bill function compute during the wait.
 
-The code in the MicroVM runs [`@aws/durable-execution-sdk-js-microvm-worker`](../aws-durable-execution-sdk-js-microvm-worker). The worker runs your job handler and reports its result.
+The code in the MicroVM runs [`@aws/durable-execution-sdk-js-compute-worker`](../aws-durable-execution-sdk-js-compute-worker). The worker runs your job handler and reports its result.
 
 ## Common uses
 
@@ -205,7 +205,7 @@ await microvmSession(
 
 - [MicroVM operations reference](docs/microvm.md): delivery, the operation tree, subtypes, retries, the error tree, limits, permissions, suspend details, the worker contract, and best practices.
 - [End-to-end test](docs/e2e.md)
-- [MicroVM worker](../aws-durable-execution-sdk-js-microvm-worker)
+- [Compute worker](../aws-durable-execution-sdk-js-compute-worker)
 - Examples: [one job](../aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts) and [a session](../aws-durable-execution-sdk-js-examples/src/examples/microvm/session/microvm-session.ts).
 - Source: [`src/compute/microvm`](src/compute/microvm), with option docs in [`types.ts`](src/compute/microvm/types.ts).
 - [Lambda MicroVMs guide](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html)
