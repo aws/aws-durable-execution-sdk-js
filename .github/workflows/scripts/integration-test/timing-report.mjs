@@ -216,12 +216,17 @@ export function commentBody(artifactName, outliers) {
   return lines.join("\n");
 }
 
+// The GITHUB_TOKEN posts as this user. Only its comments are updated, so a
+// person's comment that starts with a copied marker is never edited.
+const COMMENT_AUTHOR = "github-actions[bot]";
+
 /**
  * Creates or updates this Node.js version's PR comment. Posts nothing when no
  * file is slow and no comment exists yet.
+ * @param {string} artifactName
  * @param {{ name: string, seconds: number, median: number }[]} outliers
  */
-async function updatePrComment(outliers) {
+export async function updatePrComment(artifactName, outliers) {
   const marker = `<!-- ${artifactName} -->`;
   /** @type {{ id: number } | undefined} */
   let existing;
@@ -231,8 +236,9 @@ async function updatePrComment(outliers) {
         `/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100&page=${page}`,
       )
     ).json();
-    existing = comments.find((/** @type {{ body?: string }} */ c) =>
-      c.body?.startsWith(marker),
+    existing = comments.find(
+      (/** @type {{ body?: string, user?: { login?: string } }} */ c) =>
+        c.user?.login === COMMENT_AUTHOR && c.body?.startsWith(marker),
     );
     if (comments.length < 100) break;
   }
@@ -330,7 +336,7 @@ async function main() {
   // Without a baseline there is nothing to compare, so leave the PR alone.
   if (PR_NUMBER && baseline.runs > 0) {
     try {
-      await updatePrComment(outliers);
+      await updatePrComment(artifactName, outliers);
     } catch (error) {
       console.log(`Could not update the PR comment: ${error}`);
     }

@@ -89,8 +89,10 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Empty on push runs, so no comment is posted there.
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Set only on pull_request runs, which test the PR's code. Push runs
+          # have no PR. pull_request_target runs (label changes) test the base
+          # branch, so their timings must not replace the PR's comment.
+          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
         run: |
           node .github/workflows/scripts/integration-test/timing-report.mjs \
             "${{ runner.temp }}/integration-results.json" \

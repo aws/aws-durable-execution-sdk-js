@@ -99,6 +99,9 @@ jobs:
         uses: ./.github/actions/npm-ci
       - name: Verify every package ships the files its package.json declares
         run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
+      # Uses node:test only, so it needs no install. Takes under a second.
+      - name: Test the integration test timing report
+        run: node --test .github/workflows/scripts/integration-test/timing-report.test.mjs
 
   # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #
