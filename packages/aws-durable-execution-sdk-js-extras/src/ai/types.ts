@@ -61,8 +61,9 @@ export interface DeciderRequest {
 }
 
 /**
- * Sends one request to a decision model and returns its JSON reply. Use it to
- * reach a model with SigV4, such as a SageMaker endpoint.
+ * Sends one request to a decision model and returns its JSON reply.
+ * `agentCoreTransport`, `sageMakerTransport`, and `lambdaTransport` return
+ * one. Write your own to reach a model another way.
  *
  * @public
  *
@@ -74,14 +75,14 @@ export type DeciderTransport = (
 ) => Promise<unknown>;
 
 /**
- * The part of `BedrockAgentCoreClient` that the AgentCore transport uses.
- * Pass a fake in a test, or your own client to set a Region.
+ * The part of an AWS SDK client that the decider transports use: its `send`
+ * method. Pass a fake in a test, or your own client to set a Region.
  *
  * @public
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface AgentCoreInvokeClient {
+export interface AwsSdkClient {
   send(
     command: unknown,
     options?: { abortSignal?: AbortSignal },
@@ -101,7 +102,37 @@ export interface AgentCoreConfig {
   /** The runtime endpoint name. The default is the runtime's default endpoint. */
   qualifier?: string;
   /** A `BedrockAgentCoreClient`. The default client uses the function's Region and credentials. */
-  client?: AgentCoreInvokeClient;
+  client?: AwsSdkClient;
+}
+
+/**
+ * A Strands Decider deployed on an Amazon SageMaker real-time endpoint.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface SageMakerConfig {
+  /** The name of the SageMaker endpoint that serves the model. */
+  endpointName: string;
+  /** A `SageMakerRuntimeClient`. The default client uses the function's Region and credentials. */
+  client?: AwsSdkClient;
+}
+
+/**
+ * A Strands Decider deployed as an AWS Lambda function.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface LambdaConfig {
+  /** The name or ARN of the function that serves the model. */
+  functionName: string;
+  /** The version or alias to invoke, such as `live`. The default is `$LATEST`. */
+  qualifier?: string;
+  /** A `LambdaClient`. The default client uses the function's Region and credentials. */
+  client?: AwsSdkClient;
 }
 
 /**
@@ -112,14 +143,6 @@ export interface AgentCoreConfig {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DeciderConfig {
-  /**
-   * A Strands Decider on Amazon Bedrock AgentCore Runtime. The call goes
-   * through `InvokeAgentRuntime` with the function's credentials, so the
-   * function's role needs `bedrock-agentcore:InvokeAgentRuntime` on the
-   * runtime. Needs the `@aws-sdk/client-bedrock-agentcore` package. Do not
-   * combine it with `endpoint` or `transport`.
-   */
-  agentCore?: AgentCoreConfig;
   /**
    * The full URL of the model's `POST /v1/systemone` route, such as
    * `http://127.0.0.1:8000/v1/systemone`. The default is the
@@ -132,8 +155,9 @@ export interface DeciderConfig {
   /** The value of the request's `model` field. The default is `strands-decider-latest`. */
   model?: string;
   /**
-   * Your own function that sends the request. Do not combine it with
-   * `agentCore` or `endpoint`.
+   * The function that sends the request, such as one that
+   * `agentCoreTransport`, `sageMakerTransport`, or `lambdaTransport` returns.
+   * Do not combine it with `endpoint`.
    */
   transport?: DeciderTransport;
   /**

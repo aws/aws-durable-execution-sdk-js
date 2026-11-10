@@ -58,6 +58,8 @@
     "@aws/durable-execution-sdk-js-testing": "*",
     "@aws-sdk/client-bedrock-agentcore": "^3.1150.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1150.0",
+    "@aws-sdk/client-lambda": "^3.1150.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.1150.0",
     "@biomejs/biome": "2.5.15",
     "jest": "^30.5.2",
     "typescript": "^6.0.3"
@@ -65,13 +67,21 @@
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": ">=2.6.0",
     "@aws-sdk/client-bedrock-agentcore": "^3.1150.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.1150.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.1150.0",
+    "@aws-sdk/client-lambda": "^3.1150.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.1150.0"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-bedrock-agentcore": {
       "optional": true
     },
     "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    },
+    "@aws-sdk/client-lambda": {
+      "optional": true
+    },
+    "@aws-sdk/client-sagemaker-runtime": {
       "optional": true
     }
   },
