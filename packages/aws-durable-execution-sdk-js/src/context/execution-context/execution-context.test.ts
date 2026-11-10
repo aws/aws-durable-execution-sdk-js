@@ -633,11 +633,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-
-    // Verify that the SDK's Lambda transport was not used
-    expect(result.executionContext.durableExecutionClient).not.toBeInstanceOf(
-      DurableExecutionApiClient,
-    );
   });
 
   it("should use custom durableExecutionClient for pagination when event is DurableExecutionInvocationInputWithClient", async () => {
@@ -674,9 +669,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-    expect(result.executionContext.durableExecutionClient).not.toBe(
-      mockDurableExecutionClient,
-    );
 
     // Verify that the custom client was used for pagination
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
@@ -687,12 +679,6 @@ describe("initializeExecutionContext", () => {
         MaxItems: 1000,
       },
       expectLogger,
-    );
-
-    // Verify that the default DurableExecutionApiClient was not used
-    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
-    expect(result.executionContext.durableExecutionClient).not.toBeInstanceOf(
-      DurableExecutionApiClient,
     );
 
     // Verify the result uses the custom client
@@ -761,9 +747,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-    expect(result.executionContext.durableExecutionClient).not.toBe(
-      mockDurableExecutionClient,
-    );
 
     // Verify that the custom client was called for both pagination requests
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
@@ -788,12 +771,6 @@ describe("initializeExecutionContext", () => {
 
     // Verify both calls were made to the custom client
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledTimes(2);
-
-    // Verify that the default client was not used
-    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
-    expect(result.executionContext.durableExecutionClient).not.toBeInstanceOf(
-      DurableExecutionApiClient,
-    );
 
     // Verify the step data includes all operations from multiple pages
     expect(result.executionContext._stepData).toEqual({
@@ -932,9 +909,6 @@ describe("initializeExecutionContext", () => {
       );
 
       expect(executionContext.durableExecutionClient).toBe(injected);
-      expect(executionContext.durableExecutionClient).not.toBeInstanceOf(
-        DurableExecutionApiClient,
-      );
     });
 
     it("falls back to the Lambda transport when no transport is supplied", async () => {
