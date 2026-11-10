@@ -15,7 +15,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";

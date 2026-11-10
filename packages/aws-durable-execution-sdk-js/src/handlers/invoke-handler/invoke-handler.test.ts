@@ -21,7 +21,6 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {

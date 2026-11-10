@@ -20,7 +20,6 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {

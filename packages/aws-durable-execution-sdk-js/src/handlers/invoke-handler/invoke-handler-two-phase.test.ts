@@ -13,7 +13,6 @@ import { DurablePromise } from "../../types/durable-promise";
 import { OperationStatus } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../utils/logger/logger");
 vi.mock("../../errors/serdes-errors/serdes-errors");
 
 import {
