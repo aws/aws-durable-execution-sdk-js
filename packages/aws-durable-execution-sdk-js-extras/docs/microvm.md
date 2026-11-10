@@ -195,7 +195,7 @@ The MicroVM execution role (`executionRoleArn`) needs `lambda:SendDurableExecuti
 
 ### The contract with the code in the MicroVM
 
-[`@aws/durable-execution-sdk-js-microvm-worker`](../../aws-durable-execution-sdk-js-microvm-worker) implements this contract. Use it, or implement the steps below yourself.
+[`@aws/durable-execution-sdk-js-compute-worker`](../../aws-durable-execution-sdk-js-compute-worker) implements this contract. Use it, or implement the steps below yourself.
 
 The image must enable the `run` lifecycle hook. The service then also requires the `ready` image hook. Lambda sends the `run` hook a JSON body whose `runHookPayload` field is a JSON string with this shape (exported as `MicrovmRunHookPayload`):
 
@@ -409,7 +409,7 @@ It needs:
 
 ## Best practices for MicroVM operations
 
-The operations retry network and service failures. They launch and terminate the MicroVM. They do not check every setting of your function and your deploy. This section lists what your durable function and your deploy must do. Each rule states what happens if you break it. The rules for the job handlers in the MicroVM are in the worker's [best practices for job handlers](../../aws-durable-execution-sdk-js-microvm-worker/docs/worker.md#best-practices-for-job-handlers).
+The operations retry network and service failures. They launch and terminate the MicroVM. They do not check every setting of your function and your deploy. This section lists what your durable function and your deploy must do. Each rule states what happens if you break it. The rules for the job handlers in the MicroVM are in the worker's [best practices for job handlers](../../aws-durable-execution-sdk-js-compute-worker/docs/worker.md#best-practices-for-job-handlers).
 
 ### Deploys and versions
 
