@@ -210,7 +210,6 @@ jobs:
       actions: read
       contents: read
       id-token: write
-      pull-requests: write # Lets the timing report comment on slow tests
     strategy:
       fail-fast: false
       matrix:
@@ -219,6 +218,37 @@ jobs:
     with:
       node-version: ${{ matrix.node-version }}
     secrets: inherit
+
+  # One PR comment for all Node.js versions, so a file that is slow on both is
+  # listed once. Only pull_request runs test the PR's code: pull_request_target
+  # runs (label changes) test the base branch, and push runs have no PR.
+  integration-timings-comment:
+    needs: integration-tests
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.integration-tests.result != 'skipped'
+    permissions:
+      contents: read
+      pull-requests: write # Required to comment on slow tests
+    runs-on: ${{ format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/scripts/integration-test
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22.x
+      - name: Download test timings
+        uses: actions/download-artifact@v8
+        with:
+          pattern: integration-test-timings-*
+          path: timings
+      - name: Comment on slow tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node .github/workflows/scripts/integration-test/timing-report.mjs --comment timings
 
   capacity-provider-tests:
     needs: build

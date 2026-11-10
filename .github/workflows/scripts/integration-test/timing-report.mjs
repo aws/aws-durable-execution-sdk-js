@@ -8,19 +8,23 @@
 // each slow file gets a warning annotation.
 // It never fails the job: timings vary from run to run.
 //
-// When PR_NUMBER is set, it also keeps one PR comment per Node.js version
-// that lists the slow files. It posts the comment only when a file is slow.
-// If a later run finds no slow file, it updates the old comment to say so.
+// Each Node.js version's job saves its slow files in its timings artifact.
+// After both jobs finish, the --comment mode reads those artifacts and keeps
+// one PR comment that lists each slow file once, with a column per version.
+// It posts the comment only when a file is slow. If a later run finds no slow
+// file, it updates the old comment to say so.
 //
 // Usage: node timing-report.mjs <vitest-json-file> <artifact-name>
+//        node timing-report.mjs --comment <folder-of-downloaded-artifacts>
 // Env: GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_STEP_SUMMARY,
-//      PR_NUMBER (optional)
+//      PR_NUMBER (--comment only)
 
 import { execFileSync } from "node:child_process";
 import {
   appendFileSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
@@ -183,30 +187,51 @@ async function loadBaseline() {
 const fmt = (seconds) => `${seconds.toFixed(1)}s`;
 
 /**
- * Body of the PR comment. The first line is a hidden marker, so a later run
- * can find this comment and update it.
- * @param {string} artifactName
- * @param {{ name: string, seconds: number, median: number }[]} outliers
+ * @typedef {{ name: string, seconds: number, median: number }} Outlier
+ * @typedef {{ version: string, outliers: Outlier[] }} VersionReport
  */
-export function commentBody(artifactName, outliers) {
-  const nodeVersion = artifactName.replace(/^integration-test-timings-/, "");
-  const lines = [
-    `<!-- ${artifactName} -->`,
-    `### Slow integration tests (Node.js ${nodeVersion})`,
-    "",
-  ];
-  if (outliers.length === 0) {
+
+// The first line of the PR comment. It is hidden, and lets a later run find
+// the comment and update it.
+const COMMENT_MARKER = "<!-- integration-test-timings -->";
+
+/**
+ * Body of the PR comment: one row per slow file, one column per Node.js
+ * version, so a file that is slow on both versions is listed once.
+ * @param {VersionReport[]} reports
+ */
+export function commentBody(reports) {
+  /** @type {Map<string, Map<string, Outlier>>} */
+  const slow = new Map();
+  for (const { version, outliers } of reports) {
+    for (const outlier of outliers) {
+      if (!slow.has(outlier.name)) slow.set(outlier.name, new Map());
+      slow.get(outlier.name)?.set(version, outlier);
+    }
+  }
+  const lines = [COMMENT_MARKER, "### Slow integration tests", ""];
+  if (slow.size === 0) {
     lines.push("No test file is slower than usual in the latest run.");
   } else {
+    /** @param {Map<string, Outlier>} byVersion */
+    const maxExtra = (byVersion) =>
+      Math.max(...[...byVersion.values()].map((o) => o.seconds - o.median));
     lines.push(
       `Slow means ${OUTLIER_RULE}. The median is from recent runs.`,
       "",
-      "| Test file | This run | Median | Change |",
-      "|---|---|---|---|",
-      ...outliers.map(
-        ({ name, seconds, median: base }) =>
-          `| ${name} | ${fmt(seconds)} | ${fmt(base)} | +${fmt(seconds - base)} |`,
-      ),
+      `| Test file | ${reports.map((r) => `Node.js ${r.version}`).join(" | ")} |`,
+      `|---|${reports.map(() => "---|").join("")}`,
+      ...[...slow.entries()]
+        .sort((a, b) => maxExtra(b[1]) - maxExtra(a[1]))
+        .map(([name, byVersion]) => {
+          const cells = reports.map(({ version }) => {
+            const outlier = byVersion.get(version);
+            return outlier
+              ? `${fmt(outlier.seconds)} (median ${fmt(outlier.median)})`
+              : "-";
+          });
+          return `| ${name} | ${cells.join(" | ")} |`;
+        }),
     );
   }
   lines.push(
@@ -216,18 +241,39 @@ export function commentBody(artifactName, outliers) {
   return lines.join("\n");
 }
 
+/**
+ * Reads the timings that each Node.js version's job saved in this run.
+ * Versions without a baseline are left out: they have nothing to compare.
+ * @param {string} dir One folder per integration-test-timings-* artifact, as
+ *   download-artifact writes them.
+ * @returns {VersionReport[]}
+ */
+export function loadReports(dir) {
+  // readdirSync order depends on the file system, so sort for stable columns.
+  return readdirSync(dir)
+    .sort()
+    .map((name) => ({
+      version: name.replace(/^integration-test-timings-/, ""),
+      saved: JSON.parse(
+        readFileSync(join(dir, name, TIMINGS_FILE_IN_ARTIFACT), "utf8"),
+      ),
+    }))
+    .filter(({ saved }) => saved.baselineRuns > 0)
+    .map(({ version, saved }) => ({ version, outliers: saved.outliers ?? [] }));
+}
+
 // The GITHUB_TOKEN posts as this user. Only its comments are updated, so a
 // person's comment that starts with a copied marker is never edited.
 const COMMENT_AUTHOR = "github-actions[bot]";
 
 /**
- * Creates or updates this Node.js version's PR comment. Posts nothing when no
- * file is slow and no comment exists yet.
- * @param {string} artifactName
- * @param {{ name: string, seconds: number, median: number }[]} outliers
+ * Creates or updates the PR comment. Posts nothing when no file is slow and
+ * no comment exists yet.
+ * @param {VersionReport[]} reports
  */
-export async function updatePrComment(artifactName, outliers) {
-  const marker = `<!-- ${artifactName} -->`;
+export async function updatePrComment(reports) {
+  const marker = COMMENT_MARKER;
+  const anySlow = reports.some((r) => r.outliers.length > 0);
   /** @type {{ id: number } | undefined} */
   let existing;
   for (let page = 1; !existing; page++) {
@@ -242,8 +288,8 @@ export async function updatePrComment(artifactName, outliers) {
     );
     if (comments.length < 100) break;
   }
-  if (!existing && outliers.length === 0) return;
-  const body = commentBody(artifactName, outliers);
+  if (!existing && !anySlow) return;
+  const body = commentBody(reports);
   if (existing) {
     await github(`/repos/${GITHUB_REPOSITORY}/issues/comments/${existing.id}`, {
       method: "PATCH",
@@ -263,8 +309,6 @@ async function main() {
     return;
   }
   const current = summarize(JSON.parse(readFileSync(jsonPath, "utf8")));
-  // The artifact step uploads this file, so later runs can compare with it.
-  writeFileSync(TIMINGS_FILE_IN_ARTIFACT, JSON.stringify(current));
 
   /** @type {{ runs: number, files: Record<string, number[]> }} */
   let baseline = { runs: 0, files: {} };
@@ -274,6 +318,12 @@ async function main() {
     console.log(`Could not load the baseline: ${error}`);
   }
   const outliers = findOutliers(current.files, baseline.files);
+  // The artifact step uploads this file. Later runs compare with its files,
+  // and the PR comment job in this run reads its outliers.
+  writeFileSync(
+    TIMINGS_FILE_IN_ARTIFACT,
+    JSON.stringify({ ...current, baselineRuns: baseline.runs, outliers }),
+  );
 
   const lines = [
     `## Integration test timings (${artifactName.replace(/^integration-test-timings-/, "Node.js ")})`,
@@ -332,19 +382,15 @@ async function main() {
   const markdown = lines.join("\n");
   if (GITHUB_STEP_SUMMARY) appendFileSync(GITHUB_STEP_SUMMARY, markdown);
   else console.log(markdown);
-
-  // Without a baseline there is nothing to compare, so leave the PR alone.
-  if (PR_NUMBER && baseline.runs > 0) {
-    try {
-      await updatePrComment(artifactName, outliers);
-    } catch (error) {
-      console.log(`Could not update the PR comment: ${error}`);
-    }
-  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
+  const run =
+    jsonPath === "--comment"
+      ? // Here the second argument is the folder of downloaded artifacts.
+        async () => updatePrComment(loadReports(artifactName))
+      : main;
+  run().catch((error) => {
     // Timings are advisory; never fail the job because of the report.
     console.log(`Timing report failed: ${error}`);
   });

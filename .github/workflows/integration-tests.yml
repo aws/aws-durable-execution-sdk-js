@@ -29,7 +29,6 @@ jobs:
       actions: read # Required to read timings saved by earlier runs
       contents: read
       id-token: write # Required for AWS credentials
-      pull-requests: write # Required to comment on slow tests
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
@@ -85,20 +84,17 @@ jobs:
 
       # Writes per-file timings to the job summary and flags files that got much
       # slower than on recent successful runs. Advisory: it never fails the job.
+      # The PR comment is posted by a later job in build.yml, once for all versions.
       - name: Report test timings
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Set only on pull_request runs, which test the PR's code. Push runs
-          # have no PR. pull_request_target runs (label changes) test the base
-          # branch, so their timings must not replace the PR's comment.
-          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
         run: |
           node .github/workflows/scripts/integration-test/timing-report.mjs \
             "${{ runner.temp }}/integration-results.json" \
             "integration-test-timings-${{ inputs.node-version }}"
 
-      # Later runs compare with this.
+      # Later runs compare with this, and the PR comment job reads it.
       - name: Upload test timings
         if: always() && hashFiles('integration-timings.json') != ''
         uses: actions/upload-artifact@v7
