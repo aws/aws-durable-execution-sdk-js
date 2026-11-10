@@ -24,15 +24,9 @@ import {
 } from "../../types/wire";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { getActiveContext } from "../../utils/context-tracker/context-tracker";
 import { DurableExecutionMode } from "../../types/core";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
-
-vi.mock("../../utils/context-tracker/context-tracker", async () => ({
-  ...(await vi.importActual<
-    typeof import("../../utils/context-tracker/context-tracker")
-  >("../../utils/context-tracker/context-tracker")),
-}));
 
 describe("Run In Child Context Handler", () => {
   let mockExecutionContext: Mocked<ExecutionContext>;
@@ -971,7 +965,9 @@ describe("runInChildContext with custom serdes", () => {
   });
 });
 
-// Test cases for runWithContext logic - verifying the different modes and parameters
+// Test cases for runWithContext logic - verifying the different modes and parameters.
+// The handler runs the child function inside runWithContext. So the context that is
+// active while the child function runs shows the arguments that runWithContext received.
 describe("runWithContext Integration", () => {
   let mockExecutionContext: Mocked<ExecutionContext>;
   let mockCheckpoint: MockedFunction<CheckpointFunction>;
@@ -980,6 +976,18 @@ describe("runWithContext Integration", () => {
   let runInChildContextHandler: ReturnType<
     typeof createRunInChildContextHandler
   >;
+
+  // Returns a child function that records the active context each time it runs.
+  const childFnRecordingContext = (
+    result?: unknown,
+  ): Mock & { activeContexts: ReturnType<typeof getActiveContext>[] } => {
+    const activeContexts: ReturnType<typeof getActiveContext>[] = [];
+    const childFn = vi.fn().mockImplementation(async () => {
+      activeContexts.push(getActiveContext());
+      return result;
+    });
+    return Object.assign(childFn, { activeContexts });
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -1026,34 +1034,24 @@ describe("runWithContext Integration", () => {
       mockCreateChildContext,
       mockParentDurableContext,
     );
-
-    // Setup runWithContext mock to return the function result
-    // biome-ignore lint/suspicious/noImportAssign: GENUINE DEFECT, not stylistic -- assigning to an imported binding is invalid ESM and only works because the module is replaced by a plain-object vi.mock factory, so the rewritten import is a writable property. Needs a real fix (vi.mock or a mutable indirection), tracked as follow-up; suppressed here so the toolchain migration does not also rewrite test mocking.
-    (runWithContext as Mock) = vi
-      .fn()
-      .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {
-        try {
-          return await fn();
-        } catch (error) {
-          throw error;
-        }
-      });
   });
 
   it("should call runWithContext with ExecutionMode for new child context", async () => {
-    const childFn = vi.fn().mockResolvedValue("child-result");
+    const childFn = childFnRecordingContext("child-result");
 
     await runInChildContextHandler("test-child", childFn);
 
     // Verify runWithContext was called with correct parameters for ExecutionMode
-    expect(runWithContext).toHaveBeenCalledWith(
-      "child-context-id",
-      "parent-step-123", // parentId from handler setup
-      expect.any(Function), // The wrapped child function
-      undefined, // No attempt number for child contexts
-      DurableExecutionMode.ExecutionMode,
-      "test-child", // operationName (child context name)
-    );
+    expect(childFn.activeContexts).toEqual([
+      {
+        contextId: "child-context-id",
+        parentId: "parent-step-123", // parentId from handler setup
+        attempt: undefined, // No attempt number for child contexts
+        durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        operationName: "test-child", // operationName (child context name)
+        execution: undefined,
+      },
+    ]);
   });
 
   it("should call runWithContext with ReplayMode for completed child context", async () => {
@@ -1072,8 +1070,8 @@ describe("runWithContext Integration", () => {
     const result = await runInChildContextHandler("test-child", childFn);
 
     expect(result).toBe("cached-result");
-    // Should not call runWithContext for cached results
-    expect(runWithContext).not.toHaveBeenCalled();
+    // Should not call runWithContext for cached results. The child function is the
+    // only code that runs inside runWithContext, so it must not run.
     expect(childFn).not.toHaveBeenCalled();
   });
 
@@ -1089,20 +1087,22 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = vi.fn().mockResolvedValue("replayed-result");
+    const childFn = childFnRecordingContext("replayed-result");
 
     const result = await runInChildContextHandler("test-child", childFn);
 
     expect(result).toBe("replayed-result");
     // Verify runWithContext was called for ReplayChildren mode
-    expect(runWithContext).toHaveBeenCalledWith(
-      "child-context-id",
-      "child-context-id", // parentId becomes entityId in ReplayChildren mode
-      expect.any(Function), // The wrapped child function
-      undefined, // no attempt number
-      undefined, // no explicit replay mode override
-      "test-child", // operationName (child context name)
-    );
+    expect(childFn.activeContexts).toEqual([
+      {
+        contextId: "child-context-id",
+        parentId: "child-context-id", // parentId becomes entityId in ReplayChildren mode
+        attempt: undefined, // no attempt number
+        durableExecutionMode: undefined, // no explicit replay mode override
+        operationName: "test-child", // operationName (child context name)
+        execution: undefined,
+      },
+    ]);
   });
 
   it("should call runWithContext with ReplayMode for failed child context in execution", async () => {
@@ -1122,27 +1122,20 @@ describe("runWithContext Integration", () => {
       runInChildContextHandler("test-child", childFn),
     ).rejects.toThrow("Previous failure");
 
-    // Should not call runWithContext for failed cached results
-    expect(runWithContext).not.toHaveBeenCalled();
+    // Should not call runWithContext for failed cached results. The child function is
+    // the only code that runs inside runWithContext, so it must not run.
     expect(childFn).not.toHaveBeenCalled();
   });
 
   it("should pass the child function through runWithContext correctly", async () => {
-    const childFn = vi.fn().mockResolvedValue("child-result");
-    let capturedFunction: (() => Promise<unknown>) | undefined;
-
-    // Capture the function passed to runWithContext
-    (runWithContext as Mock).mockImplementation(
-      async (stepId, parentId, fn, _attempt, _mode) => {
-        capturedFunction = fn;
-        return await fn();
-      },
-    );
+    const childFn = childFnRecordingContext("child-result");
 
     await runInChildContextHandler("test-child", childFn);
 
-    // Verify that the captured function calls our child function with DurableContext
-    expect(capturedFunction).toBeDefined();
+    // Verify that the child function ran inside runWithContext
+    expect(childFn.activeContexts).toEqual([
+      expect.objectContaining({ contextId: "child-context-id" }),
+    ]);
 
     // The captured function should be the wrapped version that calls childFn with DurableContext
     expect(childFn).toHaveBeenCalledWith(
@@ -1163,34 +1156,38 @@ describe("runWithContext Integration", () => {
       },
     } as any;
 
-    const childFn = vi.fn().mockResolvedValue("replayed-result");
+    const childFn = childFnRecordingContext("replayed-result");
 
     await runInChildContextHandler("test-child", childFn);
 
     // In ReplayChildren mode, both stepId and parentId should be the entityId
-    expect(runWithContext).toHaveBeenCalledWith(
-      "child-context-id", // stepId = entityId
-      "child-context-id", // parentId = entityId (not the original parentId)
-      expect.any(Function),
-      undefined, // no attempt number
-      undefined, // no explicit replay mode override
-      "test-child", // operationName (child context name)
-    );
+    expect(childFn.activeContexts).toEqual([
+      {
+        contextId: "child-context-id", // stepId = entityId
+        parentId: "child-context-id", // parentId = entityId (not the original parentId)
+        attempt: undefined, // no attempt number
+        durableExecutionMode: undefined, // no explicit replay mode override
+        operationName: "test-child", // operationName (child context name)
+        execution: undefined,
+      },
+    ]);
   });
 
   it("should use determineChildReplayMode logic correctly", async () => {
     // Test ExecutionMode for new context (no existing step data)
-    const childFn1 = vi.fn().mockResolvedValue("result1");
+    const childFn1 = childFnRecordingContext("result1");
     await runInChildContextHandler("test-child-1", childFn1);
 
-    expect(runWithContext).toHaveBeenLastCalledWith(
-      expect.any(String),
-      expect.any(String),
-      expect.any(Function),
-      undefined,
-      DurableExecutionMode.ExecutionMode,
-      "test-child-1", // operationName (child context name)
-    );
+    expect(childFn1.activeContexts).toEqual([
+      {
+        contextId: expect.any(String),
+        parentId: expect.any(String),
+        attempt: undefined,
+        durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        operationName: "test-child-1", // operationName (child context name)
+        execution: undefined,
+      },
+    ]);
 
     // Reset and test with STARTED status (should still be ExecutionMode)
     vi.clearAllMocks();
@@ -1200,17 +1197,19 @@ describe("runWithContext Integration", () => {
       Status: OperationStatus.STARTED,
     } as any;
 
-    const childFn2 = vi.fn().mockResolvedValue("result2");
+    const childFn2 = childFnRecordingContext("result2");
     await runInChildContextHandler("test-child-2", childFn2);
 
-    expect(runWithContext).toHaveBeenLastCalledWith(
-      expect.any(String),
-      expect.any(String),
-      expect.any(Function),
-      undefined,
-      DurableExecutionMode.ExecutionMode,
-      "test-child-2", // operationName (child context name)
-    );
+    expect(childFn2.activeContexts).toEqual([
+      {
+        contextId: expect.any(String),
+        parentId: expect.any(String),
+        attempt: undefined,
+        durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        operationName: "test-child-2", // operationName (child context name)
+        execution: undefined,
+      },
+    ]);
   });
 
   it("should handle different execution modes based on step status", async () => {
@@ -1228,9 +1227,9 @@ describe("runWithContext Integration", () => {
     const childFn = vi.fn();
     const result = await runInChildContextHandler("test-replay", childFn);
 
-    // Should return cached result without calling runWithContext
+    // Should return cached result without calling runWithContext. The child function
+    // is the only code that runs inside runWithContext, so it must not run.
     expect(result).toBe("replay-result");
-    expect(runWithContext).not.toHaveBeenCalled();
     expect(childFn).not.toHaveBeenCalled();
   });
 });
