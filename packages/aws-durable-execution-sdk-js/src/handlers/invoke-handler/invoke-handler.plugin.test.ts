@@ -18,17 +18,10 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
+// A fake Serdes. The handler passes it to the real safeSerialize and
+// safeDeserialize, so the tests stub and assert on its methods.
+let fakeSerdes: { serialize: Mock; deserialize: Mock };
+const getFakeSerdes = () => fakeSerdes;
 
 describe("InvokeHandler - plugin hooks", () => {
   let mockContext: ExecutionContext;
@@ -38,6 +31,7 @@ describe("InvokeHandler - plugin hooks", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    fakeSerdes = { serialize: vi.fn(), deserialize: vi.fn() };
     mockCreateStepId = vi.fn().mockReturnValue("test-step-1");
     mockCheckpoint = {
       checkpoint: vi.fn().mockResolvedValue(undefined),
@@ -57,8 +51,8 @@ describe("InvokeHandler - plugin hooks", () => {
       onOperationAttemptStart: vi.fn(),
       onOperationAttemptEnd: vi.fn(),
     };
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue({ result: "success" });
+    fakeSerdes.serialize.mockResolvedValue('{"serialized":"data"}');
+    fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
   });
 
   it("should call onOperationEnd on replay succeeded", async () => {
@@ -73,7 +67,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       vi.fn(),
-      undefined,
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -99,7 +93,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       vi.fn(),
-      undefined,
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -128,7 +122,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       vi.fn(),
-      undefined,
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -164,7 +158,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       vi.fn(),
-      undefined,
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -218,7 +212,7 @@ describe("InvokeHandler - plugin hooks", () => {
         mockCreateStepId,
         undefined,
         vi.fn(),
-        undefined,
+        getFakeSerdes,
         mockPlugin,
       );
       const caught = await handler("test-function", {}).catch(
@@ -273,7 +267,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       vi.fn(),
-      undefined,
+      getFakeSerdes,
       {},
     );
 
