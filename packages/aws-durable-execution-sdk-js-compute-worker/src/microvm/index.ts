@@ -5,7 +5,7 @@ export {
   MAX_CALLBACK_RESULT_BYTES,
   ResultSerializationError,
   ResultTooLargeError,
-} from "./callback-reporter";
+} from "../callback-reporter";
 export {
   InvalidRunHookPayloadError,
   type MicrovmJobDocument,

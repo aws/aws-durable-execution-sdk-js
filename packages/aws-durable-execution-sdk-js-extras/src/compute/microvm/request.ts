@@ -18,7 +18,7 @@ export const DEFAULT_MICROVM_PORT = 8080;
  *
  * The worker package serves this path with its `handler`. So the same handler
  * receives a job whether it arrives in the `run` hook or over HTTP. The value
- * must equal `MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-microvm-worker`.
+ * must equal `MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-compute-worker/microvm`.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */

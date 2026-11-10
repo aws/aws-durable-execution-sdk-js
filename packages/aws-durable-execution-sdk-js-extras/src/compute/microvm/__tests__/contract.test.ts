@@ -19,7 +19,7 @@ import {
   parseJobRequest,
   parseRunHookRequest,
   SUPPORTED_PAYLOAD_VERSION,
-} from "@aws/durable-execution-sdk-js-microvm-worker";
+} from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 import {
   DEFAULT_MICROVM_JOB_PATH,
   type MicrovmJobDocument,
