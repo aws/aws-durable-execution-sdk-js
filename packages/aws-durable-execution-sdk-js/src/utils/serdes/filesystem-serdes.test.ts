@@ -448,7 +448,7 @@ describe("createFileSystemSerdes with preview", () => {
   });
 
   it("deserialize ignores preview field and reads from file", async () => {
-    const value = { id: "abc" };
+    const value = { id: "abc", body: "full stored payload" };
     await writeJsonFile(EXPECTED_FILE, value);
 
     const envelope = JSON.stringify({
