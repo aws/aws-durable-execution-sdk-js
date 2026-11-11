@@ -1725,3 +1725,20 @@ describe("decider() reply without answers", () => {
     },
   );
 });
+
+describe("decider().classify non-string choice", () => {
+  it.each([42, null, ["a"]])(
+    "fails with DeciderInvalidResponseError for choice %j",
+    async (value) => {
+      const fake = new FakeDecider();
+      fake.replies = [answers({ answer: { type: "choice", choice: value } })];
+      const decide = fakeDecider(fake);
+
+      const result = await run((context) =>
+        outcomes([() => decide.classify(context, "Which?", ["a", "b"], "x")]),
+      );
+
+      expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+    },
+  );
+});

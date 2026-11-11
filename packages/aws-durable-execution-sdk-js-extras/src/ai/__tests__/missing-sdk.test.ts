@@ -182,3 +182,43 @@ it.each([
     expect(made).toEqual([{}]);
   },
 );
+
+it("loads the AWS SDK client again after a failed load", async () => {
+  let loads = 0;
+  vi.resetModules();
+  vi.doMock("@aws-sdk/client-sagemaker-runtime", () => {
+    loads += 1;
+    if (loads === 1) {
+      throw missingModule();
+    }
+    return {
+      SageMakerRuntimeClient: class {
+        async send(): Promise<unknown> {
+          return {
+            Body: new TextEncoder().encode(
+              JSON.stringify({
+                answers: { answer: { type: "noul", noul: 0.9 } },
+              }),
+            ),
+          };
+        }
+      },
+      InvokeEndpointCommand: class {
+        constructor(readonly input: unknown) {}
+      },
+    };
+  });
+  const ai = await import("..");
+  const send = ai.sageMakerTransport({ endpointName: "x" });
+  const request = { model: "m", state: "s", questions: {} };
+
+  const first = await send(request, { abortSignal: undefined }).then(
+    () => undefined,
+    (e: unknown) => e as Error,
+  );
+  const second = await send(request, { abortSignal: undefined });
+
+  expect(first).toBeInstanceOf(ai.AiError);
+  expect(second).toEqual({ answers: { answer: { type: "noul", noul: 0.9 } } });
+  expect(loads).toBe(2);
+});
