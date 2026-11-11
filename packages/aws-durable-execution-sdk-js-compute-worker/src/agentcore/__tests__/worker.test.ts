@@ -120,12 +120,75 @@ describe("startAgentcoreWorker", () => {
       return "done";
     });
 
-    expect(await ping()).toEqual({ status: "Healthy" });
+    expect(await ping()).toMatchObject({ status: "Healthy" });
     await invoke(job("cb-1"));
-    expect(await ping()).toEqual({ status: "HealthyBusy" });
+    expect(await ping()).toMatchObject({ status: "HealthyBusy" });
     release.open();
     await worker?.idle();
-    expect(await ping()).toEqual({ status: "Healthy" });
+    expect(await ping()).toMatchObject({ status: "Healthy" });
+  });
+
+  it("sets time_of_last_update at start and at each status change only", async () => {
+    // Only Date is faked, so the server and the requests still run.
+    vi.useFakeTimers({ toFake: ["Date"], now: 1_000_000_000_000 });
+    try {
+      const first = gate();
+      const second = gate();
+      const gates = [first, second];
+      const { client } = await start(async () => {
+        await gates.shift()?.promise;
+      });
+
+      // At start.
+      expect(await ping()).toEqual({
+        status: "Healthy",
+        time_of_last_update: 1_000_000_000,
+      });
+      // No status change: the time stays.
+      vi.setSystemTime(1_000_000_010_000);
+      expect(await ping()).toEqual({
+        status: "Healthy",
+        time_of_last_update: 1_000_000_000,
+      });
+
+      // A job starts: Healthy to HealthyBusy.
+      await invoke(job("cb-1"));
+      expect(await ping()).toEqual({
+        status: "HealthyBusy",
+        time_of_last_update: 1_000_000_010,
+      });
+
+      // A second job starts while busy: no change.
+      vi.setSystemTime(1_000_000_020_000);
+      await invoke(job("cb-2"));
+      expect(await ping()).toEqual({
+        status: "HealthyBusy",
+        time_of_last_update: 1_000_000_010,
+      });
+
+      // One of two jobs ends: still busy, no change.
+      vi.setSystemTime(1_000_000_030_000);
+      first.open();
+      // The first job has reported. Its job promise settles a few
+      // microtasks later. setTimeout is real, so the wait lets it settle.
+      await expect.poll(() => client.named(SUCCESS)).toHaveLength(1);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(await ping()).toEqual({
+        status: "HealthyBusy",
+        time_of_last_update: 1_000_000_010,
+      });
+
+      // The last job ends: HealthyBusy to Healthy.
+      vi.setSystemTime(1_000_000_040_000);
+      second.open();
+      await worker?.idle();
+      expect(await ping()).toEqual({
+        status: "Healthy",
+        time_of_last_update: 1_000_000_040,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("accepts a job at once, runs the handler, and reports its result", async () => {

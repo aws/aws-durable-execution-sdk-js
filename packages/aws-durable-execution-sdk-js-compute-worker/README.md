@@ -163,7 +163,7 @@ await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
 
 The worker listens on `0.0.0.0:8080`, because AgentCore Runtime requires that port inside the container:
 
-- `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and `{"status": "Healthy"}` otherwise.
+- `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and `{"status": "Healthy"}` otherwise. The answer also has `time_of_last_update`: the Unix time, in seconds, of the last status change. The worker sets it when it starts and when the status changes, not on every ping.
 - `POST /invocations` answers `{"accepted": true}` at once and runs the handler in the background. A repeated callback ID gets the same answer and does not run again. A document that does not match the contract gets HTTP 400.
 
 The worker sends heartbeats while the job runs, when the job has a `heartbeatTimeout`. It then completes the callback with the handler's result or error.

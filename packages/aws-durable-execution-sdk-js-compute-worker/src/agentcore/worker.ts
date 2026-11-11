@@ -159,9 +159,14 @@ export interface AgentcoreWorker {
  * @remarks
  * The server answers two routes:
  *
- * - `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and
- *   `{"status": "Healthy"}` otherwise. AgentCore Runtime keeps a busy
- *   session alive past its idle timeout.
+ * - `GET /ping` answers `{"status": "HealthyBusy", "time_of_last_update":
+ *   <seconds>}` while a job runs, and `"Healthy"` otherwise. AgentCore
+ *   Runtime keeps a busy session alive past its idle timeout.
+ *   `time_of_last_update` is the Unix time, in seconds, of the last status
+ *   change. The worker sets it when it starts and when the status changes
+ *   between `Healthy` and `HealthyBusy`. It does not set it to the current
+ *   time on every ping, because the documentation asks to set it only on a
+ *   change.
  * - `POST /invocations` reads the job document. It answers
  *   `{"accepted": true}` at once and runs `handler` in the background. A
  *   document that does not match the contract gets HTTP 400.
@@ -199,6 +204,22 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   // Every callback ID that the worker accepted, oldest first. A Set keeps
   // insertion order.
   const accepted = new Set<string>();
+  // The Unix time, in seconds, of the last status change. A public report
+  // states that the service ends a HealthyBusy session at its idle timeout
+  // when the ping answer has no time_of_last_update. The documentation makes
+  // the field optional and asks to set it only when the status changes. So
+  // the worker sets it at start, and when the status flips.
+  let lastStatusChange = nowSeconds();
+  const status = (): "Healthy" | "HealthyBusy" =>
+    running.size > 0 ? "HealthyBusy" : "Healthy";
+  /** Runs `change` on the job set, and records the time if the status flipped. */
+  const updateRunning = (change: () => void): void => {
+    const before = status();
+    change();
+    if (status() !== before) {
+      lastStatusChange = nowSeconds();
+    }
+  };
 
   const listener = async (
     request: IncomingMessage,
@@ -206,10 +227,9 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   ): Promise<void> => {
     const path = (request.url ?? "").split("?")[0];
     if (request.method === "GET" && path === "/ping") {
-      // The contract also allows `time_of_last_update`. The worker never
-      // sends it. The service then measures idle time from its own view.
       respond(response, 200, {
-        status: running.size > 0 ? "HealthyBusy" : "Healthy",
+        status: status(),
+        time_of_last_update: lastStatusChange,
       });
       return;
     }
@@ -239,8 +259,10 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
     if (accepted.size > MAX_REMEMBERED_JOBS) {
       accepted.delete(accepted.values().next().value as string);
     }
-    const run = runJob(options, logger, job).finally(() => running.delete(run));
-    running.add(run);
+    const run: Promise<void> = runJob(options, logger, job).finally(() =>
+      updateRunning(() => running.delete(run)),
+    );
+    updateRunning(() => running.add(run));
     respond(response, 200, { accepted: true });
   };
 
@@ -346,6 +368,10 @@ async function runJob<TInput, TOutput>(
     await heartbeats.stop();
     reporter.close();
   }
+}
+
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1_000);
 }
 
 function respond(
