@@ -121,3 +121,79 @@ export class FakeAgentCore {
     );
   }
 }
+
+const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+/** Records every InvokeEndpoint command and answers from a queue. */
+export class FakeSageMaker {
+  readonly inputs: Record<string, unknown>[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
+  replies: (string | Error)[] = [];
+
+  async send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown> {
+    this.inputs.push((command as { input: Record<string, unknown> }).input);
+    this.signals.push(options?.abortSignal);
+    const next = this.replies.shift();
+    if (next instanceof Error) {
+      throw next;
+    }
+    if (next === undefined) {
+      throw new Error("FakeSageMaker has no reply queued");
+    }
+    return { ContentType: "application/json", Body: bytes(next) };
+  }
+
+  /** The JSON request in the body of call `i`. */
+  request(i: number): unknown {
+    return JSON.parse(
+      new TextDecoder().decode(this.inputs[i].Body as Uint8Array),
+    );
+  }
+}
+
+/** The `ModelError` that InvokeEndpoint throws for an HTTP error from the container. */
+export const modelError = (status: number, message: string): Error =>
+  Object.assign(new Error("Received client error from primary"), {
+    name: "ModelError",
+    OriginalStatusCode: status,
+    OriginalMessage: message,
+  });
+
+/** Records every Lambda Invoke command and answers from a queue. */
+export class FakeLambda {
+  readonly inputs: Record<string, unknown>[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
+  replies: ({ payload: string; functionError?: string } | Error)[] = [];
+
+  async send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown> {
+    this.inputs.push((command as { input: Record<string, unknown> }).input);
+    this.signals.push(options?.abortSignal);
+    const next = this.replies.shift();
+    if (next instanceof Error) {
+      throw next;
+    }
+    if (next === undefined) {
+      throw new Error("FakeLambda has no reply queued");
+    }
+    return {
+      StatusCode: 200,
+      Payload: bytes(next.payload),
+      ...(next.functionError !== undefined && {
+        FunctionError: next.functionError,
+      }),
+    };
+  }
+
+  /** The JSON request in the payload of call `i`. */
+  request(i: number): unknown {
+    return JSON.parse(
+      new TextDecoder().decode(this.inputs[i].Payload as Uint8Array),
+    );
+  }
+}

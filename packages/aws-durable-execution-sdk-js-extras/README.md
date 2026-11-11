@@ -433,20 +433,34 @@ The first argument is the context that the call runs in. Inside a child context 
 
 A decision model is not a large language model. It does not write text. It picks one of your options or rates on a scale, so its answer is always one of the options or a number in range.
 
-`decider()` assumes you already deployed a Strands Decider and it is ready. It does not host or check the model. Name the model one of three ways:
+`decider()` assumes you already deployed a Strands Decider and it is ready. It does not host or check the model. Every host takes the same request, so only the way the call is sent changes. Pass `endpoint` or one `transport`:
 
-| Option | How the call goes | Needs |
-|---|---|---|
-| `agentCore` | AWS SDK `InvokeAgentRuntime` to [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/), signed with the function's credentials | `@aws-sdk/client-bedrock-agentcore`, and `bedrock-agentcore:InvokeAgentRuntime` on the runtime |
-| `endpoint` | `fetch` to the server's `POST /v1/systemone` route | A URL the function can reach |
-| `transport` | Your own function | Nothing |
+| Host | Option | How the call goes | Needs |
+|---|---|---|---|
+| Any server, such as `strands-decider serve` | `endpoint` | `fetch` to the server's `POST /v1/systemone` route | A URL the function can reach |
+| Amazon SageMaker real-time endpoint | `transport: sageMakerTransport({ endpointName })` | AWS SDK `InvokeEndpoint` | `@aws-sdk/client-sagemaker-runtime`, and `sagemaker:InvokeEndpoint` on the endpoint |
+| AWS Lambda function | `transport: lambdaTransport({ functionName })` | AWS SDK `Invoke`, with the request as the event | `@aws-sdk/client-lambda`, and `lambda:InvokeFunction` on the function |
+| [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/) | `transport: agentCoreTransport({ runtimeArn })` | AWS SDK `InvokeAgentRuntime` | `@aws-sdk/client-bedrock-agentcore`, and `bedrock-agentcore:InvokeAgentRuntime` on the runtime |
+| Anything else | `transport` | Your own function | Nothing |
+
+The [Strands Decider repository](https://github.com/strands-labs/strands-decider/tree/main/deploy) has CDK stacks that deploy the model to SageMaker and to Lambda.
 
 ```typescript
-// A Strands Decider on AgentCore Runtime.
+// A Strands Decider on a SageMaker endpoint.
 const decide = decider({
-  agentCore: {
+  transport: sageMakerTransport({ endpointName: "strands-decider-2b-qwen3-5-v1-2610" }),
+});
+
+// A Strands Decider as a Lambda function, through its live alias.
+const decideLambda = decider({
+  transport: lambdaTransport({ functionName: "strands-decider-2b-qwen3-5-v1-2610", qualifier: "live" }),
+});
+
+// A Strands Decider on AgentCore Runtime.
+const decideAgentCore = decider({
+  transport: agentCoreTransport({
     runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/strands-decider-abc",
-  },
+  }),
 });
 
 // A Strands Decider at a URL.
@@ -457,12 +471,14 @@ const decideHttp = decider({
 });
 ```
 
-- Pass only one of `agentCore`, `endpoint`, and `transport`. Without any, `decider()` uses the `STRANDS_DECIDER_ENDPOINT` environment variable, and throws a `TypeError` when it is not set.
-- On AgentCore Runtime, the call reaches the server's `POST /invocations` route, which the Strands Decider server answers like `/v1/systemone`. The 0.2.0 release on PyPI has no `/invocations` route, so deploy a later version. `agentCore.qualifier` names a runtime endpoint, and `agentCore.client` replaces the default `BedrockAgentCoreClient`, for example to set a Region.
-- `@aws-sdk/client-bedrock-agentcore` is an optional peer dependency. Without it, `endpoint` and `transport` still work, and an `agentCore` call fails with an `AiError` that names the package.
+- Pass only one of `endpoint` and `transport`. Without either, `decider()` uses the `STRANDS_DECIDER_ENDPOINT` environment variable, and throws a `TypeError` when it is not set.
+- The AWS transports sign the call with the function's credentials. Each takes a `client` to replace the default AWS SDK client, for example to set a Region.
+- Each AWS SDK client is an optional peer dependency. Install only the one you use. Without it, a call through that transport fails with an `AiError` that names the package.
+- On SageMaker and AgentCore Runtime, the call reaches the server's `POST /invocations` route, which the Strands Decider server answers like `/v1/systemone`. The 0.2.0 release on PyPI has no `/invocations` route, so deploy a later version. `agentCoreTransport`'s `qualifier` names a runtime endpoint.
+- On SageMaker, an HTTP error from the server becomes a `DeciderError` with the server's status.
+- On Lambda, the function fails the invocation when it refuses a request, for example an input that does not fit the window. That becomes a `DeciderError` with status 422, which is not retried. Any other function error is retried. `lambdaTransport` does not use the function's Function URL. A new execution environment loads the model first, which can take 30 seconds without SnapStart.
 - `decider()` throws a `TypeError` when the endpoint is not an absolute `http:` or `https:` URL.
 - An endpoint with a user name or password is refused: pass credentials in `headers`. Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query, because errors are checkpointed.
-- Pass `transport` to send the request yourself, for example to a SageMaker endpoint with SigV4.
 - `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
 
 ### `llm()`
@@ -517,11 +533,11 @@ The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling,
 
 ### Permissions
 
-`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. Without it, `decider()` still works, a bundler such as esbuild still builds, and `ask` fails with an `AiError` that names the package. `decider()` with `agentCore` needs `bedrock-agentcore:InvokeAgentRuntime` on the runtime. With `endpoint` or `transport` it needs no AWS permission.
+`ask` needs `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. A guardrail also needs `bedrock:ApplyGuardrail`. `@aws-sdk/client-bedrock-runtime` is an optional peer dependency. Install it to use `llm()`. Without it, `decider()` still works, a bundler such as esbuild still builds, and `ask` fails with an `AiError` that names the package. `decider()` needs the permission of its transport, listed in the table above. With `endpoint` or your own `transport` it needs no AWS permission.
 
 ### Testing
 
-Pass a fake as `transport` or `agentCore.client` to `decider()`, and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
+Pass a fake as `transport` to `decider()`, or as `client` to an AWS transport,, and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
 
 ## Best practices for MicroVM operations
 

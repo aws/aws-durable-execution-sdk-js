@@ -9,17 +9,21 @@ import {
 import {
   AiError,
   AiOperationSubType,
+  agentCoreTransport,
   AiTimeoutError,
   DEFAULT_LLM_MODEL_ID,
   DeciderError,
   DeciderInvalidResponseError,
   decider,
+  type DeciderTransport,
   defaultAiRetryStrategy,
   LlmMaxTokensError,
   LlmStoppedError,
   llm,
   MAX_CLASSIFY_OPTIONS,
+  lambdaTransport,
   MAX_SCORE_LEVELS,
+  sageMakerTransport,
 } from "..";
 import {
   answers,
@@ -28,6 +32,9 @@ import {
   FakeAgentCore,
   FakeBedrock,
   FakeDecider,
+  FakeLambda,
+  FakeSageMaker,
+  modelError,
   noul,
   scoreAnswer,
 } from "./fakes";
@@ -860,7 +867,25 @@ describe("decider()", () => {
   });
 });
 
-describe("decider({ agentCore })", () => {
+const named = (name: string) => Object.assign(new Error(name), { name });
+
+/** Runs one check through `transport` and returns the error the retry strategy saw. */
+async function firstError(
+  transport: DeciderTransport,
+): Promise<Error | undefined> {
+  let seen: Error | undefined;
+  const decide = decider({
+    transport,
+    retryStrategy: (error) => {
+      seen = error;
+      return { shouldRetry: false };
+    },
+  });
+  await run((context) => decide.check(context, "Q?", "x"));
+  return seen;
+}
+
+describe("agentCoreTransport", () => {
   const ARN =
     "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/strands-decider-abc";
 
@@ -877,7 +902,11 @@ describe("decider({ agentCore })", () => {
       },
     ];
     const decide = decider({
-      agentCore: { runtimeArn: ARN, qualifier: "prod", client },
+      transport: agentCoreTransport({
+        runtimeArn: ARN,
+        qualifier: "prod",
+        client,
+      }),
       retryStrategy: noRetry,
     });
 
@@ -914,7 +943,9 @@ describe("decider({ agentCore })", () => {
   it("omits the qualifier when the config sets none", async () => {
     const client = new FakeAgentCore();
     client.replies = [{ body: JSON.stringify(answers({ answer: noul(0.1) })) }];
-    const decide = decider({ agentCore: { runtimeArn: ARN, client } });
+    const decide = decider({
+      transport: agentCoreTransport({ runtimeArn: ARN, client }),
+    });
 
     const result = await run((context) => decide.check(context, "Q?", "x"));
 
@@ -927,16 +958,9 @@ describe("decider({ agentCore })", () => {
     client.replies = [
       { body: '{"detail":"exceeds the context window"}', statusCode: 422 },
     ];
-    let seen: Error | undefined;
-    const decide = decider({
-      agentCore: { runtimeArn: ARN, client },
-      retryStrategy: (error) => {
-        seen = error;
-        return { shouldRetry: false };
-      },
-    });
-
-    await run((context) => decide.check(context, "Q?", "x"));
+    const seen = await firstError(
+      agentCoreTransport({ runtimeArn: ARN, client }),
+    );
 
     expect(seen).toBeInstanceOf(DeciderError);
     expect((seen as DeciderError).status).toBe(422);
@@ -947,36 +971,20 @@ describe("decider({ agentCore })", () => {
   it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
     const client = new FakeAgentCore();
     client.replies = [{ body: "<html>" }];
-    let seen: Error | undefined;
-    const decide = decider({
-      agentCore: { runtimeArn: ARN, client },
-      retryStrategy: (error) => {
-        seen = error;
-        return { shouldRetry: false };
-      },
-    });
-
-    await run((context) => decide.check(context, "Q?", "x"));
+    const seen = await firstError(
+      agentCoreTransport({ runtimeArn: ARN, client }),
+    );
 
     expect(seen).toBeInstanceOf(DeciderInvalidResponseError);
   });
 
   it("passes an AWS SDK error through to the retry strategy", async () => {
     const client = new FakeAgentCore();
-    const throttled = Object.assign(new Error("Rate exceeded"), {
-      name: "ThrottlingException",
-    });
+    const throttled = named("ThrottlingException");
     client.replies = [throttled];
-    let seen: Error | undefined;
-    const decide = decider({
-      agentCore: { runtimeArn: ARN, client },
-      retryStrategy: (error) => {
-        seen = error;
-        return { shouldRetry: false };
-      },
-    });
-
-    await run((context) => decide.check(context, "Q?", "x"));
+    const seen = await firstError(
+      agentCoreTransport({ runtimeArn: ARN, client }),
+    );
 
     expect(seen).toBe(throttled);
     expect(defaultAiRetryStrategy(throttled, 1).shouldRetry).toBe(true);
@@ -987,7 +995,7 @@ describe("decider({ agentCore })", () => {
     client.send = async (_command, options) => abortable(options?.abortSignal);
     let seen: Error | undefined;
     const decide = decider({
-      agentCore: { runtimeArn: ARN, client },
+      transport: agentCoreTransport({ runtimeArn: ARN, client }),
       retryStrategy: (error) => {
         seen = error;
         return { shouldRetry: false };
@@ -1001,24 +1009,15 @@ describe("decider({ agentCore })", () => {
     expect(seen).toBeInstanceOf(AiTimeoutError);
   });
 
-  it("takes only one of agentCore, endpoint, and transport", () => {
-    const fake = new FakeDecider();
-    for (const config of [
-      { agentCore: { runtimeArn: ARN }, endpoint: "https://x.example/v1" },
-      { agentCore: { runtimeArn: ARN }, transport: fake.transport },
-      { endpoint: "https://x.example/v1", transport: fake.transport },
-    ]) {
-      expect(() => decider(config)).toThrow(/only one of/);
-    }
-  });
-
   it("is used instead of STRANDS_DECIDER_ENDPOINT", async () => {
     const client = new FakeAgentCore();
     client.replies = [{ body: JSON.stringify(answers({ answer: noul(0.9) })) }];
     const fetchMock = jest.spyOn(globalThis, "fetch");
     try {
       await withEndpoint("https://env.example/v1/systemone", async () => {
-        const decide = decider({ agentCore: { runtimeArn: ARN, client } });
+        const decide = decider({
+          transport: agentCoreTransport({ runtimeArn: ARN, client }),
+        });
         const result = await run((context) => decide.check(context, "Q?", "x"));
         expect(result.getResult()).toBe(true);
       });
@@ -1030,9 +1029,246 @@ describe("decider({ agentCore })", () => {
   });
 });
 
-describe("defaultAiRetryStrategy", () => {
-  const named = (name: string) => Object.assign(new Error(name), { name });
+describe("sageMakerTransport", () => {
+  const ENDPOINT = "strands-decider-2b-qwen3-5-v1-2610";
 
+  it("sends the request through InvokeEndpoint and answers from the reply", async () => {
+    const client = new FakeSageMaker();
+    client.replies = [JSON.stringify(answers({ answer: noul(0.9) }))];
+    const decide = decider({
+      transport: sageMakerTransport({ endpointName: ENDPOINT, client }),
+      retryStrategy: noRetry,
+    });
+
+    const result = await run((context) =>
+      decide.check(context, "Is it urgent?", "help"),
+    );
+
+    expect(result.getResult()).toBe(true);
+    expect(history(result)).toEqual([["decider.check", "DeciderCheck"]]);
+    expect(client.inputs[0]).toMatchObject({
+      EndpointName: ENDPOINT,
+      ContentType: "application/json",
+      Accept: "application/json",
+    });
+    expect(client.request(0)).toEqual({
+      model: "strands-decider-latest",
+      state: "help",
+      questions: { answer: { type: "noul", instructions: "Is it urgent?" } },
+    });
+    expect(client.signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("reports a ModelError as DeciderError with the server's status", async () => {
+    const client = new FakeSageMaker();
+    const error = modelError(422, '{"detail":"exceeds the context window"}');
+    client.replies = [error];
+    const seen = await firstError(
+      sageMakerTransport({ endpointName: ENDPOINT, client }),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect((seen as DeciderError).status).toBe(422);
+    expect(seen?.message).toContain("context window");
+    expect(seen?.cause).toBe(error);
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(false);
+  });
+
+  it("retries a ModelError with a 5xx status", async () => {
+    const client = new FakeSageMaker();
+    client.replies = [modelError(503, "busy")];
+    const seen = await firstError(
+      sageMakerTransport({ endpointName: ENDPOINT, client }),
+    );
+
+    expect((seen as DeciderError).status).toBe(503);
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(true);
+  });
+
+  it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
+    const client = new FakeSageMaker();
+    client.replies = ["<html>"];
+    const seen = await firstError(
+      sageMakerTransport({ endpointName: ENDPOINT, client }),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderInvalidResponseError);
+  });
+
+  it.each([
+    "ModelNotReadyException",
+    "ServiceUnavailable",
+    "InternalFailure",
+    "InternalDependencyException",
+  ])("passes %s through, and the default strategy retries it", async (name) => {
+    const client = new FakeSageMaker();
+    const error = named(name);
+    client.replies = [error];
+    const seen = await firstError(
+      sageMakerTransport({ endpointName: ENDPOINT, client }),
+    );
+
+    expect(seen).toBe(error);
+    expect(defaultAiRetryStrategy(error, 1).shouldRetry).toBe(true);
+  });
+
+  it("does not retry a ValidationError", async () => {
+    const client = new FakeSageMaker();
+    const error = named("ValidationError");
+    client.replies = [error];
+    const seen = await firstError(
+      sageMakerTransport({ endpointName: ENDPOINT, client }),
+    );
+
+    expect(seen).toBe(error);
+    expect(defaultAiRetryStrategy(error, 1).shouldRetry).toBe(false);
+  });
+});
+
+describe("lambdaTransport", () => {
+  const FUNCTION = "strands-decider-2b-qwen3-5-v1-2610";
+
+  it("invokes the function with the request as its event and answers from the result", async () => {
+    const client = new FakeLambda();
+    client.replies = [
+      { payload: JSON.stringify(answers({ answer: noul(0.9) })) },
+    ];
+    const decide = decider({
+      transport: lambdaTransport({
+        functionName: FUNCTION,
+        qualifier: "live",
+        client,
+      }),
+      retryStrategy: noRetry,
+    });
+
+    const result = await run((context) =>
+      decide.check(context, "Is it urgent?", "help"),
+    );
+
+    expect(result.getResult()).toBe(true);
+    expect(history(result)).toEqual([["decider.check", "DeciderCheck"]]);
+    expect(client.inputs[0]).toMatchObject({
+      FunctionName: FUNCTION,
+      Qualifier: "live",
+    });
+    expect(client.request(0)).toEqual({
+      model: "strands-decider-latest",
+      state: "help",
+      questions: { answer: { type: "noul", instructions: "Is it urgent?" } },
+    });
+    expect(client.signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("omits the qualifier when the config sets none", async () => {
+    const client = new FakeLambda();
+    client.replies = [
+      { payload: JSON.stringify(answers({ answer: noul(0.1) })) },
+    ];
+    const decide = decider({
+      transport: lambdaTransport({ functionName: FUNCTION, client }),
+    });
+
+    const result = await run((context) => decide.check(context, "Q?", "x"));
+
+    expect(result.getResult()).toBe(false);
+    expect(client.inputs[0]).not.toHaveProperty("Qualifier");
+  });
+
+  it.each(["ValueError", "ValidationError"])(
+    "reports a refused request (%s) as DeciderError with status 422, not retried",
+    async (errorType) => {
+      const client = new FakeLambda();
+      client.replies = [
+        {
+          functionError: "Unhandled",
+          payload: JSON.stringify({
+            errorType,
+            errorMessage: "The prompt exceeds the context window",
+          }),
+        },
+      ];
+      const seen = await firstError(
+        lambdaTransport({ functionName: FUNCTION, client }),
+      );
+
+      expect(seen).toBeInstanceOf(DeciderError);
+      expect((seen as DeciderError).status).toBe(422);
+      expect(seen?.message).toContain(errorType);
+      expect(seen?.message).toContain("context window");
+      expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(false);
+    },
+  );
+
+  it("reports any other function error as DeciderError with no status, which is retried", async () => {
+    const client = new FakeLambda();
+    client.replies = [
+      {
+        functionError: "Unhandled",
+        payload: JSON.stringify({
+          errorType: "Runtime.ExitError",
+          errorMessage:
+            "RequestId: 1 Error: Runtime exited with error: exit status 1",
+        }),
+      },
+    ];
+    const seen = await firstError(
+      lambdaTransport({ functionName: FUNCTION, client }),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect((seen as DeciderError).status).toBeUndefined();
+    expect(seen?.message).toContain("Runtime.ExitError");
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(true);
+  });
+
+  it("reports a function error with a payload that is not JSON", async () => {
+    const client = new FakeLambda();
+    client.replies = [{ functionError: "Unhandled", payload: "oops" }];
+    const seen = await firstError(
+      lambdaTransport({ functionName: FUNCTION, client }),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect(seen?.message).toContain("Unhandled");
+  });
+
+  it("reports a result that is not JSON as DeciderInvalidResponseError", async () => {
+    const client = new FakeLambda();
+    client.replies = [{ payload: "<html>" }];
+    const seen = await firstError(
+      lambdaTransport({ functionName: FUNCTION, client }),
+    );
+
+    expect(seen).toBeInstanceOf(DeciderInvalidResponseError);
+  });
+
+  it.each(["TooManyRequestsException", "ServiceException"])(
+    "passes %s through, and the default strategy retries it",
+    async (name) => {
+      const client = new FakeLambda();
+      const error = named(name);
+      client.replies = [error];
+      const seen = await firstError(
+        lambdaTransport({ functionName: FUNCTION, client }),
+      );
+
+      expect(seen).toBe(error);
+      expect(defaultAiRetryStrategy(error, 1).shouldRetry).toBe(true);
+    },
+  );
+});
+
+describe("decider() transport choice", () => {
+  it("takes only one of endpoint and transport", () => {
+    const fake = new FakeDecider();
+    expect(() =>
+      decider({ endpoint: "https://x.example/v1", transport: fake.transport }),
+    ).toThrow(/only one of/);
+  });
+});
+
+describe("defaultAiRetryStrategy", () => {
   it("retries throttling and server errors with a growing delay", () => {
     expect(defaultAiRetryStrategy(named("ThrottlingException"), 1)).toEqual({
       shouldRetry: true,

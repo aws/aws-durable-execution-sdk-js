@@ -11,6 +11,13 @@ const RETRYABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
   "TimeoutError",
   "RequestTimeout",
   "RequestTimeoutException",
+  // AWS Lambda Invoke.
+  "TooManyRequestsException",
+  "ServiceException",
+  // Amazon SageMaker InvokeEndpoint.
+  "InternalFailure",
+  "ServiceUnavailable",
+  "InternalDependencyException",
 ]);
 
 /** Node.js codes of a failed connection or a socket timeout. */

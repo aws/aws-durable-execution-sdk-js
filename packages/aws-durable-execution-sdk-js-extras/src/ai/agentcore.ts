@@ -1,37 +1,12 @@
-import { AiError, DeciderError } from "./errors";
-import { invalid } from "./shared";
-import type {
-  AgentCoreConfig,
-  AgentCoreInvokeClient,
-  DeciderTransport,
-} from "./types";
+import { encode, lazySdk, parseReply } from "./aws-sdk";
+import { DeciderError } from "./errors";
+import type { AgentCoreConfig, AwsSdkClient, DeciderTransport } from "./types";
 
-type AgentCoreSdk = typeof import("@aws-sdk/client-bedrock-agentcore");
-
-let sdk: Promise<AgentCoreSdk> | undefined;
-
-/**
- * Loads `@aws-sdk/client-bedrock-agentcore`, an optional peer dependency, on
- * first use.
- *
- * The `.catch` on the `import()` lets a bundler such as esbuild leave a
- * missing package to run time instead of failing the build.
- */
-function loadAgentCoreSdk(): Promise<AgentCoreSdk> {
-  sdk ??= import("@aws-sdk/client-bedrock-agentcore").catch(
-    (cause: unknown) => {
-      sdk = undefined;
-      const code = (cause as { code?: unknown } | null)?.code;
-      throw new AiError(
-        code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND"
-          ? "decider({ agentCore }) needs the @aws-sdk/client-bedrock-agentcore package. Install it next to this package."
-          : "decider({ agentCore }) could not load the @aws-sdk/client-bedrock-agentcore package. See the cause.",
-        { cause },
-      );
-    },
-  );
-  return sdk;
-}
+const loadSdk = lazySdk(
+  () => import("@aws-sdk/client-bedrock-agentcore"),
+  "@aws-sdk/client-bedrock-agentcore",
+  "agentCoreTransport()",
+);
 
 interface InvokeResponse {
   response?: { transformToString(encoding?: string): Promise<string> };
@@ -42,32 +17,54 @@ interface InvokeResponse {
  * Returns a transport that sends each request to a Strands Decider deployed
  * on Amazon Bedrock AgentCore Runtime, through `InvokeAgentRuntime`.
  *
+ * @remarks
  * AgentCore Runtime forwards the payload to the server's `POST /invocations`
- * route, which the Strands Decider server answers the same way as
- * `POST /v1/systemone`. The AWS SDK signs the request with the function's
- * credentials.
+ * route. The Strands Decider server answers that route the same way as
+ * `POST /v1/systemone`. The 0.2.0 release on PyPI has no `/invocations`
+ * route, so deploy a later version.
+ *
+ * The AWS SDK signs the request with the function's credentials. So the
+ * function's role needs `bedrock-agentcore:InvokeAgentRuntime` on the
+ * runtime.
+ *
+ * `@aws-sdk/client-bedrock-agentcore` is an optional peer dependency. Without
+ * it, each call fails with an `AiError` that names the package.
+ *
+ * ```typescript
+ * const decide = decider({
+ *   transport: agentCoreTransport({
+ *     runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/strands-decider-abc",
+ *   }),
+ * });
+ * ```
+ *
+ * @param config - The runtime. Only `runtimeArn` is required.
+ *
+ * @public
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function agentCoreTransport(config: AgentCoreConfig): DeciderTransport {
-  let client: Promise<AgentCoreInvokeClient> | undefined;
-  const getClient = (): Promise<AgentCoreInvokeClient> => {
+  let client: Promise<AwsSdkClient> | undefined;
+  const getClient = (): Promise<AwsSdkClient> => {
     if (config.client) {
       return Promise.resolve(config.client);
     }
-    client ??= loadAgentCoreSdk().then(
+    client ??= loadSdk().then(
       ({ BedrockAgentCoreClient }) =>
-        new BedrockAgentCoreClient({}) as unknown as AgentCoreInvokeClient,
+        new BedrockAgentCoreClient({}) as unknown as AwsSdkClient,
     );
     return client;
   };
 
   return async (request, { abortSignal }) => {
-    const { InvokeAgentRuntimeCommand } = await loadAgentCoreSdk();
+    const { InvokeAgentRuntimeCommand } = await loadSdk();
     const command = new InvokeAgentRuntimeCommand({
       agentRuntimeArn: config.runtimeArn,
       ...(config.qualifier !== undefined && { qualifier: config.qualifier }),
       contentType: "application/json",
       accept: "application/json",
-      payload: new TextEncoder().encode(JSON.stringify(request)),
+      payload: encode(request),
     });
     const output = (await (
       await getClient()
@@ -82,10 +79,6 @@ export function agentCoreTransport(config: AgentCoreConfig): DeciderTransport {
         { status },
       );
     }
-    try {
-      return JSON.parse(body);
-    } catch (cause) {
-      return invalid("The decision model's reply is not JSON.", cause);
-    }
+    return parseReply(body);
   };
 }
