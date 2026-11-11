@@ -18,7 +18,7 @@
   "exports": {
     ".": {
       "import": {
-        "types": "./dist-types/index.d.mts",
+        "types": "./index.d.mts",
         "default": "./dist/index.mjs"
       },
       "require": {
@@ -28,6 +28,7 @@
     }
   },
   "files": [
+    "index.d.mts",
     "dist/",
     "dist-cjs/",
     "dist-types/",
@@ -40,7 +41,7 @@
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
-    "build:types": "rimraf dist-types tsconfig.build.tsbuildinfo && tsc -p tsconfig.build.json --emitDeclarationOnly --declaration --outDir dist-types && node scripts/write-esm-types.mjs",
+    "build:types": "rimraf dist-types tsconfig.build.tsbuildinfo && tsc -p tsconfig.build.json --emitDeclarationOnly --declaration --outDir dist-types",
     "test": "npm run typecheck && vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage",
