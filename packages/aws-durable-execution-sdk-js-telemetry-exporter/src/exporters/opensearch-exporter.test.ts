@@ -10,7 +10,9 @@ const signMock = vi.fn().mockResolvedValue({
 });
 
 vi.mock("@smithy/signature-v4", () => ({
-  SignatureV4: vi.fn(() => ({ sign: signMock })),
+  SignatureV4: vi.fn(function () {
+    return { sign: signMock };
+  }),
 }));
 vi.mock("@aws-crypto/sha256-js", () => ({ Sha256: vi.fn() }));
 vi.mock("@aws-sdk/credential-provider-node", () => ({

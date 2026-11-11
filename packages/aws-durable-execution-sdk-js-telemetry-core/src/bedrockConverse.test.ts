@@ -1,8 +1,12 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 const send = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
-  BedrockRuntimeClient: vi.fn(() => ({ send })),
-  ConverseCommand: vi.fn((input) => ({ __t: "converse", input })),
+  BedrockRuntimeClient: vi.fn(function () {
+    return { send };
+  }),
+  ConverseCommand: vi.fn(function (input) {
+    return { __t: "converse", input };
+  }),
 }));
 
 import { sendConverse, modelRejectsTemperature } from "./bedrockConverse";

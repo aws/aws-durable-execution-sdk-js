@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: vi.fn(() => ({ send: mockSend })),
-  PutObjectCommand: vi.fn((input: unknown) => ({ __input: input })),
+  S3Client: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutObjectCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { S3Exporter } from "./s3-exporter";

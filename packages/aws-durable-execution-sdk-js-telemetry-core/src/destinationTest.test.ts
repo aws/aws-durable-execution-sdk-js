@@ -1,18 +1,30 @@
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 const ddbSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: vi.fn(() => ({ send: ddbSend })),
-  DescribeTableCommand: vi.fn((i) => ({ __t: "descTable", i })),
+  DynamoDBClient: vi.fn(function () {
+    return { send: ddbSend };
+  }),
+  DescribeTableCommand: vi.fn(function (i) {
+    return { __t: "descTable", i };
+  }),
 }));
 const logsSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-cloudwatch-logs", () => ({
-  CloudWatchLogsClient: vi.fn(() => ({ send: logsSend })),
-  DescribeLogGroupsCommand: vi.fn((i) => ({ __t: "descLog", i })),
+  CloudWatchLogsClient: vi.fn(function () {
+    return { send: logsSend };
+  }),
+  DescribeLogGroupsCommand: vi.fn(function (i) {
+    return { __t: "descLog", i };
+  }),
 }));
 const sqsSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-sqs", () => ({
-  SQSClient: vi.fn(() => ({ send: sqsSend })),
-  GetQueueAttributesCommand: vi.fn((i) => ({ __t: "getAttrs", i })),
+  SQSClient: vi.fn(function () {
+    return { send: sqsSend };
+  }),
+  GetQueueAttributesCommand: vi.fn(function (i) {
+    return { __t: "getAttrs", i };
+  }),
 }));
 vi.mock("./athena", () => ({
   tableExists: vi.fn(),
@@ -32,7 +44,9 @@ vi.mock("./opensearch", () => ({
 // resolveCredentials from. Pointing this at ./config made it a no-op and let the
 // real provider chain run in tests.
 vi.mock("./configCore", () => ({
-  resolveCredentials: vi.fn(() => ({})),
+  resolveCredentials: vi.fn(function () {
+    return {};
+  }),
 }));
 vi.mock("./athenaResultLocation", () => ({
   // Default: results land outside the data, so the Athena probe may run.

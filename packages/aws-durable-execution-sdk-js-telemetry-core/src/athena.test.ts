@@ -2,10 +2,18 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.hoisted(() => vi.fn());
 
 vi.mock("@aws-sdk/client-athena", () => ({
-  AthenaClient: vi.fn(() => ({ send: mockSend })),
-  StartQueryExecutionCommand: vi.fn((i) => ({ __type: "start", i })),
-  GetQueryExecutionCommand: vi.fn((i) => ({ __type: "getExec", i })),
-  GetQueryResultsCommand: vi.fn((i) => ({ __type: "getResults", i })),
+  AthenaClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  StartQueryExecutionCommand: vi.fn(function (i) {
+    return { __type: "start", i };
+  }),
+  GetQueryExecutionCommand: vi.fn(function (i) {
+    return { __type: "getExec", i };
+  }),
+  GetQueryResultsCommand: vi.fn(function (i) {
+    return { __type: "getResults", i };
+  }),
 }));
 vi.mock("@aws-sdk/client-glue", () => ({
   GlueClient: vi.fn(),

@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: vi.fn(() => ({ send: mockSend })),
-  PutItemCommand: vi.fn((input: unknown) => ({ __input: input })),
+  DynamoDBClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutItemCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 vi.mock("@aws-sdk/util-dynamodb", () => ({

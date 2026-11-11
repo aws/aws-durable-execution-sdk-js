@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-rds-data", () => ({
-  RDSDataClient: vi.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: vi.fn((input: unknown) => ({ __input: input })),
+  RDSDataClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  ExecuteStatementCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { AuroraExporter } from "./aurora-exporter";

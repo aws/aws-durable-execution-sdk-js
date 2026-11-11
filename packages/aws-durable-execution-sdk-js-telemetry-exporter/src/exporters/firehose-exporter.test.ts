@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-firehose", () => ({
-  FirehoseClient: vi.fn(() => ({ send: mockSend })),
-  PutRecordCommand: vi.fn((input: unknown) => ({ __input: input })),
+  FirehoseClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutRecordCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { FirehoseExporter } from "./firehose-exporter";

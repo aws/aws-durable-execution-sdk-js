@@ -1,9 +1,15 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 const send = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-bedrock", () => ({
-  BedrockClient: vi.fn(() => ({ send, destroy: vi.fn() })),
-  ListInferenceProfilesCommand: vi.fn((i) => ({ __t: "profiles", i })),
-  ListFoundationModelsCommand: vi.fn((i) => ({ __t: "models", i })),
+  BedrockClient: vi.fn(function () {
+    return { send, destroy: vi.fn() };
+  }),
+  ListInferenceProfilesCommand: vi.fn(function (i) {
+    return { __t: "profiles", i };
+  }),
+  ListFoundationModelsCommand: vi.fn(function (i) {
+    return { __t: "models", i };
+  }),
 }));
 
 import { listBedrockModels } from "./bedrockModels";

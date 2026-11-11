@@ -3,10 +3,18 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-redshift-data", () => ({
-  RedshiftDataClient: vi.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: vi.fn((i) => ({ __type: "exec", i })),
-  DescribeStatementCommand: vi.fn((i) => ({ __type: "describe", i })),
-  GetStatementResultCommand: vi.fn((i) => ({ __type: "getResult", i })),
+  RedshiftDataClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  ExecuteStatementCommand: vi.fn(function (i) {
+    return { __type: "exec", i };
+  }),
+  DescribeStatementCommand: vi.fn(function (i) {
+    return { __type: "describe", i };
+  }),
+  GetStatementResultCommand: vi.fn(function (i) {
+    return { __type: "getResult", i };
+  }),
 }));
 
 import { runRedshiftQuery, fetchRedshiftRecord } from "./redshift";

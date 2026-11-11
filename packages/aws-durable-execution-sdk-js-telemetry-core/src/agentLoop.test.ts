@@ -7,12 +7,14 @@ const mockSend = vi.hoisted(() => vi.fn());
 const mockRunSandboxedJs = vi.hoisted(() => vi.fn());
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
-  BedrockRuntimeClient: vi.fn(() => ({ send: mockSend })),
+  BedrockRuntimeClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
   // Snapshot the input (esp. `messages`, which the loop mutates by reference)
   // so each call's arguments can be inspected as they were at send time.
-  ConverseCommand: vi.fn((input: unknown) => ({
-    input: JSON.parse(JSON.stringify(input)),
-  })),
+  ConverseCommand: vi.fn(function (input: unknown) {
+    return { input: JSON.parse(JSON.stringify(input)) };
+  }),
 }));
 
 vi.mock("./sandbox", () => ({

@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-sqs", () => ({
-  SQSClient: vi.fn(() => ({ send: mockSend })),
-  SendMessageCommand: vi.fn((input: unknown) => ({ __input: input })),
+  SQSClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  SendMessageCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { SQSExporter, fifoId } from "./sqs-exporter";

@@ -2,8 +2,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.fn();
 
 vi.mock("@aws-sdk/client-eventbridge", () => ({
-  EventBridgeClient: vi.fn(() => ({ send: mockSend })),
-  PutEventsCommand: vi.fn((input: unknown) => ({ __input: input })),
+  EventBridgeClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  PutEventsCommand: vi.fn(function (input: unknown) {
+    return { __input: input };
+  }),
 }));
 
 import { EventBridgeExporter } from "./eventbridge-exporter";

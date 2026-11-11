@@ -5,13 +5,21 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 const glueSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-glue", () => ({
-  GlueClient: vi.fn(() => ({ send: glueSend })),
-  GetTableCommand: vi.fn((input) => ({ input })),
+  GlueClient: vi.fn(function () {
+    return { send: glueSend };
+  }),
+  GetTableCommand: vi.fn(function (input) {
+    return { input };
+  }),
 }));
 const athenaSend = vi.hoisted(() => vi.fn());
 vi.mock("@aws-sdk/client-athena", () => ({
-  AthenaClient: vi.fn(() => ({ send: athenaSend })),
-  GetWorkGroupCommand: vi.fn((input) => ({ input })),
+  AthenaClient: vi.fn(function () {
+    return { send: athenaSend };
+  }),
+  GetWorkGroupCommand: vi.fn(function (input) {
+    return { input };
+  }),
   StartQueryExecutionCommand: vi.fn(),
   GetQueryExecutionCommand: vi.fn(),
   GetQueryResultsCommand: vi.fn(),

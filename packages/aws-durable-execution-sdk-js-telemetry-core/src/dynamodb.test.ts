@@ -18,8 +18,12 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 const mockSend = vi.hoisted(() => vi.fn());
 
 vi.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: vi.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: vi.fn((i) => ({ __type: "execute", i })),
+  DynamoDBClient: vi.fn(function () {
+    return { send: mockSend };
+  }),
+  ExecuteStatementCommand: vi.fn(function (i) {
+    return { __type: "execute", i };
+  }),
 }));
 
 import { runDynamoDBQuery } from "./dynamodb";
