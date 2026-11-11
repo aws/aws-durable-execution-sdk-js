@@ -1618,3 +1618,17 @@ describe("decider() non-finite answers", () => {
     },
   );
 });
+
+describe("decider().classify answer type", () => {
+  it("fails with DeciderInvalidResponseError when the answer is not a choice, even if it names an option", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: { type: "noul", choice: "a" } })];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      outcomes([() => decide.classify(context, "Which?", ["a", "b"], "x")]),
+    );
+
+    expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+  });
+});
