@@ -415,6 +415,8 @@ describe("Run In Child Context Integration Tests", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        Name: "test-replay-child-context",
+        SubType: "RunInChildContext",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {

@@ -49,6 +49,7 @@ describe("Run In Child Context Handler", () => {
       _stepData: {},
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
         getTerminationPromise: vi.fn(),
       },
       mutex: {
@@ -716,6 +717,7 @@ describe("runInChildContext with custom serdes", () => {
       _stepData: {},
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
       getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
@@ -1000,6 +1002,7 @@ describe("runWithContext Integration", () => {
       _stepData: {},
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
         getTerminationPromise: vi.fn(),
       },
       mutex: {
