@@ -61,6 +61,19 @@ const history = (result: TestResult<unknown>) =>
     .getOperations()
     .map((operation) => [operation.getName(), operation.getSubType()]);
 
+/**
+ * A fetch reply. It is a plain object, not a Response, because on Node.js 22
+ * reading a Response body inside a step of the local test runner with
+ * skipTime runs out of memory.
+ */
+const reply = (body: string | null, status: number): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body ?? "",
+    json: async () => JSON.parse(body ?? ""),
+  }) as Response;
+
 const noRetry = () => ({ shouldRetry: false });
 
 /** Rejects like the AWS SDK when its abort signal fires. */
@@ -761,9 +774,7 @@ describe("decider()", () => {
   it("does not follow a redirect", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(null, { status: 307, headers: { location: "https://x" } }),
-      );
+      .mockResolvedValue(reply(null, 307));
     let seen: Error | undefined;
     try {
       const decide = decider({
@@ -787,7 +798,7 @@ describe("decider()", () => {
   it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response("<html>", { status: 200 }));
+      .mockResolvedValue(reply("<html>", 200));
     let seen: Error | undefined;
     try {
       const decide = decider({
@@ -820,11 +831,11 @@ describe("decider()", () => {
   });
 
   it("posts to STRANDS_DECIDER_ENDPOINT by default, with the caller's headers", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(answers({ answer: noul(0.95) })), {
-        status: 200,
-      }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        reply(JSON.stringify(answers({ answer: noul(0.95) })), 200),
+      );
     try {
       await withEndpoint("http://127.0.0.1:9/v1/systemone", async () => {
         const decide = decider({ headers: { authorization: "Bearer t" } });
@@ -851,7 +862,7 @@ describe("decider()", () => {
   it("reports an HTTP error from the decision model with its status", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response("bad question", { status: 422 }));
+      .mockResolvedValue(reply("bad question", 422));
     try {
       const decide = decider({
         endpoint: "http://127.0.0.1:9/x",
