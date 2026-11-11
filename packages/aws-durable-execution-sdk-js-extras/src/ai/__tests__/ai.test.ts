@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   type DurableContext,
+  DurablePromise,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
@@ -510,7 +511,10 @@ describe("decider()", () => {
       ]),
     );
 
-    expect(result.getResult()).toEqual(["StepError", "StepError"]);
+    expect(result.getResult()).toEqual([
+      "DeciderInvalidResponseError",
+      "DeciderInvalidResponseError",
+    ]);
     const errors = result
       .getOperations()
       .map((operation) => operation.getStepDetails()?.error?.errorMessage);
@@ -1340,5 +1344,189 @@ describe("defaultAiRetryStrategy", () => {
     ]) {
       expect(defaultAiRetryStrategy(error, 1).shouldRetry).toBe(false);
     }
+  });
+});
+
+describe("the step boundary", () => {
+  it("rejects with the AI error class and its status, on the first run and on replay", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [
+      new DeciderError("HTTP 422: too long", { status: 422 }),
+      new LlmStoppedError("guardrail_intervened"),
+    ];
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok", "guardrail_intervened")];
+    const decide = fakeDecider(fake);
+    const model = fakeLlm(client);
+    const seen: string[][] = [];
+
+    const result = await run(async (context) => {
+      const names: string[] = [];
+      for (const call of [
+        () => decide.check(context, "Q?", "x"),
+        () => model.ask(context, "Q?"),
+      ]) {
+        try {
+          await call();
+        } catch (error) {
+          names.push(
+            `${(error as Error).constructor.name}:${String((error as DeciderError).status ?? (error as LlmStoppedError).stopReason)}:${error instanceof AiError}`,
+          );
+        }
+      }
+      seen.push(names);
+      // The wait ends the invocation. The next one replays both steps.
+      await context.wait({ seconds: 1 });
+      return seen;
+    });
+
+    const expected = [
+      "DeciderError:422:true",
+      "LlmStoppedError:guardrail_intervened:true",
+    ];
+    expect(result.getResult()).toEqual([expected, expected]);
+    expect(fake.requests).toHaveLength(1);
+    expect(client.inputs).toHaveLength(1);
+  });
+
+  it("keeps another step failure as the SDK's StepError", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [
+      Object.assign(new Error("denied"), { name: "AccessDenied" }),
+    ];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      outcomes([() => decide.check(context, "Q?", "x")]),
+    );
+
+    expect(result.getResult()).toEqual(["StepError"]);
+  });
+});
+
+describe("request signals", () => {
+  /** A context whose step passes `signal` as the step's cancellation signal. */
+  const contextWith = (signal: AbortSignal, lambdaContext?: unknown) =>
+    ({
+      lambdaContext,
+      step: (_name: string, fn: (ctx: unknown) => Promise<unknown>) =>
+        new DurablePromise(() => fn({ signal })),
+    }) as unknown as DurableContext;
+
+  it("aborts the request when the SDK cancels the step, without an AiTimeoutError", async () => {
+    const cancel = new AbortController();
+    let received: AbortSignal | undefined;
+    const decide = decider({
+      transport: (_request, { abortSignal }) => {
+        received = abortSignal;
+        return abortable(abortSignal);
+      },
+      retryStrategy: noRetry,
+    });
+
+    const call = decide.check(
+      contextWith(cancel.signal, { getRemainingTimeInMillis: () => 60_000 }),
+      "Q?",
+      "x",
+    );
+    const outcome = call.then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    cancel.abort();
+    const error = await outcome;
+
+    expect(received?.aborted).toBe(true);
+    expect(error?.name).toBe("AbortError");
+    expect(error).not.toBeInstanceOf(AiTimeoutError);
+  });
+
+  it("treats a deadline read that throws as no deadline", async () => {
+    let received: AbortSignal | undefined;
+    const decide = decider({
+      transport: async (_request, { abortSignal }) => {
+        received = abortSignal;
+        return answers({ answer: noul(0.9) });
+      },
+    });
+    const step = new AbortController().signal;
+
+    const answer = await decide.check(
+      contextWith(step, {
+        getRemainingTimeInMillis: () => {
+          throw new Error("no deadline here");
+        },
+      }),
+      "Q?",
+      "x",
+    );
+
+    expect(answer).toBe(true);
+    // Only the step's own signal is left.
+    expect(received).toBe(step);
+  });
+});
+
+describe("decider() HTTP body", () => {
+  it("reports a reply that cannot be read as a retried DeciderError, not an invalid reply", async () => {
+    const dropped = Object.assign(new TypeError("terminated"), {
+      cause: Object.assign(new Error("other side closed"), {
+        code: "UND_ERR_SOCKET",
+      }),
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.reject(dropped),
+    } as unknown as Response);
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      await run((context) => decide.check(context, "Q?", "x"));
+    } finally {
+      fetchMock.mockRestore();
+    }
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect(seen).not.toBeInstanceOf(DeciderInvalidResponseError);
+    expect((seen as DeciderError).status).toBeUndefined();
+    expect(seen?.message).toContain(
+      "could not be read (TypeError, UND_ERR_SOCKET)",
+    );
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(true);
+  });
+});
+
+describe("llm() guardrail", () => {
+  it("passes the configured guardrail to Converse", async () => {
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok")];
+    const model = fakeLlm(client, {
+      guardrail: { identifier: "gr-123", version: "4" },
+    });
+
+    await run((context) => model.ask(context, "Q?"));
+
+    expect(client.inputs[0]?.guardrailConfig).toEqual({
+      guardrailIdentifier: "gr-123",
+      guardrailVersion: "4",
+    });
+  });
+
+  it("sends no guardrail when none is configured", async () => {
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok")];
+    const model = fakeLlm(client);
+
+    await run((context) => model.ask(context, "Q?"));
+
+    expect(client.inputs[0]).not.toHaveProperty("guardrailConfig");
   });
 });

@@ -1,8 +1,13 @@
 import {
   type DurableContext,
   DurablePromise,
+  type StepConfig,
 } from "@aws/durable-execution-sdk-js";
-import { AiTimeoutError, DeciderInvalidResponseError } from "./errors";
+import {
+  AiTimeoutError,
+  DeciderInvalidResponseError,
+  rebuildAiError,
+} from "./errors";
 
 /** Time that a request leaves for the step to record its outcome. */
 export const INVOCATION_RESERVE_MS = 10_000;
@@ -41,11 +46,83 @@ export function deadlineSignal(
   if (typeof read !== "function") {
     return undefined;
   }
-  const remaining = read.call(lambdaContext) as number | undefined;
+  let remaining: unknown;
+  try {
+    remaining = read.call(lambdaContext);
+  } catch {
+    // A deadline that cannot be read means no deadline, as in the core SDK.
+    // The call then runs without the reserve, and does not fail for it.
+    return undefined;
+  }
   if (typeof remaining !== "number" || !Number.isFinite(remaining)) {
     return undefined;
   }
   return AbortSignal.timeout(Math.max(remaining - INVOCATION_RESERVE_MS, 1));
+}
+
+/**
+ * The signals of one request.
+ *
+ * - `deadline` fires {@link INVOCATION_RESERVE_MS} before the invocation runs
+ *   out of time.
+ * - `signal` fires on the deadline, or when the SDK cancels the step, for
+ *   example when a `map` or `parallel` batch completes early.
+ *
+ * The request is sent with `signal`. {@link deadlineError} checks only
+ * `deadline`, so a cancelled step does not count as a timeout.
+ */
+export interface RequestSignals {
+  signal: AbortSignal | undefined;
+  deadline: AbortSignal | undefined;
+}
+
+/** Returns the signals of one request. */
+export function requestSignals(
+  context: DurableContext,
+  stepSignal: AbortSignal | undefined,
+): RequestSignals {
+  const deadline = deadlineSignal(context);
+  const signals = [stepSignal, deadline].filter(
+    (value): value is AbortSignal => value !== undefined,
+  );
+  return {
+    signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
+    deadline,
+  };
+}
+
+/**
+ * Runs `body` in one durable step, and rejects with an AI error as its own
+ * class.
+ *
+ * @remarks
+ * The SDK rebuilds a failed step as a `StepError`, on the first run and on
+ * replay. Its `cause.name` and `errorData` hold the AI error type and data.
+ * So the error is rebuilt as that AI class. Any other failure stays a
+ * `StepError`.
+ *
+ * The step is created when this function runs, so it keeps its place in the
+ * operation order. The returned promise only maps the error.
+ */
+export function aiStep<T>(
+  context: DurableContext,
+  name: string,
+  config: StepConfig<T>,
+  body: (signals: RequestSignals) => Promise<T>,
+): DurablePromise<T> {
+  const step = context.step(
+    name,
+    async (stepContext) => body(requestSignals(context, stepContext.signal)),
+    config,
+  );
+  return new DurablePromise<T>(() =>
+    step.then(
+      (value) => value,
+      (error: unknown) => {
+        throw rebuildAiError(error) ?? error;
+      },
+    ),
+  );
 }
 
 const ABORT_ERROR_NAMES: ReadonlySet<string> = new Set([

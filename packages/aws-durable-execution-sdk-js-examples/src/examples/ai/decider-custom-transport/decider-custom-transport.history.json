@@ -1,0 +1,81 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d6fbb1bc-ecac-4ced-9ee4-5b2e8ac5140c",
+    "EventTimestamp": "2026-11-11T04:56:23.524Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"ticket\":\"My billing page is failing right now.\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "DeciderCheck",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "decider.check",
+    "EventTimestamp": "2026-11-11T04:56:23.645Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "DeciderCheck",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "decider.check",
+    "EventTimestamp": "2026-11-11T04:56:23.645Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "true"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "DeciderClassify",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "decider.classify",
+    "EventTimestamp": "2026-11-11T04:56:23.648Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "DeciderClassify",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "decider.classify",
+    "EventTimestamp": "2026-11-11T04:56:23.648Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"billing\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-11-11T04:56:23.649Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-11T04:56:23.524Z",
+      "EndTimestamp": "2026-11-11T04:56:23.649Z",
+      "Error": {},
+      "RequestId": "f1928924-58f0-4001-ad6c-fad688014150"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "d6fbb1bc-ecac-4ced-9ee4-5b2e8ac5140c",
+    "EventTimestamp": "2026-11-11T04:56:23.649Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"urgent\":true,\"team\":\"billing\"}"
+      }
+    }
+  }
+]

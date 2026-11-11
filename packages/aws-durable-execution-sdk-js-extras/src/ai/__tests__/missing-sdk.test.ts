@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type * as Ai from "..";
 
 const ctx = {
-  step: (_name: string, fn: () => Promise<unknown>) => fn(),
+  step: (_name: string, fn: (ctx: unknown) => Promise<unknown>) => fn({}),
 } as unknown as Parameters<Ai.Llm["ask"]>[0];
 
 async function loadWithout(pkg: string, error: Error): Promise<typeof Ai> {

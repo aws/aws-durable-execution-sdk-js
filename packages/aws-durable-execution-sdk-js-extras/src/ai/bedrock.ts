@@ -1,6 +1,6 @@
 import { sdkLoadError } from "./aws-sdk";
 import { LlmMaxTokensError, LlmStoppedError } from "./errors";
-import { deadlineError, serializeInput } from "./shared";
+import { deadlineError, type RequestSignals, serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
 /**
@@ -91,7 +91,7 @@ export class BedrockConverse {
     question: string,
     input: unknown,
     override: Partial<BedrockConfig> | undefined,
-    signal: AbortSignal | undefined,
+    { signal, deadline }: RequestSignals,
   ): Promise<string> {
     const { ConverseCommand } = await loadBedrockRuntime();
     const merged = { ...this.config, ...defined(override) };
@@ -131,7 +131,7 @@ export class BedrockConverse {
         abortSignal: signal,
       })) as typeof response;
     } catch (error) {
-      throw deadlineError(error, signal);
+      throw deadlineError(error, deadline);
     }
     const { stopReason } = response;
     if (stopReason === "max_tokens") {

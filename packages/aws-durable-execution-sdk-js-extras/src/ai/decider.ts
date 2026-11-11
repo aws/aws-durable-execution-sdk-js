@@ -2,12 +2,14 @@ import {
   type DurableContext,
   DurablePromise,
 } from "@aws/durable-execution-sdk-js";
+import { parseReply } from "./aws-sdk";
 import { DeciderError } from "./errors";
 import { defaultAiRetryStrategy } from "./retry";
 import {
   causeChain,
+  aiStep,
   deadlineError,
-  deadlineSignal,
+  type RequestSignals,
   invalid,
   MAX_CLASSIFY_OPTIONS,
   matchOption,
@@ -117,11 +119,20 @@ function httpTransport(
         { status: response.status },
       );
     }
+    // The body is read first and parsed second. A read that fails, for
+    // example when the connection drops after the headers, is a transport
+    // failure, which the default strategy retries. Only a body that is not
+    // JSON is an invalid reply.
+    let text: string;
     try {
-      return await response.json();
+      text = await response.text();
     } catch (cause) {
-      return invalid("The decision model's reply is not JSON.", cause);
+      throw new DeciderError(
+        `The decision model at ${where} answered HTTP ${response.status}, but its reply could not be read (${reason(cause)}).`,
+        { cause },
+      );
     }
+    return parseReply(text);
   };
 }
 
@@ -243,7 +254,7 @@ export function decider(config: DeciderConfig = {}): Decider {
   async function ask(
     input: unknown,
     questions: Record<string, unknown>,
-    signal: AbortSignal | undefined,
+    { signal, deadline }: RequestSignals,
   ): Promise<Answers> {
     const request: DeciderRequest = {
       model,
@@ -254,7 +265,7 @@ export function decider(config: DeciderConfig = {}): Decider {
     try {
       response = await send(request, { abortSignal: signal });
     } catch (error) {
-      throw deadlineError(error, signal);
+      throw deadlineError(error, deadline);
     }
     return answersOf(response);
   }
@@ -263,13 +274,14 @@ export function decider(config: DeciderConfig = {}): Decider {
     context: DurableContext,
     operation: Operation,
     options: AiCallOptions | undefined,
-    body: (signal: AbortSignal | undefined) => Promise<T>,
+    body: (signals: RequestSignals) => Promise<T>,
   ): DurablePromise<T> {
-    return context.step(
+    return aiStep(
+      context,
       options?.name ?? `decider.${operation}`,
-      async () => body(deadlineSignal(context)),
       { retryStrategy, subType: SUBTYPES[operation] },
-    ) as DurablePromise<T>;
+      body,
+    );
   }
 
   return {
@@ -280,11 +292,11 @@ export function decider(config: DeciderConfig = {}): Decider {
       } catch (error) {
         return rejected(error);
       }
-      return run(context, "check", options, async (signal) => {
+      return run(context, "check", options, async (signals) => {
         const answers = await ask(
           input,
           { [ANSWER]: { type: "noul", instructions: question } },
-          signal,
+          signals,
         );
         return numberField(answers[ANSWER], "noul", "noul") >= yesAt;
       });
@@ -304,14 +316,14 @@ export function decider(config: DeciderConfig = {}): Decider {
       } catch (error) {
         return rejected<T[number]>(error);
       }
-      return run<T[number]>(context, "classify", options, async (signal) => {
+      return run<T[number]>(context, "classify", options, async (signals) => {
         const criteria = Object.fromEntries(
           choices.map((option) => [option, null]),
         );
         const answers = await ask(
           input,
           { [ANSWER]: { type: "choice", instructions: question, criteria } },
-          signal,
+          signals,
         );
         const answer = answers[ANSWER];
         if (answer?.type !== "choice") {
@@ -338,7 +350,7 @@ export function decider(config: DeciderConfig = {}): Decider {
       } catch (error) {
         return rejected<T[number][]>(error);
       }
-      return run<T[number][]>(context, "label", options, async (signal) => {
+      return run<T[number][]>(context, "label", options, async (signals) => {
         // One yes-or-no question per option. The model reads the input once.
         const questions = Object.fromEntries(
           choices.map((option, i) => [
@@ -349,7 +361,7 @@ export function decider(config: DeciderConfig = {}): Decider {
             },
           ]),
         );
-        const answers = await ask(input, questions, signal);
+        const answers = await ask(input, questions, signals);
         return choices.filter(
           (_option, i) =>
             numberField(answers[`o${i}`], "noul", "noul") >= yesAt,
@@ -365,7 +377,7 @@ export function decider(config: DeciderConfig = {}): Decider {
       } catch (error) {
         return rejected(error);
       }
-      return run(context, "score", options, async (signal) => {
+      return run(context, "score", options, async (signals) => {
         const answers = await ask(
           input,
           {
@@ -375,7 +387,7 @@ export function decider(config: DeciderConfig = {}): Decider {
               criteria: scale,
             },
           },
-          signal,
+          signals,
         );
         // The model's score is the expected level index, from 0 to levels - 1.
         const position = numberField(answers[ANSWER], "score", "score");

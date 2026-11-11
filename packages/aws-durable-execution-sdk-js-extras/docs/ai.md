@@ -130,14 +130,19 @@ A call that breaks an argument limit creates no durable operation. The returned 
 
 `ask` sends the input inside `<input>` tags, and its system prompt says that the input is data, not instructions. The decider operations can only return one of your options or a number in range. An instruction in the input can still change the answer. So do not use an answer alone to authorize an action.
 
+## Cancellation
+
+Each request listens to two signals: the step's own `signal`, and the invocation deadline. The SDK fires the step's signal when it no longer needs the result, for example when a `map` or `parallel` batch completes early. The request then stops. That stop is not an `AiTimeoutError`.
+
 ## Errors and retries
 
-Every error class extends `AiError`:
+Every error class extends `AiError`, which extends the SDK's `DurableOperationError`. A call rejects with the class that the step's last attempt threw, on the first run and on replay. `DeciderError.status` and `LlmStoppedError.stopReason` are stored in `errorData`, so they are the same on replay. Any other step failure, such as an AWS access-denied error, rejects with the SDK's `StepError`. A caller's own `runInChildContext` wraps the failure in `ChildContextError`, whose inner `StepError` has the AI error type as `cause.name`.
+
 
 | Error | When | Retried |
 |---|---|---|
-| `AiTimeoutError` | A request is still running 10 seconds before the invocation runs out of time | Yes, in a new invocation |
-| `DeciderError` | The decision model cannot be reached, or answers with an HTTP error (including 422 for an input that is too long) | On no answer, 408, 429, and 5xx |
+| `AiTimeoutError` | A request is still running 10 seconds before the invocation runs out of time. A deadline that cannot be read counts as no deadline. | Yes, in a new invocation |
+| `DeciderError` | The decision model cannot be reached, its reply cannot be read, or it answers with an HTTP error (including 422 for an input that is too long) | On no answer, 408, 429, and 5xx |
 | `DeciderInvalidResponseError` | The decision model's reply is not JSON, has the wrong shape, or has a score outside the scale | No |
 | `LlmMaxTokensError` | The `ask` reply stops at `maxTokens` | No |
 | `LlmStoppedError` | The `ask` reply stops for another reason, such as a guardrail that intervened. Its `stopReason` says why. | Only `malformed_model_output` and `malformed_tool_use` |
@@ -150,5 +155,5 @@ The step retry strategy is `defaultAiRetryStrategy`. It also retries throttling,
 
 ## Testing
 
-Pass a fake as `transport` to `decider()`, as `client` to an AWS transport, and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
+Pass a fake as `transport` to `decider()`, as `client` to an AWS transport, and as `destination.bedrock.client` to `llm()`. `LocalDurableTestRunner` then runs a handler without AWS credentials or a model server. The [decider custom transport example](../../aws-durable-execution-sdk-js-examples/src/examples/ai/decider-custom-transport/decider-custom-transport.ts) shows a transport that answers without a model. `src/ai/__tests__/live.test.ts` runs the operations against a real decision model server and Bedrock when `AI_LIVE=1`. `e2e/run-ai-e2e.mjs deploy` deploys a durable function that runs `ask` and checks the result and the history.
 

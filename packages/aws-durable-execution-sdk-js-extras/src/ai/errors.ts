@@ -1,14 +1,55 @@
+import { DurableOperationError } from "@aws/durable-execution-sdk-js";
+
+/** The options of an AI error. `errorData` is set when the SDK rebuilds it. */
+interface AiErrorOptions {
+  cause?: unknown;
+  errorData?: string | undefined;
+}
+
+function asError(cause: unknown): Error | undefined {
+  return cause instanceof Error ? cause : undefined;
+}
+
+/** Reads one field of the JSON in `errorData`. */
+function dataField(errorData: string | undefined, key: string): unknown {
+  if (errorData === undefined) {
+    return undefined;
+  }
+  try {
+    const data: unknown = JSON.parse(errorData);
+    return typeof data === "object" && data !== null
+      ? (data as Record<string, unknown>)[key]
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The base class of the errors that the `decider` and `llm` operations throw.
+ *
+ * @remarks
+ * An operation call rejects with the class that the step's last attempt
+ * threw, on the first run and on replay. The SDK checkpoints the error type,
+ * the message, and `errorData`. So a field such as {@link DeciderError.status}
+ * is stored in `errorData` as JSON, and it is the same on replay.
+ *
+ * The class is restored at the operation's own boundary. A caller's own
+ * `runInChildContext` wraps the failure in `ChildContextError`. The inner
+ * error is then a `StepError` whose `cause.name` is the AI error type.
+ *
+ * Any other failure of the step, such as an AWS access-denied error, rejects
+ * with the SDK's `StepError`.
  *
  * @public
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
-export class AiError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "AiError";
+export class AiError extends DurableOperationError {
+  readonly errorType: string = "AiError";
+
+  constructor(message: string, options?: AiErrorOptions) {
+    super(message, asError(options?.cause), options?.errorData);
   }
 }
 
@@ -20,13 +61,22 @@ export class AiError extends Error {
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
 export class DeciderError extends AiError {
-  /** The HTTP status, when the decision model answered. */
-  readonly status: number | undefined;
+  override readonly errorType: string = "DeciderError";
 
-  constructor(message: string, options?: { status?: number; cause?: unknown }) {
-    super(message, options);
-    this.name = "DeciderError";
-    this.status = options?.status;
+  constructor(message: string, options?: AiErrorOptions & { status?: number }) {
+    super(message, {
+      cause: options?.cause,
+      errorData:
+        options?.status === undefined
+          ? options?.errorData
+          : JSON.stringify({ status: options.status }),
+    });
+  }
+
+  /** The HTTP status, when the decision model answered. */
+  get status(): number | undefined {
+    const status = dataField(this.errorData, "status");
+    return typeof status === "number" ? status : undefined;
   }
 }
 
@@ -40,10 +90,7 @@ export class DeciderError extends AiError {
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
 export class DeciderInvalidResponseError extends AiError {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "DeciderInvalidResponseError";
-  }
+  override readonly errorType: string = "DeciderInvalidResponseError";
 }
 
 /**
@@ -56,10 +103,7 @@ export class DeciderInvalidResponseError extends AiError {
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
 export class AiTimeoutError extends AiError {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "AiTimeoutError";
-  }
+  override readonly errorType: string = "AiTimeoutError";
 }
 
 /**
@@ -74,15 +118,22 @@ export class AiTimeoutError extends AiError {
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
 export class LlmStoppedError extends AiError {
-  /** The Converse `stopReason`, such as `guardrail_intervened`. */
-  readonly stopReason: string;
+  override readonly errorType: string = "LlmStoppedError";
 
-  constructor(stopReason: string) {
+  constructor(stopReason: string, options?: AiErrorOptions) {
     super(
       `The model stopped with the reason "${stopReason}". The reply is not returned.`,
+      {
+        cause: options?.cause,
+        errorData: options?.errorData ?? JSON.stringify({ stopReason }),
+      },
     );
-    this.name = "LlmStoppedError";
-    this.stopReason = stopReason;
+  }
+
+  /** The Converse `stopReason`, such as `guardrail_intervened`. */
+  get stopReason(): string {
+    const reason = dataField(this.errorData, "stopReason");
+    return typeof reason === "string" ? reason : "";
   }
 }
 
@@ -95,8 +146,46 @@ export class LlmStoppedError extends AiError {
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
 export class LlmMaxTokensError extends AiError {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = "LlmMaxTokensError";
+  override readonly errorType: string = "LlmMaxTokensError";
+}
+
+/**
+ * Restores an AI error from the error that the SDK rebuilt from a
+ * checkpoint, or returns `undefined` for any other error.
+ *
+ * The SDK rebuilds an error type it does not know as a `StepError`, and it
+ * sets `cause.name` to the checkpointed type. The message and `errorData` are
+ * kept, so the AI error is rebuilt from them.
+ */
+export function rebuildAiError(error: unknown): AiError | undefined {
+  if (error instanceof AiError) {
+    return error;
+  }
+  if (!(error instanceof DurableOperationError)) {
+    return undefined;
+  }
+  const type =
+    error.errorType === "StepError" ? error.cause?.name : error.errorType;
+  const options = { cause: error.cause, errorData: error.errorData };
+  switch (type) {
+    case "AiError":
+      return new AiError(error.message, options);
+    case "DeciderError":
+      return new DeciderError(error.message, options);
+    case "DeciderInvalidResponseError":
+      return new DeciderInvalidResponseError(error.message, options);
+    case "AiTimeoutError":
+      return new AiTimeoutError(error.message, options);
+    case "LlmMaxTokensError":
+      return new LlmMaxTokensError(error.message, options);
+    case "LlmStoppedError": {
+      const reason = dataField(error.errorData, "stopReason");
+      return new LlmStoppedError(
+        typeof reason === "string" ? reason : "unknown",
+        options,
+      );
+    }
+    default:
+      return undefined;
   }
 }
