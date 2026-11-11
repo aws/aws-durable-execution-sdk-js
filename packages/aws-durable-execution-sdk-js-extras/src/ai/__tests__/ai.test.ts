@@ -1568,3 +1568,53 @@ describe("decider().score boundaries", () => {
     },
   );
 });
+
+describe("defaultAiRetryStrategy after a timeout", () => {
+  it("waits longer than the invocation reserve, so the retry runs in a new invocation", () => {
+    const timeout = new AiTimeoutError("late");
+
+    expect(defaultAiRetryStrategy(timeout, 1)).toEqual({
+      shouldRetry: true,
+      delay: { seconds: 11 },
+    });
+    expect(defaultAiRetryStrategy(timeout, 4).delay).toEqual({ seconds: 16 });
+    // Other errors keep the short delay.
+    expect(
+      defaultAiRetryStrategy(new DeciderError("busy", { status: 503 }), 1)
+        .delay,
+    ).toEqual({ seconds: 2 });
+  });
+});
+
+describe("decider() non-finite answers", () => {
+  it.each([
+    ["check", Number.NaN],
+    ["check", Number.POSITIVE_INFINITY],
+    ["score", Number.NaN],
+  ] as const)(
+    "fails %s with DeciderInvalidResponseError for %d",
+    async (operation, value) => {
+      const fake = new FakeDecider();
+      fake.replies = [
+        answers({
+          answer:
+            operation === "check"
+              ? { type: "noul", noul: value }
+              : scoreAnswer(value, 1),
+        }),
+      ];
+      const decide = fakeDecider(fake);
+
+      const result = await run((context) =>
+        outcomes([
+          () =>
+            operation === "check"
+              ? decide.check(context, "Q?", "x")
+              : decide.score(context, "How?", ["low", "high"], "x"),
+        ]),
+      );
+
+      expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+    },
+  );
+});
