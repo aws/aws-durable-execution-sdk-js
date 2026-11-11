@@ -1,11 +1,18 @@
-import { decode, encode, lazySdk, parseReply } from "./aws-sdk";
+import {
+  decode,
+  encode,
+  lazyClient,
+  once,
+  parseReply,
+  sdkLoadError,
+} from "./aws-sdk";
 import { DeciderError } from "./errors";
 import type { AwsSdkClient, DeciderTransport, LambdaConfig } from "./types";
 
-const loadSdk = lazySdk(
-  () => import("@aws-sdk/client-lambda"),
-  "@aws-sdk/client-lambda",
-  "lambdaTransport()",
+const loadSdk = once(() =>
+  import("@aws-sdk/client-lambda").catch(
+    sdkLoadError("@aws-sdk/client-lambda", "lambdaTransport()"),
+  ),
 );
 
 /**
@@ -63,16 +70,11 @@ interface InvokeOutput {
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function lambdaTransport(config: LambdaConfig): DeciderTransport {
-  let client: Promise<AwsSdkClient> | undefined;
-  const getClient = (): Promise<AwsSdkClient> => {
-    if (config.client) {
-      return Promise.resolve(config.client);
-    }
-    client ??= loadSdk().then(
+  const getClient = lazyClient(config.client, () =>
+    loadSdk().then(
       ({ LambdaClient }) => new LambdaClient({}) as unknown as AwsSdkClient,
-    );
-    return client;
-  };
+    ),
+  );
 
   return async (request, { abortSignal }) => {
     const { InvokeCommand } = await loadSdk();

@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   type DurableContext,
   withDurableExecution,
@@ -628,7 +629,7 @@ describe("decider()", () => {
   });
 
   it("keeps the cause's message, which can repeat the URL, out of the error message", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(
         new TypeError("cannot reach https://svc.example/?token=T"),
@@ -704,7 +705,7 @@ describe("decider()", () => {
   });
 
   it("turns an unreachable error caused by the deadline abort into AiTimeoutError", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(
         (_url, init) => abortable(init?.signal ?? undefined) as never,
@@ -739,7 +740,7 @@ describe("decider()", () => {
   });
 
   it("keeps the query and credentials of the endpoint out of the error", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(new TypeError("fetch failed"));
     try {
@@ -758,7 +759,7 @@ describe("decider()", () => {
   });
 
   it("does not follow a redirect", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
         new Response(null, { status: 307, headers: { location: "https://x" } }),
@@ -784,7 +785,7 @@ describe("decider()", () => {
   });
 
   it("reports a reply that is not JSON as DeciderInvalidResponseError", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("<html>", { status: 200 }));
     let seen: Error | undefined;
@@ -819,7 +820,7 @@ describe("decider()", () => {
   });
 
   it("posts to STRANDS_DECIDER_ENDPOINT by default, with the caller's headers", async () => {
-    const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(answers({ answer: noul(0.95) })), {
         status: 200,
       }),
@@ -848,7 +849,7 @@ describe("decider()", () => {
   });
 
   it("reports an HTTP error from the decision model with its status", async () => {
-    const fetchMock = jest
+    const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("bad question", { status: 422 }));
     try {
@@ -1012,7 +1013,7 @@ describe("agentCoreTransport", () => {
   it("is used instead of STRANDS_DECIDER_ENDPOINT", async () => {
     const client = new FakeAgentCore();
     client.replies = [{ body: JSON.stringify(answers({ answer: noul(0.9) })) }];
-    const fetchMock = jest.spyOn(globalThis, "fetch");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
     try {
       await withEndpoint("https://env.example/v1/systemone", async () => {
         const decide = decider({

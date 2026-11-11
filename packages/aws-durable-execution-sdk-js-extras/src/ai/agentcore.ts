@@ -1,11 +1,11 @@
-import { encode, lazySdk, parseReply } from "./aws-sdk";
+import { encode, lazyClient, once, parseReply, sdkLoadError } from "./aws-sdk";
 import { DeciderError } from "./errors";
 import type { AgentCoreConfig, AwsSdkClient, DeciderTransport } from "./types";
 
-const loadSdk = lazySdk(
-  () => import("@aws-sdk/client-bedrock-agentcore"),
-  "@aws-sdk/client-bedrock-agentcore",
-  "agentCoreTransport()",
+const loadSdk = once(() =>
+  import("@aws-sdk/client-bedrock-agentcore").catch(
+    sdkLoadError("@aws-sdk/client-bedrock-agentcore", "agentCoreTransport()"),
+  ),
 );
 
 interface InvokeResponse {
@@ -45,17 +45,12 @@ interface InvokeResponse {
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function agentCoreTransport(config: AgentCoreConfig): DeciderTransport {
-  let client: Promise<AwsSdkClient> | undefined;
-  const getClient = (): Promise<AwsSdkClient> => {
-    if (config.client) {
-      return Promise.resolve(config.client);
-    }
-    client ??= loadSdk().then(
+  const getClient = lazyClient(config.client, () =>
+    loadSdk().then(
       ({ BedrockAgentCoreClient }) =>
         new BedrockAgentCoreClient({}) as unknown as AwsSdkClient,
-    );
-    return client;
-  };
+    ),
+  );
 
   return async (request, { abortSignal }) => {
     const { InvokeAgentRuntimeCommand } = await loadSdk();

@@ -1,11 +1,18 @@
-import { decode, encode, lazySdk, parseReply } from "./aws-sdk";
+import {
+  decode,
+  encode,
+  lazyClient,
+  once,
+  parseReply,
+  sdkLoadError,
+} from "./aws-sdk";
 import { DeciderError } from "./errors";
 import type { AwsSdkClient, DeciderTransport, SageMakerConfig } from "./types";
 
-const loadSdk = lazySdk(
-  () => import("@aws-sdk/client-sagemaker-runtime"),
-  "@aws-sdk/client-sagemaker-runtime",
-  "sageMakerTransport()",
+const loadSdk = once(() =>
+  import("@aws-sdk/client-sagemaker-runtime").catch(
+    sdkLoadError("@aws-sdk/client-sagemaker-runtime", "sageMakerTransport()"),
+  ),
 );
 
 /**
@@ -50,17 +57,12 @@ interface ModelError extends Error {
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function sageMakerTransport(config: SageMakerConfig): DeciderTransport {
-  let client: Promise<AwsSdkClient> | undefined;
-  const getClient = (): Promise<AwsSdkClient> => {
-    if (config.client) {
-      return Promise.resolve(config.client);
-    }
-    client ??= loadSdk().then(
+  const getClient = lazyClient(config.client, () =>
+    loadSdk().then(
       ({ SageMakerRuntimeClient }) =>
         new SageMakerRuntimeClient({}) as unknown as AwsSdkClient,
-    );
-    return client;
-  };
+    ),
+  );
 
   return async (request, { abortSignal }) => {
     const { InvokeEndpointCommand } = await loadSdk();

@@ -1,4 +1,5 @@
-import { AiError, LlmMaxTokensError, LlmStoppedError } from "./errors";
+import { sdkLoadError } from "./aws-sdk";
+import { LlmMaxTokensError, LlmStoppedError } from "./errors";
 import { deadlineError, serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
@@ -50,13 +51,7 @@ function loadBedrockRuntime(): Promise<BedrockRuntime> {
   runtime ??= import("@aws-sdk/client-bedrock-runtime").catch(
     (cause: unknown) => {
       runtime = undefined;
-      const code = (cause as { code?: unknown } | null)?.code;
-      throw new AiError(
-        code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND"
-          ? "llm() needs the @aws-sdk/client-bedrock-runtime package. Install it next to this package."
-          : "llm() could not load the @aws-sdk/client-bedrock-runtime package. See the cause.",
-        { cause },
-      );
+      return sdkLoadError("@aws-sdk/client-bedrock-runtime", "llm()")(cause);
     },
   );
   return runtime;

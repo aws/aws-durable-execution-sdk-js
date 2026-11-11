@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // Runs the operations against real services, inside the local test runner.
 // It is skipped unless AI_LIVE=1, because it needs:
 //
@@ -6,7 +7,7 @@
 // 2. AWS credentials that can call bedrock:InvokeModel on
 //    global.anthropic.claude-haiku-5-5, and AWS_REGION.
 //
-// Usage: AI_LIVE=1 STRANDS_DECIDER_ENDPOINT=... npx jest src/ai/__tests__/live.test.ts
+// Usage: AI_LIVE=1 STRANDS_DECIDER_ENDPOINT=... npx vitest run src/ai/__tests__/live.test.ts
 import {
   type DurableContext,
   withDurableExecution,
