@@ -1,14 +1,15 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.hoisted(() => vi.fn());
 
-jest.mock("@aws-sdk/client-athena", () => ({
-  AthenaClient: jest.fn(() => ({ send: mockSend })),
-  StartQueryExecutionCommand: jest.fn((i) => ({ __type: "start", i })),
-  GetQueryExecutionCommand: jest.fn((i) => ({ __type: "getExec", i })),
-  GetQueryResultsCommand: jest.fn((i) => ({ __type: "getResults", i })),
+vi.mock("@aws-sdk/client-athena", () => ({
+  AthenaClient: vi.fn(() => ({ send: mockSend })),
+  StartQueryExecutionCommand: vi.fn((i) => ({ __type: "start", i })),
+  GetQueryExecutionCommand: vi.fn((i) => ({ __type: "getExec", i })),
+  GetQueryResultsCommand: vi.fn((i) => ({ __type: "getResults", i })),
 }));
-jest.mock("@aws-sdk/client-glue", () => ({
-  GlueClient: jest.fn(),
-  GetTableCommand: jest.fn(),
+vi.mock("@aws-sdk/client-glue", () => ({
+  GlueClient: vi.fn(),
+  GetTableCommand: vi.fn(),
 }));
 
 import { readFileSync } from "node:fs";
@@ -64,7 +65,9 @@ const base = {
   query: "SELECT col1 FROM t",
 };
 
-beforeEach(() => mockSend.mockReset());
+beforeEach(() => {
+  mockSend.mockReset();
+});
 
 describe("runAthenaQuery: row cap", () => {
   it("stops paging at maxRows and marks the result truncated", async () => {

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { parseVerdict, buildAnalysisPrompt } from "./verdict";
 
 describe("parseVerdict", () => {

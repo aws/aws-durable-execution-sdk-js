@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { BatchItemStatus, DurableLogger, DurableContext } from "../../types";
 

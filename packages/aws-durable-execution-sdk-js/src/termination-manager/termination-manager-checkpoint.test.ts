@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
 import { CheckpointManager } from "../utils/checkpoint/checkpoint-manager";
@@ -46,8 +55,8 @@ describe("TerminationManager Checkpoint Integration", () => {
     mockContext = {
       durableExecutionArn: "test-arn",
       durableExecutionClient: {
-        getExecutionState: jest.fn(),
-        checkpoint: jest.fn().mockResolvedValue({
+        getExecutionState: vi.fn(),
+        checkpoint: vi.fn().mockResolvedValue({
           CheckpointToken: "new-token",
           NewExecutionState: { Operations: [] },
         }),
@@ -58,8 +67,8 @@ describe("TerminationManager Checkpoint Integration", () => {
       getRemainingTimeMs: (): number => Infinity,
       tenantId: "",
       pendingCompletions: new Set(),
-      getStepData: jest.fn(),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      getStepData: vi.fn(),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } satisfies ExecutionContext;
 
     mockLogger = createDefaultLogger(mockContext);
@@ -120,7 +129,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockLogger,
     ) as unknown as CheckpointFunction;
     const mockCheckpointFn = mockContext.durableExecutionClient
-      .checkpoint as jest.Mock;
+      .checkpoint as Mock;
 
     // Queue a checkpoint first
     await checkpoint("step-1", {

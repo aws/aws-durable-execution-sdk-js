@@ -5,7 +5,7 @@
  * integration tests against the LOCAL SDK SOURCE (not bundled dist) so the
  * CPU profile shows individual SDK functions in their original files.
  *
- * It uses the same approach as `copy-sdk-source.js` + jest moduleNameMapper
+ * It uses the same approach as `copy-sdk-source.js` + the SDK_COVERAGE alias in vitest.config.ts
  * to resolve `@aws/durable-execution-sdk-js` to the TypeScript source, giving
  * full function-level visibility in the generated .cpuprofile.
  *

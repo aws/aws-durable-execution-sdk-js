@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import {
   context,
   propagation,
@@ -161,10 +162,10 @@ describe.each([
       let traceIdCounter = 0;
       let spanIdCounter = 0;
       const fallbackIdGenerator: IdGenerator = {
-        generateTraceId: jest.fn(() =>
+        generateTraceId: vi.fn(() =>
           (++traceIdCounter).toString(16).padStart(32, "0"),
         ),
-        generateSpanId: jest.fn(() =>
+        generateSpanId: vi.fn(() =>
           (++spanIdCounter).toString(16).padStart(16, "0"),
         ),
       };
@@ -235,7 +236,7 @@ describe.each([
   });
 
   it("disables the current invocation and recovers when the global provider registers later", async () => {
-    const consoleWarnSpy = jest
+    const consoleWarnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => {});
     // Two invocations, so two instances from one factory: the disabled-then-
@@ -268,7 +269,7 @@ describe.each([
   });
 
   it("disables and warns for every invocation while global installation keeps failing", async () => {
-    const consoleWarnSpy = jest
+    const consoleWarnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => {});
     // One factory, one environment, one instance per invocation: installation
@@ -312,13 +313,13 @@ describe.each([
   });
 
   it("does not emit spans through an incompatible registered global tracer", async () => {
-    const startSpan = jest.fn();
+    const startSpan = vi.fn();
     const incompatibleTracer = { startSpan };
     const incompatibleProvider = {
-      getTracer: jest.fn(() => incompatibleTracer),
+      getTracer: vi.fn(() => incompatibleTracer),
     };
     trace.setGlobalTracerProvider(incompatibleProvider as never);
-    const consoleWarnSpy = jest
+    const consoleWarnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => {});
     const info = invocationInfo(EXECUTION_ARN_A);

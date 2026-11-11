@@ -1,15 +1,15 @@
 import {
-  ExecutionContext,
-  ParallelFunc,
-  ParallelConfig,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  ConcurrencyConfig,
+  type ExecutionContext,
+  type ParallelFunc,
+  type ParallelConfig,
+  type ConcurrentExecutionItem,
+  type ConcurrentExecutor,
+  type ConcurrencyConfig,
   OperationSubType,
-  NamedParallelBranch,
-  BatchResult,
+  type NamedParallelBranch,
+  type BatchResult,
   DurablePromise,
-  DurableLogger,
+  type DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import {
@@ -18,7 +18,7 @@ import {
 } from "../../utils/summary-generators/summary-generators";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
-  context: ExecutionContext,
+  _context: ExecutionContext,
   executeConcurrently: <TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],

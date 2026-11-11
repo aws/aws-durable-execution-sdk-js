@@ -2,18 +2,19 @@
  * getTableLocation and getWorkGroupOutput, the two metadata reads the write
  * check depends on. Kept apart from athena.test.ts, whose Glue mock is inert.
  */
-const glueSend = jest.fn();
-jest.mock("@aws-sdk/client-glue", () => ({
-  GlueClient: jest.fn(() => ({ send: glueSend })),
-  GetTableCommand: jest.fn((input) => ({ input })),
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const glueSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-glue", () => ({
+  GlueClient: vi.fn(() => ({ send: glueSend })),
+  GetTableCommand: vi.fn((input) => ({ input })),
 }));
-const athenaSend = jest.fn();
-jest.mock("@aws-sdk/client-athena", () => ({
-  AthenaClient: jest.fn(() => ({ send: athenaSend })),
-  GetWorkGroupCommand: jest.fn((input) => ({ input })),
-  StartQueryExecutionCommand: jest.fn(),
-  GetQueryExecutionCommand: jest.fn(),
-  GetQueryResultsCommand: jest.fn(),
+const athenaSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-athena", () => ({
+  AthenaClient: vi.fn(() => ({ send: athenaSend })),
+  GetWorkGroupCommand: vi.fn((input) => ({ input })),
+  StartQueryExecutionCommand: vi.fn(),
+  GetQueryExecutionCommand: vi.fn(),
+  GetQueryResultsCommand: vi.fn(),
 }));
 
 import { getTableLocation, getWorkGroupOutput } from "./athena";

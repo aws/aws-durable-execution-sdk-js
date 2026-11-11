@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   Logger,
   LogLevel,
@@ -9,20 +10,20 @@ import {
 describe("Logger", () => {
   // Setup console mocks before each test
   beforeEach(() => {
-    jest.spyOn(console, "debug").mockImplementation(jest.fn());
-    jest.spyOn(console, "info").mockImplementation(jest.fn());
-    jest.spyOn(console, "warn").mockImplementation(jest.fn());
-    jest.spyOn(console, "error").mockImplementation(jest.fn());
+    vi.spyOn(console, "debug").mockImplementation(vi.fn());
+    vi.spyOn(console, "info").mockImplementation(vi.fn());
+    vi.spyOn(console, "warn").mockImplementation(vi.fn());
+    vi.spyOn(console, "error").mockImplementation(vi.fn());
 
     // Mock Date.toISOString to return consistent values for testing
-    jest
-      .spyOn(Date.prototype, "toISOString")
-      .mockReturnValue("2025-06-30T20:04:00.000Z");
+    vi.spyOn(Date.prototype, "toISOString").mockReturnValue(
+      "2025-06-30T20:04:00.000Z",
+    );
   });
 
   // Restore original console methods after each test
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe("constructor", () => {
@@ -109,7 +110,7 @@ describe("Logger", () => {
         expect.stringContaining("[2025-06-30T20:04:00.000Z] [INFO]"),
       );
 
-      jest.mocked(console.info).mockClear();
+      vi.mocked(console.info).mockClear();
 
       // Update configuration
       logger.configure({

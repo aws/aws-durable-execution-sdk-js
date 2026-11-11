@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import {
   SynchronousContextStorage,
   createContextStorage,
@@ -9,8 +10,8 @@ describe("context-storage", () => {
   afterEach(() => {
     // `resetModules` alone leaves the mock registry in place, so a later suite would still get
     // the stubbed async_hooks.
-    jest.dontMock("node:async_hooks");
-    jest.resetModules();
+    vi.doUnmock("node:async_hooks");
+    vi.resetModules();
   });
 
   describe("createContextStorage", () => {
@@ -21,7 +22,8 @@ describe("context-storage", () => {
     });
 
     it("falls back and reports itself degraded when AsyncLocalStorage is absent", async () => {
-      jest.doMock("node:async_hooks", () => ({}));
+      // Vitest throws on reading an export a mock factory did not return, so the absent      // export is spelled out as `undefined` rather than left off.
+      vi.doMock("node:async_hooks", () => ({ AsyncLocalStorage: undefined }));
 
       const storage = await import("./context-storage");
 
@@ -85,16 +87,17 @@ describe("context-storage", () => {
 
   describe("warnOnceIfContextStorageIsDegraded", () => {
     it("stays quiet when the runtime provides AsyncLocalStorage", () => {
-      const logger = { warn: jest.fn() };
+      const logger = { warn: vi.fn() };
       warnOnceIfContextStorageIsDegraded(logger);
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
     it("warns exactly once per execution environment when degraded", async () => {
-      jest.doMock("node:async_hooks", () => ({}));
+      // Vitest throws on reading an export a mock factory did not return, so the absent      // export is spelled out as `undefined` rather than left off.
+      vi.doMock("node:async_hooks", () => ({ AsyncLocalStorage: undefined }));
 
       const storage = await import("./context-storage");
-      const logger = { warn: jest.fn() };
+      const logger = { warn: vi.fn() };
 
       storage.warnOnceIfContextStorageIsDegraded(logger);
       storage.warnOnceIfContextStorageIsDegraded(logger);

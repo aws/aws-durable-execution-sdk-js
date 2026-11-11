@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { hashId, getStepData } from "./step-id-utils";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { Operation, OperationType } from "../../types/wire";

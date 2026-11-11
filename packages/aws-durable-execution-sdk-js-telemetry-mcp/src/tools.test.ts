@@ -4,6 +4,14 @@
  * separately in `injection.test.ts`.
  */
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
+import {
   configFromWireSettings,
   runAthenaQuery,
   runDynamoDBQuery,
@@ -23,44 +31,40 @@ import {
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
-  const actual = jest.requireActual<
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => {
+  const actual = await vi.importActual<
     typeof import("@aws/durable-execution-sdk-js-telemetry-core")
   >("@aws/durable-execution-sdk-js-telemetry-core");
   return {
     ...actual,
-    runAthenaQuery: jest.fn(),
-    runDynamoDBQuery: jest.fn(),
-    runAuroraQuery: jest.fn(),
-    runRedshiftQuery: jest.fn(),
-    runLogsInsightsQuery: jest.fn(),
-    fetchLogsInsightsRecord: jest.fn(),
-    resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
+    runAthenaQuery: vi.fn(),
+    runDynamoDBQuery: vi.fn(),
+    runAuroraQuery: vi.fn(),
+    runRedshiftQuery: vi.fn(),
+    runLogsInsightsQuery: vi.fn(),
+    fetchLogsInsightsRecord: vi.fn(),
+    resolveCredentials: vi.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
-const runAuroraMock = runAuroraQuery as jest.MockedFunction<
-  typeof runAuroraQuery
->;
-const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+const runAuroraMock = runAuroraQuery as MockedFunction<typeof runAuroraQuery>;
+const runRedshiftMock = runRedshiftQuery as MockedFunction<
   typeof runRedshiftQuery
 >;
-const runLogsMock = runLogsInsightsQuery as jest.MockedFunction<
+const runLogsMock = runLogsInsightsQuery as MockedFunction<
   typeof runLogsInsightsQuery
 >;
-const logsRecordMock = fetchLogsInsightsRecord as jest.MockedFunction<
+const logsRecordMock = fetchLogsInsightsRecord as MockedFunction<
   typeof fetchLogsInsightsRecord
 >;
 /** A representative execution ARN for point lookups. */
 const ARN = "arn:aws:lambda:us-east-1:123456789012:function:fn:1#exec-1";
-const runAthenaMock = runAthenaQuery as jest.MockedFunction<
-  typeof runAthenaQuery
->;
-const runDynamoDBMock = runDynamoDBQuery as jest.MockedFunction<
+const runAthenaMock = runAthenaQuery as MockedFunction<typeof runAthenaQuery>;
+const runDynamoDBMock = runDynamoDBQuery as MockedFunction<
   typeof runDynamoDBQuery
 >;
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 function cfgFor(destinationType: string): TelemetryConfig {
   return configFromWireSettings({

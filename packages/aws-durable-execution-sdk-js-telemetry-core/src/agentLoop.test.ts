@@ -1,22 +1,21 @@
 // Mocks must be declared before importing the module under test. The Bedrock
 // client is replaced with a scripted `send`, and the sandbox is stubbed so the
-// truncation-note logic can be tested without the WASM VM. (Vars are prefixed
-// `mock` so jest's hoist allowlist permits referencing them in the factories.)
-const mockSend = jest.fn();
-const mockRunSandboxedJs = jest.fn();
+// truncation-note logic can be tested without the WASM VM. (Vars the
+// factories reference are created with `vi.hoisted`, since `vi.mock` is hoisted.)
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.hoisted(() => vi.fn());
+const mockRunSandboxedJs = vi.hoisted(() => vi.fn());
 
-jest.mock("@aws-sdk/client-bedrock-runtime", () => ({
-  BedrockRuntimeClient: jest
-    .fn()
-    .mockImplementation(() => ({ send: mockSend })),
+vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
+  BedrockRuntimeClient: vi.fn(() => ({ send: mockSend })),
   // Snapshot the input (esp. `messages`, which the loop mutates by reference)
   // so each call's arguments can be inspected as they were at send time.
-  ConverseCommand: jest.fn().mockImplementation((input: unknown) => ({
+  ConverseCommand: vi.fn((input: unknown) => ({
     input: JSON.parse(JSON.stringify(input)),
   })),
 }));
 
-jest.mock("./sandbox", () => ({
+vi.mock("./sandbox", () => ({
   runSandboxedJs: (...args: unknown[]) => mockRunSandboxedJs(...args),
 }));
 
@@ -55,8 +54,8 @@ function baseOpts(overrides: Record<string, unknown> = {}) {
     destinationType: "s3" as const,
     tableName: "durable_execution_telemetry",
     maxIterations: 8,
-    onStep: jest.fn(),
-    runQuery: jest.fn(async () => OK_RESULT),
+    onStep: vi.fn(),
+    runQuery: vi.fn(async () => OK_RESULT),
     ...overrides,
   };
 }
@@ -102,7 +101,7 @@ describe("runAgentLoop: finish parsing", () => {
       .mockResolvedValueOnce(
         assistantTurn(toolUse("finish", { answer: "it's in the input field" })),
       );
-    const opts = baseOpts({ runQuery: jest.fn(async () => OK_RESULT) });
+    const opts = baseOpts({ runQuery: vi.fn(async () => OK_RESULT) });
     const final = await runAgentLoop(opts);
     // Must NOT fall back to the explored query — no table should be shown.
     expect(final?.query).toBe("");
@@ -125,7 +124,7 @@ describe("runAgentLoop: oscillation guard", () => {
       .mockResolvedValueOnce(
         assistantTurn(toolUse("finish", { answer: "done" })),
       );
-    const opts = baseOpts({ runQuery: jest.fn(async () => OK_RESULT) });
+    const opts = baseOpts({ runQuery: vi.fn(async () => OK_RESULT) });
     await runAgentLoop(opts);
 
     expect(opts.runQuery).toHaveBeenCalledTimes(1);
@@ -149,7 +148,7 @@ describe("runAgentLoop: run_javascript truncation note", () => {
       .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
 
     const opts = baseOpts({
-      runQuery: jest.fn(
+      runQuery: vi.fn(
         async (): Promise<AgentQueryResult> => ({
           columns: ["a"],
           rows: [["1"]],
@@ -176,7 +175,7 @@ describe("runAgentLoop: run_javascript truncation note", () => {
       .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
 
     const opts = baseOpts({
-      runQuery: jest.fn(
+      runQuery: vi.fn(
         async (): Promise<AgentQueryResult> => ({
           columns: ["a"],
           rows: [["1"], ["2"]],
@@ -192,7 +191,7 @@ describe("runAgentLoop: run_javascript truncation note", () => {
 // ─── run_javascript guards (LIMIT note, size cap) ──────────────────────────────
 
 describe("runAgentLoop: run_javascript guards", () => {
-  const oneRow = jest.fn(
+  const oneRow = vi.fn(
     async (): Promise<AgentQueryResult> => ({
       columns: ["a"],
       rows: [["1"]],
@@ -270,7 +269,7 @@ describe("runAgentLoop: parallel tool use", () => {
       .mockResolvedValueOnce(
         assistantTurn(toolUse("finish", { answer: "done" })),
       );
-    const opts = baseOpts({ runQuery: jest.fn(async () => OK_RESULT) });
+    const opts = baseOpts({ runQuery: vi.fn(async () => OK_RESULT) });
     await runAgentLoop(opts);
 
     expect(opts.runQuery).toHaveBeenCalledTimes(2);
@@ -297,7 +296,7 @@ describe("runAgentLoop: parallel tool ordering", () => {
         ),
       )
       .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
-    await runAgentLoop(baseOpts({ runQuery: jest.fn(async () => OK_RESULT) }));
+    await runAgentLoop(baseOpts({ runQuery: vi.fn(async () => OK_RESULT) }));
     // The JS block ran after the query, so it computed a result rather than
     // hitting the "no data yet" path. The toolResult text is itself JSON.
     const msgs = messagesOf(1);
@@ -329,7 +328,7 @@ describe("runAgentLoop: query budget", () => {
       );
     const opts = baseOpts({
       maxIterations: 2,
-      runQuery: jest.fn(async () => OK_RESULT),
+      runQuery: vi.fn(async () => OK_RESULT),
     });
     await runAgentLoop(opts);
     expect(opts.runQuery).toHaveBeenCalledTimes(2);
@@ -354,7 +353,7 @@ describe("runAgentLoop: typed run_javascript rows", () => {
         ),
       )
       .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
-    const runQuery = jest.fn(
+    const runQuery = vi.fn(
       async (): Promise<AgentQueryResult> => ({
         columns: ["amount", "name"],
         rows: [
@@ -385,7 +384,7 @@ describe("runAgentLoop: typed run_javascript rows", () => {
         assistantTurn(toolUse("run_javascript", { code: "return 1" })),
       )
       .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
-    const runQuery = jest.fn(
+    const runQuery = vi.fn(
       async (): Promise<AgentQueryResult> => ({
         columns: ["amount"],
         rows: [["10"]],

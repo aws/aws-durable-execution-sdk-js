@@ -12,6 +12,7 @@
  * something that fails identically on every attempt. See
  * https://github.com/aws/aws-durable-execution-sdk-js/issues/865.
  */
+import { vi, describe, it, expect, beforeEach } from "vitest";
 
 import { withDurableExecution } from "../../with-durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../durable-execution-invocation-input/durable-execution-invocation-input";
@@ -126,7 +127,7 @@ describe("non-deterministic replay reaches the invocation response", () => {
   it("succeeds on the same history when the step name is stable", async () => {
     // The control: the failure above is caused by the name divergence and nothing else
     // about this harness.
-    const stepBody = jest.fn();
+    const stepBody = vi.fn();
 
     const response = await invoke(async (_event, context: DurableContext) => {
       const result = await context.step("step-a", async () => {

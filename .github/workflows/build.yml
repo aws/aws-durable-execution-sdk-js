@@ -48,7 +48,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Check PR title
         run: |
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
@@ -73,7 +72,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Install dependencies
         uses: ./.github/actions/npm-ci
       - name: Build project
@@ -97,11 +95,13 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 22.x
-          cache: "npm"
       - name: Install dependencies
         uses: ./.github/actions/npm-ci
       - name: Verify every package ships the files its package.json declares
         run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
+      # Uses node:test only, so it needs no install. Takes under a second.
+      - name: Test the integration test timing report
+        run: node --test .github/workflows/scripts/integration-test/timing-report.test.mjs
 
   # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #
@@ -179,11 +179,11 @@ jobs:
         working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
         run: node -p "'ESLint ' + require('eslint/package.json').version"
       - name: Lint with the plugin on ESLint ${{ matrix.eslint }}
-        # Jest only. The package's `npm test` also runs `npm run typecheck`, but
+        # Vitest only. The package's `npm test` also runs `npm run typecheck`, but
         # ESLint 8 ships no types, so tsc would fall back to the root ESLint 10
         # types and check nothing new here. The unit-tests job type-checks.
         working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
-        run: npx jest src/index.test.ts src/eslint-integration.test.ts
+        run: npx vitest run src/index.test.ts src/eslint-integration.test.ts
 
   # Runs off lint-commits rather than build: Biome needs only the sources, so
   # linting does not have to wait for compilation and reports failures earlier.
@@ -213,11 +213,49 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Keep in sync with NODE_VERSIONS in integration-timings-comment.
         node-version: ["22.x", "24.x"]
     uses: "./.github/workflows/integration-tests.yml"
     with:
       node-version: ${{ matrix.node-version }}
     secrets: inherit
+
+  # One PR comment for all Node.js versions, so a file that is slow on both is
+  # listed once. Only pull_request runs test the PR's code: pull_request_target
+  # runs (label changes) test the base branch, and push runs have no PR.
+  integration-timings-comment:
+    needs: integration-tests
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.integration-tests.result != 'skipped'
+    permissions:
+      contents: read
+      pull-requests: write # Required to comment on slow tests
+    runs-on: ${{ format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/scripts/integration-test
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22.x
+      - name: Download test timings
+        uses: actions/download-artifact@v8
+        with:
+          pattern: integration-test-timings-*
+          path: timings
+      - name: Comment on slow tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # A failed run may skip the slow file, so it must not clear a warning.
+          TESTS_PASSED: ${{ needs.integration-tests.result == 'success' }}
+          # A job can pass without uploading timings, so a warning is cleared
+          # only when every version below has a report. Same list as the
+          # integration-tests matrix.
+          NODE_VERSIONS: "22.x,24.x"
+        run: node .github/workflows/scripts/integration-test/timing-report.mjs --comment timings
 
   capacity-provider-tests:
     needs: build

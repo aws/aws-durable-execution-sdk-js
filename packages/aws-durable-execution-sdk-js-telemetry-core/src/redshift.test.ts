@@ -1,11 +1,12 @@
 // Mock the Redshift Data API client so we can drive the async
 // execute→poll→getResult flow deterministically.
-const mockSend = jest.fn();
-jest.mock("@aws-sdk/client-redshift-data", () => ({
-  RedshiftDataClient: jest.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: jest.fn((i) => ({ __type: "exec", i })),
-  DescribeStatementCommand: jest.fn((i) => ({ __type: "describe", i })),
-  GetStatementResultCommand: jest.fn((i) => ({ __type: "getResult", i })),
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-redshift-data", () => ({
+  RedshiftDataClient: vi.fn(() => ({ send: mockSend })),
+  ExecuteStatementCommand: vi.fn((i) => ({ __type: "exec", i })),
+  DescribeStatementCommand: vi.fn((i) => ({ __type: "describe", i })),
+  GetStatementResultCommand: vi.fn((i) => ({ __type: "getResult", i })),
 }));
 
 import { runRedshiftQuery, fetchRedshiftRecord } from "./redshift";
@@ -17,7 +18,7 @@ const conn = {
   workgroupName: "wg",
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe("runRedshiftQuery", () => {
   it("executes, polls to FINISHED, and normalizes rows + numeric flags", async () => {

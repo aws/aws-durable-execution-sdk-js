@@ -17,6 +17,7 @@
  * hard-killed run left a file the next enumeration would pick up, failing with a
  * misleading complaint about a filename nobody wrote.
  */
+import { describe, it, expect } from "vitest";
 import {
   ALL_HOST_MODULES,
   HOST_MODULES,

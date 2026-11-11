@@ -111,7 +111,7 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  */
 
 export function buildPreview(
-  value: any,
+  value: unknown,
   config: PreviewConfig,
 ): Record<string, unknown> | undefined {
   if (value === null || typeof value !== "object") return undefined;
@@ -122,7 +122,7 @@ export function buildPreview(
 
   const pairs: Array<[string, unknown]> = [];
 
-  function collect(obj: any, pathPrefix: string): void {
+  function collect(obj: unknown, pathPrefix: string): void {
     if (obj === null || typeof obj !== "object") return;
 
     if (Array.isArray(obj)) {
@@ -132,7 +132,8 @@ export function buildPreview(
       return;
     }
 
-    for (const key of Object.keys(obj)) {
+    const record = obj as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
       if (DANGEROUS_KEYS.has(key)) continue;
       if (key.includes(".")) continue;
       const path = pathPrefix ? `${pathPrefix}.${key}` : key;
@@ -147,7 +148,7 @@ export function buildPreview(
 
       if (!visible) {
         if (!excluded) {
-          collect(obj[key], path);
+          collect(record[key], path);
         }
         continue;
       }
@@ -157,10 +158,10 @@ export function buildPreview(
         continue;
       }
 
-      if (obj[key] !== null && typeof obj[key] === "object") {
-        collect(obj[key], path);
+      if (record[key] !== null && typeof record[key] === "object") {
+        collect(record[key], path);
       } else {
-        pairs.push([path, obj[key]]);
+        pairs.push([path, record[key]]);
       }
     }
   }
@@ -184,15 +185,17 @@ export function buildPreview(
 
   const result: Record<string, unknown> = {};
   for (const [path, val] of accepted) {
-    const parts = path.split(".");
+    const parents = path.split(".");
+    // split() always returns at least one item.
+    const leaf = parents.pop() as string;
     let node = result;
-    for (let i = 0; i < parts.length - 1; i++) {
-      if (typeof node[parts[i]] !== "object" || node[parts[i]] === null) {
-        node[parts[i]] = {};
+    for (const key of parents) {
+      if (typeof node[key] !== "object" || node[key] === null) {
+        node[key] = {};
       }
-      node = node[parts[i]] as Record<string, unknown>;
+      node = node[key] as Record<string, unknown>;
     }
-    node[parts[parts.length - 1]] = val;
+    node[leaf] = val;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;

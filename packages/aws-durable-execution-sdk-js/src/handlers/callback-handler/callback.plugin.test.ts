@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { createCallback } from "./callback";
 import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "../../types/wire";
@@ -5,44 +14,34 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-
-import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
-  typeof safeDeserialize
->;
-
 describe("Callback Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let createStepId: jest.Mock;
-  let checkAndUpdateReplayMode: jest.Mock;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let createStepId: Mock;
+  let checkAndUpdateReplayMode: Mock;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockContext = {
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
       _stepData: {},
-      terminationManager: { terminate: jest.fn() },
+      terminationManager: { terminate: vi.fn() },
       durableExecutionArn: "test-arn",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
-    createStepId = jest.fn().mockReturnValue("test-callback-id");
-    checkAndUpdateReplayMode = jest.fn();
+    createStepId = vi.fn().mockReturnValue("test-callback-id");
+    checkAndUpdateReplayMode = vi.fn();
     mockPlugin = {
-      onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationStart: vi.fn(),
+      onOperationEnd: vi.fn(),
     };
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
   it("should call onOperationEnd on replay succeeded", async () => {
@@ -52,7 +51,7 @@ describe("Callback Handler - plugin hooks", () => {
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: { CallbackId: "cb-123", Result: "result" },
     } as Operation;
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       (mockContext as any)._stepData[hashedStepId],
     );
 
@@ -85,7 +84,7 @@ describe("Callback Handler - plugin hooks", () => {
       Status: OperationStatus.FAILED,
       CallbackDetails: { CallbackId: "cb-456" },
     } as Operation;
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       (mockContext as any)._stepData[hashedStepId],
     );
 
@@ -117,7 +116,7 @@ describe("Callback Handler - plugin hooks", () => {
       Status: OperationStatus.TIMED_OUT,
       CallbackDetails: { CallbackId: "cb-789" },
     } as Operation;
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       (mockContext as any)._stepData[hashedStepId],
     );
 
@@ -143,9 +142,9 @@ describe("Callback Handler - plugin hooks", () => {
   });
 
   it("should call onOperationStart for new callback (phase 1 start)", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+    (mockContext.getStepData as Mock).mockReturnValueOnce(null);
 
-    (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
+    (mockCheckpoint.checkpoint as Mock).mockImplementation(
       async (stepId: string) => {
         const hashedStepId = hashId(stepId);
         (mockContext as any)._stepData[hashedStepId] = {
@@ -158,12 +157,10 @@ describe("Callback Handler - plugin hooks", () => {
       },
     );
 
-    (mockContext.getStepData as jest.Mock).mockImplementation(
-      (stepId: string) => {
-        const hashedStepId = hashId(stepId);
-        return (mockContext as any)._stepData[hashedStepId];
-      },
-    );
+    (mockContext.getStepData as Mock).mockImplementation((stepId: string) => {
+      const hashedStepId = hashId(stepId);
+      return (mockContext as any)._stepData[hashedStepId];
+    });
 
     const handler = createCallback(
       mockContext,
@@ -193,7 +190,7 @@ describe("Callback Handler - plugin hooks", () => {
       Status: OperationStatus.SUCCEEDED,
       CallbackDetails: { CallbackId: "cb-123", Result: "result" },
     } as Operation;
-    (mockContext.getStepData as jest.Mock).mockReturnValue(
+    (mockContext.getStepData as Mock).mockReturnValue(
       (mockContext as any)._stepData[hashedStepId],
     );
 
@@ -203,7 +200,10 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
-      undefined,
+      () => ({
+        serialize: vi.fn(),
+        deserialize: vi.fn().mockResolvedValue("deserialized-result"),
+      }),
       {},
     );
 

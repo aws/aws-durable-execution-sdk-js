@@ -1,3 +1,4 @@
+import { vi, type MockInstance } from "vitest";
 import {
   ExecutionStatus,
   OperationStatus,
@@ -36,7 +37,7 @@ function restoreVerboseLogging(): void {
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
-    let debugSpy: jest.SpyInstance;
+    let debugSpy: MockInstance;
 
     beforeAll(enableVerboseLogging);
     afterAll(restoreVerboseLogging);
@@ -47,7 +48,7 @@ createTests({
     // from the Error itself, so asserting on it alone would still pass if the
     // stringifier silently stopped substituting its markers.
     beforeEach(() => {
-      debugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
+      debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     });
 
     afterEach(() => {

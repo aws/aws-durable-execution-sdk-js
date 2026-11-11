@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createRunInChildContextHandler } from "./run-in-child-context-handler";
 import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
@@ -9,41 +10,41 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
   let mockParentContext: Context;
   let createStepId: () => string;
   let getParentLogger: () => any;
-  let createChildContext: jest.Mock;
+  let createChildContext: Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
     stepIdCounter = 0;
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       durableExecutionArn: "test-arn",
       terminationManager: {
-        shouldTerminate: jest.fn().mockReturnValue(false),
-        terminate: jest.fn(),
+        shouldTerminate: vi.fn().mockReturnValue(false),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      force: jest.fn().mockResolvedValue(undefined),
-      setTerminating: jest.fn(),
-      markAncestorFinished: jest.fn(),
-      markOperationState: jest.fn(),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      force: vi.fn().mockResolvedValue(undefined),
+      setTerminating: vi.fn(),
+      markAncestorFinished: vi.fn(),
+      markOperationState: vi.fn(),
     };
 
     mockParentContext = {
-      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
+      getRemainingTimeInMillis: vi.fn().mockReturnValue(30000),
     } as any;
 
     createStepId = (): string => `child-${++stepIdCounter}`;
-    getParentLogger = jest.fn().mockReturnValue({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
+    getParentLogger = vi.fn().mockReturnValue({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
     });
 
-    createChildContext = jest.fn().mockReturnValue({
-      step: jest.fn().mockResolvedValue("child-result"),
+    createChildContext = vi.fn().mockReturnValue({
+      step: vi.fn().mockResolvedValue("child-result"),
     } as any);
   });
 
@@ -57,7 +58,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       createChildContext,
     );
 
-    const childFn = jest.fn().mockResolvedValue("result");
+    const childFn = vi.fn().mockResolvedValue("result");
 
     // Phase 1: Create the promise - this executes the logic immediately
     const childPromise = handler(childFn);
@@ -86,7 +87,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       createChildContext,
     );
 
-    const childFn = jest.fn().mockResolvedValue("test-result");
+    const childFn = vi.fn().mockResolvedValue("test-result");
 
     // Phase 1: Create the promise
     const childPromise = handler(childFn);
@@ -121,7 +122,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       createChildContext,
     );
 
-    const childFn = jest.fn().mockResolvedValue("result");
+    const childFn = vi.fn().mockResolvedValue("result");
 
     // Phase 1: Create the promise
     const childPromise = handler(childFn);

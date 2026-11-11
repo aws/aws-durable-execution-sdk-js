@@ -1,7 +1,9 @@
 name: npm ci with cached node_modules
 description: >-
   Restores node_modules (root and workspaces) keyed on the lockfile and Node version, and runs
-  `npm ci` only on a cache miss. Run after actions/checkout and actions/setup-node.
+  `npm ci` only on a cache miss. Run after actions/checkout and actions/setup-node, without
+  setup-node's `cache: npm`: that restores the npm download cache (~10s) on every job, and only
+  a miss here uses it, so this action restores it on a miss instead.
 
 runs:
   using: composite
@@ -18,6 +20,13 @@ runs:
           node_modules
           packages/*/node_modules
         key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.version }}-${{ hashFiles('package-lock.json') }}
+    - name: Restore the npm download cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: npm-cache-${{ runner.os }}-${{ runner.arch }}-
     - name: npm ci
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash

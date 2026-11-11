@@ -1,24 +1,24 @@
 import {
-  ExecutionContext,
-  StepFunc,
-  StepConfig,
+  type ExecutionContext,
+  type StepFunc,
+  type StepConfig,
   StepSemantics,
   OperationSubType,
-  StepContext,
+  type StepContext,
   DurablePromise,
   DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { terminateForUnrecoverableError } from "../../utils/termination-helper/termination-helper";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
@@ -26,7 +26,7 @@ import {
   DurableOperationError,
   StepError,
 } from "../../errors/durable-error/durable-error";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -35,11 +35,11 @@ import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecover
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import {
-  DurableInstrumentationPlugin,
+  type DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
-  CustomerFnResult,
+  type CustomerFnResult,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {
@@ -53,7 +53,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: Checkpoint,
-  parentContext: Context,
+  _parentContext: Context,
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
@@ -61,6 +61,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   plugin: DurableInstrumentationPlugin = {},
   // Plugin-only operation name; never checkpointed. Labels the STEP span.
   pluginOperationName?: string,
+  // Passed to the step function as StepContext.signal.
+  signal: AbortSignal = new AbortController().signal,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -277,7 +279,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             });
           } else {
             const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
-            checkpoint.checkpoint(stepId, {
+            // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+            void checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
@@ -305,6 +308,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const stepContext: StepContext<Logger> = {
             logger,
             attempt: currentAttempt,
+            signal,
           };
 
           // Mark operation as EXECUTING
@@ -325,14 +329,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptInfo, opInfo);
           attemptInfo.startTimestamp = new Date();
           await plugin.onOperationAttemptStart?.(attemptInfo);
-          let result: T;
           const stepFn = (): Promise<T> => fn(stepContext);
-          result = (await runWithContext(
+          const wrapOperationAttemptFn = plugin.wrapOperationAttemptFn;
+          const result = (await runWithContext(
             stepId,
             parentId,
-            plugin.wrapOperationAttemptFn
+            wrapOperationAttemptFn
               ? (): CustomerFnResult =>
-                  plugin.wrapOperationAttemptFn!(attemptInfo, stepFn)
+                  wrapOperationAttemptFn.call(plugin, attemptInfo, stepFn)
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,

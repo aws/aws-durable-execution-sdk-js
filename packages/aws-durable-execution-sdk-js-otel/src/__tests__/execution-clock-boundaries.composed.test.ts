@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type {
   AttemptInfo,
   InvocationInfo,
@@ -65,7 +66,7 @@ describe.each(["global", "factory"] as const)(
       descriptors = ["now", "timeOrigin"].map((key) =>
         Object.getOwnPropertyDescriptor(otperformance, key),
       );
-      jest.spyOn(Date, "now").mockImplementation(() => Math.floor(wall));
+      vi.spyOn(Date, "now").mockImplementation(() => Math.floor(wall));
       Object.defineProperty(otperformance, "now", {
         configurable: true,
         value: () => monotonic,
@@ -91,7 +92,7 @@ describe.each(["global", "factory"] as const)(
       });
     });
     afterEach(async () => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
       ["now", "timeOrigin"].forEach((key, i) => {
         if (descriptors[i])
           Object.defineProperty(otperformance, key, descriptors[i]!);
@@ -277,7 +278,7 @@ describe.each(["global", "factory"] as const)(
           startTimestamp: stepStart,
         };
         const attempt: AttemptInfo = { ...step, attempt: 1 };
-        const starts = jest.spyOn(
+        const starts = vi.spyOn(
           provider.getTracer("aws-durable-execution-sdk-js"),
           "startSpan",
         );
@@ -455,7 +456,7 @@ describe.each(["global", "factory"] as const)(
         plugin = factory.createPlugin(info(true));
         await plugin.onInvocationStart(info(true));
         advance(0.051);
-        const starts = jest.spyOn(
+        const starts = vi.spyOn(
           provider.getTracer("aws-durable-execution-sdk-js"),
           "startSpan",
         );
@@ -563,7 +564,7 @@ describe.each(["global", "factory"] as const)(
         isReplay: false,
         startTimestamp: historical,
       };
-      const starts = jest.spyOn(
+      const starts = vi.spyOn(
         provider.getTracer("aws-durable-execution-sdk-js"),
         "startSpan",
       );
@@ -665,7 +666,7 @@ describe.each(["global", "factory"] as const)(
       ).operationStarts;
       const originalGet = cache.get.bind(cache);
       let reads = 0;
-      const get = jest.spyOn(cache, "get").mockImplementation((id) => {
+      const get = vi.spyOn(cache, "get").mockImplementation((id) => {
         if (++reads > 32)
           throw new Error("ancestor traversal failed to terminate");
         return originalGet(id);

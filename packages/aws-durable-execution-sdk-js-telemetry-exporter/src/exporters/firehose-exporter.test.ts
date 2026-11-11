@@ -1,8 +1,9 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-firehose", () => ({
-  FirehoseClient: jest.fn(() => ({ send: mockSend })),
-  PutRecordCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-firehose", () => ({
+  FirehoseClient: vi.fn(() => ({ send: mockSend })),
+  PutRecordCommand: vi.fn((input: unknown) => ({ __input: input })),
 }));
 
 import { FirehoseExporter } from "./firehose-exporter";

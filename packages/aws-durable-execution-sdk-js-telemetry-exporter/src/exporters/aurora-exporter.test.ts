@@ -1,8 +1,9 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-rds-data", () => ({
-  RDSDataClient: jest.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-rds-data", () => ({
+  RDSDataClient: vi.fn(() => ({ send: mockSend })),
+  ExecuteStatementCommand: vi.fn((input: unknown) => ({ __input: input })),
 }));
 
 import { AuroraExporter } from "./aurora-exporter";

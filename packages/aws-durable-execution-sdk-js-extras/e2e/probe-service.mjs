@@ -10,6 +10,8 @@
 // 3. The unit of that limit. ASCII padding has one UTF-16 code unit per
 //    UTF-8 byte, so it cannot tell bytes from characters. This probe pads
 //    with "日" (1 unit, 3 bytes) and "😀" (2 units, 4 bytes) as well.
+// 4. The answer of a dead MicroVM's endpoint (PROBES=dead only). It needs
+//    an image with an HTTP worker on port 8080, such as the end-to-end image.
 //
 // Every MicroVM the probe starts is terminated before it exits.
 //
@@ -18,6 +20,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  CreateMicrovmAuthTokenCommand,
   GetMicrovmCommand,
   LambdaMicrovmsClient,
   RunMicrovmCommand,
@@ -189,6 +192,94 @@ if (probes.has("unit")) {
       outcome: outcome.ok ? "accepted" : outcome.error,
     };
   }
+}
+
+// ---------------------------------------------------------------- 4. dead
+// What does the endpoint of a MicroVM answer once the MicroVM ends? And does
+// CreateMicrovmAuthToken still issue a token for it? The probe asks both
+// while the MicroVM runs, right after TerminateMicrovm, and once GetMicrovm
+// reports TERMINATED.
+if (probes.has("dead")) {
+  const launched = await client.send(
+    new RunMicrovmCommand({
+      imageIdentifier: IMAGE,
+      clientToken: `probe-${randomUUID()}`,
+      ingressNetworkConnectors: [connector("ALL_INGRESS")],
+      egressNetworkConnectors: [connector("INTERNET_EGRESS")],
+      maximumDurationInSeconds: 600,
+      runHookPayload: payload(100),
+    }),
+  );
+  started.add(launched.microvmId);
+  const id = launched.microvmId;
+  const url = `https://${launched.endpoint.replace(/^https?:\/\//, "")}/durable-execution/v1/job`;
+  const state = async () =>
+    client.send(new GetMicrovmCommand({ microvmIdentifier: id }));
+  const ask = async () => {
+    let token;
+    try {
+      token = (
+        await client.send(
+          new CreateMicrovmAuthTokenCommand({
+            microvmIdentifier: id,
+            expirationInMinutes: 5,
+            allowedPorts: [{ port: 8080 }],
+          }),
+        )
+      ).authToken;
+    } catch (error) {
+      return { token: `${error.name}: ${error.message}` };
+    }
+    const at = Date.now();
+    try {
+      // An empty job body: the worker answers 400, so a 400 means that the
+      // request reached the worker.
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...token },
+        body: "{}",
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      });
+      return {
+        token: "issued",
+        status: response.status,
+        headers: Object.fromEntries(
+          [...response.headers].filter(([name]) => !/^date$/i.test(name)),
+        ),
+        body: (await response.text()).slice(0, 500),
+        ms: Date.now() - at,
+      };
+    } catch (error) {
+      return {
+        token: "issued",
+        fetchError: `${error.name}: ${error.cause?.code ?? error.message}`,
+        ms: Date.now() - at,
+      };
+    }
+  };
+  for (let i = 0; i < 60 && (await state()).state !== "RUNNING"; i++) {
+    await sleep(2_000);
+  }
+  const running = await ask();
+  await client.send(new TerminateMicrovmCommand({ microvmIdentifier: id }));
+  const afterTerminate = { state: (await state()).state, ...(await ask()) };
+  let last;
+  for (let i = 0; i < 60; i++) {
+    last = await state();
+    if (last.state === "TERMINATED") {
+      break;
+    }
+    await sleep(2_000);
+  }
+  const terminated = {
+    state: last.state,
+    stateReason: last.stateReason,
+    ...(await ask()),
+  };
+  await sleep(30_000);
+  const terminated30s = { state: (await state()).state, ...(await ask()) };
+  results.deadMicrovm = { running, afterTerminate, terminated, terminated30s };
 }
 
 // ---------------------------------------------------------------- cleanup

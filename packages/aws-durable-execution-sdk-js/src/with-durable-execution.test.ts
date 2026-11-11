@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -21,11 +30,11 @@ import {
 } from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 // Mock dependencies
-jest.mock("./context/execution-context/execution-context");
-jest.mock("./context/durable-context/durable-context");
-jest.mock("./utils/checkpoint/checkpoint-manager");
-jest.mock("./utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("./context/execution-context/execution-context");
+vi.mock("./context/durable-context/durable-context");
+vi.mock("./utils/checkpoint/checkpoint-manager");
+vi.mock("./utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
 const mockCheckpointToken = "test-checkpoint-token";
@@ -45,9 +54,9 @@ describe("withDurableExecution", () => {
   const mockContext = {} as Context;
 
   const mockTerminationManager = {
-    getTerminationPromise: jest.fn(),
-    terminate: jest.fn(),
-    setCheckpointTerminatingCallback: jest.fn(),
+    getTerminationPromise: vi.fn(),
+    terminate: vi.fn(),
+    setCheckpointTerminatingCallback: vi.fn(),
   };
 
   const mockCustomerHandlerEvent = {};
@@ -55,63 +64,69 @@ describe("withDurableExecution", () => {
     state: {},
     _stepData: {},
     terminationManager: mockTerminationManager,
-    mutex: { lock: jest.fn((fn) => fn()) },
+    mutex: { lock: vi.fn((fn) => fn()) },
   };
 
   const mockDurableContext = {
     ...mockContext,
     _stepCounter: 0,
-    step: jest.fn(),
-    runInChildContext: jest.fn(),
-    wait: jest.fn(),
+    step: vi.fn(),
+    runInChildContext: vi.fn(),
+    wait: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
 
     // Setup default mocks
-    (initializeExecutionContext as jest.Mock).mockResolvedValue({
+    (initializeExecutionContext as Mock).mockResolvedValue({
       executionContext: mockExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
     });
-    (createDurableContext as jest.Mock).mockReturnValue(mockDurableContext);
+    (createDurableContext as Mock).mockReturnValue(mockDurableContext);
 
     // Mock CheckpointManager
-    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      setTerminating: jest.fn(),
-      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
-      dispose: jest.fn(),
-      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-    }));
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (CheckpointManager as unknown as Mock).mockImplementation(function () {
+      return {
+        checkpoint: vi.fn().mockResolvedValue(undefined),
+        setTerminating: vi.fn(),
+        isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+        checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
+        dispose: vi.fn(),
+        waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+      };
+    });
 
     // Reset termination manager mock behavior
     mockTerminationManager.getTerminationPromise.mockReset();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("disposes the checkpoint manager on the normal-completion path", async () => {
     // The path that never terminates, and therefore never reached any cleanup before:
     // without disposal the invocation returns with its poll timers still armed.
-    const dispose = jest.fn();
-    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      setTerminating: jest.fn(),
-      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
-      dispose,
-      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-    }));
+    const dispose = vi.fn();
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (CheckpointManager as unknown as Mock).mockImplementation(function () {
+      return {
+        checkpoint: vi.fn().mockResolvedValue(undefined),
+        setTerminating: vi.fn(),
+        isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+        checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
+        dispose,
+        waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+      };
+    });
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
 
-    await withDurableExecution(jest.fn().mockResolvedValue({ ok: true }))(
+    await withDurableExecution(vi.fn().mockResolvedValue({ ok: true }))(
       mockEvent,
       mockContext,
     );
@@ -120,21 +135,24 @@ describe("withDurableExecution", () => {
   });
 
   it("disposes the checkpoint manager when the handler throws", async () => {
-    const dispose = jest.fn();
-    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      setTerminating: jest.fn(),
-      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
-      dispose,
-      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
-    }));
+    const dispose = vi.fn();
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (CheckpointManager as unknown as Mock).mockImplementation(function () {
+      return {
+        checkpoint: vi.fn().mockResolvedValue(undefined),
+        setTerminating: vi.fn(),
+        isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+        checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
+        dispose,
+        waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
+      };
+    });
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
 
     await withDurableExecution(
-      jest.fn().mockRejectedValue(new Error("handler blew up")),
+      vi.fn().mockRejectedValue(new Error("handler blew up")),
     )(mockEvent, mockContext);
 
     expect(dispose).toHaveBeenCalled();
@@ -143,7 +161,7 @@ describe("withDurableExecution", () => {
   it("should return successful response when handler completes normally", async () => {
     // Setup
     const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+    const mockHandler = vi.fn().mockResolvedValue(mockResult);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -166,7 +184,7 @@ describe("withDurableExecution", () => {
   it("should return error response when handler throws non-checkpoint error", async () => {
     // Setup
     const testError = new Error("Test error");
-    const mockHandler = jest.fn().mockRejectedValue(testError);
+    const mockHandler = vi.fn().mockRejectedValue(testError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -191,7 +209,7 @@ describe("withDurableExecution", () => {
     const checkpointError = new CheckpointUnrecoverableInvocationError(
       "Checkpoint failed test",
     );
-    const mockHandler = jest.fn().mockRejectedValue(checkpointError);
+    const mockHandler = vi.fn().mockRejectedValue(checkpointError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -209,7 +227,7 @@ describe("withDurableExecution", () => {
 
   it("should throw error when termination promise resolves with CHECKPOINT_FAILED reason", async () => {
     // Setup
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     const checkpointError = new CheckpointUnrecoverableInvocationError(
       "Checkpoint failed via termination",
     );
@@ -234,7 +252,7 @@ describe("withDurableExecution", () => {
     // Setup: a deterministic, non-retryable caller mistake (e.g. an invalid
     // maxConcurrency) must surface as FAILED, not fall through to the
     // generic PENDING handling used for genuine suspends/pauses.
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     const configError = new Error("Invalid maxConcurrency: 0");
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason: TerminationReason.CONFIG_VALIDATION_ERROR,
@@ -262,7 +280,7 @@ describe("withDurableExecution", () => {
   it("should return FAILED response for CONTEXT_VALIDATION_ERROR reason", async () => {
     // Using a parent or sibling context inside runInChildContext: deterministic and
     // permanent, so the execution fails rather than being reported as still pending.
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     const contextError = new Error(
       'Context usage error in "child": You are using a parent or sibling context',
     );
@@ -289,7 +307,7 @@ describe("withDurableExecution", () => {
     // retry an error that reproduces on every replay and hid the diagnostic from the
     // customer entirely -- until the execution eventually failed with "Cannot return
     // PENDING status with no pending operations" instead.
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     const nonDeterminismError = new NonDeterministicExecutionError(
       'Non-deterministic execution detected: Operation name mismatch for step "1". ' +
         'Expected name "step-a", but got "step-b".',
@@ -319,7 +337,7 @@ describe("withDurableExecution", () => {
     // fault. Pinned separately from NON_DETERMINISM above: that reason exists precisely so
     // non-determinism no longer relies on CUSTOM's default, and this asserts the default
     // itself did not change with it.
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason: TerminationReason.CUSTOM,
       message: "terminated for a reason the SDK does not classify",
@@ -341,7 +359,7 @@ describe("withDurableExecution", () => {
   it("should return FAILED for a termination reason with no explicit branch", async () => {
     // Fail closed: a reason added later without being classified as a suspend must not
     // inherit PENDING by default, because PENDING claims the execution is progressing.
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason: "SOME_FUTURE_REASON" as TerminationReason,
       message: "something the SDK does not classify yet",
@@ -368,7 +386,7 @@ describe("withDurableExecution", () => {
     TerminationReason.CALLBACK_PENDING,
   ])("should return PENDING response for %s termination", async (reason) => {
     // Setup
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason,
       message: "Operation terminated",
@@ -391,31 +409,31 @@ describe("withDurableExecution", () => {
   // Test for the timeout logging branch
   it("should set up timeout for logging promise race status", async () => {
     // Use real timers for this test
-    jest.useRealTimers();
+    vi.useRealTimers();
 
     // Setup with verbose mode enabled
     const verboseExecutionContext = {
       ...mockExecutionContext,
       isVerbose: true,
     };
-    (initializeExecutionContext as jest.Mock).mockResolvedValue({
+    (initializeExecutionContext as Mock).mockResolvedValue({
       executionContext: verboseExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
     });
 
     const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+    const mockHandler = vi.fn().mockResolvedValue(mockResult);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
 
     // Mock waitForQueueCompletion to resolve immediately
-    const waitForQueueCompletionSpy = jest
+    const waitForQueueCompletionSpy = vi
       .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
       .mockResolvedValue(undefined);
 
     // Spy on setTimeout
-    const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
 
     // Mock the callback execution to ensure the log function is called
     setTimeoutSpy.mockImplementation((callback, timeout) => {
@@ -447,12 +465,12 @@ describe("withDurableExecution", () => {
     waitForQueueCompletionSpy.mockRestore();
 
     // Restore fake timers for other tests
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   it("should handle non-Error objects thrown by handler", async () => {
     // Setup
-    const mockHandler = jest.fn().mockImplementation(() => {
+    const mockHandler = vi.fn().mockImplementation(() => {
       throw "string error"; // Not an Error object
     });
     mockTerminationManager.getTerminationPromise.mockReturnValue(
@@ -472,7 +490,7 @@ describe("withDurableExecution", () => {
 
   it("should handle undefined result from handler", async () => {
     // Setup - handler returns undefined
-    const mockHandler = jest.fn().mockResolvedValue(undefined);
+    const mockHandler = vi.fn().mockResolvedValue(undefined);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
@@ -492,7 +510,7 @@ describe("withDurableExecution", () => {
   it("should checkpoint large results that exceed Lambda response size limit", async () => {
     // Setup - Create a large result that exceeds 6MB
     const largeResult = { data: "x".repeat(6 * 1024 * 1024) }; // 6MB of data
-    const mockHandler = jest.fn().mockResolvedValue(largeResult);
+    const mockHandler = vi.fn().mockResolvedValue(largeResult);
 
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
@@ -516,7 +534,7 @@ describe("withDurableExecution", () => {
   it("should checkpoint large results that exceed Lambda response size limit with large unicode characters", async () => {
     // Setup - Create a large result that exceeds 6MB
     const largeResult = { data: "\u{FFFF}".repeat(2 * 1024 * 1024) }; // 6MB of byte length, but only 2MB in length
-    const mockHandler = jest.fn().mockResolvedValue(largeResult);
+    const mockHandler = vi.fn().mockResolvedValue(largeResult);
 
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
@@ -539,7 +557,7 @@ describe("withDurableExecution", () => {
 
   it("should throw SerdesFailedError when termination reason is SERDES_FAILED", async () => {
     // Setup - handler never resolves so termination wins the race
-    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const mockHandler = vi.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason: TerminationReason.SERDES_FAILED,
       message: "Serialization failed for step test-step",
@@ -555,7 +573,7 @@ describe("withDurableExecution", () => {
   it("should throw checkpoint error when large result checkpointing fails", async () => {
     // Setup - Create a large result that exceeds 6MB
     const largeResult = { data: "x".repeat(6 * 1024 * 1024) };
-    const mockHandler = jest.fn().mockResolvedValue(largeResult);
+    const mockHandler = vi.fn().mockResolvedValue(largeResult);
     const checkpointError = new CheckpointUnrecoverableInvocationError(
       "Checkpoint service unavailable",
     );
@@ -564,13 +582,16 @@ describe("withDurableExecution", () => {
     // The real manager does not reject the result checkpoint on a failure: it terminates with
     // CHECKPOINT_FAILED and reports the update as abandoned. The classified error then comes
     // from the termination, which is what this mock reproduces.
-    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
-      checkpoint: jest.fn().mockRejectedValue(checkpointError),
-      setTerminating: jest.fn(),
-      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
-      checkpointExecutionResult: jest.fn().mockResolvedValue("abandoned"),
-      dispose: jest.fn(),
-    }));
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    (CheckpointManager as unknown as Mock).mockImplementation(function () {
+      return {
+        checkpoint: vi.fn().mockRejectedValue(checkpointError),
+        setTerminating: vi.fn(),
+        isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
+        checkpointExecutionResult: vi.fn().mockResolvedValue("abandoned"),
+        dispose: vi.fn(),
+      };
+    });
 
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
       reason: TerminationReason.CHECKPOINT_FAILED,
@@ -595,7 +616,7 @@ describe("withDurableExecution", () => {
     }
 
     const testError = new TestInvocationError("Test invocation error");
-    const mockHandler = jest.fn().mockRejectedValue(testError);
+    const mockHandler = vi.fn().mockRejectedValue(testError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -621,7 +642,7 @@ describe("withDurableExecution", () => {
     }
 
     const customError = new CustomInvocationError("Custom invocation error");
-    const mockHandler = jest.fn().mockRejectedValue(customError);
+    const mockHandler = vi.fn().mockRejectedValue(customError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -647,7 +668,7 @@ describe("withDurableExecution", () => {
     }
 
     const executionError = new CustomExecutionError("Custom execution error");
-    const mockHandler = jest.fn().mockRejectedValue(executionError);
+    const mockHandler = vi.fn().mockRejectedValue(executionError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -670,7 +691,7 @@ describe("withDurableExecution", () => {
   it("should call deleteCheckpoint when initializing durable function", async () => {
     // Setup
     const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+    const mockHandler = vi.fn().mockResolvedValue(mockResult);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -694,7 +715,7 @@ describe("withDurableExecution", () => {
   });
 
   it("should throw error for invalid durable execution event", async () => {
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
 
     // Test missing DurableExecutionArn
@@ -729,7 +750,7 @@ describe("withDurableExecution", () => {
     const mockClient = new LambdaClient({});
     const config = { client: mockClient };
     const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+    const mockHandler = vi.fn().mockResolvedValue(mockResult);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -755,9 +776,9 @@ describe("withDurableExecution", () => {
       name: "KMSAccessDeniedException",
       $metadata: { httpStatusCode: 502 },
     });
-    (initializeExecutionContext as jest.Mock).mockRejectedValue(kmsError);
+    (initializeExecutionContext as Mock).mockRejectedValue(kmsError);
 
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
     const result = await wrappedHandler(mockEvent, mockContext);
 
@@ -771,9 +792,9 @@ describe("withDurableExecution", () => {
       name: "ServiceException",
       $metadata: { httpStatusCode: 500 },
     });
-    (initializeExecutionContext as jest.Mock).mockRejectedValue(serviceError);
+    (initializeExecutionContext as Mock).mockRejectedValue(serviceError);
 
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
 
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
@@ -786,13 +807,13 @@ describe("withDurableExecution", () => {
   // is no checkpoint classifier to consult. A transport's stated scope has to be
   // honoured here instead.
   it("should return FAILED status when a client states the failure is fatal for the execution", async () => {
-    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+    (initializeExecutionContext as Mock).mockRejectedValue(
       new DurableExecutionClientError("execution not found", {
         scope: DurableExecutionClientErrorScope.EXECUTION,
       }),
     );
 
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
     const result = await wrappedHandler(mockEvent, mockContext);
 
@@ -802,13 +823,13 @@ describe("withDurableExecution", () => {
   });
 
   it("should re-throw when a client states the failure only ends the invocation", async () => {
-    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+    (initializeExecutionContext as Mock).mockRejectedValue(
       new DurableExecutionClientError("backend unavailable", {
         scope: DurableExecutionClientErrorScope.INVOCATION,
       }),
     );
 
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
 
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
@@ -818,11 +839,11 @@ describe("withDurableExecution", () => {
   });
 
   it("should re-throw an unscoped client error so the execution can resume", async () => {
-    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+    (initializeExecutionContext as Mock).mockRejectedValue(
       new DurableExecutionClientError("transient failure"),
     );
 
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler);
 
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
@@ -833,12 +854,12 @@ describe("withDurableExecution", () => {
   it("rejects conflicting transport config before the transport is used", async () => {
     // The point of checking this early: with both provided, the SDK would otherwise pick
     // one, read execution state through it, and only then report the misconfiguration.
-    const mockHandler = jest.fn();
+    const mockHandler = vi.fn();
     const wrappedHandler = withDurableExecution(mockHandler, {
       client: {} as never,
       durableExecutionClient: {
-        getExecutionState: jest.fn(),
-        checkpoint: jest.fn(),
+        getExecutionState: vi.fn(),
+        checkpoint: vi.fn(),
       } as never,
     });
 
@@ -850,15 +871,15 @@ describe("withDurableExecution", () => {
   });
 
   it("does not reject either transport option on its own", async () => {
-    const mockHandler = jest.fn().mockResolvedValue("ok");
+    const mockHandler = vi.fn().mockResolvedValue("ok");
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
 
     await withDurableExecution(mockHandler, {
       durableExecutionClient: {
-        getExecutionState: jest.fn(),
-        checkpoint: jest.fn(),
+        getExecutionState: vi.fn(),
+        checkpoint: vi.fn(),
       } as never,
     })(mockEvent, mockContext);
 

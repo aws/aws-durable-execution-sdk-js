@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   type InvocationInfo,
@@ -20,7 +21,7 @@ it.each([
   async (kind, fails) => {
     const starts: InvocationInfo[] = [];
     const ends: OperationEndInfo[] = [];
-    const body = jest.fn(async () => "checkpointed");
+    const body = vi.fn(async () => "checkpointed");
     const handler = withDurableExecution(
       async (_, ctx) => {
         const saved = await ctx.step("saved", body);

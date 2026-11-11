@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+} from "vitest";
 import { Clock, install } from "@sinonjs/fake-timers";
 import { EventType } from "@aws-sdk/client-lambda";
 import {
@@ -24,14 +33,17 @@ import {
   createInvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
 
-jest.mock("../operations/local-operation-storage");
+vi.mock("../operations/local-operation-storage");
 
-const mockInvoke = jest.fn();
-jest.mock("../invoke-handler", () => ({
-  InvokeHandler: jest.fn().mockImplementation(() => ({
-    invoke: mockInvoke,
-    buildContext: jest.fn(() => ({})),
-  })),
+const mockInvoke = vi.fn();
+vi.mock("../invoke-handler", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+  InvokeHandler: vi.fn().mockImplementation(function () {
+    return {
+      invoke: mockInvoke,
+      buildContext: vi.fn(() => ({})),
+    };
+  }),
 }));
 
 describe("TestExecutionOrchestrator invoke started by the final drain", () => {
@@ -67,9 +79,9 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
       },
     };
     const checkpointApi: CheckpointApiClient = {
-      pauseExecution: jest.fn().mockResolvedValue(undefined),
-      resumeExecution: jest.fn().mockResolvedValue(undefined),
-      startDurableExecution: jest.fn().mockResolvedValue({
+      pauseExecution: vi.fn().mockResolvedValue(undefined),
+      resumeExecution: vi.fn().mockResolvedValue(undefined),
+      startDurableExecution: vi.fn().mockResolvedValue({
         executionId,
         checkpointToken: createCheckpointToken("token"),
         operationEvents: [
@@ -93,15 +105,13 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
         invocationId: createInvocationId(),
         updatedOperationIds: [],
       }),
-      pollCheckpointData: jest
-        .fn()
-        .mockReturnValue(new Promise(() => undefined)),
-      drainCheckpointData: jest
+      pollCheckpointData: vi.fn().mockReturnValue(new Promise(() => undefined)),
+      drainCheckpointData: vi
         .fn()
         .mockResolvedValue({ operations: [invokeStart] }),
-      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
-      startInvocation: jest.fn(),
-      completeInvocation: jest.fn().mockResolvedValue({
+      updateCheckpointData: vi.fn().mockResolvedValue(undefined),
+      startInvocation: vi.fn(),
+      completeInvocation: vi.fn().mockResolvedValue({
         EventType: "InvocationCompleted",
         InvocationCompletedDetails: {
           RequestId: "request",
@@ -118,7 +128,7 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
     const functionStorage = new FunctionStorage(
       {} as ILocalDurableTestRunnerFactory,
     );
-    const neverReturns = jest.fn(() => new Promise(() => undefined));
+    const neverReturns = vi.fn(() => new Promise(() => undefined));
     functionStorage.registerFunction("neverReturns", neverReturns);
 
     const indexedOperations = new IndexedOperations([]);
@@ -126,15 +136,15 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
       new OperationWaitManager(indexedOperations),
       indexedOperations,
       {
-        sendCallbackFailure: jest.fn(),
-        sendCallbackSuccess: jest.fn(),
-        sendCallbackHeartbeat: jest.fn(),
+        sendCallbackFailure: vi.fn(),
+        sendCallbackSuccess: vi.fn(),
+        sendCallbackHeartbeat: vi.fn(),
       },
-      jest.fn(),
-    ) as jest.Mocked<LocalOperationStorage>;
+      vi.fn(),
+    ) as Mocked<LocalOperationStorage>;
 
     const orchestrator = new TestExecutionOrchestrator(
-      jest.fn(),
+      vi.fn(),
       operationStorage,
       checkpointApi,
       functionStorage,
@@ -146,13 +156,13 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
     expect(neverReturns).toHaveBeenCalledTimes(1);
 
     // An unrelated execution on the same clock waits 3 s. Nothing runs, so the clock moves.
-    const unrelated: jest.Mocked<SkipTimeParticipant> = {
-      isBusy: jest.fn(() => false),
-      runningInvocation: jest.fn(() => undefined),
-      hasPendingWork: jest.fn(() => true),
-      earliestDeadline: jest.fn(() => 3000),
-      applyDeadline: jest.fn(),
-      onClockAdvanced: jest.fn(),
+    const unrelated: Mocked<SkipTimeParticipant> = {
+      isBusy: vi.fn(() => false),
+      runningInvocation: vi.fn(() => undefined),
+      hasPendingWork: vi.fn(() => true),
+      earliestDeadline: vi.fn(() => 3000),
+      applyDeadline: vi.fn(),
+      onClockAdvanced: vi.fn(),
     };
     const coordinator = SkipTimeCoordinator.forClock(clock);
     coordinator.register(unrelated);

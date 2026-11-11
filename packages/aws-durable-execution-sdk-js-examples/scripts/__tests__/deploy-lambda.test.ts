@@ -1,3 +1,4 @@
+import { vi, type Mock, type MockInstance } from "vitest";
 import {
   LambdaClient,
   GetFunctionCommand,
@@ -23,31 +24,34 @@ import { main } from "../deploy-lambda";
 
 let mockUseCapacityProvider = true;
 
-jest.mock("@aws-sdk/client-lambda", () => ({
-  ...jest.requireActual("@aws-sdk/client-lambda"),
-  LambdaClient: jest.fn(),
+vi.mock("@aws-sdk/client-lambda", async () => ({
+  ...(await vi.importActual("@aws-sdk/client-lambda")),
+  LambdaClient: vi.fn(),
 }));
-jest.mock("@aws-sdk/client-cloudwatch-logs", () => ({
-  ...jest.requireActual("@aws-sdk/client-cloudwatch-logs"),
-  CloudWatchLogsClient: jest.fn(),
+vi.mock("@aws-sdk/client-cloudwatch-logs", async () => ({
+  ...(await vi.importActual("@aws-sdk/client-cloudwatch-logs")),
+  CloudWatchLogsClient: vi.fn(),
 }));
-jest.mock("argparse", () => ({
-  ArgumentParser: jest.fn(() => ({
-    add_argument: jest.fn(),
-    parse_args: () => ({
-      example: "step-basic",
-      function_name: "deploy-regression",
-      runtime: "24.x",
-      use_capacity_provider: mockUseCapacityProvider,
-    }),
-  })),
+vi.mock("argparse", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: the code calls this mock with `new`, and Vitest cannot construct an arrow function.
+  ArgumentParser: vi.fn(function () {
+    return {
+      add_argument: vi.fn(),
+      parse_args: () => ({
+        example: "step-basic",
+        function_name: "deploy-regression",
+        runtime: "24.x",
+        use_capacity_provider: mockUseCapacityProvider,
+      }),
+    };
+  }),
 }));
-jest.mock("fs", () => ({
-  ...jest.requireActual("fs"),
+vi.mock("fs", async () => ({
+  ...(await vi.importActual("fs")),
   existsSync: () => true,
   readFileSync: () => Buffer.from("mock deployment archive"),
 }));
-jest.mock(
+vi.mock(
   "@aws/durable-execution-sdk-js-examples/catalog",
   () => ({
     __esModule: true,
@@ -84,29 +88,31 @@ const conflict = () =>
 // Exercise the real deployment orchestration; only AWS, CLI and filesystem I/O
 // are replaced. No credentials or Lambda resources are used by these tests.
 describe("deployment retries", () => {
-  let send: jest.Mock;
-  let logSend: jest.Mock;
-  let exit: jest.SpyInstance;
+  let send: Mock;
+  let logSend: Mock;
+  let exit: MockInstance;
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
+    vi.useFakeTimers();
+    vi.clearAllMocks();
     mockUseCapacityProvider = true;
-    jest.replaceProperty(process, "env", {
-      ...process.env,
-      AWS_ACCOUNT_ID: "123456789012",
-      AWS_REGION: "us-west-2",
-      LAMBDA_EXECUTION_ROLE_ARN: "arn:aws:iam::123456789012:role/test",
-      CAPACITY_PROVIDER_ARN:
-        "arn:aws:lambda:us-west-2:123456789012:capacity-provider:test",
-    });
-    jest.spyOn(console, "log").mockImplementation(() => {});
-    jest.spyOn(console, "warn").mockImplementation(() => {});
-    jest.spyOn(console, "error").mockImplementation(() => {});
-    exit = jest.spyOn(process, "exit").mockImplementation(() => {
+    vi.stubEnv("AWS_ACCOUNT_ID", "123456789012");
+    vi.stubEnv("AWS_REGION", "us-west-2");
+    vi.stubEnv(
+      "LAMBDA_EXECUTION_ROLE_ARN",
+      "arn:aws:iam::123456789012:role/test",
+    );
+    vi.stubEnv(
+      "CAPACITY_PROVIDER_ARN",
+      "arn:aws:lambda:us-west-2:123456789012:capacity-provider:test",
+    );
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    exit = vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("Deployment exited with failure");
     });
-    send = jest.fn(async (command) => {
+    send = vi.fn(async (command) => {
       if (command instanceof GetFunctionCommand) {
         throw new ResourceNotFoundException({
           message: "Not found",
@@ -117,16 +123,21 @@ describe("deployment retries", () => {
         return configuration;
       return {};
     });
-    (LambdaClient as unknown as jest.Mock).mockImplementation(() => ({ send }));
-    logSend = jest.fn().mockResolvedValue({});
-    (CloudWatchLogsClient as unknown as jest.Mock).mockImplementation(() => ({
-      send: logSend,
-    }));
+    // biome-ignore lint/complexity/useArrowFunction: the code calls this mock with `new`, and Vitest cannot construct an arrow function.
+    (LambdaClient as unknown as Mock).mockImplementation(function () {
+      return { send };
+    });
+    logSend = vi.fn().mockResolvedValue({});
+    // biome-ignore lint/complexity/useArrowFunction: the code calls this mock with `new`, and Vitest cannot construct an arrow function.
+    (CloudWatchLogsClient as unknown as Mock).mockImplementation(function () {
+      return { send: logSend };
+    });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   async function deploy() {
@@ -134,7 +145,7 @@ describe("deployment retries", () => {
       () => undefined,
       (error: Error) => error,
     );
-    await jest.runAllTimersAsync();
+    await vi.runAllTimersAsync();
     expect(await result).toBeUndefined();
     expect(exit).not.toHaveBeenCalled();
   }
@@ -184,7 +195,7 @@ describe("deployment retries", () => {
         () => undefined,
         (failure: Error) => failure,
       );
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
       expect(await result).toEqual(new Error("Deployment exited with failure"));
       expect(exit).toHaveBeenCalledWith(1);
       expect(console.error).toHaveBeenCalledWith("Deployment failed:", error);
@@ -275,7 +286,7 @@ describe("deployment retries", () => {
         () => undefined,
         (error: Error) => error,
       );
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
       expect(await result).toEqual(new Error("Deployment exited with failure"));
       expect(exit).toHaveBeenCalledWith(1);
       expect(console.error).toHaveBeenCalledWith(
@@ -378,7 +389,7 @@ describe("deployment retries", () => {
   test.each([false, true])(
     "stops at the readiness deadline without replaying deployment (existing=%s)",
     async (existing) => {
-      jest.spyOn(Math, "random").mockReturnValue(0);
+      vi.spyOn(Math, "random").mockReturnValue(0);
       const normal = send.getMockImplementation()!;
       const throttled = throttle();
       let polls = 0;
@@ -398,7 +409,7 @@ describe("deployment retries", () => {
         () => undefined,
         (error: Error) => error,
       );
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
       expect(await result).toEqual(new Error("Deployment exited with failure"));
       expect(exit).toHaveBeenCalledWith(1);
       expect(console.error).toHaveBeenCalledWith(
@@ -438,7 +449,7 @@ describe("deployment retries", () => {
       () => undefined,
       (error: Error) => error,
     );
-    await jest.runAllTimersAsync();
+    await vi.runAllTimersAsync();
     expect(await result).toEqual(new Error("Deployment exited with failure"));
     expect(exit).toHaveBeenCalledWith(1);
     expect(console.error).toHaveBeenCalledWith("Deployment failed:", throttled);
@@ -516,7 +527,7 @@ describe("deployment retries", () => {
       () => undefined,
       (error: Error) => error,
     );
-    await jest.runAllTimersAsync();
+    await vi.runAllTimersAsync();
     expect(await result).toEqual(new Error("Deployment exited with failure"));
     expect(commands(CreateFunctionCommand)).toHaveLength(1);
     expect(commands(PublishVersionCommand)).toHaveLength(2);
@@ -553,7 +564,7 @@ describe("deployment retries", () => {
 
     beforeEach(() => {
       // Make exponential backoff timings exact; the phase deadline also bounds jitter.
-      jest.spyOn(Math, "random").mockReturnValue(0);
+      vi.spyOn(Math, "random").mockReturnValue(0);
     });
 
     function mockPoll(
@@ -608,10 +619,10 @@ describe("deployment retries", () => {
           return error;
         },
       );
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
       // Fail deterministically if a read remains stuck after all budget timers fire.
       expect(settled).toBe(true);
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
       return result;
     }
 
@@ -742,7 +753,7 @@ describe("deployment retries", () => {
     test("counts time spent reading toward readiness without starting another read", async () => {
       const polls = mockPoll("readiness", () => {
         // Advance elapsed time, rather than only changing the wall clock.
-        jest.advanceTimersByTime(900_000);
+        vi.advanceTimersByTime(900_000);
         return pending;
       });
       const startedAt = Date.now();
@@ -777,10 +788,10 @@ describe("deployment retries", () => {
         expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
 
         complete();
-        await jest.runAllTimersAsync();
+        await vi.runAllTimersAsync();
         expect(polls()).toBe(1);
         expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
-        expect(jest.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
         expect(getEventListeners(readSignal!, "abort")).toHaveLength(0);
       },
     );
@@ -788,7 +799,7 @@ describe("deployment retries", () => {
     test.each(phases)(
       "aborts an in-flight $phase request without leaking its abort error",
       async ({ phase, attempts }) => {
-        const aborted = jest.fn();
+        const aborted = vi.fn();
         let readSignal: AbortSignal | undefined;
         const polls = mockPoll(phase, (_, signal) => {
           readSignal = signal;
@@ -825,7 +836,7 @@ describe("deployment retries", () => {
     )(
       "rejects $phase success $lateByMs ms beyond expiry even before the timeout callback runs",
       async ({ phase, attempts, lateByMs }) => {
-        const clock = jest.spyOn(performance, "now").mockReturnValue(0);
+        const clock = vi.spyOn(performance, "now").mockReturnValue(0);
         let readSignal: AbortSignal | undefined;
         const polls = mockPoll(phase, (_, signal) => {
           readSignal = signal;
@@ -873,7 +884,7 @@ describe("deployment retries", () => {
         const throttled = throttle();
         const polls = mockPoll(phase, (attempt) => {
           if (attempt === 1) {
-            setTimeout(() => jest.setSystemTime(Date.now() + clockStepMs), 500);
+            setTimeout(() => vi.setSystemTime(Date.now() + clockStepMs), 500);
           }
           throw throttled;
         });
@@ -909,7 +920,7 @@ describe("deployment retries", () => {
     );
 
     test("caps throttle jitter at the readiness deadline", async () => {
-      jest.spyOn(Math, "random").mockReturnValue(0.999);
+      vi.spyOn(Math, "random").mockReturnValue(0.999);
       const throttled = throttle();
       const polls = mockPoll("readiness", () => {
         throw throttled;
@@ -966,7 +977,7 @@ describe("deployment retries", () => {
       () => undefined,
       (error: Error) => error,
     );
-    await jest.runAllTimersAsync();
+    await vi.runAllTimersAsync();
     expect(await result).toEqual(new Error("Deployment exited with failure"));
     expect(exit).toHaveBeenCalledWith(1);
     expect(console.error).toHaveBeenCalledWith("Deployment failed:", throttled);
@@ -990,7 +1001,7 @@ describe("deployment retries", () => {
       () => undefined,
       (error: Error) => error,
     );
-    await jest.runAllTimersAsync();
+    await vi.runAllTimersAsync();
     expect(await result).toEqual(new Error("Deployment exited with failure"));
     expect(exit).toHaveBeenCalledWith(1);
     expect(console.error).toHaveBeenCalledWith("Deployment failed:", denied);

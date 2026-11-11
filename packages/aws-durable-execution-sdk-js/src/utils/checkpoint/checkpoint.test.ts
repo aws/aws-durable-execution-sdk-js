@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mocked } from "vitest";
 import {
   CheckpointDurableExecutionResponse,
   OperationAction,
@@ -45,14 +46,9 @@ const createCheckpoint = (
   return checkpoint;
 };
 
-// Mock dependencies
-jest.mock("../../utils/logger/logger", () => ({
-  log: jest.fn(),
-}));
-
 describe("CheckpointManager", () => {
   let mockTerminationManager: TerminationManager;
-  let mockState: jest.Mocked<DurableExecutionClient>;
+  let mockState: Mocked<DurableExecutionClient>;
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointManager;
   let mockEmitter: EventEmitter;
@@ -61,15 +57,15 @@ describe("CheckpointManager", () => {
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
+    vi.spyOn(mockTerminationManager, "terminate");
 
     mockState = {
-      getExecutionState: jest.fn(),
-      checkpoint: jest.fn().mockResolvedValue({
+      getExecutionState: vi.fn(),
+      checkpoint: vi.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
     };
@@ -81,10 +77,10 @@ describe("CheckpointManager", () => {
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,
@@ -725,25 +721,25 @@ describe("deleteCheckpointHandler", () => {
   let mockLogger2: DurableLogger;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
+    vi.spyOn(mockTerminationManager, "terminate");
 
     // Create separate mock states for each context to ensure independence
     mockState1 = {
-      checkpoint: jest.fn().mockResolvedValue({
+      checkpoint: vi.fn().mockResolvedValue({
         CheckpointToken: "new-task-token-1",
       }),
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
     };
 
     mockState2 = {
-      checkpoint: jest.fn().mockResolvedValue({
+      checkpoint: vi.fn().mockResolvedValue({
         CheckpointToken: "new-task-token-2",
       }),
-      getStepData: jest.fn(),
+      getStepData: vi.fn(),
     };
 
     const stepData1 = {};
@@ -753,10 +749,10 @@ describe("deleteCheckpointHandler", () => {
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,
@@ -769,10 +765,10 @@ describe("deleteCheckpointHandler", () => {
       _stepData: stepData2,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,
@@ -1012,22 +1008,22 @@ describe("createCheckpointHandler", () => {
   };
 
   let mockTerminationManager: TerminationManager;
-  let mockState: jest.Mocked<DurableExecutionClient>;
-  let mockState2: jest.Mocked<DurableExecutionClient>;
+  let mockState: Mocked<DurableExecutionClient>;
+  let mockState2: Mocked<DurableExecutionClient>;
   let mockContext: ExecutionContext;
   let mockLogger: DurableLogger;
   let mockEmitter: EventEmitter;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
+    vi.spyOn(mockTerminationManager, "terminate");
 
     mockState = {
-      checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
-      getExecutionState: jest.fn(),
+      checkpoint: vi.fn().mockResolvedValue(mockCheckpointResponse),
+      getExecutionState: vi.fn(),
     };
 
     const stepData = {};
@@ -1037,10 +1033,10 @@ describe("createCheckpointHandler", () => {
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,
@@ -1181,7 +1177,7 @@ describe("createCheckpointHandler", () => {
     // Create second mock state
     mockState2 = {
       ...mockState2,
-      checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
+      checkpoint: vi.fn().mockResolvedValue(mockCheckpointResponse),
     };
 
     // Setup second context
@@ -1225,7 +1221,7 @@ describe("createCheckpointHandler", () => {
     // Create second mock state
     mockState2 = {
       ...mockState2,
-      checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
+      checkpoint: vi.fn().mockResolvedValue(mockCheckpointResponse),
     };
 
     // Setup second context

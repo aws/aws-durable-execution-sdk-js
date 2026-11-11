@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import type { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -17,7 +18,7 @@ import {
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-/** Each view runs in its own Jest module environment, like a deployed function. */
+/** Each view runs in its own Vitest module environment, like a deployed function. */
 export function testCaughtCallbackConformance(
   view: "execution" | "invocation",
 ) {

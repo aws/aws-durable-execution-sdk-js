@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -34,7 +35,7 @@ describe.each([
       let provider!: NodeTracerProvider;
       const enteredStep = gate();
       const releaseStep = gate();
-      const savedStep = jest.fn(async () => {
+      const savedStep = vi.fn(async () => {
         enteredStep.open();
         await releaseStep.opened;
         return "saved";

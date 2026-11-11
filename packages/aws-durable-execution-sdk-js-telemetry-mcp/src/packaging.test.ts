@@ -19,6 +19,7 @@
  * needed at runtime (a module marked `external` in the bundle) must stay in
  * `dependencies` instead.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -97,7 +98,7 @@ describe("release pipeline actually publishes what claims to be published", () =
   // Remove each exception when its first publication is ready.
   const deferredFirstPublication = new Set([
     "aws-durable-execution-sdk-js-extras",
-    "aws-durable-execution-sdk-js-microvm-worker",
+    "aws-durable-execution-sdk-js-compute-worker",
   ]);
 
   const PUBLISH_SCRIPT = join(

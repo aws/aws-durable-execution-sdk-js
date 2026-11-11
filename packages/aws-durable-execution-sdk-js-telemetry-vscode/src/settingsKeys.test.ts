@@ -8,6 +8,7 @@
  * versa) fails here rather than silently becoming unsettable in the desktop
  * app.
  */
+import { describe, expect, it } from "vitest";
 import {
   BOOLEAN_SETTING_KEYS,
   NUMBER_SETTING_KEYS,

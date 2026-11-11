@@ -29,6 +29,7 @@
  * The same two mistakes, in the same shapes, as the host-module scan in core:
  * an invariant named too narrowly, and a scanner that flagged its own prose.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import * as ts from "typescript";

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import * as indexExports from "../index";
 import * as localDurableTestRunnerExports from "../local-durable-test-runner";
 

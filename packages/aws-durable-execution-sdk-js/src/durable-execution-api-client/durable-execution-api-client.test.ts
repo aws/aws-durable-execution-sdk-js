@@ -1,7 +1,15 @@
 import {
+  vi,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
+import {
   CheckpointDurableExecutionCommand,
   CheckpointDurableExecutionRequest,
-  LambdaClient,
   GetDurableExecutionStateCommand,
   OperationAction,
   OperationType,
@@ -11,81 +19,21 @@ import { log } from "../utils/logger/logger";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
 import { resolveDefaultLambdaClient } from "./lambda-module";
 import { DurableExecutionClient } from "../types/durable-execution";
-import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 // Mock the logger
-jest.mock("../utils/logger/logger", () => ({
-  log: jest.fn(),
+vi.mock("../utils/logger/logger", () => ({
+  log: vi.fn(),
 }));
 
-// Mock the LambdaClient
-jest.mock("@aws-sdk/client-lambda", () => {
-  const originalModule = jest.requireActual("@aws-sdk/client-lambda");
-  return {
-    ...originalModule,
-    LambdaClient: jest.fn().mockImplementation(() => ({
-      send: jest.fn(),
-    })),
-    CheckpointDurableExecutionCommand: jest.fn(),
-    GetDurableExecutionStateCommand: jest.fn(),
-  };
-});
-
 describe("ApiStorage", () => {
-  let logSpy: jest.MockedFunction<typeof log>;
+  let logSpy: MockedFunction<typeof log>;
 
   beforeEach(() => {
     // Reset all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Get the mocked log function
-    logSpy = log as jest.MockedFunction<typeof log>;
-  });
-
-  test("should not create the default LambdaClient until the first request", async () => {
-    const mockSend = jest.fn().mockResolvedValue({});
-    (LambdaClient as jest.Mock).mockImplementation(() => ({ send: mockSend }));
-
-    const apiStorage = new DurableExecutionApiClient();
-
-    // The Lambda client is loaded and constructed lazily, so simply constructing
-    // the API client must not pull it in.
-    expect(LambdaClient).not.toHaveBeenCalled();
-
-    await apiStorage.getExecutionState({
-      CheckpointToken: "checkpoint-token",
-      DurableExecutionArn: "durable-execution-arn",
-    });
-
-    // Verify that LambdaClient was constructed with the correct default configuration
-    expect(LambdaClient).toHaveBeenCalledWith({
-      customUserAgent: [[SDK_NAME, SDK_VERSION]],
-      requestHandler: {
-        connectionTimeout: 5000,
-        socketTimeout: 50000,
-        requestTimeout: 55000,
-        throwOnRequestTimeout: true,
-      },
-    });
-  });
-
-  test("should not create LambdaClient when custom client is passed", async () => {
-    // Clear mocks to reset call counts
-    jest.clearAllMocks();
-
-    const customClient = { send: jest.fn().mockResolvedValue({}) };
-
-    // Create ApiStorage with custom client (should not call LambdaClient constructor)
-    const apiStorage = new DurableExecutionApiClient(customClient as any);
-
-    await apiStorage.getExecutionState({
-      CheckpointToken: "checkpoint-token",
-      DurableExecutionArn: "durable-execution-arn",
-    });
-
-    // Verify the injected client was used, and no default client was constructed
-    expect(customClient.send).toHaveBeenCalledTimes(1);
-    expect(LambdaClient).not.toHaveBeenCalled();
+    logSpy = log as MockedFunction<typeof log>;
   });
 
   // Test client configurations for describe.each
@@ -94,22 +42,18 @@ describe("ApiStorage", () => {
       name: "default LambdaClient",
       setup: async () => {
         // Create a fresh mock client for this test
-        const mockLambdaClient = { send: jest.fn() };
+        const mockLambdaClient = { send: vi.fn() };
 
-        // Mock the LambdaClient constructor to return our mock when called
-        (LambdaClient as jest.Mock).mockImplementation(() => mockLambdaClient);
-
-        // Create the API client - it will use either the cached client or create a new one
+        // Create the API client without a client, so it uses the default client
         const apiStorage = new DurableExecutionApiClient();
 
-        // The default client is created on first use and cached at module scope, so
-        // resolve it through the loader and redirect its send method at this test's
-        // mock. Going through the loader rather than issuing a request keeps the
-        // assertions below from seeing an extra call.
+        // The default client is a real LambdaClient. It is created on first use and
+        // cached at module scope. So resolve it through the loader and redirect its send
+        // method at this test's mock. Then no request leaves the process. Going through
+        // the loader rather than issuing a request keeps the assertions below from
+        // seeing an extra call.
         const actualClient = await resolveDefaultLambdaClient();
-        if (actualClient && actualClient.send) {
-          actualClient.send = mockLambdaClient.send;
-        }
+        actualClient.send = mockLambdaClient.send;
 
         return {
           apiStorage,
@@ -121,7 +65,7 @@ describe("ApiStorage", () => {
     {
       name: "custom LambdaClient",
       setup: async () => {
-        const customMockClient = { send: jest.fn() };
+        const customMockClient = { send: vi.fn() };
         return {
           apiStorage: new DurableExecutionApiClient(customMockClient as any),
           mockClient: customMockClient,
@@ -134,7 +78,7 @@ describe("ApiStorage", () => {
   // Using describe.each to create separate describe blocks for each client type
   describe.each(clientConfigurations)("Testing with %s", ({ setup }) => {
     let apiStorage: DurableExecutionClient;
-    let mockClient: { send: jest.Mock };
+    let mockClient: { send: Mock };
 
     beforeEach(async () => {
       const clientSetup = await setup();
@@ -155,18 +99,18 @@ describe("ApiStorage", () => {
         MaxItems: 1000,
       });
 
-      // Verify that GetDurableExecutionStateCommand was constructed with the correct parameters
-      expect(GetDurableExecutionStateCommand).toHaveBeenCalledWith({
+      // Verify that send was called once with a GetDurableExecutionStateCommand
+      expect(mockClient.send).toHaveBeenCalledTimes(1);
+      const [command] = mockClient.send.mock.calls[0];
+      expect(command).toBeInstanceOf(GetDurableExecutionStateCommand);
+
+      // Verify that the command was constructed with the correct parameters
+      expect(command.input).toEqual({
         DurableExecutionArn: "durable-execution-arn",
         CheckpointToken: "checkpoint-token",
         Marker: "next-marker",
         MaxItems: 1000,
       });
-
-      // Verify that send was called with the GetDurableExecutionStateCommand
-      expect(mockClient.send).toHaveBeenCalledWith(
-        expect.any(GetDurableExecutionStateCommand),
-      );
 
       // Verify the result
       expect(result).toBe(mockResponse);
@@ -194,17 +138,17 @@ describe("ApiStorage", () => {
       // Call checkpoint
       const result = await apiStorage.checkpoint(checkpointData);
 
-      // Verify that CheckpointDurableExecutionCommand was constructed with the correct parameters
-      expect(CheckpointDurableExecutionCommand).toHaveBeenCalledWith({
+      // Verify that send was called once with a CheckpointDurableExecutionCommand
+      expect(mockClient.send).toHaveBeenCalledTimes(1);
+      const [command] = mockClient.send.mock.calls[0];
+      expect(command).toBeInstanceOf(CheckpointDurableExecutionCommand);
+
+      // Verify that the command was constructed with the correct parameters
+      expect(command.input).toEqual({
         DurableExecutionArn: "test-durable-execution-arn",
         CheckpointToken: "task-token",
         Updates: checkpointData.Updates,
       });
-
-      // Verify that send was called with the CheckpointDurableExecutionCommand
-      expect(mockClient.send).toHaveBeenCalledWith(
-        expect.any(CheckpointDurableExecutionCommand),
-      );
 
       // Verify the result
       expect(result).toBe(mockResponse);
@@ -336,12 +280,12 @@ describe("ApiStorage", () => {
       mockClient.send.mockRejectedValue(mockError);
 
       const mockLogger = {
-        error: jest.fn(),
-        info: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        log: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        log: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       try {
@@ -372,12 +316,12 @@ describe("ApiStorage", () => {
       mockClient.send.mockRejectedValue(mockError);
 
       const mockLogger = {
-        error: jest.fn(),
-        info: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        log: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        log: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       const checkpointData: CheckpointDurableExecutionRequest = {

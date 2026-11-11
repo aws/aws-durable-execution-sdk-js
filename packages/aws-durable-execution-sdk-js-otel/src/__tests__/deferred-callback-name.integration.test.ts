@@ -1,3 +1,4 @@
+import { vi, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   type InvocationInfo,
@@ -43,10 +44,10 @@ it.each(
     const submission = new Promise<void>((resolve) => {
       submitted = resolve;
     });
-    const submitter = jest.fn(async () => {
+    const submitter = vi.fn(async () => {
       submitted();
     });
-    const childBody = jest.fn(
+    const childBody = vi.fn(
       async (child: import("@aws/durable-execution-sdk-js").DurableContext) => {
         // The outer child can finish before the external operation completes.
         // Descendants of this completed small context are omitted on replay.
@@ -59,7 +60,7 @@ it.each(
         return "submitted";
       },
     );
-    const step = jest.fn(async () => {
+    const step = vi.fn(async () => {
       entered();
       await released;
       return "saved";

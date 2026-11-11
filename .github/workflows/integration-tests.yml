@@ -37,7 +37,6 @@ jobs:
         uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "npm"
 
       - name: Get AWS Credentials
         id: credentials
@@ -75,26 +74,27 @@ jobs:
 
       # Same job as the deploy: a separate job waited ~45s for a new runner and
       # repeated Node setup, credentials and npm ci before ~60s of tests.
-      - name: Run Jest integration tests
+      - name: Run Vitest integration tests
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          INTEG_TIMINGS_FILE: ${{ runner.temp }}/jest-integration.json
+          INTEG_TIMINGS_FILE: ${{ runner.temp }}/integration-results.json
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}
 
       # Writes per-file timings to the job summary and flags files that got much
       # slower than on recent successful runs. Advisory: it never fails the job.
+      # The PR comment is posted by a later job in build.yml, once for all versions.
       - name: Report test timings
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node .github/workflows/scripts/integration-test/timing-report.mjs \
-            "${{ runner.temp }}/jest-integration.json" \
+            "${{ runner.temp }}/integration-results.json" \
             "integration-test-timings-${{ inputs.node-version }}"
 
-      # Later runs compare with this.
+      # Later runs compare with this, and the PR comment job reads it.
       - name: Upload test timings
         if: always() && hashFiles('integration-timings.json') != ''
         uses: actions/upload-artifact@v7

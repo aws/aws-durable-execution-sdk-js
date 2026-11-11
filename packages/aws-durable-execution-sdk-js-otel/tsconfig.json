@@ -10,7 +10,8 @@
     "noImplicitAny": true,
     "isolatedModules": true,
     "module": "esnext",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "types": ["node"]
   },
   "include": ["src"]
 }

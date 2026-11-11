@@ -24,6 +24,7 @@
  * parameter destructured and then dropped still passes. It catches the specific,
  * silent mistake of declaring a parameter and forgetting the handler.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as ts from "typescript";

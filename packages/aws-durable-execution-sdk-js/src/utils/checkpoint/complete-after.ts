@@ -1,6 +1,6 @@
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { OperationMetadata } from "../../types/operation-lifecycle";
-import { Checkpoint } from "./checkpoint-helper";
+import type { OperationMetadata } from "../../types/operation-lifecycle";
+import type { Checkpoint } from "./checkpoint-helper";
 
 /**
  * Runs the async work that finishes an operation, such as deserializing its

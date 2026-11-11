@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { OperationStatus } from "../../types/wire";
@@ -5,21 +6,6 @@ import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Step Handler Timing Tests", () => {
   let mockContext: ExecutionContext;
@@ -29,37 +15,30 @@ describe("Step Handler Timing Tests", () => {
   let stepIdCounter = 0;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     mockParentContext = {
-      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
+      getRemainingTimeInMillis: vi.fn().mockReturnValue(30000),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
   });
 
   it("should handle retry with scheduled delay", async () => {
@@ -68,7 +47,7 @@ describe("Step Handler Timing Tests", () => {
     const nextAttemptTime = new Date(Date.now() + 1000);
 
     let callCount = 0;
-    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+    (mockContext.getStepData as Mock).mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
         return {
@@ -92,7 +71,7 @@ describe("Step Handler Timing Tests", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("retry-result");
+    const stepFn = vi.fn().mockResolvedValue("retry-result");
 
     const result = await stepHandler("test-step", stepFn);
 
@@ -113,7 +92,7 @@ describe("Step Handler Timing Tests", () => {
     const hashedStepId = hashId(stepId);
 
     let callCount = 0;
-    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+    (mockContext.getStepData as Mock).mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
         return {
@@ -135,7 +114,7 @@ describe("Step Handler Timing Tests", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("executed-result");
+    const stepFn = vi.fn().mockResolvedValue("executed-result");
 
     const result = await stepHandler("test-step", stepFn);
 
@@ -149,7 +128,7 @@ describe("Step Handler Timing Tests", () => {
     const hashedStepId = hashId(stepId);
 
     let callCount = 0;
-    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+    (mockContext.getStepData as Mock).mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
         return {
@@ -171,7 +150,7 @@ describe("Step Handler Timing Tests", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("executed-after-retry");
+    const stepFn = vi.fn().mockResolvedValue("executed-after-retry");
 
     const result = await stepHandler("test-step", stepFn);
 

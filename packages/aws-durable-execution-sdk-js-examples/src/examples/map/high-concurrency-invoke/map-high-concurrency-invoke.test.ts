@@ -69,8 +69,12 @@ createTests({
         expect(childInvokeOps![0].getStatus()).toBe(OperationStatus.SUCCEEDED);
       });
 
+      // The 200 invokes finish at different times. Each time the results
+      // are not all in yet, the invocation can suspend and a new one starts.
+      // Cloud runs have seen 4 invocations against 1 in the history. So the
+      // count can differ from the history by up to 3.
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 2,
+        invocationCompletedDifference: 3,
       });
     });
   },

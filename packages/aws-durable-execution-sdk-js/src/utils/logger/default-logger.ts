@@ -1,7 +1,7 @@
 import { Console } from "node:console";
-import { DurableLogLevel, DurableLogData } from "../../types";
+import { DurableLogLevel, type DurableLogData } from "../../types";
 import util from "node:util";
-import {
+import type {
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
@@ -92,6 +92,10 @@ function jsonErrorReplacer(
           typeof value.stack === "string"
             ? value.stack.split("\n")
             : value.stack,
+        // Object.assign copies only enumerable properties, and the native
+        // cause is not enumerable. So the cause is set here. JSON.stringify
+        // omits it when it is undefined, and calls this replacer on it.
+        cause: value.cause as DurableLogField,
       },
       value,
     );

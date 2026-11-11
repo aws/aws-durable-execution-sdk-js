@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import type {
   InvocationInfo,
@@ -29,7 +30,7 @@ import { parseXRayTraceHeader } from "../context-extractors";
 
 import type * as PluginRunner from "../../../aws-durable-execution-sdk-js/dist-types/utils/plugin/plugin-runner";
 
-const { createPluginRunner } = jest.requireActual<typeof PluginRunner>(
+const { createPluginRunner } = await vi.importActual<typeof PluginRunner>(
   "../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner",
 );
 
@@ -94,7 +95,7 @@ describe.each([
       const plugin = make(sampling);
       expect(plugin.providePropagationMetadata(input)).toBeUndefined();
       await plugin.onInvocationStart(info);
-      const started = jest.spyOn(
+      const started = vi.spyOn(
         provider.getTracer("aws-durable-execution-sdk-js"),
         "startSpan",
       );

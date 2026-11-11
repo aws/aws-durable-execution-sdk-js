@@ -1,12 +1,21 @@
+import {
+  vi,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 import { log, refreshLogConfig } from "./logger";
 
 describe("Logger", () => {
-  let consoleDebugSpy: jest.SpyInstance;
+  let consoleDebugSpy: MockInstance;
   const originalEnv = process.env.DURABLE_VERBOSE_MODE;
 
   beforeEach(() => {
     // Create a spy on console.debug before each test
-    consoleDebugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
+    consoleDebugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
   });
 
   afterEach(() => {

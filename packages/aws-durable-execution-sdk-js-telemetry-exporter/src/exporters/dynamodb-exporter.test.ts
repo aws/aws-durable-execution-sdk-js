@@ -1,13 +1,14 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-dynamodb", () => ({
-  DynamoDBClient: jest.fn(() => ({ send: mockSend })),
-  PutItemCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-dynamodb", () => ({
+  DynamoDBClient: vi.fn(() => ({ send: mockSend })),
+  PutItemCommand: vi.fn((input: unknown) => ({ __input: input })),
 }));
 
-jest.mock("@aws-sdk/util-dynamodb", () => ({
+vi.mock("@aws-sdk/util-dynamodb", () => ({
   // Pass the item through untouched so tests can inspect the raw shape.
-  marshall: jest.fn((item: unknown) => item),
+  marshall: vi.fn((item: unknown) => item),
 }));
 
 import { DynamoDBExporter } from "./dynamodb-exporter";

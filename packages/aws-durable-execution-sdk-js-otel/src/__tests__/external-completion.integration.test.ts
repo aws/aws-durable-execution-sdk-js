@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import type { HrTime } from "@opentelemetry/api";
 import {
   withDurableExecution,
@@ -69,7 +79,7 @@ describe.each([
     const ends: OperationEndInfo[] = [];
     const starts: InvocationInfo[] = [];
     const order: string[] = [];
-    const step = jest.fn(async () => {
+    const step = vi.fn(async () => {
       live.open();
       await release.opened;
       return "checkpointed";
@@ -178,13 +188,13 @@ describe.each([
     const resumedPending = gate();
     const starts: InvocationInfo[] = [];
     const ends: OperationEndInfo[] = [];
-    const childBody = jest.fn(async (child: DurableContext) => {
+    const childBody = vi.fn(async (child: DurableContext) => {
       const [external] = await child.createCallback("external");
       const [finish] = await child.createCallback("finish-child");
       await finish;
       return await external;
     });
-    const winnerBody = jest.fn(async (child: DurableContext) => {
+    const winnerBody = vi.fn(async (child: DurableContext) => {
       const [winner] = await child.createCallback("winner");
       return await winner;
     });
@@ -320,7 +330,7 @@ describe.each([
       const starts: InvocationInfo[] = [];
       const ends: OperationEndInfo[] = [];
       const changes: OperationChangeInfo[] = [];
-      const body = jest.fn(async () => {
+      const body = vi.fn(async () => {
         live.open();
         await release.opened;
         return "saved";
@@ -494,7 +504,7 @@ describe.each([
       const live = gate();
       const release = gate();
       const starts: InvocationInfo[] = [];
-      const childBody = jest.fn(async (child: DurableContext) => {
+      const childBody = vi.fn(async (child: DurableContext) => {
         await child.createCallback("external");
         return "submitted";
       });
@@ -565,7 +575,7 @@ describe.each([
     const changes: OperationChangeInfo[] = [];
     const ends: OperationEndInfo[] = [];
     const deliveryOrder: string[] = [];
-    const childBody = jest.fn(async (child: DurableContext) => {
+    const childBody = vi.fn(async (child: DurableContext) => {
       await child.createCallback("external");
       await child.step("inside", async () => {
         live.open();
@@ -645,13 +655,13 @@ describe.each([
     const release = gate();
     const changes: OperationChangeInfo[] = [];
     const ends: OperationEndInfo[] = [];
-    const childBody = jest.fn(async (child: DurableContext) => {
+    const childBody = vi.fn(async (child: DurableContext) => {
       const [external] = await child.createCallback("external");
       const [blocker] = await child.createCallback("still-open");
       await blocker;
       return await external;
     });
-    const step = jest.fn(async () => {
+    const step = vi.fn(async () => {
       live.open();
       await release.opened;
       return "saved";
@@ -746,12 +756,12 @@ describe.each([
       const starts: InvocationInfo[] = [];
       const ends: OperationEndInfo[] = [];
       const callbackIds: string[] = [];
-      const childBody = jest.fn(async (child: DurableContext) => {
+      const childBody = vi.fn(async (child: DurableContext) => {
         const [, callbackId] = await child.createCallback("external");
         callbackIds.push(callbackId);
         return "submitted";
       });
-      const savedBody = jest.fn(async () => {
+      const savedBody = vi.fn(async () => {
         live.open();
         await release.opened;
         return "saved";

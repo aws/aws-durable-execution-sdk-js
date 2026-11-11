@@ -17,7 +17,7 @@ The automated npm publishing workflow covers the following packages:
 | `@aws/durable-execution-sdk-js-telemetry-exporter`        | `packages/aws-durable-execution-sdk-js-telemetry-exporter`       | `telemetry-exporter` |
 | `@aws/durable-execution-sdk-js-telemetry-mcp`    | `packages/aws-durable-execution-sdk-js-telemetry-mcp`   | `telemetry-mcp` |
 
-Extras and MicroVM Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
+Extras and Compute Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
 
 The `packages/aws-durable-execution-sdk-js-telemetry-vscode` package is intentionally excluded from this table. Release it with the [Durable Execution Telemetry VSCode Extension](#durable-execution-telemetry-vscode-extension-publishing) process instead.
 
@@ -118,6 +118,33 @@ telemetry-mcp-0.1.0
 If additional packages are added to the monorepo in the future, follow the same pattern: choose a short descriptive prefix for the package and use `<prefix>-<version>`.
 
 > **Note:** Automated rollout of new versions into the SDK bundled with the Lambda managed runtime relies on the release tag matching the `sdk-<version>` format. For any SDK version we want in the runtime, ensure there is a release with a tag in the exact `sdk-<version>` format (if needed, create a new release for the same commit with a correctly formatted tag).
+
+### 3. Update the shared documentation
+
+The release engineer owns this step for every new version release. Complete it
+after the published packages are available on npm.
+
+The shared documentation lives in
+[`aws/aws-durable-execution-docs`](https://github.com/aws/aws-durable-execution-docs).
+Checking version strings alone is insufficient. Review the changes in every
+package released, including the testing, OTel, Telemetry Exporter, Telemetry
+MCP, and ESLint plugin packages when applicable, and update the documentation
+to match:
+
+- [ ] API references and guides that describe new or changed behavior
+- [ ] `examples/typescript/` snippets that use new or changed APIs
+- [ ] Dependency versions, compatibility guidance, and migration instructions
+
+Search the entire documentation repository so references are not missed:
+
+```bash
+rg -n 'durable-execution-sdk-js' docs examples/typescript
+```
+
+Open or update the documentation pull request, link this GitHub release in its
+description, and follow through on review and merge. If the release needs no
+documentation changes, add a note to the GitHub release stating that the
+documentation review was completed and found no changes needed.
 
 ## How Publishing Works
 
@@ -224,6 +251,10 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
 - [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
+
+After publishing a release:
+
+- [ ] Shared documentation reviewed per [Update the shared documentation](#3-update-the-shared-documentation), and the docs pull request opened or "no documentation changes needed" recorded on the release
 
 ## SDK 3.x migration release order
 

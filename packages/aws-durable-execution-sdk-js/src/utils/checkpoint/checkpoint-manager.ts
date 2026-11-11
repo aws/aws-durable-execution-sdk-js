@@ -1,12 +1,12 @@
 import {
-  CheckpointDurableExecutionRequest,
-  OperationUpdate,
-  Operation,
+  type CheckpointDurableExecutionRequest,
+  type OperationUpdate,
+  type Operation,
   OperationStatus,
   OperationType,
   OperationAction,
 } from "../../types/wire";
-import { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -22,8 +22,8 @@ import {
   DurableExecutionClientErrorScope,
   isDurableExecutionClientError,
 } from "../../errors/durable-execution-client-error/durable-execution-client-error";
-import { DurableLogger } from "../../types/durable-logger";
-import { Checkpoint } from "./checkpoint-helper";
+import type { DurableLogger } from "../../types/durable-logger";
+import type { Checkpoint } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
   MAX_TIMER_DELAY_MS,
@@ -33,12 +33,12 @@ import {
   EXTENDED_POLL_INTERVAL_CEILING_MS,
   POLLS_BEFORE_EXTENDED_INTERVAL,
 } from "../constants/constants";
-import {
+import type {
   OperationInfo,
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
@@ -230,7 +230,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -326,7 +327,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -375,7 +377,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -504,9 +507,7 @@ export class CheckpointManager implements Checkpoint {
     // Cursor-based drain: sizes were computed at enqueue time, and a single
     // slice() replaces O(n²) per-item shift().
     let consumed = 0;
-    while (consumed < this.queue.length) {
-      const nextItem = this.queue[consumed];
-
+    for (const nextItem of this.queue) {
       if (
         (currentSize + nextItem.sizeBytes > this.MAX_PAYLOAD_SIZE ||
           batch.length >= this.MAX_ITEMS_IN_BATCH) &&
@@ -582,7 +583,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (this.queue.length > 0) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       } else {
         // Queue is empty and processing is done - notify all waiting promises
@@ -795,8 +797,8 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     state: OperationLifecycleState,
     options?: {
-      metadata?: OperationMetadata;
-      endTimestamp?: Date;
+      metadata?: OperationMetadata | undefined;
+      endTimestamp?: Date | undefined;
     },
   ): void {
     let op = this.operations.get(stepId);
@@ -1202,7 +1204,8 @@ export class CheckpointManager implements Checkpoint {
     op.pollCount ??= 0;
 
     op.timer = setTimeout(() => {
-      this.forceRefreshAndCheckStatus(stepId);
+      // forceCheckpoint does not reject, so this timer callback does not reject.
+      void this.forceRefreshAndCheckStatus(stepId);
     }, delay);
   }
 
@@ -1268,7 +1271,8 @@ export class CheckpointManager implements Checkpoint {
       const nextDelay = Math.min(op.pollCount * 1000, intervalCeilingMs);
 
       op.timer = setTimeout(() => {
-        this.forceRefreshAndCheckStatus(stepId);
+        // forceCheckpoint does not reject, so this timer callback does not reject.
+        void this.forceRefreshAndCheckStatus(stepId);
       }, nextDelay);
     }
   }

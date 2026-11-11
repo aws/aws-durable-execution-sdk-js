@@ -1,6 +1,6 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { WaitForConditionContext } from "./logger";
-import { DurableLogger, Duration } from "../types";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { WaitForConditionContext } from "./logger";
+import type { DurableLogger, Duration } from "../types";
 
 /**
  * Function that checks and updates state for waitForCondition operations

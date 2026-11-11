@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
@@ -10,70 +19,48 @@ import {
 import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
-  typeof safeDeserialize
->;
-
 describe("Step Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let mockParentContext: Context;
   let createStepId: () => string;
   let stepIdCounter = 0;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     mockParentContext = {
-      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
+      getRemainingTimeInMillis: vi.fn().mockReturnValue(30000),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
 
     mockPlugin = {
-      onOperationAttemptStart: jest.fn(),
-      onOperationAttemptEnd: jest.fn(),
-      wrapOperationAttemptFn: jest.fn(),
+      onOperationAttemptStart: vi.fn(),
+      onOperationAttemptEnd: vi.fn(),
+      wrapOperationAttemptFn: vi.fn(),
     };
 
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
-    );
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
     );
   });
 
@@ -90,7 +77,7 @@ describe("Step Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     await stepHandler("my-step", stepFn);
     const afterTime = new Date();
@@ -101,7 +88,7 @@ describe("Step Handler - plugin hooks", () => {
     );
 
     // Verify startTimestamp is the current time, not from stepData
-    const attemptInfo = (mockPlugin.onOperationAttemptStart as jest.Mock).mock
+    const attemptInfo = (mockPlugin.onOperationAttemptStart as Mock).mock
       .calls[0][0];
     expect(attemptInfo.startTimestamp).toBeInstanceOf(Date);
     expect(attemptInfo.startTimestamp.getTime()).toBeGreaterThanOrEqual(
@@ -140,7 +127,7 @@ describe("Step Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const stepFn = jest.fn().mockRejectedValue(stepError);
+    const stepFn = vi.fn().mockRejectedValue(stepError);
 
     await expect(
       stepHandler("my-step", stepFn, {
@@ -167,7 +154,7 @@ describe("Step Handler - plugin hooks", () => {
 
   it("should call onOperationAttemptEnd with failed outcome when step fails and will retry", async () => {
     let callCount = 0;
-    const stepFn = jest.fn().mockImplementation(async () => {
+    const stepFn = vi.fn().mockImplementation(async () => {
       callCount++;
       if (callCount === 1) {
         throw new Error("transient failure");
@@ -234,7 +221,7 @@ describe("Step Handler - plugin hooks", () => {
   it("should propagate errors thrown within wrapOperationAttemptFn", async () => {
     const wrapError = new Error("wrapOperationAttemptFn exploded");
 
-    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+    (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => {
         fn();
         throw wrapError;
@@ -252,7 +239,7 @@ describe("Step Handler - plugin hooks", () => {
       mockPlugin,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     await expect(
       stepHandler("my-step", stepFn, {
@@ -277,7 +264,7 @@ describe("Step Handler - plugin hooks", () => {
       emptyPlugin,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     const result = await stepHandler("my-step", stepFn);
     expect(result).toBe("result");
@@ -301,7 +288,7 @@ describe("Step Handler - plugin hooks", () => {
     //     7. try block (computing currentAttempt): { Attempt: 1 }
     //     8. after SUCCEED checkpoint: { Status: SUCCEEDED, Attempt: 1 }
     let getStepDataCallCount = 0;
-    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+    (mockContext.getStepData as Mock).mockImplementation(() => {
       getStepDataCallCount++;
       if (getStepDataCallCount <= 3) {
         return null;
@@ -325,10 +312,10 @@ describe("Step Handler - plugin hooks", () => {
       };
     });
 
-    mockPlugin.onOperationStart = jest.fn();
+    mockPlugin.onOperationStart = vi.fn();
 
     let callCount = 0;
-    const stepFn = jest.fn().mockImplementation(async () => {
+    const stepFn = vi.fn().mockImplementation(async () => {
       callCount++;
       if (callCount === 1) {
         throw new Error("transient failure");

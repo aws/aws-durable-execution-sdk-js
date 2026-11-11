@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "types": ["node", "vitest/globals"],
     "target": "ES2022",
     "module": "esnext",
     "lib": ["ES2022"],
@@ -17,5 +18,7 @@
     "resolveJsonModule": true,
     "allowArbitraryExtensions": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Temporary SDK copy for the coverage run. See SDK_COVERAGE.md.
+  "exclude": ["src/dur-sdk"]
 }

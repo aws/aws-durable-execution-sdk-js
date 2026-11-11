@@ -8,6 +8,7 @@
  * `TOOL_DESCRIPTIONS` is the single source of truth the server registers from,
  * so asserting over it covers exactly the descriptions that ship.
  */
+import { describe, it, expect } from "vitest";
 import { SERVER_INSTRUCTIONS, TOOL_DESCRIPTIONS } from "./tools";
 
 const DESCRIPTION_CAP = 10_000;

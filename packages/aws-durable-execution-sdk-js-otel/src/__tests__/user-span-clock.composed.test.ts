@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import type {
   AttemptInfo,
   InvocationInfo,
@@ -311,7 +312,7 @@ describe.each([10, -10])(
       // Neither the tracer nor SpanImpl is mocked; only their clock inputs are.
       wallMillis = epoch;
       monotonicMillis = 100;
-      jest.spyOn(Date, "now").mockImplementation(() => Math.floor(wallMillis));
+      vi.spyOn(Date, "now").mockImplementation(() => Math.floor(wallMillis));
       timeOriginDescriptor = Object.getOwnPropertyDescriptor(
         otperformance,
         "timeOrigin",
@@ -354,7 +355,7 @@ describe.each([10, -10])(
     });
 
     afterEach(async () => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
       for (const [key, descriptor] of [
         ["timeOrigin", timeOriginDescriptor],
         ["now", nowDescriptor],
@@ -383,7 +384,7 @@ describe.each([10, -10])(
         let monotonicReads = 0;
         let sampledWallReads = 0;
         let sampledMonotonicReads = 0;
-        jest.spyOn(Date, "now").mockImplementation(() => {
+        vi.spyOn(Date, "now").mockImplementation(() => {
           const stall = sampling ? (stalls[wallReads++] ?? 100) : 0;
           if (side === "before") advance(stall);
           const value = Math.floor(wallMillis);
@@ -476,9 +477,15 @@ describe.each([10, -10])(
     it("anchors an omitted execution start before a millisecond rollover", async () => {
       // Only the clock inputs are controlled. The global provider now flushes
       // through its API delegate, whose exporter acknowledgment uses a timer.
-      jest.useFakeTimers({
+      vi.useFakeTimers({
         now: epoch,
-        doNotFake: ["performance", "setTimeout", "clearTimeout"],
+        toFake: [
+          "Date",
+          "setInterval",
+          "clearInterval",
+          "setImmediate",
+          "clearImmediate",
+        ],
       });
       try {
         factory = createInvocationOtelPluginFactory({
@@ -486,7 +493,7 @@ describe.each([10, -10])(
             // Date advances by one integer millisecond while only a fraction
             // elapses since the invocation's wall/monotonic clock was sampled.
             monotonicMillis += 0.25;
-            jest.setSystemTime(epoch + 1);
+            vi.setSystemTime(epoch + 1);
             return undefined;
           },
         });
@@ -521,7 +528,7 @@ describe.each([10, -10])(
           nanoseconds(workflow.startTime),
         );
       } finally {
-        jest.useRealTimers();
+        vi.useRealTimers();
       }
     });
 
@@ -542,7 +549,7 @@ describe.each([10, -10])(
         // one precision. Default user spans retain only the existing 1 ms
         // allowance; all SDK relationships and ordering remain exact.
         wallMillis = epoch + wallFraction;
-        const starts = jest.spyOn(
+        const starts = vi.spyOn(
           provider.getTracer("aws-durable-execution-sdk-js"),
           "startSpan",
         );

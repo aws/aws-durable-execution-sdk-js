@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import {
   getActiveContext,
   runWithContext,
@@ -125,13 +126,13 @@ describe("context-tracker", () => {
     });
 
     it("should not terminate when no active context", () => {
-      const terminateSpy = jest.spyOn(terminationManager, "terminate");
+      const terminateSpy = vi.spyOn(terminationManager, "terminate");
       validateContextUsage("any-id", "test-op", terminationManager);
       expect(terminateSpy).not.toHaveBeenCalled();
     });
 
     it("should not terminate when context matches", () => {
-      const terminateSpy = jest.spyOn(terminationManager, "terminate");
+      const terminateSpy = vi.spyOn(terminationManager, "terminate");
       runWithContext("context-1", undefined, () => {
         validateContextUsage("context-1", "test-op", terminationManager);
       });
@@ -139,7 +140,7 @@ describe("context-tracker", () => {
     });
 
     it("should terminate when context does not match", () => {
-      const terminateSpy = jest.spyOn(terminationManager, "terminate");
+      const terminateSpy = vi.spyOn(terminationManager, "terminate");
       runWithContext("child-context", undefined, () => {
         validateContextUsage("parent-context", "test-op", terminationManager);
       });
@@ -151,7 +152,7 @@ describe("context-tracker", () => {
     });
 
     it("should include helpful error message", () => {
-      const terminateSpy = jest.spyOn(terminationManager, "terminate");
+      const terminateSpy = vi.spyOn(terminationManager, "terminate");
       runWithContext("child-1", undefined, () => {
         validateContextUsage("parent", "runInChildContext", terminationManager);
       });

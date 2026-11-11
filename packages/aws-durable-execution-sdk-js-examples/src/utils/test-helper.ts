@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { LambdaClient, Event, EventType } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
@@ -146,9 +147,10 @@ function assertEventSignatures(
     const invocationCompletedDifference = Math.abs(
       actualInvocationCompleted - expectedInvocationsCompleted,
     );
-    expect(invocationCompletedDifference).toBeLessThanOrEqual(
-      eventSignatureConfig.invocationCompletedDifference,
-    );
+    expect(
+      invocationCompletedDifference,
+      `InvocationCompleted count: actual ${actualInvocationCompleted}, expected ${expectedInvocationsCompleted}`,
+    ).toBeLessThanOrEqual(eventSignatureConfig.invocationCompletedDifference);
   }
 
   expect(actualCounts).toEqual(expectedCounts);
@@ -188,7 +190,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
   if (generateHistories && isTimeSkipping && !isIntegrationTest) {
     console.warn("Disabling skipTime since GENERATE_HISTORY is true");
-    jest.setTimeout(120000);
+    vi.setConfig({ testTimeout: 120000 });
   }
 
   const testFileName = getCallerFile();

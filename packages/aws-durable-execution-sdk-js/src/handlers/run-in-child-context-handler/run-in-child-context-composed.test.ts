@@ -1,3 +1,4 @@
+import { vi, describe, test, expect, beforeEach } from "vitest";
 import {
   createDurableContext,
   DurableExecution,
@@ -18,9 +19,6 @@ import {
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
-// Mock the TerminationManager class
-jest.mock("../../termination-manager/termination-manager");
-
 describe("Run In Child Context Integration Tests", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: any;
@@ -30,7 +28,7 @@ describe("Run In Child Context Integration Tests", () => {
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
-    jest.resetAllMocks();
+    vi.resetAllMocks();
 
     checkpointCalls = [];
 
@@ -38,46 +36,34 @@ describe("Run In Child Context Integration Tests", () => {
 
     mockDurableExecution = {
       checkpointManager: {
-        checkpoint: jest
-          .fn()
-          .mockImplementation((stepId: string, data: any) => {
-            const checkpointData = {
-              CheckpointToken: "mock-token",
-              Updates: [data],
-            };
-            checkpointCalls.push({
-              checkpointToken: "mock-token",
-              data: checkpointData,
-            });
-            return Promise.resolve({ CheckpointToken: "mock-token" });
-          }),
-        force: jest.fn(),
-        setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
-        markAncestorFinished: jest.fn(),
-        markOperationState: jest.fn(),
-        markOperationAwaited: jest.fn(),
-        waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-        waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
-        getOperationState: jest.fn(),
-        getAllOperations: jest.fn().mockReturnValue([]),
+        checkpoint: vi.fn().mockImplementation((stepId: string, data: any) => {
+          const checkpointData = {
+            CheckpointToken: "mock-token",
+            Updates: [data],
+          };
+          checkpointCalls.push({
+            checkpointToken: "mock-token",
+            data: checkpointData,
+          });
+          return Promise.resolve({ CheckpointToken: "mock-token" });
+        }),
+        force: vi.fn(),
+        setTerminating: vi.fn(),
+        hasPendingAncestorCompletion: vi.fn(),
+        markAncestorFinished: vi.fn(),
+        markOperationState: vi.fn(),
+        markOperationAwaited: vi.fn(),
+        waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+        waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
+        getOperationState: vi.fn(),
+        getAllOperations: vi.fn().mockReturnValue([]),
       },
     } as any;
 
-    // Create proper mocks for TerminationManager
-    const mockTerminationManager = {
-      terminate: jest.fn(),
-      getTerminationPromise: jest.fn().mockResolvedValue({}),
-      isTerminated: false,
-      terminationPromise: Promise.resolve(),
-      handleTermination: jest.fn(),
-      addListener: jest.fn(),
-    } as unknown as TerminationManager;
-
     mockExecutionContext = {
       durableExecutionClient: {
-        getExecutionState: jest.fn().mockResolvedValue({}),
-        checkpoint: jest
+        getExecutionState: vi.fn().mockResolvedValue({}),
+        checkpoint: vi
           .fn()
           .mockImplementation((data: CheckpointDurableExecutionRequest) => {
             const checkpointToken = data.CheckpointToken;
@@ -86,13 +72,13 @@ describe("Run In Child Context Integration Tests", () => {
           }),
       },
       _stepData: {},
-      terminationManager: mockTerminationManager,
+      terminationManager: new TerminationManager(),
       durableExecutionArn: "mock-execution-arn",
       pendingCompletions: new Set<string>(),
-      getStepData: jest.fn((stepId: string) => {
+      getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
       getRemainingTimeMs: (): number => Infinity,
@@ -143,7 +129,7 @@ describe("Run In Child Context Integration Tests", () => {
 
   test("should execute step without passing context", async () => {
     // Create a function that will capture any arguments passed to it
-    const stepFn = jest.fn().mockImplementation(async () => {
+    const stepFn = vi.fn().mockImplementation(async () => {
       return "step-result";
     });
 

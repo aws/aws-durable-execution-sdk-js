@@ -1,38 +1,49 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type MockedClass,
+} from "vitest";
 import { LocalDurableTestRunner } from "../../../";
 import { parseCliArgs } from "../utils/cli-config";
 import { loadAndValidateHandler } from "../utils/validation";
 import { runDurable } from "../run-durable";
 
 // Mock only the essential dependencies
-jest.mock("../utils/cli-config");
-jest.mock("../utils/validation");
-jest.mock("../utils/output");
-jest.mock("../../../", () => ({
-  LocalDurableTestRunner: jest.fn().mockImplementation(() => ({
-    run: jest.fn().mockResolvedValue({
-      print: jest.fn(),
-      getStatus: jest.fn().mockReturnValue("SUCCEEDED"),
-    }),
-  })),
+vi.mock("../utils/cli-config");
+vi.mock("../utils/validation");
+vi.mock("../utils/output");
+vi.mock("../../../", () => ({
+  // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+  LocalDurableTestRunner: vi.fn().mockImplementation(function () {
+    return {
+      run: vi.fn().mockResolvedValue({
+        print: vi.fn(),
+        getStatus: vi.fn().mockReturnValue("SUCCEEDED"),
+      }),
+    };
+  }),
 }));
 
 // Mocks for the main functions
-const mockParseCliArgs = parseCliArgs as jest.MockedFunction<
-  typeof parseCliArgs
+const mockParseCliArgs = parseCliArgs as MockedFunction<typeof parseCliArgs>;
+const mockLoadAndValidateHandler = loadAndValidateHandler as MockedFunction<
+  typeof loadAndValidateHandler
 >;
-const mockLoadAndValidateHandler =
-  loadAndValidateHandler as jest.MockedFunction<typeof loadAndValidateHandler>;
 
 // Mock static methods
-const MockedLocalDurableTestRunner = LocalDurableTestRunner as jest.MockedClass<
+const MockedLocalDurableTestRunner = LocalDurableTestRunner as MockedClass<
   typeof LocalDurableTestRunner
 >;
-MockedLocalDurableTestRunner.setupTestEnvironment = jest.fn();
-MockedLocalDurableTestRunner.teardownTestEnvironment = jest.fn();
+MockedLocalDurableTestRunner.setupTestEnvironment = vi.fn();
+MockedLocalDurableTestRunner.teardownTestEnvironment = vi.fn();
 
 describe("runDurable orchestration", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup minimal default mocks
     mockParseCliArgs.mockReturnValue({
@@ -45,7 +56,7 @@ describe("runDurable orchestration", () => {
       },
     });
 
-    mockLoadAndValidateHandler.mockResolvedValue(jest.fn());
+    mockLoadAndValidateHandler.mockResolvedValue(vi.fn());
   });
 
   it("should run the CLI workflow successfully", async () => {

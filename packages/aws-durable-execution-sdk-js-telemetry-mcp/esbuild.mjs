@@ -50,7 +50,7 @@ const build = {
  * The package root has no `"type": "module"`, so Node would load dist/server.js
  * as CommonJS by default — which breaks the ESM output (import.meta, imports).
  * Dropping a minimal `package.json` scoped to dist/ marks that folder as ESM
- * without changing how the rest of the package (jest, ts-jest) resolves.
+ * without changing how the rest of the package (vitest) resolves.
  */
 function markDistAsEsm() {
   writeFileSync(

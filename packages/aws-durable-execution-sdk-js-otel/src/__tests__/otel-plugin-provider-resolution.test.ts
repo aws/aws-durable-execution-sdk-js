@@ -1,4 +1,14 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
+import {
   withDurableExecution,
   type InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
@@ -55,7 +65,7 @@ describe("createTracerProvider", () => {
 
   it("passes a deterministic ID generator factory to the provider factory", () => {
     const idGenerator = new DeterministicIdGenerator();
-    const tracerProviderFactory = jest.fn(
+    const tracerProviderFactory = vi.fn(
       (createIdGenerator) =>
         new NodeTracerProvider({ idGenerator: createIdGenerator() }),
     );
@@ -74,12 +84,12 @@ describe("createTracerProvider", () => {
     const fallbackTraceId = "f".repeat(32);
     const fallbackSpanId = "e".repeat(16);
     const fallbackIdGenerator = {
-      generateTraceId: jest.fn(() => fallbackTraceId),
-      generateSpanId: jest.fn(() => fallbackSpanId),
+      generateTraceId: vi.fn(() => fallbackTraceId),
+      generateSpanId: vi.fn(() => fallbackSpanId),
     };
     const pluginIdGenerator = new DeterministicIdGenerator();
     let providerIdGenerator: IdGenerator | undefined;
-    const tracerProviderFactory = jest.fn((createIdGenerator) => {
+    const tracerProviderFactory = vi.fn((createIdGenerator) => {
       providerIdGenerator = createIdGenerator(fallbackIdGenerator);
       return new NodeTracerProvider({ idGenerator: providerIdGenerator });
     });
@@ -215,11 +225,11 @@ describe.each([
       ],
     });
     provider.register();
-    const flush = jest.spyOn(provider, "forceFlush");
-    const shutdown = jest.spyOn(provider, "shutdown");
+    const flush = vi.spyOn(provider, "forceFlush");
+    const shutdown = vi.spyOn(provider, "shutdown");
     const plugin = Plugin({ contextExtractor: () => undefined });
     const starts: InvocationInfo[] = [];
-    const savedBody = jest.fn(async () => "saved");
+    const savedBody = vi.fn(async () => "saved");
     const handler = withDurableExecution(
       async (_, ctx) => {
         const saved = await ctx.step("saved", savedBody);
@@ -294,7 +304,7 @@ describe("provider boundary flushing", () => {
       ],
     });
     provider.register();
-    const shutdown = jest.spyOn(provider, "shutdown");
+    const shutdown = vi.spyOn(provider, "shutdown");
     try {
       trace.getTracer("unit").startSpan("queued").end();
       expect(exporter.getFinishedSpans()).toHaveLength(0);
@@ -310,7 +320,7 @@ describe("provider boundary flushing", () => {
 
   it("honors an explicit factory provider's own flush without traversing its delegate", async () => {
     const provider = new NodeTracerProvider();
-    const getDelegate = jest.fn(() => provider);
+    const getDelegate = vi.fn(() => provider);
     let receiver: unknown;
     const factoryProvider = {
       getTracer: provider.getTracer.bind(provider),

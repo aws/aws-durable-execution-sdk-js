@@ -985,5 +985,6 @@ export async function main(): Promise<void> {
 
 // Run the script
 if (require.main === module) {
-  main();
+  // main() catches every error and exits with code 1, so it does not reject.
+  void main();
 }

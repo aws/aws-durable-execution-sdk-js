@@ -1,8 +1,9 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { HttpExporter } from "./http-exporter";
 import { makeRecord } from "../test-utils/make-record";
 
 beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({
+  global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
     statusText: "OK",
@@ -18,7 +19,7 @@ describe("HttpExporter", () => {
 
     await exporter.export(makeRecord());
 
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toBe("https://hook.example/telemetry");
     expect(init.method).toBe("POST");
     expect(init.headers["Content-Type"]).toBe("application/json");
@@ -38,14 +39,14 @@ describe("HttpExporter", () => {
 
     await exporter.export(makeRecord());
 
-    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [, init] = (global.fetch as Mock).mock.calls[0];
     expect(init.method).toBe("PUT");
     expect(init.headers.Authorization).toBe("Bearer token123");
     expect(init.headers["Content-Type"]).toBe("application/json");
   });
 
   it("throws when the endpoint returns a non-2xx status", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 500,
       statusText: "Internal Server Error",

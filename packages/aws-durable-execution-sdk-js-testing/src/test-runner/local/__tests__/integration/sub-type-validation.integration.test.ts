@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import {
@@ -29,7 +30,7 @@ describe("subtype validation in the local checkpoint server", () => {
   ])(
     "fails the execution for a step subtype %s",
     async (_label, subType, constraint) => {
-      const after = jest.fn();
+      const after = vi.fn();
       const handler = withDurableExecution(
         async (_event: unknown, context: DurableContext) => {
           await context.step("charge", async () => "ok", { subType });

@@ -1,9 +1,8 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createWaitHandler } from "./wait-handler";
 import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-
-jest.mock("../../utils/logger/logger");
 
 describe("Wait Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
@@ -12,22 +11,22 @@ describe("Wait Handler Two-Phase Execution", () => {
   let stepIdCounter = 0;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import type { Tracer } from "@opentelemetry/api";
 import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import { DeterministicIdGenerator } from "../deterministic-id-generator";
@@ -5,8 +6,8 @@ import { tryInstallGlobalIdGenerator } from "../global-id-generator";
 
 function fallbackIdGenerator(): IdGenerator {
   return {
-    generateTraceId: jest.fn(() => "f".repeat(32)),
-    generateSpanId: jest.fn(() => "e".repeat(16)),
+    generateTraceId: vi.fn(() => "f".repeat(32)),
+    generateSpanId: vi.fn(() => "e".repeat(16)),
   };
 }
 

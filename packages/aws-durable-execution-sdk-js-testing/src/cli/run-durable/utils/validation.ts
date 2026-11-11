@@ -1,6 +1,6 @@
 import { resolve } from "path";
 import { existsSync } from "fs";
-import { pathToFileURL } from "url";
+import { loadModuleFromPath } from "./load-module";
 import type { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 
 export interface ValidatedHandler {
@@ -63,16 +63,6 @@ export async function loadAndValidateHandler(
 
   return handlerCandidate as DurableLambdaHandler;
 }
-
-/**
- * Load module from file path
- */
-export const loadModuleFromPath = async (
-  filePath: string,
-): Promise<unknown> => {
-  const module = (await import(pathToFileURL(filePath).href)) as unknown;
-  return module;
-};
 
 /**
  * Set up environment variables based on CLI options

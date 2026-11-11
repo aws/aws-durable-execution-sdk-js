@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createDurableContext } from "./durable-context";
 import { DurableExecutionMode, Duration } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
@@ -6,94 +15,87 @@ import { OperationStatus } from "../../types/wire";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { DurableLogger } from "../../types/durable-logger";
+import * as mod_step_handler from "../../handlers/step-handler/step-handler";
+import * as mod_invoke_handler from "../../handlers/invoke-handler/invoke-handler";
+import * as mod_run_in_child_context_handler from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
+import * as mod_wait_handler from "../../handlers/wait-handler/wait-handler";
+import * as mod_callback from "../../handlers/callback-handler/callback";
+import * as mod_wait_for_callback_handler from "../../handlers/wait-for-callback-handler/wait-for-callback-handler";
+import * as mod_wait_for_condition_handler from "../../handlers/wait-for-condition-handler/wait-for-condition-handler";
+import * as mod_map_handler from "../../handlers/map-handler/map-handler";
+import * as mod_parallel_handler from "../../handlers/parallel-handler/parallel-handler";
+import * as mod_concurrent_execution_handler from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
 import * as contextTracker from "../../utils/context-tracker/context-tracker";
 
-jest.mock("../../utils/checkpoint/checkpoint-manager");
-jest.mock("../../handlers/step-handler/step-handler");
-jest.mock("../../handlers/invoke-handler/invoke-handler");
-jest.mock(
+vi.mock("../../utils/checkpoint/checkpoint-manager");
+vi.mock("../../handlers/step-handler/step-handler");
+vi.mock("../../handlers/invoke-handler/invoke-handler");
+vi.mock(
   "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
 );
-jest.mock("../../handlers/wait-handler/wait-handler");
-jest.mock("../../handlers/callback-handler/callback");
-jest.mock("../../handlers/wait-for-callback-handler/wait-for-callback-handler");
-jest.mock(
-  "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
-);
-jest.mock("../../handlers/map-handler/map-handler");
-jest.mock("../../handlers/parallel-handler/parallel-handler");
-jest.mock(
+vi.mock("../../handlers/wait-handler/wait-handler");
+vi.mock("../../handlers/callback-handler/callback");
+vi.mock("../../handlers/wait-for-callback-handler/wait-for-callback-handler");
+vi.mock("../../handlers/wait-for-condition-handler/wait-for-condition-handler");
+vi.mock("../../handlers/map-handler/map-handler");
+vi.mock("../../handlers/parallel-handler/parallel-handler");
+vi.mock(
   "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
 );
-jest.mock("../../utils/context-tracker/context-tracker");
+vi.mock("../../utils/context-tracker/context-tracker");
 
 describe("DurableContext", () => {
   let mockContext: Context;
   let mockLogger: DurableLogger;
   const mockDurableExecution = {
     checkpointManager: {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      force: jest.fn().mockResolvedValue(undefined),
-      setTerminating: jest.fn(),
-      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
-      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
-      getOperationState: jest.fn(),
-      getAllOperations: jest.fn().mockReturnValue([]),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      force: vi.fn().mockResolvedValue(undefined),
+      setTerminating: vi.fn(),
+      hasPendingAncestorCompletion: vi.fn().mockReturnValue(false),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
+      waitForRetryTimer: vi.fn().mockResolvedValue(undefined),
+      getOperationState: vi.fn(),
+      getAllOperations: vi.fn().mockReturnValue([]),
     },
   } as any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Setup default mock implementations
-    const { createStepHandler } = jest.requireMock(
-      "../../handlers/step-handler/step-handler",
-    );
-    const { createInvokeHandler } = jest.requireMock(
-      "../../handlers/invoke-handler/invoke-handler",
-    );
-    const { createRunInChildContextHandler } = jest.requireMock(
-      "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
-    );
-    const { createWaitHandler } = jest.requireMock(
-      "../../handlers/wait-handler/wait-handler",
-    );
-    const { createCallback } = jest.requireMock(
-      "../../handlers/callback-handler/callback",
-    );
-    const { createWaitForCallbackHandler } = jest.requireMock(
-      "../../handlers/wait-for-callback-handler/wait-for-callback-handler",
-    );
-    const { createWaitForConditionHandler } = jest.requireMock(
-      "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
-    );
-    const { createMapHandler } = jest.requireMock(
-      "../../handlers/map-handler/map-handler",
-    );
-    const { createParallelHandler } = jest.requireMock(
-      "../../handlers/parallel-handler/parallel-handler",
-    );
-    const { createConcurrentExecutionHandler } = jest.requireMock(
-      "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
-    );
+    const createStepHandler = mod_step_handler.createStepHandler as Mock;
+    const createInvokeHandler = mod_invoke_handler.createInvokeHandler as Mock;
+    const createRunInChildContextHandler =
+      mod_run_in_child_context_handler.createRunInChildContextHandler as Mock;
+    const createWaitHandler = mod_wait_handler.createWaitHandler as Mock;
+    const createCallback = mod_callback.createCallback as Mock;
+    const createWaitForCallbackHandler =
+      mod_wait_for_callback_handler.createWaitForCallbackHandler as Mock;
+    const createWaitForConditionHandler =
+      mod_wait_for_condition_handler.createWaitForConditionHandler as Mock;
+    const createMapHandler = mod_map_handler.createMapHandler as Mock;
+    const createParallelHandler =
+      mod_parallel_handler.createParallelHandler as Mock;
+    const createConcurrentExecutionHandler =
+      mod_concurrent_execution_handler.createConcurrentExecutionHandler as Mock;
 
-    createStepHandler.mockReturnValue(jest.fn().mockResolvedValue(undefined));
-    createInvokeHandler.mockReturnValue(jest.fn());
-    createRunInChildContextHandler.mockReturnValue(jest.fn());
+    createStepHandler.mockReturnValue(vi.fn().mockResolvedValue(undefined));
+    createInvokeHandler.mockReturnValue(vi.fn());
+    createRunInChildContextHandler.mockReturnValue(vi.fn());
     createWaitHandler.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve()),
     );
-    createCallback.mockReturnValue(jest.fn());
-    createWaitForCallbackHandler.mockReturnValue(jest.fn());
+    createCallback.mockReturnValue(vi.fn());
+    createWaitForCallbackHandler.mockReturnValue(vi.fn());
     createWaitForConditionHandler.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve({})),
     );
-    createMapHandler.mockReturnValue(jest.fn());
-    createParallelHandler.mockReturnValue(jest.fn());
-    createConcurrentExecutionHandler.mockReturnValue(jest.fn());
+    createMapHandler.mockReturnValue(vi.fn());
+    createParallelHandler.mockReturnValue(vi.fn());
+    createConcurrentExecutionHandler.mockReturnValue(vi.fn());
 
     mockContext = {
       awsRequestId: "test-request-id",
@@ -189,10 +191,8 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createStepHandler } = jest.requireMock(
-        "../../handlers/step-handler/step-handler",
-      );
-      const mockHandler = jest.fn().mockResolvedValue("result");
+      const createStepHandler = mod_step_handler.createStepHandler as Mock;
+      const mockHandler = vi.fn().mockResolvedValue("result");
       createStepHandler.mockReturnValue(mockHandler);
 
       await context.step(async (): Promise<string> => "result");
@@ -202,7 +202,7 @@ describe("DurableContext", () => {
 
     it("should switch from ReplayMode to ExecutionMode when next step not found", async () => {
       const executionContext = createMockExecutionContext({
-        getStepData: jest.fn().mockReturnValue(undefined),
+        getStepData: vi.fn().mockReturnValue(undefined),
       });
 
       const context = createDurableContext(
@@ -223,7 +223,7 @@ describe("DurableContext", () => {
       // Virtual contexts are not checkpointed themselves, but their first child
       // is (under `${pendingStepId}-1`). Replay must not end prematurely (#578).
       const executionContext = createMockExecutionContext({
-        getStepData: jest.fn((id: string) =>
+        getStepData: vi.fn((id: string) =>
           id === "1-1"
             ? ({ Id: "1-1", Status: OperationStatus.SUCCEEDED } as any)
             : undefined,
@@ -250,7 +250,7 @@ describe("DurableContext", () => {
 
     it("should switch to ExecutionMode when neither the next op nor its first child is checkpointed", () => {
       const executionContext = createMockExecutionContext({
-        getStepData: jest.fn().mockReturnValue(undefined),
+        getStepData: vi.fn().mockReturnValue(undefined),
       });
 
       const context = createDurableContext(
@@ -271,7 +271,7 @@ describe("DurableContext", () => {
 
     it("should switch mode when step is unfinished", async () => {
       const executionContext = createMockExecutionContext({
-        getStepData: jest
+        getStepData: vi
           .fn()
           .mockReturnValue({ Id: "1", Status: OperationStatus.STARTED }),
       });
@@ -292,7 +292,7 @@ describe("DurableContext", () => {
 
     it("should return non-resolving promise in ReplaySucceededContext for unfinished steps", () => {
       const executionContext = createMockExecutionContext({
-        getStepData: jest
+        getStepData: vi
           .fn()
           .mockReturnValue({ Id: "1", Status: OperationStatus.STARTED }),
       });
@@ -326,9 +326,7 @@ describe("DurableContext", () => {
       await context.step(async (): Promise<void> => {});
       await context.step(async (): Promise<void> => {});
 
-      const { createStepHandler } = jest.requireMock(
-        "../../handlers/step-handler/step-handler",
-      );
+      const createStepHandler = mod_step_handler.createStepHandler as Mock;
       const createStepIdFn = createStepHandler.mock.calls[0][3];
 
       expect(createStepIdFn()).toBe("1");
@@ -349,9 +347,7 @@ describe("DurableContext", () => {
 
       await context.step(async (): Promise<void> => {});
 
-      const { createStepHandler } = jest.requireMock(
-        "../../handlers/step-handler/step-handler",
-      );
+      const createStepHandler = mod_step_handler.createStepHandler as Mock;
       const createStepIdFn = createStepHandler.mock.calls[0][3];
 
       expect(createStepIdFn()).toBe("child-1");
@@ -373,9 +369,7 @@ describe("DurableContext", () => {
 
       await context.step(async (): Promise<string> => "result");
 
-      const { createStepHandler } = jest.requireMock(
-        "../../handlers/step-handler/step-handler",
-      );
+      const createStepHandler = mod_step_handler.createStepHandler as Mock;
       expect(createStepHandler).toHaveBeenCalled();
     });
 
@@ -392,9 +386,8 @@ describe("DurableContext", () => {
 
       await context.invoke("func", {});
 
-      const { createInvokeHandler } = jest.requireMock(
-        "../../handlers/invoke-handler/invoke-handler",
-      );
+      const createInvokeHandler =
+        mod_invoke_handler.createInvokeHandler as Mock;
       expect(createInvokeHandler).toHaveBeenCalled();
     });
 
@@ -411,9 +404,8 @@ describe("DurableContext", () => {
 
       await context.runInChildContext(async (): Promise<string> => "result");
 
-      const { createRunInChildContextHandler } = jest.requireMock(
-        "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
-      );
+      const createRunInChildContextHandler =
+        mod_run_in_child_context_handler.createRunInChildContextHandler as Mock;
       expect(createRunInChildContextHandler).toHaveBeenCalled();
 
       // Call the logger getter to cover line 222
@@ -435,9 +427,7 @@ describe("DurableContext", () => {
 
       await context.wait({ seconds: 5 });
 
-      const { createWaitHandler } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler",
-      );
+      const createWaitHandler = mod_wait_handler.createWaitHandler as Mock;
       expect(createWaitHandler).toHaveBeenCalled();
     });
 
@@ -452,10 +442,8 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createWaitHandler } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler",
-      );
-      const mockHandler = jest.fn(
+      const createWaitHandler = mod_wait_handler.createWaitHandler as Mock;
+      const mockHandler = vi.fn(
         () => new DurablePromise(() => Promise.resolve()),
       );
       createWaitHandler.mockReturnValue(mockHandler);
@@ -478,9 +466,7 @@ describe("DurableContext", () => {
 
       await context.createCallback();
 
-      const { createCallback } = jest.requireMock(
-        "../../handlers/callback-handler/callback",
-      );
+      const createCallback = mod_callback.createCallback as Mock;
       expect(createCallback).toHaveBeenCalled();
     });
 
@@ -497,9 +483,8 @@ describe("DurableContext", () => {
 
       await context.waitForCallback(async (): Promise<void> => {});
 
-      const { createWaitForCallbackHandler } = jest.requireMock(
-        "../../handlers/wait-for-callback-handler/wait-for-callback-handler",
-      );
+      const createWaitForCallbackHandler =
+        mod_wait_for_callback_handler.createWaitForCallbackHandler as Mock;
       expect(createWaitForCallbackHandler).toHaveBeenCalled();
     });
 
@@ -514,7 +499,7 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const checkFunc = jest.fn();
+      const checkFunc = vi.fn();
       const config = {
         initialState: {},
         waitStrategy: (): {
@@ -528,9 +513,8 @@ describe("DurableContext", () => {
 
       await context.waitForCondition(checkFunc, config);
 
-      const { createWaitForConditionHandler } = jest.requireMock(
-        "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
-      );
+      const createWaitForConditionHandler =
+        mod_wait_for_condition_handler.createWaitForConditionHandler as Mock;
       expect(createWaitForConditionHandler).toHaveBeenCalled();
     });
 
@@ -545,13 +529,12 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createWaitForConditionHandler } = jest.requireMock(
-        "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
-      );
-      const mockHandler = jest.fn();
+      const createWaitForConditionHandler =
+        mod_wait_for_condition_handler.createWaitForConditionHandler as Mock;
+      const mockHandler = vi.fn();
       createWaitForConditionHandler.mockReturnValue(mockHandler);
 
-      const checkFunc = jest.fn();
+      const checkFunc = vi.fn();
       const config = {
         initialState: {},
         waitStrategy: (): {
@@ -583,9 +566,8 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createInvokeHandler } = jest.requireMock(
-        "../../handlers/invoke-handler/invoke-handler",
-      );
+      const createInvokeHandler =
+        mod_invoke_handler.createInvokeHandler as Mock;
 
       await context.invoke("func", {});
 
@@ -607,9 +589,7 @@ describe("DurableContext", () => {
 
       await context.map([1, 2], async (): Promise<string> => "result");
 
-      const { createMapHandler } = jest.requireMock(
-        "../../handlers/map-handler/map-handler",
-      );
+      const createMapHandler = mod_map_handler.createMapHandler as Mock;
       expect(createMapHandler).toHaveBeenCalled();
     });
 
@@ -626,9 +606,8 @@ describe("DurableContext", () => {
 
       await context.parallel([async (): Promise<string> => "result"]);
 
-      const { createParallelHandler } = jest.requireMock(
-        "../../handlers/parallel-handler/parallel-handler",
-      );
+      const createParallelHandler =
+        mod_parallel_handler.createParallelHandler as Mock;
       expect(createParallelHandler).toHaveBeenCalled();
     });
   });
@@ -646,12 +625,12 @@ describe("DurableContext", () => {
       );
 
       const customLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       expect(() => context.configureLogger({ customLogger })).not.toThrow();
@@ -659,20 +638,20 @@ describe("DurableContext", () => {
 
     it("should reassign this.logger and use new custom logger after configureLogger", () => {
       const originalLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
       };
 
       const newCustomLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
-        configureDurableLoggingContext: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+        configureDurableLoggingContext: vi.fn(),
       };
 
       const executionContext = createMockExecutionContext();
@@ -687,7 +666,7 @@ describe("DurableContext", () => {
 
       // Mock context to allow logging
       const mockGetActiveContext =
-        contextTracker.getActiveContext as jest.MockedFunction<
+        contextTracker.getActiveContext as MockedFunction<
           typeof contextTracker.getActiveContext
         >;
       mockGetActiveContext.mockReturnValue(undefined);
@@ -698,7 +677,7 @@ describe("DurableContext", () => {
       expect(newCustomLogger.info).not.toHaveBeenCalled();
 
       // Configure with new custom logger
-      jest.clearAllMocks();
+      vi.clearAllMocks();
       context.configureLogger({ customLogger: newCustomLogger });
 
       // Now should use the new custom logger
@@ -727,11 +706,11 @@ describe("DurableContext", () => {
       );
 
       const customLoggerWithoutConfigure = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         // configureDurableLoggingContext is undefined/missing
       };
 
@@ -749,7 +728,7 @@ describe("DurableContext", () => {
       // Test that logger functions work and call underlying logger when modeAware is enabled (default)
       // Mock getActiveContext to return undefined (should allow logging)
       const mockGetActiveContext =
-        contextTracker.getActiveContext as jest.MockedFunction<
+        contextTracker.getActiveContext as MockedFunction<
           typeof contextTracker.getActiveContext
         >;
       mockGetActiveContext.mockReturnValue(undefined);
@@ -771,13 +750,13 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const configureMock = jest.fn();
+      const configureMock = vi.fn();
       const customLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         configureDurableLoggingContext: configureMock,
       };
 
@@ -792,13 +771,13 @@ describe("DurableContext", () => {
 
   describe("configureDurableLoggingContext handling", () => {
     it("should create context with logger that has configureDurableLoggingContext", () => {
-      const configureMock = jest.fn();
+      const configureMock = vi.fn();
       const loggerWithConfigure = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         configureDurableLoggingContext: configureMock,
       };
 
@@ -823,11 +802,11 @@ describe("DurableContext", () => {
 
     it("should create context with logger without configureDurableLoggingContext", () => {
       const loggerWithoutConfigure = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         // configureDurableLoggingContext is undefined/missing
       };
 
@@ -881,13 +860,13 @@ describe("DurableContext", () => {
     });
 
     it("should not call configureDurableLoggingContext when configuring logger with modeAware only", () => {
-      const configureMock = jest.fn();
+      const configureMock = vi.fn();
       const loggerWithConfigure = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         configureDurableLoggingContext: configureMock,
       };
 
@@ -974,24 +953,23 @@ describe("DurableContext", () => {
   });
 
   describe("mode-aware logging (shouldLog & createModeAwareLogger)", () => {
-    let mockGetActiveContext: jest.MockedFunction<
+    let mockGetActiveContext: MockedFunction<
       typeof contextTracker.getActiveContext
     >;
     let mockLogger: DurableLogger;
 
     beforeEach(() => {
-      mockGetActiveContext =
-        contextTracker.getActiveContext as jest.MockedFunction<
-          typeof contextTracker.getActiveContext
-        >;
+      mockGetActiveContext = contextTracker.getActiveContext as MockedFunction<
+        typeof contextTracker.getActiveContext
+      >;
       mockGetActiveContext.mockClear();
 
       mockLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
       };
     });
 
@@ -1119,18 +1097,18 @@ describe("DurableContext", () => {
 
     it("should create mode-aware logger with conditional log method based on underlying logger", () => {
       const mockLoggerWithLog = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
       };
 
       const mockLoggerWithoutLog = {
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
         // no log method
       };
 
@@ -1170,11 +1148,11 @@ describe("DurableContext", () => {
 
     it("should respect mode changes when reconfiguring logger", () => {
       const mockLogger = {
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn(),
-        debug: jest.fn(),
+        log: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
       };
 
       const executionContext = createMockExecutionContext();
@@ -1206,7 +1184,7 @@ describe("DurableContext", () => {
       expect(mockLogger.info).toHaveBeenCalledWith("allowed message");
 
       // Re-enable mode-aware logging
-      jest.clearAllMocks();
+      vi.clearAllMocks();
       context.configureLogger({ modeAware: true });
 
       // Logging should be suppressed again

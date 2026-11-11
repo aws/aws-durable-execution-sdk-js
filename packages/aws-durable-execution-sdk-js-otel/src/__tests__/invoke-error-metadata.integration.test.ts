@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   withDurableExecution,
   InvocationStatus,
@@ -47,7 +48,7 @@ describe.each([
       const endInvocations: number[] = [];
       const changes: OperationChangeInfo[] = [];
       const failures: Array<{ name: string; message: string }> = [];
-      const step = jest.fn(async () => {
+      const step = vi.fn(async () => {
         inStep.open();
         await releaseStep.opened;
         return "saved";

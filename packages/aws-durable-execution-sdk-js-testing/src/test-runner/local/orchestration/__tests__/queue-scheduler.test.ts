@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { install, Clock } from "@sinonjs/fake-timers";
 import { QueueScheduler } from "../queue-scheduler";
 
@@ -30,10 +31,10 @@ describe("QueueScheduler", () => {
 
         scheduler.scheduleFunction(async () => {
           executionOrder.push(1);
-        }, jest.fn());
+        }, vi.fn());
         scheduler.scheduleFunction(async () => {
           executionOrder.push(2);
-        }, jest.fn());
+        }, vi.fn());
 
         const completed = await Promise.race([
           scheduler.waitForCompletion().then(() => true),
@@ -71,7 +72,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule multiple functions with different delays
       scheduler.scheduleFunction(createAsyncFunction(1, 50), mockOnError);
@@ -100,7 +101,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn((err: unknown) => {
+      const mockOnError = vi.fn((err: unknown) => {
         errors.push(err);
       });
 
@@ -131,15 +132,15 @@ describe("QueueScheduler", () => {
           // Schedule more functions during execution of the first batch
           if (id === 2 && !secondBatchScheduled) {
             secondBatchScheduled = true;
-            scheduler.scheduleFunction(createFunction(4), jest.fn());
-            scheduler.scheduleFunction(createFunction(5), jest.fn());
+            scheduler.scheduleFunction(createFunction(4), vi.fn());
+            scheduler.scheduleFunction(createFunction(5), vi.fn());
           }
           // Small delay to make execution observable
           await new Promise((resolve) => setTimeout(resolve, 10));
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule initial batch
       scheduler.scheduleFunction(createFunction(1), mockOnError);
@@ -158,14 +159,14 @@ describe("QueueScheduler", () => {
   describe("updateCheckpoint functionality", () => {
     it("should execute updateCheckpoint before startInvocation", async () => {
       const executionOrder: string[] = [];
-      const mockFn = jest.fn().mockImplementation(() => {
+      const mockFn = vi.fn().mockImplementation(() => {
         executionOrder.push("startInvocation");
       });
-      const mockUpdateCheckpoint = jest.fn().mockImplementation(() => {
+      const mockUpdateCheckpoint = vi.fn().mockImplementation(() => {
         executionOrder.push("updateCheckpoint");
         return Promise.resolve();
       });
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(
         mockFn,
@@ -185,9 +186,9 @@ describe("QueueScheduler", () => {
 
     it("should call onError when updateCheckpoint throws an error", async () => {
       const checkpointError = new Error("Checkpoint error");
-      const mockFn = jest.fn();
-      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn();
+      const mockUpdateCheckpoint = vi.fn().mockRejectedValue(checkpointError);
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(
         mockFn,
@@ -204,8 +205,8 @@ describe("QueueScheduler", () => {
     });
 
     it("should work correctly when updateCheckpoint is not provided", async () => {
-      const mockFn = jest.fn();
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(mockFn, mockOnError);
 
@@ -228,7 +229,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule functions with timestamps (should be ignored)
       const futureDate = new Date(Date.now() + 10000); // 10 seconds in future
@@ -248,20 +249,20 @@ describe("QueueScheduler", () => {
 
   describe("hasScheduledFunction state management", () => {
     it("should return true when functions are queued", () => {
-      const mockFn = jest.fn();
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(mockFn, mockOnError);
       expect(scheduler.hasScheduledFunction()).toBe(true);
     });
 
     it("should return true while processing queue", async () => {
-      const mockFn = jest.fn().mockImplementation(async () => {
+      const mockFn = vi.fn().mockImplementation(async () => {
         // Function is currently executing
         expect(scheduler.hasScheduledFunction()).toBe(true);
         await new Promise((resolve) => setTimeout(resolve, 10));
       });
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(mockFn, mockOnError);
 
@@ -272,8 +273,8 @@ describe("QueueScheduler", () => {
     });
 
     it("should return false after all functions complete", async () => {
-      const mockFn = jest.fn();
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn();
+      const mockOnError = vi.fn();
 
       scheduler.scheduleFunction(mockFn, mockOnError);
 
@@ -298,9 +299,9 @@ describe("QueueScheduler", () => {
 
     it("should not cause unhandled rejection when updateCheckpoint fails and queue is flushed before processing", async () => {
       const checkpointError = new Error("Checkpoint error");
-      const mockFn = jest.fn();
-      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
-      const mockOnError = jest.fn();
+      const mockFn = vi.fn();
+      const mockUpdateCheckpoint = vi.fn().mockRejectedValue(checkpointError);
+      const mockOnError = vi.fn();
 
       // Schedule function with failing updateCheckpoint
       scheduler.scheduleFunction(
@@ -343,7 +344,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule multiple functions
       scheduler.scheduleFunction(createFunction(1), mockOnError);
@@ -368,7 +369,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule and flush
       scheduler.scheduleFunction(createFunction(1), mockOnError);
@@ -403,7 +404,7 @@ describe("QueueScheduler", () => {
         };
       };
 
-      const mockOnError = jest.fn();
+      const mockOnError = vi.fn();
 
       // Schedule functions
       scheduler.scheduleFunction(createFunction(1), mockOnError);

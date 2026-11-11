@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -62,10 +63,11 @@ export function testChainedInvokeSuspension(
     it.each([undefined, ""])(
       "fails before invoking a child when the target is %p",
       async (functionName) => {
-        const environment = jest.replaceProperty(process, "env", {
-          ...process.env,
+        const originalEnv = process.env;
+        process.env = {
+          ...originalEnv,
           OTEL_INVOKE_TARGET_FUNCTION_NAME: functionName,
-        });
+        } as NodeJS.ProcessEnv;
         try {
           const runner = new LocalDurableTestRunner({
             handlerFunction: handler,
@@ -85,7 +87,7 @@ export function testChainedInvokeSuspension(
               .filter((event) => event.EventType === "ChainedInvokeStarted"),
           ).toHaveLength(0);
         } finally {
-          environment.restore();
+          process.env = originalEnv;
         }
       },
     );
@@ -95,10 +97,7 @@ export function testChainedInvokeSuspension(
       const gate = new Promise<void>((resolve) => {
         releaseTarget = resolve;
       });
-      const target = jest.fn<
-        ReturnType<DurableLambdaHandler>,
-        Parameters<DurableLambdaHandler>
-      >(async (...args) => {
+      const target = vi.fn<DurableLambdaHandler>(async (...args) => {
         await gate;
         return targetHandler(...args);
       });

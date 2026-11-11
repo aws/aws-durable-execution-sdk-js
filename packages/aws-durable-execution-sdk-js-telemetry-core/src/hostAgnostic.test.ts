@@ -24,6 +24,7 @@
  * host imports it today — which cannot miss a transitive path, and cannot silently
  * narrow when a host stops importing something.
  */
+import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import {

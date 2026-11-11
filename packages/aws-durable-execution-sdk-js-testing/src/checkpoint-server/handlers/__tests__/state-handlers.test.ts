@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { OperationType, OperationAction } from "@aws/durable-execution-sdk-js";
 import { processGetDurableExecutionState } from "../state-handlers";
 import { ExecutionManager } from "../../storage/execution-manager";
@@ -35,11 +36,11 @@ describe("state handlers", () => {
         Name: "TestStep",
       });
 
-      const getStorageSpy = jest.spyOn(
+      const getStorageSpy = vi.spyOn(
         executionManager,
         "getCheckpointsByExecution",
       );
-      const getStateSpy = jest.spyOn(storage!, "getState");
+      const getStateSpy = vi.spyOn(storage!, "getState");
 
       const result = processGetDurableExecutionState(
         "test-execution-arn",
@@ -58,7 +59,7 @@ describe("state handlers", () => {
     });
 
     it("should throw error when execution manager cannot find storage", () => {
-      const getStorageSpy = jest
+      const getStorageSpy = vi
         .spyOn(executionManager, "getCheckpointsByExecution")
         .mockReturnValue(undefined);
 

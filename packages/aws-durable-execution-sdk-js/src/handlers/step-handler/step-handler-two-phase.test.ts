@@ -1,24 +1,10 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Step Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
@@ -28,31 +14,28 @@ describe("Step Handler Two-Phase Execution", () => {
   let stepIdCounter = 0;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     stepIdCounter = 0;
 
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(null),
+      getStepData: vi.fn().mockReturnValue(null),
       durableExecutionArn: "test-arn",
       terminationManager: {
-        terminate: jest.fn(),
+        terminate: vi.fn(),
       },
     } as any;
 
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
     } as any;
 
     mockParentContext = {
-      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
+      getRemainingTimeInMillis: vi.fn().mockReturnValue(30000),
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
   it("should execute step logic in phase 1 immediately", async () => {
@@ -64,7 +47,7 @@ describe("Step Handler Two-Phase Execution", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     const stepPromise = stepHandler(stepFn);
 
@@ -79,13 +62,6 @@ describe("Step Handler Two-Phase Execution", () => {
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
-
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -94,7 +70,7 @@ describe("Step Handler Two-Phase Execution", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("test-result");
+    const stepFn = vi.fn().mockResolvedValue("test-result");
 
     const stepPromise = stepHandler(stepFn);
 
@@ -119,7 +95,7 @@ describe("Step Handler Two-Phase Execution", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     const stepPromise = stepHandler(stepFn);
 
@@ -133,13 +109,6 @@ describe("Step Handler Two-Phase Execution", () => {
   });
 
   it("should handle step with name parameter", async () => {
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
-
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -148,7 +117,7 @@ describe("Step Handler Two-Phase Execution", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("named-result");
+    const stepFn = vi.fn().mockResolvedValue("named-result");
 
     const stepPromise = stepHandler("test-step", stepFn);
 
@@ -169,7 +138,7 @@ describe("Step Handler Two-Phase Execution", () => {
       createDefaultLogger(),
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const stepFn = vi.fn().mockResolvedValue("result");
 
     const stepPromise = stepHandler(stepFn);
 

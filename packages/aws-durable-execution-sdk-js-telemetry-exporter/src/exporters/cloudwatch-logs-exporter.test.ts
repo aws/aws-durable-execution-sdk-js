@@ -1,12 +1,13 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-cloudwatch-logs", () => ({
-  CloudWatchLogsClient: jest.fn(() => ({ send: mockSend })),
-  PutLogEventsCommand: jest.fn((input: unknown) => ({
+vi.mock("@aws-sdk/client-cloudwatch-logs", () => ({
+  CloudWatchLogsClient: vi.fn(() => ({ send: mockSend })),
+  PutLogEventsCommand: vi.fn((input: unknown) => ({
     __type: "put",
     __input: input,
   })),
-  CreateLogStreamCommand: jest.fn((input: unknown) => ({
+  CreateLogStreamCommand: vi.fn((input: unknown) => ({
     __type: "create",
     __input: input,
   })),

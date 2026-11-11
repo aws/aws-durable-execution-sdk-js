@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   currentTime,
   ExecutionClock,
@@ -7,14 +8,14 @@ import {
 
 describe("client clock", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
     resetClientTimeForTesting();
   });
 
   afterEach(() => {
     resetClientTimeForTesting();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("reads the local clock before any request is observed", () => {
@@ -26,7 +27,7 @@ describe("client clock", () => {
     observeClientTime(Date.parse("2030-01-01T01:00:00.000Z"));
     expect(currentTime()).toEqual(new Date("2030-01-01T01:00:00.000Z"));
 
-    jest.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1500);
     expect(currentTime()).toEqual(new Date("2030-01-01T01:00:01.500Z"));
   });
 
@@ -54,7 +55,7 @@ describe("client clock", () => {
 
     // The main thread is blocked, so its fake clock stops. The server keeps running and
     // records a time, for example a callback timeout.
-    jest.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(2000);
     expect(clock.now()).toEqual(new Date("2030-01-01T01:00:02.000Z"));
 
     // After the stall, the main thread's clock is 1.9 s behind that time.
@@ -62,14 +63,14 @@ describe("client clock", () => {
     expect(clock.now()).toEqual(new Date("2030-01-01T01:00:02.000Z"));
 
     // The time holds until the main thread's clock passes it, then follows that clock.
-    jest.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(2000);
     expect(clock.now()).toEqual(new Date("2030-01-01T01:00:02.100Z"));
   });
 
   it("keeps each execution's clock separate", () => {
     const stalled = new ExecutionClock();
     observeClientTime(Date.parse("2030-01-01T01:00:00.000Z"));
-    jest.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(2000);
     stalled.now();
     observeClientTime(Date.parse("2030-01-01T01:00:00.100Z"));
 

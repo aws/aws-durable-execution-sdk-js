@@ -1,15 +1,16 @@
-const send = jest.fn();
-jest.mock("@aws-sdk/client-bedrock", () => ({
-  BedrockClient: jest.fn(() => ({ send, destroy: jest.fn() })),
-  ListInferenceProfilesCommand: jest.fn((i) => ({ __t: "profiles", i })),
-  ListFoundationModelsCommand: jest.fn((i) => ({ __t: "models", i })),
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const send = vi.hoisted(() => vi.fn());
+vi.mock("@aws-sdk/client-bedrock", () => ({
+  BedrockClient: vi.fn(() => ({ send, destroy: vi.fn() })),
+  ListInferenceProfilesCommand: vi.fn((i) => ({ __t: "profiles", i })),
+  ListFoundationModelsCommand: vi.fn((i) => ({ __t: "models", i })),
 }));
 
 import { listBedrockModels } from "./bedrockModels";
 
 const creds = {} as never;
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 function route(handlers: {
   profiles?: unknown[];

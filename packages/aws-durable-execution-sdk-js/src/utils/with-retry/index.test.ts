@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { DurableContext } from "../../types/durable-context";
 import { Duration } from "../../types";
 import { withRetry } from ".";
@@ -20,7 +21,7 @@ function createMockContext(): {
   const childContextNames: Array<string | undefined> = [];
 
   const context = {
-    wait: jest.fn(
+    wait: vi.fn(
       async (nameOrDuration: string | Duration, maybeDuration?: Duration) => {
         if (typeof nameOrDuration === "string") {
           waits.push({ name: nameOrDuration, duration: maybeDuration! });
@@ -29,7 +30,7 @@ function createMockContext(): {
         }
       },
     ),
-    runInChildContext: jest.fn(
+    runInChildContext: vi.fn(
       async (
         nameOrFn: string | ((childCtx: DurableContext) => Promise<unknown>),
         fnOrConfig?: ((childCtx: DurableContext) => Promise<unknown>) | unknown,
@@ -57,7 +58,7 @@ function createMockContext(): {
 describe("withRetry", () => {
   it("returns the result on the first attempt without retrying", async () => {
     const { context, waits, childContextNames } = createMockContext();
-    const operation = jest.fn(async () => "success");
+    const operation = vi.fn(async () => "success");
 
     const result = await withRetry(context, "op", operation, {
       retryStrategy: () => ({ shouldRetry: true, delay: { seconds: 1 } }),
@@ -72,8 +73,8 @@ describe("withRetry", () => {
 
   it("retries until the operation succeeds", async () => {
     const { context, waits } = createMockContext();
-    const operation = jest
-      .fn<Promise<string>, [DurableContext, number]>()
+    const operation = vi
+      .fn<(ctx: DurableContext, n: number) => Promise<string>>()
       .mockRejectedValueOnce(new Error("fail 1"))
       .mockRejectedValueOnce(new Error("fail 2"))
       .mockResolvedValueOnce("ok");
@@ -96,8 +97,8 @@ describe("withRetry", () => {
   it("throws the last error when retries are exhausted", async () => {
     const { context } = createMockContext();
     const finalError = new Error("final");
-    const operation = jest
-      .fn<Promise<string>, [DurableContext, number]>()
+    const operation = vi
+      .fn<(ctx: DurableContext, n: number) => Promise<string>>()
       .mockRejectedValueOnce(new Error("first"))
       .mockRejectedValueOnce(finalError);
 
@@ -113,10 +114,10 @@ describe("withRetry", () => {
   it("throws immediately when the strategy returns shouldRetry=false", async () => {
     const { context, waits } = createMockContext();
     const error = new Error("nope");
-    const operation = jest
-      .fn<Promise<string>, [DurableContext, number]>()
+    const operation = vi
+      .fn<(ctx: DurableContext, n: number) => Promise<string>>()
       .mockRejectedValueOnce(error);
-    const retryStrategy = jest.fn(() => ({ shouldRetry: false }));
+    const retryStrategy = vi.fn(() => ({ shouldRetry: false }));
 
     await expect(
       withRetry(context, "op", operation, { retryStrategy }),
@@ -129,8 +130,8 @@ describe("withRetry", () => {
 
   it("defaults the backoff delay to 1 second when none is provided", async () => {
     const { context, waits } = createMockContext();
-    const operation = jest
-      .fn<Promise<string>, [DurableContext, number]>()
+    const operation = vi
+      .fn<(ctx: DurableContext, n: number) => Promise<string>>()
       .mockRejectedValueOnce(new Error("fail"))
       .mockResolvedValueOnce("ok");
 
@@ -143,7 +144,7 @@ describe("withRetry", () => {
 
   it("wraps the retry loop in runInChildContext by default", async () => {
     const { context, childContextNames } = createMockContext();
-    const operation = jest.fn(async () => "ok");
+    const operation = vi.fn(async () => "ok");
 
     await withRetry(context, "my-op", operation, {
       retryStrategy: () => ({ shouldRetry: false }),
@@ -155,7 +156,7 @@ describe("withRetry", () => {
 
   it("skips runInChildContext when wrapWithRunInChildContext is false", async () => {
     const { context, childContextNames } = createMockContext();
-    const operation = jest.fn(async () => "ok");
+    const operation = vi.fn(async () => "ok");
 
     await withRetry(context, "my-op", operation, {
       retryStrategy: () => ({ shouldRetry: false }),
@@ -169,7 +170,7 @@ describe("withRetry", () => {
   it("passes the 1-based attempt number to the operation", async () => {
     const { context } = createMockContext();
     const attempts: number[] = [];
-    const operation = jest.fn(async (_ctx: DurableContext, attempt: number) => {
+    const operation = vi.fn(async (_ctx: DurableContext, attempt: number) => {
       attempts.push(attempt);
       if (attempt < 3) throw new Error("retry");
       return "done";
@@ -185,8 +186,8 @@ describe("withRetry", () => {
   describe("anonymous (no name)", () => {
     it("wraps the loop in an anonymous runInChildContext and waits anonymously during backoff", async () => {
       const { context, waits, childContextNames } = createMockContext();
-      const operation = jest
-        .fn<Promise<string>, [DurableContext, number]>()
+      const operation = vi
+        .fn<(ctx: DurableContext, n: number) => Promise<string>>()
         .mockRejectedValueOnce(new Error("fail"))
         .mockResolvedValueOnce("ok");
 
@@ -205,7 +206,7 @@ describe("withRetry", () => {
 
     it("skips runInChildContext when wrapWithRunInChildContext is false (anonymous overload)", async () => {
       const { context, childContextNames } = createMockContext();
-      const operation = jest.fn(async () => "ok");
+      const operation = vi.fn(async () => "ok");
 
       await withRetry(context, operation, {
         retryStrategy: () => ({ shouldRetry: false }),
@@ -220,7 +221,7 @@ describe("withRetry", () => {
   describe("childContextConfig", () => {
     it("forwards childContextConfig to runInChildContext in the named form", async () => {
       const { context, childContextCalls } = createMockContext();
-      const operation = jest.fn(async () => "ok");
+      const operation = vi.fn(async () => "ok");
       const childContextConfig = { subType: "approval-flow" };
 
       await withRetry(context, "op", operation, {
@@ -235,7 +236,7 @@ describe("withRetry", () => {
 
     it("forwards childContextConfig to runInChildContext in the anonymous form", async () => {
       const { context, childContextCalls } = createMockContext();
-      const operation = jest.fn(async () => "ok");
+      const operation = vi.fn(async () => "ok");
       const childContextConfig = { subType: "approval-flow" };
 
       await withRetry(context, operation, {
@@ -250,7 +251,7 @@ describe("withRetry", () => {
 
     it("is ignored when wrapWithRunInChildContext is false", async () => {
       const { context } = createMockContext();
-      const operation = jest.fn(async () => "ok");
+      const operation = vi.fn(async () => "ok");
 
       await withRetry(context, "op", operation, {
         retryStrategy: () => ({ shouldRetry: false }),

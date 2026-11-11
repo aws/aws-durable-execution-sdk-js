@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import {
@@ -16,7 +25,7 @@ describe("LocalDurableTestRunner Integration", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("should complete execution with no environment variables set", async () => {
@@ -44,7 +53,7 @@ describe("LocalDurableTestRunner Integration", () => {
   it("should track operations across multiple invocations", async () => {
     // Complete each callback only after its invocation has suspended. Unlike
     // skipped waits, these boundaries cannot coalesce during the idle cooldown.
-    const stepBody = jest.fn(async () => ({
+    const stepBody = vi.fn(async () => ({
       processed: true,
       timestamp: Date.now(),
     }));
@@ -241,7 +250,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should complete with mocking", async () => {
-    const mockedFunction = jest.fn();
+    const mockedFunction = vi.fn();
 
     const otherCode = {
       property: () => "not mocked",
@@ -258,7 +267,7 @@ describe("LocalDurableTestRunner Integration", () => {
       },
     );
 
-    jest.spyOn(otherCode, "property").mockReturnValue("my result");
+    vi.spyOn(otherCode, "property").mockReturnValue("my result");
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
@@ -272,7 +281,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should have fake timers in the global scope", async () => {
-    jest.useRealTimers();
+    vi.useRealTimers();
 
     const handler = withDurableExecution(() => {
       // Reviewed `@typescript-eslint/no-unsafe-member-access` (with `no-explicit-any`) disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). This probes the fake-timer flag on Date, which is untyped by design.

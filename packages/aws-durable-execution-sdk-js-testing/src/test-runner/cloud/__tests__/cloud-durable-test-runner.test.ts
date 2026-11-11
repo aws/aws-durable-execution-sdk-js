@@ -1,4 +1,14 @@
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+  type Mock,
+} from "vitest";
+import {
   LambdaClient,
   Event,
   EventType,
@@ -12,7 +22,7 @@ import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
 import { TestResult } from "../../types/durable-test-runner";
 import { WaitingOperationStatus } from "../../types/durable-operation";
 
-jest.mock("@aws-sdk/client-lambda");
+vi.mock("@aws-sdk/client-lambda");
 
 interface MockApiResponses {
   historyResponse?: GetDurableExecutionHistoryCommandOutput;
@@ -20,8 +30,8 @@ interface MockApiResponses {
 }
 
 describe("CloudDurableTestRunner", () => {
-  let mockLambdaClient: jest.Mocked<LambdaClient>;
-  let mockSend: jest.Mock;
+  let mockLambdaClient: Mocked<LambdaClient>;
+  let mockSend: Mock;
 
   const mockFunctionArn =
     "arn:aws:lambda:us-east-1:123456789012:function:test-function";
@@ -56,7 +66,7 @@ describe("CloudDurableTestRunner", () => {
   };
 
   const setupMockApiResponses = (
-    mockSend: jest.Mock,
+    mockSend: Mock,
     responses: MockApiResponses = {},
   ): void => {
     let historyCallCount = 0;
@@ -87,21 +97,24 @@ describe("CloudDurableTestRunner", () => {
   };
 
   beforeEach(() => {
-    jest.resetAllMocks();
-    jest.useFakeTimers();
+    vi.resetAllMocks();
+    vi.useFakeTimers();
 
-    mockSend = jest.fn();
+    mockSend = vi.fn();
     mockLambdaClient = {
       send: mockSend,
-    } as unknown as jest.Mocked<LambdaClient>;
+    } as unknown as Mocked<LambdaClient>;
 
-    (LambdaClient as jest.Mock).mockImplementation(() => mockLambdaClient);
+    // biome-ignore lint/complexity/useArrowFunction: used with `new`, so it must be a constructible function
+    (LambdaClient as Mock).mockImplementation(function () {
+      return mockLambdaClient;
+    });
 
     setupMockApiResponses(mockSend);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("Configuration", () => {
@@ -142,10 +155,10 @@ describe("CloudDurableTestRunner", () => {
 
       const runPromise = runner.run();
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(mockLambdaClient.send).toHaveBeenCalledTimes(1);
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(mockLambdaClient.send).toHaveBeenCalledTimes(2);
 
       await runPromise;
@@ -181,7 +194,7 @@ describe("CloudDurableTestRunner", () => {
       const testPayload = { input: "test-data", count: 42 };
       const runPromise = runner.run({ payload: testPayload });
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await runPromise;
 
       expect(result).toBeDefined();
@@ -195,7 +208,7 @@ describe("CloudDurableTestRunner", () => {
 
       const runPromise = runner.run();
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await runPromise;
 
       expect(result).toBeDefined();
@@ -246,7 +259,7 @@ describe("CloudDurableTestRunner", () => {
       });
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await runPromise;
 
       expect(result).toBeDefined();
@@ -282,7 +295,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperation("testOperation");
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       await runPromise;
 
       expect(operation).toBeDefined();
@@ -322,7 +335,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperationByIndex(0);
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       await runPromise;
 
       expect(operation.getStatus()).toBe(OperationStatus.STARTED);
@@ -355,7 +368,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperationByNameAndIndex("namedOperation", 1);
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       await runPromise;
 
       expect(operation).toBeDefined();
@@ -387,7 +400,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperationById("op-123");
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       await runPromise;
 
       expect(operation).toBeDefined();
@@ -432,7 +445,7 @@ describe("CloudDurableTestRunner", () => {
       const operation2 = runner.getOperationById("op2");
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       await runPromise;
 
       expect(operation1).toBeDefined();
@@ -478,9 +491,9 @@ describe("CloudDurableTestRunner", () => {
       const runPromise = runner.run({ payload: { test: "data" } });
 
       // First poll
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       // Second poll
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       const result = await runPromise;
 
@@ -525,16 +538,16 @@ describe("CloudDurableTestRunner", () => {
       const runPromise = runner.run();
 
       // First poll - marker1
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       // First poll - marker2
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       // First poll - undefined marker, running execution
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       // Second poll - running execution
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       // Third poll - succeeded execution
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       const result = await runPromise;
 
@@ -557,7 +570,7 @@ describe("CloudDurableTestRunner", () => {
 
       const runPromise = runner.run();
 
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
 
       const result = await runPromise;
 
@@ -620,7 +633,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperationByNameAndIndex("processData", 0);
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await runPromise;
 
       expect(result).toBeDefined();
@@ -709,7 +722,7 @@ describe("CloudDurableTestRunner", () => {
       const operation = runner.getOperationByNameAndIndex("processData", 0);
 
       const runPromise = runner.run();
-      await jest.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
       const result = await runPromise;
 
       expect(result).toBeDefined();
@@ -752,8 +765,8 @@ describe("CloudDurableTestRunner", () => {
 
       const runPromise = runner.run();
 
-      await jest.advanceTimersByTimeAsync(400);
-      await jest.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(400);
+      await vi.advanceTimersByTimeAsync(100);
 
       const result = await runPromise;
 
@@ -787,7 +800,7 @@ describe("CloudDurableTestRunner", () => {
       const [waitResult, runResult] = await Promise.allSettled([
         waitPromise,
         runPromise,
-        jest.advanceTimersByTimeAsync(1000),
+        vi.advanceTimersByTimeAsync(1000),
       ]);
 
       expect(runResult.status).toBe("fulfilled");
@@ -852,7 +865,7 @@ describe("CloudDurableTestRunner", () => {
         waitPromise1,
         waitPromise2,
         runPromise,
-        jest.advanceTimersByTimeAsync(1000),
+        vi.advanceTimersByTimeAsync(1000),
       ]);
 
       expect(runResult.status).toBe("fulfilled");

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, afterEach } from "vitest";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -165,7 +166,7 @@ describe.each(
   });
 
   it("preserves baseline sampler calls for opaque forwarding tracers", async () => {
-    const shouldSample = jest.fn(() => ({
+    const shouldSample = vi.fn(() => ({
       decision: SamplingDecision.RECORD_AND_SAMPLED,
     }));
     const { factory, exporter } = session({
@@ -269,7 +270,7 @@ describe.each(
 
   it("anchors a resume after a late-registered global provider", async () => {
     const factory = createFactory({ contextExtractor: () => undefined });
-    const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const first = start();
       const firstPlugin = factory.createPlugin(first);
@@ -469,7 +470,7 @@ describe.each(
   it.each(["SAMPLED", "NOT_SAMPLED"] as const)(
     "preserves upstream %s without an extra sampler query",
     async (sampling) => {
-      const shouldSample = jest.fn(() => ({
+      const shouldSample = vi.fn(() => ({
         decision:
           sampling === "SAMPLED"
             ? SamplingDecision.NOT_RECORD
@@ -500,7 +501,7 @@ describe.each(
     "keeps a deterministic ratio policy (%s) consistent across boundaries",
     async (ratio) => {
       const policy = new TraceIdRatioBasedSampler(ratio);
-      const shouldSample = jest.spyOn(policy, "shouldSample");
+      const shouldSample = vi.spyOn(policy, "shouldSample");
       const { factory, exporter } = session({ sampler: policy });
       for (const [isFirstInvocation, status] of [
         [true, "PENDING"],
@@ -524,7 +525,7 @@ describe.each(
     "does not persist or independently resample a changing root policy (first sampled=%s)",
     async (sampledFirst) => {
       let calls = 0;
-      const shouldSample = jest.fn(() => ({
+      const shouldSample = vi.fn(() => ({
         decision:
           (++calls === 1) === sampledFirst
             ? SamplingDecision.RECORD_AND_SAMPLED

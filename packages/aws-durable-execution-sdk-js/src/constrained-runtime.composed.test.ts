@@ -19,6 +19,7 @@
  * and it also pins the fallbacks to observability, which is the only thing they are allowed to
  * affect.
  */
+import { vi, describe, it, expect, beforeAll } from "vitest";
 
 import type {
   CheckpointDurableExecutionRequest,
@@ -54,7 +55,7 @@ type HarnessOperation = WireOperation & { wakeAt?: number };
  * sleeping.
  *
  * The testing SDK's runner cannot be used here -- it needs `node:worker_threads` and fake
- * timers, and the point of this file is to stay inside one Jest process.
+ * timers, and the point of this file is to stay inside one Vitest process.
  */
 class InMemoryDurableService {
   private now = Date.UTC(2026, 0, 1);
@@ -259,11 +260,11 @@ const strip = (operation: HarnessOperation): WireOperation => {
 /**
  * A `node:util` shaped like LLRT's: `format` present, `formatWithOptions` absent.
  *
- * `jest.requireActual` rather than `require`, which inside a mock factory would resolve back to
+ * `vi.importActual` rather than `require`, which inside a mock factory would resolve back to
  * the mock and recurse.
  */
-const partialUtil = (): unknown => {
-  const real = jest.requireActual<typeof import("node:util")>("node:util");
+const partialUtil = async (): Promise<unknown> => {
+  const real = await vi.importActual<typeof import("node:util")>("node:util");
   return {
     __esModule: true,
     default: { format: real.format, inherits: real.inherits },
@@ -288,12 +289,13 @@ async function runWorkflow({
 }: {
   constrained: boolean;
 }): Promise<RunOutcome> {
-  jest.resetModules();
+  vi.resetModules();
 
   if (constrained) {
     // LLRT exposes the low-level async_hooks surface but no AsyncLocalStorage.
-    jest.doMock("node:async_hooks", () => ({}));
-    jest.doMock("node:util", partialUtil);
+    // Vitest throws on reading an export a mock factory did not return, so the absent    // export is spelled out as `undefined` rather than left off.
+    vi.doMock("node:async_hooks", () => ({ AsyncLocalStorage: undefined }));
+    vi.doMock("node:util", partialUtil);
   }
 
   // The SDK logs through its own `Console` instance. Mocking it both captures the records this
@@ -304,13 +306,16 @@ async function runWorkflow({
     (...args: unknown[]): void => {
       records.push(`${level} ${args.map(String).join(" ")}`);
     };
-  jest.doMock("node:console", () => ({
-    Console: jest.fn().mockImplementation(() => ({
-      info: capture("INFO"),
-      debug: capture("DEBUG"),
-      warn: capture("WARN"),
-      error: capture("ERROR"),
-    })),
+  vi.doMock("node:console", () => ({
+    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
+    Console: vi.fn().mockImplementation(function () {
+      return {
+        info: capture("INFO"),
+        debug: capture("DEBUG"),
+        warn: capture("WARN"),
+        error: capture("ERROR"),
+      };
+    }),
   }));
 
   try {
@@ -397,10 +402,10 @@ async function runWorkflow({
       warnings: records.filter((record) => record.startsWith("WARN")),
     };
   } finally {
-    jest.dontMock("node:async_hooks");
-    jest.dontMock("node:util");
-    jest.dontMock("node:console");
-    jest.resetModules();
+    vi.doUnmock("node:async_hooks");
+    vi.doUnmock("node:util");
+    vi.doUnmock("node:console");
+    vi.resetModules();
   }
 }
 

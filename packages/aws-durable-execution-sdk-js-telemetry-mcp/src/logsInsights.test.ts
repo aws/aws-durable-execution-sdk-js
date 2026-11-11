@@ -20,6 +20,14 @@
  *   - `resolveCredentials`     — no provider chain constructed.
  */
 import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type MockedFunction,
+} from "vitest";
+import {
   configFromWireSettings,
   escapeQuotedString,
   fetchLogsInsightsRecord,
@@ -40,8 +48,8 @@ import {
   runListExecutions,
 } from "./tools";
 
-jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
-  const actual = jest.requireActual<
+vi.mock("@aws/durable-execution-sdk-js-telemetry-core", async () => {
+  const actual = await vi.importActual<
     typeof import("@aws/durable-execution-sdk-js-telemetry-core")
   >("@aws/durable-execution-sdk-js-telemetry-core");
   return {
@@ -49,16 +57,16 @@ jest.mock("@aws/durable-execution-sdk-js-telemetry-core", () => {
     // Real: assertReadOnly, ensureLimit, escapeQuotedString, buildSystemPrompt,
     //       configFromWireSettings, normalizeConfig, ...
     // Stubbed: the two async log boundaries + credential resolution.
-    runLogsInsightsQuery: jest.fn(),
-    fetchLogsInsightsRecord: jest.fn(),
-    resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
+    runLogsInsightsQuery: vi.fn(),
+    fetchLogsInsightsRecord: vi.fn(),
+    resolveCredentials: vi.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
-const runLogsMock = runLogsInsightsQuery as jest.MockedFunction<
+const runLogsMock = runLogsInsightsQuery as MockedFunction<
   typeof runLogsInsightsQuery
 >;
-const fetchRecordMock = fetchLogsInsightsRecord as jest.MockedFunction<
+const fetchRecordMock = fetchLogsInsightsRecord as MockedFunction<
   typeof fetchLogsInsightsRecord
 >;
 
@@ -70,7 +78,7 @@ const EMPTY_TABLE: QueryResultTable = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   runLogsMock.mockResolvedValue(EMPTY_TABLE);
   fetchRecordMock.mockResolvedValue(undefined);
 });

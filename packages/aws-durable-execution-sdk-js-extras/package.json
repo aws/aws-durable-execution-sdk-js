@@ -25,8 +25,8 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prebuild": "rm -rf dist dist-cjs dist-types",
-    "pretest": "npm run build --workspace=@aws/durable-execution-sdk-js-microvm-worker",
-    "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}"
+    "pretest": "npm run build --workspace=@aws/durable-execution-sdk-js-compute-worker",
+    "test": "tsc --noEmit && vitest run --coverage"
   },
   "exports": {
     ".": {
@@ -34,10 +34,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist-cjs/index.js"
     },
-    "./microvm": {
-      "types": "./dist-types/microvm/index.d.ts",
-      "import": "./dist/microvm.mjs",
-      "require": "./dist-cjs/microvm.js"
+    "./compute/microvm": {
+      "types": "./dist-types/compute/microvm/index.d.ts",
+      "import": "./dist/compute/microvm.mjs",
+      "require": "./dist-cjs/compute/microvm.js"
     },
     "./ai": {
       "types": "./dist-types/ai/index.d.ts",
@@ -50,26 +50,27 @@
     "dist-cjs/",
     "dist-types"
   ],
-  "dependencies": {
-    "@aws-sdk/client-lambda-microvms": "^3.1150.0"
-  },
   "devDependencies": {
-    "@aws/durable-execution-sdk-js-microvm-worker": "0.1.0-alpha.0",
+    "@aws-sdk/client-bedrock-agentcore": "^3.1164.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1164.0",
+    "@aws-sdk/client-lambda": "^3.1164.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1164.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.1164.0",
+    "@aws/durable-execution-sdk-js-compute-worker": "0.1.0-alpha.0",
     "@aws/durable-execution-sdk-js-testing": "*",
-    "@aws-sdk/client-bedrock-agentcore": "^3.1150.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.1150.0",
-    "@aws-sdk/client-lambda": "^3.1150.0",
-    "@aws-sdk/client-sagemaker-runtime": "^3.1150.0",
     "@biomejs/biome": "2.5.15",
-    "jest": "^30.5.2",
-    "typescript": "^6.0.3"
+    "@vitest/coverage-v8": "^5.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.6.0",
-    "@aws-sdk/client-bedrock-agentcore": "^3.1150.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.1150.0",
-    "@aws-sdk/client-lambda": "^3.1150.0",
-    "@aws-sdk/client-sagemaker-runtime": "^3.1150.0"
+    "@aws-sdk/client-bedrock-agentcore": "^3.1164.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1164.0",
+    "@aws-sdk/client-lambda": "^3.1164.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1164.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.1164.0",
+    "@aws/durable-execution-sdk-js": ">=2.6.0"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-bedrock-agentcore": {
@@ -79,6 +80,9 @@
       "optional": true
     },
     "@aws-sdk/client-lambda": {
+      "optional": true
+    },
+    "@aws-sdk/client-lambda-microvms": {
       "optional": true
     },
     "@aws-sdk/client-sagemaker-runtime": {

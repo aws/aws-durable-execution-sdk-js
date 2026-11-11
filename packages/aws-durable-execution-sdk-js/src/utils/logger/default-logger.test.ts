@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DurableLogData, DurableLogLevel } from "../../types";
 import {
   createDefaultLogger,
@@ -5,20 +6,7 @@ import {
   LoggingExecutionContext,
 } from "./default-logger";
 import { Console } from "node:console";
-
-// Mock the Console constructor
-jest.mock("node:console", () => {
-  const mockConsole = {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-  };
-
-  return {
-    Console: jest.fn().mockImplementation(() => mockConsole),
-  };
-});
+import { StepError } from "../../errors/durable-error/durable-error";
 
 describe("Default Logger", () => {
   let mockConsole: any;
@@ -28,16 +16,23 @@ describe("Default Logger", () => {
     // Store original environment variable
     originalEnv = process.env["AWS_LAMBDA_LOG_LEVEL"];
 
-    // Get the mocked console instance
-    mockConsole = new (Console as any)();
-
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+
+    // Spy on the real Console methods. A Console instance binds the prototype methods when
+    // it is constructed. So each logger that a test creates after this point calls these
+    // spies. The spies print nothing, so the test output stays clean.
+    mockConsole = {
+      debug: vi.spyOn(Console.prototype, "debug").mockImplementation(() => {}),
+      info: vi.spyOn(Console.prototype, "info").mockImplementation(() => {}),
+      warn: vi.spyOn(Console.prototype, "warn").mockImplementation(() => {}),
+      error: vi.spyOn(Console.prototype, "error").mockImplementation(() => {}),
+    };
 
     // Mock Date.now to have consistent timestamps in tests
-    jest
-      .spyOn(Date.prototype, "toISOString")
-      .mockReturnValue("2025-11-21T18:33:33.938Z");
+    vi.spyOn(Date.prototype, "toISOString").mockReturnValue(
+      "2025-11-21T18:33:33.938Z",
+    );
   });
 
   afterEach(() => {
@@ -48,7 +43,7 @@ describe("Default Logger", () => {
       delete process.env["AWS_LAMBDA_LOG_LEVEL"];
     }
 
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   const loggingExecutionContext: LoggingExecutionContext = {
@@ -363,6 +358,26 @@ describe("Default Logger", () => {
         });
       });
 
+      it("keeps the cause of a durable error that is logged alone", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+        const inner = new Error("card declined");
+        inner.stack = "Error: card declined\n    at pay.js:1:1";
+        const error = new StepError("Step failed", inner);
+
+        logger.log?.(DurableLogLevel.ERROR, error);
+
+        const parsedLog = JSON.parse(mockConsole.error.mock.calls[0][0]);
+        expect(parsedLog.message).toMatchObject({
+          errorType: "StepError",
+          errorMessage: "Step failed",
+          cause: {
+            errorType: "Error",
+            errorMessage: "card declined",
+            stackTrace: ["Error: card declined", "    at pay.js:1:1"],
+          },
+        });
+      });
+
       it("should default to INFO level for unknown log levels", () => {
         const logger = createDefaultLogger(loggingExecutionContext);
 
@@ -501,14 +516,16 @@ describe("Default Logger", () => {
         const expectedCall = mockConsole.error.mock.calls[0][0];
         const parsedLog = JSON.parse(expectedCall);
 
-        // With breakLength: Infinity, the message stays on a single line (no newlines from formatting)
+        // util.inspect recognises the object as an error (it inherits from Error.prototype in this
+        // realm), so it prints the stack followed by the extra own property. The only newlines are
+        // the ones inside the stack itself; breakLength: Infinity adds none.
         expect(parsedLog).toMatchObject({
           timestamp: "2025-11-21T18:33:33.938Z",
           level: "ERROR",
           requestId: "request-id",
           executionArn: "durable-execution-arn",
           message:
-            "Error occurred: Error { message: 'Test error', stack: 'Test error\\n    at test.js:1:1', constructor: null }",
+            "Error occurred: Test error\n    at test.js:1:1 {\n  constructor: null\n}",
           errorType: "UnknownError",
           errorMessage: "Test error",
           stackTrace: ["Test error", "    at test.js:1:1"],
@@ -712,8 +729,8 @@ describe("Default Logger", () => {
         };
 
         const mockContext = {
-          shouldLog: jest.fn().mockReturnValue(true),
-          getDurableLogData: jest.fn().mockReturnValue(mockDurableLogData),
+          shouldLog: vi.fn().mockReturnValue(true),
+          getDurableLogData: vi.fn().mockReturnValue(mockDurableLogData),
         };
 
         logger.configureDurableLoggingContext?.(mockContext);

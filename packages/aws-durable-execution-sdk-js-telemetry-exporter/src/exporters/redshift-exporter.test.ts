@@ -1,8 +1,9 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-redshift-data", () => ({
-  RedshiftDataClient: jest.fn(() => ({ send: mockSend })),
-  ExecuteStatementCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-redshift-data", () => ({
+  RedshiftDataClient: vi.fn(() => ({ send: mockSend })),
+  ExecuteStatementCommand: vi.fn((input: unknown) => ({ __input: input })),
 }));
 
 import { RedshiftExporter } from "./redshift-exporter";

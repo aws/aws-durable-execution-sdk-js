@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { EventType } from "@aws-sdk/client-lambda";
 import {
   OperationAction,
@@ -456,12 +457,12 @@ describe("history-event-details", () => {
     describe("WAIT operations", () => {
       beforeEach(() => {
         // Mock Date to ensure consistent test results
-        jest.useFakeTimers();
-        jest.setSystemTime(new Date("2023-01-01T00:00:00.000Z"));
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2023-01-01T00:00:00.000Z"));
       });
 
       afterEach(() => {
-        jest.useRealTimers();
+        vi.useRealTimers();
       });
 
       it("should return correct details for START-WAIT", () => {

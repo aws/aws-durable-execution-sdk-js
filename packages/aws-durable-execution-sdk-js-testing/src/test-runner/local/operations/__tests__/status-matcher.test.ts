@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { doesStatusMatch } from "../status-matcher";

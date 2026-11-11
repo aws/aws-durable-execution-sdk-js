@@ -1,3 +1,12 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mocked,
+} from "vitest";
 import { Clock, install } from "@sinonjs/fake-timers";
 import { realSetImmediate } from "../../real-timers/real-timers";
 import {
@@ -17,26 +26,26 @@ function participant(
     deadline: number;
     invocation: number;
   }> = {},
-): jest.Mocked<SkipTimeParticipant> & { state: typeof overrides } {
+): Mocked<SkipTimeParticipant> & { state: typeof overrides } {
   const state = { ...overrides };
   const mock = {
     state,
-    isBusy: jest.fn(() => state.busy ?? false),
+    isBusy: vi.fn(() => state.busy ?? false),
     // A busy participant runs invocation 1 unless the test says otherwise.
-    runningInvocation: jest.fn(() =>
+    runningInvocation: vi.fn(() =>
       state.busy ? (state.invocation ?? 1) : undefined,
     ),
-    hasPendingWork: jest.fn(
+    hasPendingWork: vi.fn(
       () => state.pendingWork ?? state.deadline !== undefined,
     ),
-    earliestDeadline: jest.fn(() => state.deadline),
+    earliestDeadline: vi.fn(() => state.deadline),
     // A real participant consumes the end it applies, as the orchestrator does.
-    applyDeadline: jest.fn((deadlineMs: number) => {
+    applyDeadline: vi.fn((deadlineMs: number) => {
       if (state.deadline === deadlineMs) {
         state.deadline = undefined;
       }
     }),
-    onClockAdvanced: jest.fn(),
+    onClockAdvanced: vi.fn(),
   };
   created.push(mock);
   return mock;
@@ -518,7 +527,7 @@ describe("SkipTimeCoordinator", () => {
     const finished = participant();
     coordinator.register(finished);
     coordinator.unregister(finished);
-    const start = jest.fn(() => Promise.resolve());
+    const start = vi.fn(() => Promise.resolve());
     coordinator.startInvoke(finished, start);
     const unrelated = participant({ deadline: 3000 });
     coordinator.register(unrelated);

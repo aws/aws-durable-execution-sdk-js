@@ -24,6 +24,7 @@
  *      a measured ~2ms) so it cannot flake on a slow CI runner while still catching
  *      a quadratic blowup, which at this input size takes tens of seconds.
  */
+import { describe, it, expect } from "vitest";
 import { extractJsonObject, stripTrailingParenthetical } from "./jsonExtract";
 
 /** The regex that used to do this, rebuilt for differential testing. */

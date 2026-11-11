@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { EventType } from "@aws-sdk/client-lambda";
 import { isClosedExecution } from "../process-terminal-event";
 

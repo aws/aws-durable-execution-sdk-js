@@ -9,7 +9,7 @@
     "pretypecheck": "npm run build:deps",
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build:deps",
-    "test": "jest",
+    "test": "vitest run",
     "presynth": "npm run build:deps",
     "synth": "cdk synth",
     "predeploy": "npm run build:deps",
@@ -27,21 +27,9 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.164",
-    "@types/jest": "^30.0.0",
     "aws-cdk": "^2.1145.0",
     "esbuild": "^0.28.2",
-    "jest": "^30.5.2",
-    "ts-jest": "^29.4.14",
-    "typescript": "^6.0.3"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/*.test.ts"
-    ],
-    "modulePathIgnorePatterns": [
-      "cdk.out"
-    ]
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   }
 }

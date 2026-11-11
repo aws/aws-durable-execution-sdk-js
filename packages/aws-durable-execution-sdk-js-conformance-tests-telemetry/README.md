@@ -19,15 +19,19 @@ part: the handler and the SAM template that maps it to the requirement ID.
 
 ## Coverage
 
-| Suite     | Requirements | What it pins down                                                                                                                           |
-| --------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `telemetry` | `telemetry-1`  | One successful single-step execution emits one `SUCCEEDED` record with `input`, `output`, ARN-derived identity fields, and `operationsByName`. |
+| Suite       | Requirements  | What it pins down                                                                                                                              |
+| ----------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `telemetry` | `telemetry-1` | One successful single-step execution emits one `SUCCEEDED` record with `input`, `output`, ARN-derived identity fields, and `operationsByName`. |
+| `telemetry` | `telemetry-2` | One failed execution emits one `FAILED` record with an `error` on the execution and on `operationsByName.charge`.                              |
+| `telemetry` | `telemetry-3` | One successful execution with `input`/`output` disabled emits one record whose `operationsByName.fetch-user.result` is exactly `{userId}`.     |
 
 ## Layout
 
 ```
 handlers/
   telemetry_1_success.ts           # single step "increment"; plugin + CloudWatchLogsExporter
+  telemetry_2_failure.ts           # step "charge" fails; handler rethrows with the step error as cause
+  telemetry_3_result_select.ts     # step "fetch-user" returns three keys; override keeps only userId
 template.yaml                    # telemetry suite; declares TelemetryLogGroupName and creates the group
 rollup.config.mjs                # bundles handlers/telemetry_*.ts -> dist/<name>.js (CJS)
 __tests__/templates.test.ts      # guards template -> handler wiring and the parameter contract

@@ -1,4 +1,4 @@
-import { BatchResult } from "../../types";
+import type { BatchResult } from "../../types";
 import { BatchItemStatus } from "../../types/batch";
 
 /**

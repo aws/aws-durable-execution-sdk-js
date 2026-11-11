@@ -1,8 +1,9 @@
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { OTelExporter } from "./otel-exporter";
 import { makeRecord } from "../test-utils/make-record";
 
 beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({
+  global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
     statusText: "OK",
@@ -19,7 +20,7 @@ describe("OTelExporter", () => {
 
     await exporter.export(makeRecord());
 
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, init] = (global.fetch as Mock).mock.calls[0];
     expect(url).toBe("https://otlp.vendor.com/v1/logs");
     expect(init.method).toBe("POST");
     expect(init.headers["x-api-key"]).toBe("k");
@@ -51,9 +52,7 @@ describe("OTelExporter", () => {
 
     await exporter.export(makeRecord({ status: "FAILED" }));
 
-    const payload = JSON.parse(
-      (global.fetch as jest.Mock).mock.calls[0][1].body,
-    );
+    const payload = JSON.parse((global.fetch as Mock).mock.calls[0][1].body);
     const logRecord = payload.resourceLogs[0].scopeLogs[0].logRecords[0];
     expect(logRecord.severityNumber).toBe(17);
     expect(logRecord.severityText).toBe("FAILED");

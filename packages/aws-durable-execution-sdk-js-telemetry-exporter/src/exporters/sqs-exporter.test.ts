@@ -1,8 +1,9 @@
-const mockSend = jest.fn();
+import { vi, describe, it, expect, beforeEach } from "vitest";
+const mockSend = vi.fn();
 
-jest.mock("@aws-sdk/client-sqs", () => ({
-  SQSClient: jest.fn(() => ({ send: mockSend })),
-  SendMessageCommand: jest.fn((input: unknown) => ({ __input: input })),
+vi.mock("@aws-sdk/client-sqs", () => ({
+  SQSClient: vi.fn(() => ({ send: mockSend })),
+  SendMessageCommand: vi.fn((input: unknown) => ({ __input: input })),
 }));
 
 import { SQSExporter, fifoId } from "./sqs-exporter";

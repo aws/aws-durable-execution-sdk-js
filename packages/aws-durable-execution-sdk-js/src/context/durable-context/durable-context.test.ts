@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 import { DurableContextImpl } from "./durable-context";
 import { ExecutionContext, DurableExecutionMode } from "../../types/core";
 import { Context } from "aws-lambda";
@@ -16,8 +17,8 @@ describe("DurableContext executionContext property", () => {
       getRemainingTimeMs: (): number => Infinity,
       tenantId: undefined,
       pendingCompletions: new Set(),
-      getStepData: jest.fn(),
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      getStepData: vi.fn(),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     };
 
     const mockLambdaContext: Context = {
@@ -31,16 +32,16 @@ describe("DurableContext executionContext property", () => {
       logGroupName: "/aws/lambda/test-function",
       logStreamName: "2024/01/01/[$LATEST]abcdef123456",
       getRemainingTimeInMillis: () => 30000,
-      done: jest.fn(),
-      fail: jest.fn(),
-      succeed: jest.fn(),
+      done: vi.fn(),
+      fail: vi.fn(),
+      succeed: vi.fn(),
     };
 
     const mockLogger = {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
     };
 
     const mockDurableExecution = {

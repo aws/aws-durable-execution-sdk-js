@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { handler } from "./powertools-logger";
 import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
@@ -15,12 +16,12 @@ createTests({
     } else {
       it("should execute successfully with all log levels", async () => {
         // Spy on process stdout and stderr to capture log output
-        const stdoutSpy = jest
+        const stdoutSpy = vi
           .spyOn(process.stdout, "write")
-          .mockImplementation();
-        const stderrSpy = jest
+          .mockImplementation(() => true);
+        const stderrSpy = vi
           .spyOn(process.stderr, "write")
-          .mockImplementation();
+          .mockImplementation(() => true);
 
         try {
           const execution = await runner.run();

@@ -1,3 +1,13 @@
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  type Mocked,
+  type MockedFunction,
+  type Mock,
+} from "vitest";
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext } from "../../types";
 import { OperationStatus, type ErrorObject } from "../../types/wire";
@@ -8,54 +18,45 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-jest.mock("../../utils/logger/logger");
-jest.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<
-  typeof safeSerialize
->;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
-  typeof safeDeserialize
->;
+// A fake Serdes. The handler passes it to the real safeSerialize and
+// safeDeserialize, so the tests stub and assert on its methods.
+let fakeSerdes: { serialize: Mock; deserialize: Mock };
+const getFakeSerdes = () => fakeSerdes;
 
 describe("InvokeHandler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
-  let mockCreateStepId: jest.Mock;
-  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let mockCreateStepId: Mock;
+  let mockPlugin: Mocked<DurableInstrumentationPlugin>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockCreateStepId = jest.fn().mockReturnValue("test-step-1");
+    vi.clearAllMocks();
+    fakeSerdes = { serialize: vi.fn(), deserialize: vi.fn() };
+    mockCreateStepId = vi.fn().mockReturnValue("test-step-1");
     mockCheckpoint = {
-      checkpoint: jest.fn().mockResolvedValue(undefined),
-      markOperationState: jest.fn(),
-      markOperationAwaited: jest.fn(),
-      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      markOperationState: vi.fn(),
+      markOperationAwaited: vi.fn(),
+      waitForStatusChange: vi.fn().mockResolvedValue(undefined),
     } as any;
     mockContext = {
-      getStepData: jest.fn().mockReturnValue(undefined),
-      terminationManager: { terminate: jest.fn() },
+      getStepData: vi.fn().mockReturnValue(undefined),
+      terminationManager: { terminate: vi.fn() },
       durableExecutionArn: "test-arn",
-      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
+      isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
     mockPlugin = {
-      onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
-      onOperationAttemptStart: jest.fn(),
-      onOperationAttemptEnd: jest.fn(),
+      onOperationStart: vi.fn(),
+      onOperationEnd: vi.fn(),
+      onOperationAttemptStart: vi.fn(),
+      onOperationAttemptEnd: vi.fn(),
     };
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue({ result: "success" });
+    fakeSerdes.serialize.mockResolvedValue('{"serialized":"data"}');
+    fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
   });
 
   it("should call onOperationEnd on replay succeeded", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: { Result: '{"result":"success"}' },
     });
@@ -65,8 +66,8 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCheckpoint,
       mockCreateStepId,
       undefined,
-      jest.fn(),
-      undefined,
+      vi.fn(),
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -79,7 +80,7 @@ describe("InvokeHandler - plugin hooks", () => {
   });
 
   it("should call onOperationStart and onOperationEnd on replay failed", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.FAILED,
       ChainedInvokeDetails: {
         Error: { ErrorMessage: "invoke failed" },
@@ -91,8 +92,8 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCheckpoint,
       mockCreateStepId,
       undefined,
-      jest.fn(),
-      undefined,
+      vi.fn(),
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -106,7 +107,7 @@ describe("InvokeHandler - plugin hooks", () => {
   });
 
   it("should call plugin hooks on phase 2 succeeded", async () => {
-    (mockContext.getStepData as jest.Mock)
+    (mockContext.getStepData as Mock)
       .mockReturnValueOnce(undefined) // phase 1: no existing step data → triggers checkpoint
       .mockReturnValueOnce(undefined) // phase 1: getStepData after checkpoint (for toOperationInfo)
       .mockReturnValueOnce({
@@ -120,8 +121,8 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCheckpoint,
       mockCreateStepId,
       undefined,
-      jest.fn(),
-      undefined,
+      vi.fn(),
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -140,7 +141,7 @@ describe("InvokeHandler - plugin hooks", () => {
   });
 
   it("should call plugin hooks with error on phase 2 failed", async () => {
-    (mockContext.getStepData as jest.Mock)
+    (mockContext.getStepData as Mock)
       .mockReturnValueOnce(undefined) // phase 1: no existing step data → triggers checkpoint
       .mockReturnValueOnce(undefined) // phase 1: getStepData after checkpoint (for toOperationInfo)
       .mockReturnValueOnce({
@@ -156,8 +157,8 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCheckpoint,
       mockCreateStepId,
       undefined,
-      jest.fn(),
-      undefined,
+      vi.fn(),
+      getFakeSerdes,
       mockPlugin,
     );
 
@@ -201,7 +202,7 @@ describe("InvokeHandler - plugin hooks", () => {
         ChainedInvokeDetails: { Error: error },
       };
       const original = structuredClone(failed);
-      (mockContext.getStepData as jest.Mock)
+      (mockContext.getStepData as Mock)
         .mockReturnValueOnce(undefined)
         .mockReturnValueOnce(undefined)
         .mockReturnValue(failed);
@@ -210,8 +211,8 @@ describe("InvokeHandler - plugin hooks", () => {
         mockCheckpoint,
         mockCreateStepId,
         undefined,
-        jest.fn(),
-        undefined,
+        vi.fn(),
+        getFakeSerdes,
         mockPlugin,
       );
       const caught = await handler("test-function", {}).catch(
@@ -223,7 +224,7 @@ describe("InvokeHandler - plugin hooks", () => {
       expect(caught.errorData).toBe(error?.ErrorData);
       expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
       const info = (
-        mockPlugin.onOperationEnd as jest.MockedFunction<
+        mockPlugin.onOperationEnd as MockedFunction<
           NonNullable<DurableInstrumentationPlugin["onOperationEnd"]>
         >
       ).mock.calls[0][0];
@@ -255,7 +256,7 @@ describe("InvokeHandler - plugin hooks", () => {
   );
 
   it("should not throw when plugin hooks are undefined", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
+    (mockContext.getStepData as Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: { Result: '{"result":"success"}' },
     });
@@ -265,8 +266,8 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCheckpoint,
       mockCreateStepId,
       undefined,
-      jest.fn(),
-      undefined,
+      vi.fn(),
+      getFakeSerdes,
       {},
     );
 

@@ -6,7 +6,7 @@
 // was terminated.
 //
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
-// workspace (npm run build in the SDK, extras, and microvm-worker packages).
+// workspace (npm run build in the SDK, extras, and compute-worker packages).
 //
 // Usage: node e2e/run-e2e.mjs            (from the extras package)
 //        AWS_REGION=us-east-1 node e2e/run-e2e.mjs
@@ -233,8 +233,9 @@ function ensureInfrastructure(account) {
           "lambda:TerminateMicrovm",
           "lambda:GetMicrovm",
           "lambda:CreateMicrovmAuthToken",
-          // A session resumes a MicroVM that suspended itself between jobs.
-          "lambda:ResumeMicrovm",
+          // A session job with suspendAfter suspends the MicroVM. The role
+          // has no lambda:ResumeMicrovm: the service resumes the MicroVM.
+          "lambda:SuspendMicrovm",
         ],
         Resource: "*",
       },
@@ -414,6 +415,15 @@ function ensureFunction(infra, imageArn) {
 }
 
 // ---------------------------------------------------------------- scenarios
+
+// The idle policy of a session that suspends its MicroVM. The service
+// resumes the MicroVM on the next request. The idle timer counts only
+// inbound requests, so it is longer than any MicroVM lives.
+const AUTO_RESUME = {
+  autoResumeEnabled: true,
+  maxIdleDurationSeconds: 86_400,
+  suspendedDurationSeconds: 3_600,
+};
 
 const SCENARIOS = [
   {
@@ -648,6 +658,55 @@ const SCENARIOS = [
     },
   },
   {
+    // The function terminates the MicroVM as soon as RunMicrovm returns, so
+    // the job goes over HTTP to a dead MicroVM. Its endpoint answers 502
+    // with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. The request step
+    // must then check the state once and fail with MicrovmNotRunningError,
+    // instead of retrying the dead endpoint in both retry tiers.
+    id: "dead-microvm",
+    countRequests: true,
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "dead" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 60,
+      requestPath: "/job",
+      terminateAfterLaunch: true,
+    },
+    expect: ({ execution, requests }) => {
+      assert(execution.Status === "FAILED", `status ${execution.Status}`);
+      assert(
+        execution.Error?.ErrorType === "MicrovmNotRunningError",
+        `error type ${execution.Error?.ErrorType}`,
+      );
+      const message = execution.Error?.ErrorMessage ?? "";
+      assert(
+        /is TERMINATED/.test(message) && /GetMicrovm request ID/.test(message),
+        `error message ${message}`,
+      );
+      // One request gets the 502, and the state check after it ends the job.
+      assert(
+        requests.length >= 1 && requests.length <= 2,
+        `${requests.length} requests`,
+      );
+    },
+  },
+  {
+    // The same dead MicroVM with a small input, which goes in the run hook.
+    // No request step runs, so only the heartbeat timeout ends the job.
+    // The scenario records the outcome and checks nothing.
+    id: "dead-microvm-run-hook",
+    optional: true,
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "dead-run-hook" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 30,
+      terminateAfterLaunch: true,
+    },
+    expect: () => {},
+  },
+  {
     id: "session",
     event: {
       scenario: "session",
@@ -695,6 +754,7 @@ const SCENARIOS = [
       // The worker suspends the MicroVM 10 seconds after the first job ends,
       // during the 60-second wait.
       autoSuspendIdleSeconds: 10,
+      idlePolicy: AUTO_RESUME,
     },
     expect: ({ execution, result, observedStates, operationNames }) => {
       assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
@@ -716,6 +776,55 @@ const SCENARIOS = [
         `resume hooks ${result.recalled.resumeHooks}`,
       );
       for (const op of ["long-pause", "second-pause", "recall.request"]) {
+        assert(operationNames.includes(op), `history has no ${op}`);
+      }
+    },
+  },
+  {
+    // The durable function suspends the MicroVM after the first job, and
+    // sends the second job at once. The endpoint answers 502 with
+    // MICROVM_CONNECT_FAILED for about 5 seconds after a suspend, and the
+    // request step retries until the service resumes the MicroVM. The
+    // first request can also arrive after those 5 seconds, because the job
+    // first waits for CreateMicrovmAuthToken. Then that request resumes the
+    // MicroVM and gets the 202. The function role has no
+    // lambda:ResumeMicrovm.
+    id: "suspend-after-session",
+    countRequests: true,
+    event: {
+      scenario: "suspend-after-session",
+      job: { mode: "succeed", sleepSeconds: 0, label: "suspend-after-key" },
+      timeoutSeconds: 900,
+      logRequests: true,
+      idlePolicy: AUTO_RESUME,
+    },
+    expect: ({ execution, result, operationNames, requests }) => {
+      assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
+      // The value lives only in the worker's memory. The same value and
+      // process ID show that the MicroVM was suspended and resumed, not
+      // replaced.
+      assert(
+        result?.recalled?.value === "suspend-after-key" &&
+          result.recalled.pid === result.remembered.pid,
+        `result ${JSON.stringify(result)}`,
+      );
+      assert(
+        result.recalled.resumeHooks >= 1,
+        `resume hooks ${result.recalled.resumeHooks}`,
+      );
+      // Only the last recall request got a 2xx, and it was a 202. Each
+      // earlier request got a 502, or no answer when it arrived during the
+      // suspend hook. The count of earlier requests depends on how long
+      // CreateMicrovmAuthToken took, so the count can be zero.
+      const recall = requests.filter((r) => r.path === "/recall");
+      const is2xx = (r) => r.status >= 200 && r.status < 300;
+      assert(
+        recall.length >= 1 &&
+          recall.slice(0, -1).every((r) => !is2xx(r)) &&
+          recall.at(-1)?.status === 202,
+        `recall requests ${JSON.stringify(recall)}`,
+      );
+      for (const op of ["remember.request", "recall.request"]) {
         assert(operationNames.includes(op), `history has no ${op}`);
       }
     },
@@ -898,6 +1007,9 @@ async function runScenario(functionArn, scenario, runId) {
   const operationNames = [
     ...new Set(events.map((e) => e.Name).filter(Boolean)),
   ];
+  const requests = scenario.countRequests
+    ? await loggedRequests(functionArn, name, started)
+    : undefined;
   // Every event of one operation carries the same subtype.
   const subTypes = Object.fromEntries(
     events.filter((e) => e.Name).map((e) => [e.Name, e.SubType]),
@@ -914,7 +1026,59 @@ async function runScenario(functionArn, scenario, runId) {
     terminatedAfterSeconds,
     operationNames,
     subTypes,
+    requests,
   };
+}
+
+/**
+ * Returns the job requests that the function logged for one execution. The
+ * function logs one line per request when the event sets
+ * terminateAfterLaunch. CloudWatch Logs can show a line some seconds late,
+ * so the runner waits for the count to stop growing.
+ */
+async function loggedRequests(functionArn, executionName, startedAt) {
+  const group = `/aws/lambda/${functionArn.split(":")[6]}`;
+  let lines = [];
+  for (let i = 0; i < 6; i++) {
+    await sleep(10_000);
+    const found = aws([
+      "logs",
+      "filter-log-events",
+      "--log-group-name",
+      group,
+      "--start-time",
+      String(startedAt),
+      "--filter-pattern",
+      `"${executionName}"`,
+    ]);
+    // With the JSON log format, the console line is the `message` field of
+    // the log event. With the text format, it follows the tab-separated
+    // prefix.
+    const parse = (text) => {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return undefined;
+      }
+    };
+    const next = (found.events ?? [])
+      .flatMap((e) => {
+        const event = parse(e.message);
+        const line =
+          typeof event?.message === "string"
+            ? parse(event.message)
+            : parse(e.message.slice(e.message.indexOf("{")));
+        return line ? [line] : [];
+      })
+      .filter(
+        (line) => line.e2e === "fetch" && line.execution === executionName,
+      );
+    if (next.length > 0 && next.length === lines.length) {
+      break;
+    }
+    lines = next;
+  }
+  return lines;
 }
 
 /** Returns the ID of the execution's launched MicroVM, once it has one. */
@@ -1059,6 +1223,7 @@ for (const outcome of outcomes) {
         operations: outcome.operationNames,
         subTypes: outcome.subTypes,
         observedStates: outcome.observedStates,
+        requests: outcome.requests,
         microvms: outcome.microvmStates,
         executionArn: outcome.executionArn,
       },
