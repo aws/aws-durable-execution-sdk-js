@@ -84,6 +84,7 @@ jobs:
 
       # Writes per-file timings to the job summary and flags files that got much
       # slower than on recent successful runs. Advisory: it never fails the job.
+      # The PR comment is posted by a later job in build.yml, once for all versions.
       - name: Report test timings
         if: always()
         env:
@@ -93,7 +94,7 @@ jobs:
             "${{ runner.temp }}/integration-results.json" \
             "integration-test-timings-${{ inputs.node-version }}"
 
-      # Later runs compare with this.
+      # Later runs compare with this, and the PR comment job reads it.
       - name: Upload test timings
         if: always() && hashFiles('integration-timings.json') != ''
         uses: actions/upload-artifact@v7
