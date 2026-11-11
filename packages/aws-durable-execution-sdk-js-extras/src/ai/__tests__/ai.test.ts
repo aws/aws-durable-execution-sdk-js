@@ -1643,3 +1643,85 @@ describe("decider().classify answer type", () => {
     expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
   });
 });
+
+describe("unusable deadline readings", () => {
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, "60000", undefined])(
+    "treats a reading of %s as no deadline",
+    async (reading) => {
+      let received: AbortSignal | undefined;
+      const decide = decider({
+        transport: async (_request, { abortSignal }) => {
+          received = abortSignal;
+          return answers({ answer: noul(0.9) });
+        },
+      });
+      const step = new AbortController().signal;
+      const context = {
+        lambdaContext: { getRemainingTimeInMillis: () => reading },
+        step: (_name: string, fn: (ctx: unknown) => Promise<unknown>) =>
+          new DurablePromise(() => fn({ signal: step })),
+      } as unknown as DurableContext;
+
+      await expect(decide.check(context, "Q?", "x")).resolves.toBe(true);
+      // Only the step's own signal is left.
+      expect(received).toBe(step);
+    },
+  );
+});
+
+describe("error classes on the first run and on replay", () => {
+  it.each([
+    [
+      "AiTimeoutError",
+      () => new AiTimeoutError("late"),
+      (error: unknown) => error instanceof AiTimeoutError,
+    ],
+    [
+      "LlmMaxTokensError",
+      () => new LlmMaxTokensError("limit"),
+      (error: unknown) => error instanceof LlmMaxTokensError,
+    ],
+    [
+      "AiError",
+      () => new AiError("base"),
+      (error: unknown) =>
+        error instanceof AiError && error.constructor === AiError,
+    ],
+  ] as const)("rejects with %s", async (_name, make, check) => {
+    const fake = new FakeDecider();
+    fake.replies = [make()];
+    const decide = fakeDecider(fake);
+    const seen: boolean[] = [];
+
+    const result = await run(async (context) => {
+      try {
+        await decide.check(context, "Q?", "x");
+      } catch (error) {
+        seen.push(check(error));
+      }
+      // The wait ends the invocation. The next one replays the step.
+      await context.wait({ seconds: 1 });
+      return seen;
+    });
+
+    expect(result.getResult()).toEqual([true, true]);
+  });
+});
+
+describe("decider() reply without answers", () => {
+  it.each([{}, { answers: null }, { answers: "x" }, null])(
+    "fails with DeciderInvalidResponseError for %j",
+    async (reply) => {
+      const decide = decider({
+        transport: async () => reply,
+        retryStrategy: noRetry,
+      });
+
+      const result = await run((context) =>
+        outcomes([() => decide.check(context, "Q?", "x")]),
+      );
+
+      expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+    },
+  );
+});
