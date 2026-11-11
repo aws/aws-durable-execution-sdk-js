@@ -106,6 +106,10 @@ export interface AgentcoreJobContext {
  * The job to run. Its resolved value becomes the durable function's result.
  * A rejection fails the durable operation with the error's name and message.
  *
+ * The handler runs on the event loop that also answers `/ping` and sends
+ * heartbeats. Synchronous CPU work blocks both while it runs. So run
+ * CPU-bound work in a worker thread or a child process.
+ *
  * @public
  *
  * @experimental This type is experimental and may be changed or removed in future releases.
@@ -183,10 +187,20 @@ export interface AgentcoreWorker {
  * @param options - The worker options.
  * @param port - The port to listen on. Defaults to 8080, the port that
  * AgentCore Runtime requires.
- * @param host - The address to listen on. Defaults to `0.0.0.0`, because
- * AgentCore Runtime requires the container to listen on all interfaces.
- * The port is reachable only inside the agent runtime's network, through
- * InvokeAgentRuntime. Tests pass `127.0.0.1`.
+ * @param host - The address to listen on. The default depends on where the
+ * worker runs:
+ *
+ * 1. AgentCore Runtime requires the agent to listen on `0.0.0.0:8080`.
+ *    Callers reach the port only through InvokeAgentRuntime, which signs
+ *    each request with SigV4.
+ * 2. `/invocations` itself has no authentication. On a laptop or a dev
+ *    host, a bind on all interfaces lets any machine on the network send a
+ *    job, which then runs with the developer's credentials.
+ * 3. AgentCore Runtime sets the `AGENTCORE_RUNTIME_URL` environment
+ *    variable, also for a direct code deployment, which has no container
+ *    marker such as `/.dockerenv`.
+ * 4. So the default is `0.0.0.0` when `AGENTCORE_RUNTIME_URL` is set, and
+ *    `127.0.0.1` otherwise. An explicit `host` replaces the default.
  * @returns The running worker. The promise rejects when the port cannot be
  * bound.
  *
@@ -197,7 +211,7 @@ export interface AgentcoreWorker {
 export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   options: AgentcoreWorkerOptions<TInput, TOutput>,
   port: number = AGENTCORE_PORT,
-  host = "0.0.0.0",
+  host: string = defaultHost(),
 ): Promise<AgentcoreWorker> {
   const logger = options.logger ?? jsonLogger;
   const running = new Set<Promise<void>>();
@@ -293,27 +307,61 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
 /**
  * Runs one job: heartbeats while the handler runs, then the outcome. It
  * never rejects. A failure to report is logged.
+ *
+ * The caller answers the request after it calls this function. A handler
+ * can start with long synchronous work. If that work ran before the answer,
+ * AgentCore Runtime would get no answer, and it fails the request with
+ * "Runtime initialization time exceeded". So the job starts on a later turn
+ * of the event loop, after the answer is written.
  */
 async function runJob<TInput, TOutput>(
   options: AgentcoreWorkerOptions<TInput, TOutput>,
   logger: AgentcoreWorkerLogger,
   job: AgentcoreJobDocument<TInput>,
 ): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
   const { callbackId, region } = job;
-  const reporter = new CallbackReporter({
-    callbackId,
-    region,
-    client: options.createClient?.(region),
-    warn: (message, data) => logger.warn(message, data),
-  });
+  let reporter: CallbackReporter;
+  try {
+    reporter = new CallbackReporter({
+      callbackId,
+      region,
+      client: options.createClient?.(region),
+      warn: (message, data) => logger.warn(message, data),
+    });
+  } catch (error) {
+    // Without a client, the worker cannot report anything. The durable
+    // function fails the job at its heartbeat timeout or its timeout. The
+    // MicroVM worker handles this case the same way.
+    logger.error("could not create the Lambda client for the job", {
+      callbackId,
+      error: String(error),
+    });
+    return;
+  }
   const controller = new AbortController();
-  const heartbeats = startHeartbeats(
-    reporter,
-    job,
-    controller,
-    undefined,
-    logger,
-  );
+  let heartbeats: ReturnType<typeof startHeartbeats>;
+  try {
+    heartbeats = startHeartbeats(reporter, job, controller, undefined, logger);
+  } catch (error) {
+    // The job would run without heartbeats, and the function would fail it
+    // only at its heartbeat timeout. So the worker fails the callback at
+    // once and does not run the handler.
+    logger.error("could not start heartbeats for the job", {
+      callbackId,
+      error: String(error),
+    });
+    try {
+      await reporter.fail(error);
+    } catch (reportError) {
+      logger.error("job outcome could not be reported", {
+        callbackId,
+        error: String(reportError),
+      });
+    }
+    reporter.close();
+    return;
+  }
   logger.info("job started", { callbackId });
   try {
     let outcome: { ok: true; value: TOutput } | { ok: false; error: unknown };
@@ -368,6 +416,11 @@ async function runJob<TInput, TOutput>(
     await heartbeats.stop();
     reporter.close();
   }
+}
+
+/** See the `host` parameter of {@link startAgentcoreWorker}. */
+function defaultHost(): string {
+  return process.env.AGENTCORE_RUNTIME_URL ? "0.0.0.0" : "127.0.0.1";
 }
 
 function nowSeconds(): number {

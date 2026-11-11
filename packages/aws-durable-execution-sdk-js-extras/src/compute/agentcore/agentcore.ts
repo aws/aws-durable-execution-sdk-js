@@ -73,10 +73,17 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * deliver the job to the session twice. The worker accepts each callback ID
  * once per process, and answers a repeat without running it again.
  *
- * The operation keeps no session across jobs. The agent runtime ends a
- * session that receives no request for its `idleRuntimeSessionTimeout`. The
- * worker reports `HealthyBusy` while a job runs, and the service keeps such
- * a session alive. Set the idle timeout on the agent runtime.
+ * The operation sends one job per session. After the agent runtime's
+ * `idleRuntimeSessionTimeout`, the same session ID silently gets a new
+ * microVM, and the memory and files of the old one are lost. One job per
+ * session keeps that safe: no later job can reach the new microVM. The idle
+ * timeout matters only while the job runs. The worker then reports
+ * `HealthyBusy`, and the service keeps such a session alive.
+ *
+ * The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime`
+ * and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN
+ * and `<runtime ARN>/runtime-endpoint/*`. The service checks the endpoint
+ * resource too, such as `<runtime ARN>/runtime-endpoint/DEFAULT`.
  *
  * A stop failure does not fail the operation. The job result is already
  * recorded when stop runs, and the agent runtime ends an idle session on its
@@ -227,10 +234,9 @@ async function stop(
         try {
           await client().send(new StopRuntimeSessionCommand(target));
         } catch (error) {
-          // A session that the idle timeout or the maximum lifetime already
-          // ended has nothing to stop. Unverified: that the service answers
-          // ResourceNotFoundException for such a session. The API model
-          // lists that error for StopRuntimeSession.
+          // The service answers ResourceNotFoundException (HTTP 404) for a
+          // session that a stop already ended, and for a session ID that
+          // never started. Either way, nothing runs. So it counts as success.
           if ((error as Error).name !== "ResourceNotFoundException") {
             throw error;
           }
@@ -244,7 +250,7 @@ async function stop(
     // missing permission fails every stop this way, and this log is the only
     // sign of it. So it is an error, not a warning.
     child.logger.error(
-      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session keeps running until the agent runtime's idle timeout ends it. A missing permission needs bedrock-agentcore:StopRuntimeSession on the agent runtime in the function's execution role.`,
+      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session keeps running until the agent runtime's idle timeout ends it. A missing permission needs bedrock-agentcore:StopRuntimeSession on the agent runtime ARN and on <runtime ARN>/runtime-endpoint/* in the function's execution role.`,
       { error },
     );
   }

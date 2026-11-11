@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Server, ServerResponse } from "node:http";
 import {
   type LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
@@ -55,6 +56,10 @@ class RecordingLogger implements AgentcoreWorkerLogger {
 }
 
 const SUCCESS = SendDurableExecutionCallbackSuccessCommand.name;
+
+// The real methods, for spies that record a call and then pass it on.
+const originalEnd = ServerResponse.prototype.end;
+const originalListen = Server.prototype.listen;
 const FAILURE = SendDurableExecutionCallbackFailureCommand.name;
 const HEARTBEAT = SendDurableExecutionCallbackHeartbeatCommand.name;
 
@@ -306,6 +311,163 @@ describe("startAgentcoreWorker", () => {
     await response.body?.cancel();
 
     expect(response.status).toBe(404);
+  });
+
+  it("answers ping with a query string, and only for GET", async () => {
+    await start(async () => undefined);
+
+    const withQuery = await fetch(url("/ping?probe=1"));
+    const post = await fetch(url("/ping"), { method: "POST" });
+    await post.body?.cancel();
+
+    expect(withQuery.status).toBe(200);
+    expect(await withQuery.json()).toMatchObject({ status: "Healthy" });
+    expect(post.status).toBe(404);
+  });
+
+  it("accepts a job on /invocations with a query string", async () => {
+    let runs = 0;
+    await start(async () => {
+      runs++;
+    });
+
+    const response = await fetch(url("/invocations?x=1"), {
+      method: "POST",
+      body: JSON.stringify(job("cb-1")),
+    });
+    await worker?.idle();
+
+    expect(await response.json()).toEqual({ accepted: true });
+    expect(runs).toBe(1);
+  });
+
+  it("writes the answer before the handler starts, so synchronous work cannot delay it", async () => {
+    const order: string[] = [];
+    const spy = vi
+      .spyOn(ServerResponse.prototype, "end")
+      .mockImplementation(function (this: ServerResponse, ...args: unknown[]) {
+        order.push("answer");
+        return originalEnd.apply(this, args as never);
+      } as never);
+    try {
+      await start(async () => {
+        order.push("handler");
+        // Synchronous work, as in a handler that parses a large input.
+        const until = Date.now() + 50;
+        while (Date.now() < until) {
+          // busy
+        }
+      });
+
+      const answer = await invoke(job("cb-1"));
+      await worker?.idle();
+
+      expect(answer.body).toEqual({ accepted: true });
+      expect(order).toEqual(["answer", "handler"]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it.each<[string, string | undefined, string]>([
+    ["without AGENTCORE_RUNTIME_URL", undefined, "127.0.0.1"],
+    ["with AGENTCORE_RUNTIME_URL", "http://127.0.0.1:8080/", "0.0.0.0"],
+  ])(
+    "listens on port 8080 and the default host %s",
+    async (_label, url, host) => {
+      const binds: unknown[][] = [];
+      // The real listen gets an ephemeral port on loopback, so the test binds
+      // no fixed port and no external interface.
+      const listen = vi
+        .spyOn(Server.prototype, "listen")
+        .mockImplementation(function (this: Server, ...args: unknown[]) {
+          binds.push(args.slice(0, 2));
+          return (originalListen as (...a: unknown[]) => Server).call(
+            this,
+            0,
+            "127.0.0.1",
+            args[2],
+          );
+        } as never);
+      const saved = process.env.AGENTCORE_RUNTIME_URL;
+      if (url === undefined) {
+        delete process.env.AGENTCORE_RUNTIME_URL;
+      } else {
+        process.env.AGENTCORE_RUNTIME_URL = url;
+      }
+      try {
+        worker = await startAgentcoreWorker({ handler: async () => undefined });
+        expect(binds).toEqual([[8080, host]]);
+      } finally {
+        listen.mockRestore();
+        if (saved === undefined) {
+          delete process.env.AGENTCORE_RUNTIME_URL;
+        } else {
+          process.env.AGENTCORE_RUNTIME_URL = saved;
+        }
+      }
+    },
+  );
+
+  it("listens on an explicit host even when AGENTCORE_RUNTIME_URL is set", async () => {
+    const saved = process.env.AGENTCORE_RUNTIME_URL;
+    process.env.AGENTCORE_RUNTIME_URL = "http://127.0.0.1:8080/";
+    try {
+      worker = await startAgentcoreWorker(
+        { handler: async () => undefined, logger: new RecordingLogger() },
+        0,
+        "127.0.0.1",
+      );
+      expect(await ping()).toMatchObject({ status: "Healthy" });
+    } finally {
+      if (saved === undefined) {
+        delete process.env.AGENTCORE_RUNTIME_URL;
+      } else {
+        process.env.AGENTCORE_RUNTIME_URL = saved;
+      }
+    }
+  });
+
+  it("keeps serving and logs one error when createClient throws", async () => {
+    let calls = 0;
+    const client = new FakeLambdaClient();
+    const logger = new RecordingLogger();
+    let runs = 0;
+    worker = await startAgentcoreWorker(
+      {
+        handler: async () => {
+          runs++;
+          return "ok";
+        },
+        createClient: () => {
+          calls++;
+          if (calls === 1) {
+            throw new Error("no credentials");
+          }
+          return client.asClient();
+        },
+        logger,
+      },
+      0,
+      "127.0.0.1",
+    );
+
+    await invoke(job("cb-1"));
+    await worker.idle();
+    const second = await invoke(job("cb-2"));
+    await worker.idle();
+
+    expect(second.body).toEqual({ accepted: true });
+    expect(runs).toBe(1);
+    expect(client.named(SUCCESS)).toEqual([
+      expect.objectContaining({ CallbackId: "cb-2" }),
+    ]);
+    expect(logger.lines.filter((line) => line.level === "error")).toEqual([
+      {
+        level: "error",
+        message: "could not create the Lambda client for the job",
+      },
+    ]);
   });
 
   it("sends a heartbeat when the job has a heartbeat timeout", async () => {

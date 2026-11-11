@@ -161,18 +161,20 @@ await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
 });
 ```
 
-The worker listens on `0.0.0.0:8080`, because AgentCore Runtime requires that port inside the container:
+The worker listens on port 8080. AgentCore Runtime requires the agent to listen on `0.0.0.0:8080`, and it sets the `AGENTCORE_RUNTIME_URL` environment variable, also for a direct code deployment. So the worker binds `0.0.0.0` when that variable is set, and `127.0.0.1` otherwise. `/invocations` has no authentication of its own, so a local run stays on loopback. Pass a `host` as the third argument of `startAgentcoreWorker` to choose another address.
 
 - `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and `{"status": "Healthy"}` otherwise. The answer also has `time_of_last_update`: the Unix time, in seconds, of the last status change. The worker sets it when it starts and when the status changes, not on every ping.
-- `POST /invocations` answers `{"accepted": true}` at once and runs the handler in the background. A repeated callback ID gets the same answer and does not run again. A document that does not match the contract gets HTTP 400.
+- `POST /invocations` answers `{"accepted": true}` and then starts the handler on a later turn of the event loop. So synchronous work at the start of the handler cannot delay the answer. A repeated callback ID gets the same answer and does not run again. A document that does not match the contract gets HTTP 400.
 
 The worker sends heartbeats while the job runs, when the job has a `heartbeatTimeout`. It then completes the callback with the handler's result or error.
 
-The agent runtime's idle timeout (`idleRuntimeSessionTimeout`) must be longer than the job's silent periods. The `agentcore` operation does not keep a session across jobs.
+The handler runs on the event loop that also answers `/ping` and sends heartbeats. Synchronous CPU work blocks both while it runs. So run CPU-bound work in a worker thread or a child process.
+
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. The `agentcore` operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
 
 Permissions:
 
-- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on the agent runtime ARN.
+- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
 
 ## Reference

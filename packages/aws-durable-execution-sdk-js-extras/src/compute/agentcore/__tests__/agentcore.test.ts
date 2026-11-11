@@ -341,6 +341,17 @@ describe("agentcore", () => {
     },
   );
 
+  it("quotes at most 256 characters of a refused answer", async () => {
+    const client = new FakeAgentcoreClient();
+    client.invokeResponses = [answer(`${"a".repeat(256)}${"b".repeat(100)}`)];
+    const seen = await bothViews((context) =>
+      agentcore(context, "review", {}, baseConfig(client)),
+    );
+
+    expect(seen.message).toContain(`answer: ${"a".repeat(256)}`);
+    expect(seen.message).not.toContain("ab");
+  });
+
   it("returns the result when stop fails, because the result is already recorded", async () => {
     const client = new FakeAgentcoreClient();
     client.stopResponses = [

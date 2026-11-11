@@ -250,11 +250,11 @@ await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
 
 The operation creates the steps `<name>.session` (the runtime session ID), `<name>.request` (InvokeAgentRuntime), and `<name>.stop` (StopRuntimeSession), and the callback `<name>.callback`. The function invocation ends while the agent works. A failure is an `AgentcoreError`: `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. `AgentcoreError` extends `ComputeError`.
 
-The agent runtime's idle timeout (`idleRuntimeSessionTimeout`) must be longer than the job's silent periods. This operation does not keep a session across jobs.
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
 
 Permissions:
 
-- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on the agent runtime ARN.
+- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
 
 ## Reference
