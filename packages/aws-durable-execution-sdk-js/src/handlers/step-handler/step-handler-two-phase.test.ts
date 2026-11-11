@@ -1,30 +1,10 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Step Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
@@ -56,9 +36,6 @@ describe("Step Handler Two-Phase Execution", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
   it("should execute step logic in phase 1 immediately", async () => {
@@ -85,13 +62,6 @@ describe("Step Handler Two-Phase Execution", () => {
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
-
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -139,13 +109,6 @@ describe("Step Handler Two-Phase Execution", () => {
   });
 
   it("should handle step with name parameter", async () => {
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
-
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,

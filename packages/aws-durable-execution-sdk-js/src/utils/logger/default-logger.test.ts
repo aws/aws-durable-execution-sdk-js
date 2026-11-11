@@ -8,23 +8,6 @@ import {
 import { Console } from "node:console";
 import { StepError } from "../../errors/durable-error/durable-error";
 
-// Mock the Console constructor
-vi.mock("node:console", () => {
-  const mockConsole = {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  };
-
-  return {
-    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
-    Console: vi.fn().mockImplementation(function () {
-      return mockConsole;
-    }),
-  };
-});
-
 describe("Default Logger", () => {
   let mockConsole: any;
   let originalEnv: string | undefined;
@@ -33,11 +16,18 @@ describe("Default Logger", () => {
     // Store original environment variable
     originalEnv = process.env["AWS_LAMBDA_LOG_LEVEL"];
 
-    // Get the mocked console instance
-    mockConsole = new (Console as any)();
-
     // Clear all mocks
     vi.clearAllMocks();
+
+    // Spy on the real Console methods. A Console instance binds the prototype methods when
+    // it is constructed. So each logger that a test creates after this point calls these
+    // spies. The spies print nothing, so the test output stays clean.
+    mockConsole = {
+      debug: vi.spyOn(Console.prototype, "debug").mockImplementation(() => {}),
+      info: vi.spyOn(Console.prototype, "info").mockImplementation(() => {}),
+      warn: vi.spyOn(Console.prototype, "warn").mockImplementation(() => {}),
+      error: vi.spyOn(Console.prototype, "error").mockImplementation(() => {}),
+    };
 
     // Mock Date.now to have consistent timestamps in tests
     vi.spyOn(Date.prototype, "toISOString").mockReturnValue(

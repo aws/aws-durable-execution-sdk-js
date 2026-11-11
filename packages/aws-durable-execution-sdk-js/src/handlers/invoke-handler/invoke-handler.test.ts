@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createInvokeHandler } from "./invoke-handler";
 import {
   ExecutionContext,
@@ -21,18 +13,10 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
+// A fake Serdes. The handler passes it to the real safeSerialize and
+// safeDeserialize, so the tests stub and assert on its methods.
+let fakeSerdes: { serialize: Mock; deserialize: Mock };
+const getFakeSerdes = () => fakeSerdes;
 
 describe("InvokeHandler", () => {
   let mockContext: ExecutionContext;
@@ -42,6 +26,7 @@ describe("InvokeHandler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    fakeSerdes = { serialize: vi.fn(), deserialize: vi.fn() };
 
     mockCreateStepId = vi.fn().mockReturnValue("test-step-1");
     checkAndUpdateReplayMode = vi.fn();
@@ -62,8 +47,8 @@ describe("InvokeHandler", () => {
       isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;
 
-    mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
-    mockSafeDeserialize.mockResolvedValue({ deserialized: "data" });
+    fakeSerdes.serialize.mockResolvedValue('{"serialized":"data"}');
+    fakeSerdes.deserialize.mockResolvedValue({ deserialized: "data" });
   });
 
   describe("invoke", () => {
@@ -75,7 +60,7 @@ describe("InvokeHandler", () => {
         },
       });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
@@ -83,19 +68,16 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         undefined,
         checkAndUpdateReplayMode,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
 
       expect(result).toEqual({ result: "success" });
       expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(fakeSerdes.deserialize).toHaveBeenCalledWith(
         '{"result":"success"}',
-        "test-step-1",
-        undefined,
-        mockContext.terminationManager,
-        "test-arn",
+        { entityId: "test-step-1", durableExecutionArn: "test-arn" },
       );
       expect(checkAndUpdateReplayMode).toHaveBeenCalled();
     });
@@ -108,12 +90,15 @@ describe("InvokeHandler", () => {
         },
       });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "named" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "named" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-invoke", "test-function", {
@@ -121,13 +106,9 @@ describe("InvokeHandler", () => {
       });
 
       expect(result).toEqual({ result: "named" });
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(fakeSerdes.deserialize).toHaveBeenCalledWith(
         '{"result":"named"}',
-        "test-step-1",
-        "test-invoke",
-        mockContext.terminationManager,
-        "test-arn",
+        { entityId: "test-step-1", durableExecutionArn: "test-arn" },
       );
     });
 
@@ -139,25 +120,24 @@ describe("InvokeHandler", () => {
         },
       });
 
-      mockSafeDeserialize.mockResolvedValue(undefined);
+      fakeSerdes.deserialize.mockResolvedValue(undefined);
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
 
       expect(result).toBeUndefined();
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.anything(),
-        undefined,
-        "test-step-1",
-        undefined,
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(fakeSerdes.deserialize).toHaveBeenCalledWith(undefined, {
+        entityId: "test-step-1",
+        durableExecutionArn: "test-arn",
+      });
     });
 
     it.each([
@@ -179,6 +159,9 @@ describe("InvokeHandler", () => {
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
 
       await expect(
@@ -221,6 +204,9 @@ describe("InvokeHandler", () => {
           mockContext,
           mockCheckpoint,
           mockCreateStepId,
+          undefined,
+          undefined,
+          getFakeSerdes,
         );
 
         const caught = await invokeHandler("test-function", {}).catch(
@@ -251,6 +237,9 @@ describe("InvokeHandler", () => {
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
       const caught = await invokeHandler("test-function", {}).catch(
         (e: unknown) => e,
@@ -268,6 +257,9 @@ describe("InvokeHandler", () => {
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
       const caught = await invokeHandler("test-function", {}).catch(
         (e: unknown) => e,
@@ -293,6 +285,9 @@ describe("InvokeHandler", () => {
           mockContext,
           mockCheckpoint,
           mockCreateStepId,
+          undefined,
+          undefined,
+          getFakeSerdes,
         );
 
         await expect(
@@ -316,12 +311,15 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         }); // Phase 2 - after waitForStatusChange
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -349,7 +347,7 @@ describe("InvokeHandler", () => {
 
       // Record the last lifecycle state set before deserialization finishes.
       let stateDuringDeserialize: unknown;
-      mockSafeDeserialize.mockImplementation(async () => {
+      fakeSerdes.deserialize.mockImplementation(async () => {
         const calls = (mockCheckpoint.markOperationState as Mock).mock.calls;
         stateDuringDeserialize = calls[calls.length - 1][1];
         return { result: "success" };
@@ -359,6 +357,9 @@ describe("InvokeHandler", () => {
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
+        undefined,
+        undefined,
+        getFakeSerdes,
       );
 
       await invokeHandler("test-function", { test: "data" });
@@ -379,26 +380,24 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-function");
 
       expect(result).toEqual({ result: "success" });
-      expect(mockSafeSerialize).toHaveBeenCalledWith(
-        expect.anything(),
-        undefined,
-        "test-step-1",
-        undefined,
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(fakeSerdes.serialize).toHaveBeenCalledWith(undefined, {
+        entityId: "test-step-1",
+        durableExecutionArn: "test-arn",
+      });
 
       expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
@@ -422,26 +421,24 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-name", "test-function");
 
       expect(result).toEqual({ result: "success" });
-      expect(mockSafeSerialize).toHaveBeenCalledWith(
-        expect.anything(),
-        undefined,
-        "test-step-1",
-        "test-name",
-        mockContext.terminationManager,
-        "test-arn",
-      );
+      expect(fakeSerdes.serialize).toHaveBeenCalledWith(undefined, {
+        entityId: "test-step-1",
+        durableExecutionArn: "test-arn",
+      });
 
       expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
@@ -465,25 +462,23 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
 
       expect(result).toEqual({ result: "success" });
-      expect(mockSafeSerialize).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(fakeSerdes.serialize).toHaveBeenCalledWith(
         { test: "data" },
-        "test-step-1",
-        undefined,
-        mockContext.terminationManager,
-        "test-arn",
+        { entityId: "test-step-1", durableExecutionArn: "test-arn" },
       );
 
       expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith("test-step-1", {
@@ -508,13 +503,15 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler("my-invoke", "test-function", {
@@ -544,13 +541,15 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const result = await invokeHandler(
@@ -583,13 +582,15 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       await invokeHandler("test-function", { test: "data" });
@@ -612,13 +613,15 @@ describe("InvokeHandler", () => {
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
-      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+      fakeSerdes.deserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpoint,
         mockCreateStepId,
         "parent-123",
+        undefined,
+        getFakeSerdes,
       );
 
       const config = {
@@ -642,11 +645,16 @@ describe("InvokeHandler", () => {
         SubType: OperationSubType.CHAINED_INVOKE,
         Type: OperationType.CHAINED_INVOKE,
         Name: undefined,
-        Payload: '{"serialized":"data"}',
+        Payload: "custom",
         ChainedInvokeOptions: {
           FunctionName: "test-function",
         },
       });
+      expect(config.payloadSerdes.serialize).toHaveBeenCalledWith(
+        { test: "data" },
+        { entityId: "test-step-1", durableExecutionArn: "test-arn" },
+      );
+      expect(fakeSerdes.serialize).not.toHaveBeenCalled();
     });
   });
 });

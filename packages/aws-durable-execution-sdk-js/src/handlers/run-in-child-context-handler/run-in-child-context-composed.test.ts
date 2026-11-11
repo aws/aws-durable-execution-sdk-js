@@ -19,9 +19,6 @@ import {
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
-// Mock the TerminationManager class
-vi.mock("../../termination-manager/termination-manager");
-
 describe("Run In Child Context Integration Tests", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: any;
@@ -63,17 +60,6 @@ describe("Run In Child Context Integration Tests", () => {
       },
     } as any;
 
-    // Create proper mocks for TerminationManager
-    const mockTerminationManager = {
-      terminate: vi.fn(),
-      getTerminationPromise: vi.fn().mockResolvedValue({}),
-      isTerminated: false,
-      isTerminationRequested: vi.fn().mockReturnValue(false),
-      terminationPromise: Promise.resolve(),
-      handleTermination: vi.fn(),
-      addListener: vi.fn(),
-    } as unknown as TerminationManager;
-
     mockExecutionContext = {
       durableExecutionClient: {
         getExecutionState: vi.fn().mockResolvedValue({}),
@@ -86,7 +72,7 @@ describe("Run In Child Context Integration Tests", () => {
           }),
       },
       _stepData: {},
-      terminationManager: mockTerminationManager,
+      terminationManager: new TerminationManager(),
       durableExecutionArn: "mock-execution-arn",
       pendingCompletions: new Set<string>(),
       getStepData: vi.fn((stepId: string) => {

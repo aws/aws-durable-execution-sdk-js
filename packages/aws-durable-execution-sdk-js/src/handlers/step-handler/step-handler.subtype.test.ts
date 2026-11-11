@@ -8,8 +8,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-vi.mock("../../utils/logger/logger");
-
 // StepConfig.subType replaces the default "Step" subtype everywhere the step
 // handler records one: checkpoints, replay validation, lifecycle metadata,
 // and plugin events.

@@ -5,35 +5,30 @@ import {
   expect,
   beforeEach,
   type MockedFunction,
-  type Mock,
 } from "vitest";
 import { withDurableExecution } from "./with-durable-execution";
-import { initializeExecutionContext } from "./context/execution-context/execution-context";
-import { createDurableContext } from "./context/durable-context/durable-context";
-import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 import { Context } from "aws-lambda";
 import {
+  type DurableExecutionClient,
   DurableExecutionInvocationInput,
-  DurableExecutionMode,
   InvocationStatus,
 } from "./types";
+import { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
 import {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
   InvocationEndInfo,
   InvocationInfo,
 } from "./types/plugin";
-import { TEST_CONSTANTS } from "./testing/test-constants";
 import {
   loadConfiguredPlugins,
   PLUGIN_ENVIRONMENT_VARIABLE,
   PLUGIN_PROVIDER_EXPORT,
 } from "./utils/plugin/plugin-loader";
 
-vi.mock("./context/execution-context/execution-context");
-vi.mock("./context/durable-context/durable-context");
-vi.mock("./utils/checkpoint/checkpoint-manager");
-vi.mock("./utils/logger/logger", () => ({ log: vi.fn() }));
+// withDurableExecution calls loadConfiguredPlugins with no options, so the
+// environment and the module import are not reachable from a test. The mock
+// lets each test call the real loader with its own environment and import.
 const pluginLoaderActual = vi.hoisted(() => ({
   loadConfiguredPlugins:
     undefined as unknown as typeof import("./utils/plugin/plugin-loader").loadConfiguredPlugins,
@@ -53,31 +48,41 @@ const mockedLoadConfiguredPlugins = loadConfiguredPlugins as MockedFunction<
 const actualLoadConfiguredPlugins: typeof loadConfiguredPlugins = (...args) =>
   pluginLoaderActual.loadConfiguredPlugins(...args);
 
-const mockEvent: DurableExecutionInvocationInput = {
-  CheckpointToken: "token",
-  DurableExecutionArn: "arn:test",
-  InitialExecutionState: { Operations: [], NextMarker: "" },
+// An in-memory transport, carried by each event. The event has a next marker,
+// so every invocation that starts reads execution state once. A test that
+// expects no state read checks that getExecutionState was never called.
+let client: DurableExecutionClient & {
+  getExecutionState: ReturnType<typeof vi.fn>;
 };
-const mockContext = {} as Context;
+let nextExecution = 0;
 
-const executionContextFor = (
-  executionArn: string,
-): Record<string, unknown> => ({
-  _stepData: {
-    "initial-op": {
-      StartTimestamp: new Date("2024-06-01T12:00:00Z"),
-      ExecutionDetails: { InputPayload: "{}" },
+/** The event and Lambda context of the next invocation, one execution each. */
+const nextInvocation = (): [DurableExecutionInvocationInput, Context] => {
+  nextExecution += 1;
+  const executionArn = `arn:exec:${nextExecution}`;
+  const input: DurableExecutionInvocationInput = {
+    CheckpointToken: "token",
+    DurableExecutionArn: executionArn,
+    InitialExecutionState: {
+      Operations: [
+        {
+          Id: "initial-op",
+          Type: "EXECUTION",
+          Status: "STARTED",
+          StartTimestamp: new Date("2024-06-01T12:00:00Z"),
+          ExecutionDetails: { InputPayload: "{}" },
+        },
+      ],
+      NextMarker: "more",
     },
-  },
-  durableExecutionArn: executionArn,
-  requestId: `req-for-${executionArn}`,
-  getRemainingTimeMs: (): number => Infinity,
-  terminationManager: {
-    getTerminationPromise: () => new Promise(() => {}),
-    terminate: vi.fn(),
-    setCheckpointTerminatingCallback: vi.fn(),
-  },
-});
+  };
+  const event = new DurableExecutionInvocationInputWithClient(input, client);
+  const context = {
+    awsRequestId: `req-for-${executionArn}`,
+    getRemainingTimeInMillis: () => 30_000,
+  } as Context;
+  return [event, context];
+};
 
 /**
  * Records what one plugin instance observed, so a test can assert that an
@@ -113,30 +118,17 @@ function recordingFactory(): DurableInstrumentationPluginFactory<RecordingPlugin
 
 beforeEach(() => {
   vi.clearAllMocks();
-  let nextExecution = 0;
+  nextExecution = 0;
   mockedLoadConfiguredPlugins.mockImplementation(async (plugins) => [
     ...(plugins ?? []),
   ]);
-  (initializeExecutionContext as Mock).mockImplementation(async () => {
-    nextExecution += 1;
-    return {
-      executionContext: executionContextFor(`arn:exec:${nextExecution}`),
-      checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      durableExecutionMode: DurableExecutionMode.ExecutionMode,
-    };
-  });
-  (createDurableContext as Mock).mockReturnValue({});
-  // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
-  (CheckpointManager as unknown as Mock).mockImplementation(function () {
-    return {
-      checkpoint: vi.fn().mockResolvedValue(undefined),
-      setTerminating: vi.fn(),
-      isCheckpointTokenRevoked: vi.fn().mockReturnValue(false),
-      checkpointExecutionResult: vi.fn().mockResolvedValue("sent"),
-      dispose: vi.fn(),
-      waitForQueueCompletion: vi.fn().mockResolvedValue(undefined),
-    };
-  });
+  client = {
+    checkpoint: async () => ({
+      CheckpointToken: "next-token",
+      NewExecutionState: {},
+    }),
+    getExecutionState: vi.fn(async () => ({ Operations: [] })),
+  };
 });
 
 describe("plugins get one instance per invocation", () => {
@@ -146,8 +138,8 @@ describe("plugins get one instance per invocation", () => {
       plugins: [factory],
     });
 
-    await handler(mockEvent, mockContext);
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
+    await handler(...nextInvocation());
 
     expect(factory.created).toHaveLength(2);
     expect(factory.created[0]).not.toBe(factory.created[1]);
@@ -174,7 +166,7 @@ describe("plugins get one instance per invocation", () => {
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
 
     expect(events).toEqual(["created", "onInvocationStart", "onInvocationEnd"]);
   });
@@ -196,7 +188,7 @@ describe("plugins get one instance per invocation", () => {
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
 
     // Same object, so a plugin can take its identity at construction rather
     // than waiting for the first hook.
@@ -221,8 +213,8 @@ describe("plugins get one instance per invocation", () => {
       { plugins: [factory] },
     );
 
-    const first = handler(mockEvent, mockContext);
-    const second = handler(mockEvent, mockContext);
+    const first = handler(...nextInvocation());
+    const second = handler(...nextInvocation());
 
     // Both invocations are in flight: each handler body is parked on its own gate.
     while (releases.length < 2) await Promise.resolve();
@@ -260,9 +252,9 @@ describe("plugins get one instance per invocation", () => {
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [factory],
     });
-    await handler(mockEvent, mockContext);
-    await handler(mockEvent, mockContext);
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
+    await handler(...nextInvocation());
+    await handler(...nextInvocation());
 
     expect(instances).toBe(3);
     expect(exporter.exported).toEqual([
@@ -301,7 +293,7 @@ describe("plugins get one instance per invocation", () => {
       { plugins: [throwingFactory, first, second] },
     );
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.SUCCEEDED,
     });
     expect(order).toEqual(["first", "second"]);
@@ -320,7 +312,7 @@ describe("plugins get one instance per invocation", () => {
       { plugins: [throwingFactory, { createPlugin: () => other }] },
     );
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.SUCCEEDED,
       Result: JSON.stringify({ ok: true }),
     });
@@ -342,7 +334,7 @@ describe("plugins get one instance per invocation", () => {
       },
     );
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
     });
   });
@@ -369,8 +361,8 @@ describe("environment-configured providers", () => {
     });
 
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
-    await handler(mockEvent, mockContext);
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
+    await handler(...nextInvocation());
 
     expect(created).toHaveLength(2);
     expect(created[0]).not.toBe(created[1]);
@@ -392,8 +384,8 @@ describe("environment-configured providers", () => {
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}), {
       plugins: [configFactory],
     });
-    await handler(mockEvent, mockContext);
-    await handler(mockEvent, mockContext);
+    await handler(...nextInvocation());
+    await handler(...nextInvocation());
 
     expect(configFactory.created).toHaveLength(2);
     expect(created).toHaveLength(2);
@@ -410,7 +402,7 @@ describe("environment-configured providers", () => {
       vi.fn().mockResolvedValue({ ok: true }),
     );
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.SUCCEEDED,
     });
   });
@@ -423,11 +415,11 @@ describe("environment-configured providers", () => {
 
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
       Error: expect.objectContaining({ ErrorType: "PluginLoadError" }),
     });
-    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(client.getExecutionState).not.toHaveBeenCalled();
   });
 
   it("contains async provider rejections across invocations", async () => {
@@ -441,7 +433,7 @@ describe("environment-configured providers", () => {
     const handler = withDurableExecution(userHandler);
 
     for (let invocation = 0; invocation < 2; invocation++) {
-      await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      await expect(handler(...nextInvocation())).resolves.toMatchObject({
         Status: InvocationStatus.SUCCEEDED,
         Result: JSON.stringify({ ok: true }),
       });
@@ -468,11 +460,11 @@ describe("explicit plugins entries are validated like providers", () => {
       ],
     });
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
       Error: expect.objectContaining({ ErrorType: "PluginLoadError" }),
     });
-    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(client.getExecutionState).not.toHaveBeenCalled();
   });
 
   it("reports the same failure on every invocation, not only the first", async () => {
@@ -482,10 +474,10 @@ describe("explicit plugins entries are validated like providers", () => {
       ],
     });
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
     });
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
     });
   });
@@ -496,7 +488,7 @@ describe("explicit plugins entries are validated like providers", () => {
       plugins: [factory],
     });
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.SUCCEEDED,
     });
     expect(factory.created).toHaveLength(1);
@@ -524,7 +516,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
       ],
     });
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
       Error: expect.objectContaining({
         ErrorType: "PluginLoadError",
@@ -536,7 +528,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
     // The failure precedes any execution work, so the handler never ran and no
     // state was read.
     expect(handlerFn).not.toHaveBeenCalled();
-    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(client.getExecutionState).not.toHaveBeenCalled();
   });
 
   it("fails a class exported as a provider the same way", async () => {
@@ -551,7 +543,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
 
     const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.FAILED,
       Error: expect.objectContaining({
         ErrorType: "PluginLoadError",
@@ -560,7 +552,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
         ),
       }),
     });
-    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(client.getExecutionState).not.toHaveBeenCalled();
   });
 
   it("still runs the invocation for the factory form of the same class", async () => {
@@ -577,7 +569,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
       ],
     });
 
-    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+    await expect(handler(...nextInvocation())).resolves.toMatchObject({
       Status: InvocationStatus.SUCCEEDED,
     });
     expect(created).toHaveLength(1);
@@ -608,7 +600,7 @@ describe("SDK 3.x rejects legacy providers before user execution", () => {
       const handler = withDurableExecution(handlerFn, {
         plugins: registration === "explicit" ? [legacy] : [],
       });
-      await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      await expect(handler(...nextInvocation())).resolves.toMatchObject({
         Status: InvocationStatus.FAILED,
         Error: {
           ErrorType: "PluginLoadError",

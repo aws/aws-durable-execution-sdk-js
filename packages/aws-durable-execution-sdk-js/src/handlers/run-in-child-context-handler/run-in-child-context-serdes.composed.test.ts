@@ -20,8 +20,6 @@ import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
-vi.mock("../../termination-manager/termination-manager");
-
 /**
  * Composed tests for child context ser/des round-trip behavior.
  *
@@ -83,16 +81,6 @@ describe("runInChildContext serdes round-trip", () => {
       },
     } as any;
 
-    const mockTerminationManager = {
-      terminate: vi.fn(),
-      getTerminationPromise: vi.fn().mockResolvedValue({}),
-      isTerminated: false,
-      isTerminationRequested: vi.fn().mockReturnValue(false),
-      terminationPromise: Promise.resolve(),
-      handleTermination: vi.fn(),
-      addListener: vi.fn(),
-    } as unknown as TerminationManager;
-
     mockExecutionContext = {
       durableExecutionClient: {
         getExecutionState: vi.fn().mockResolvedValue({}),
@@ -105,7 +93,7 @@ describe("runInChildContext serdes round-trip", () => {
           }),
       },
       _stepData: {},
-      terminationManager: mockTerminationManager,
+      terminationManager: new TerminationManager(),
       durableExecutionArn: "mock-execution-arn",
       pendingCompletions: new Set<string>(),
       getStepData: vi.fn((stepId: string) => {

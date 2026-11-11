@@ -5,7 +5,6 @@ import {
   expect,
   beforeEach,
   type Mocked,
-  type MockedFunction,
   type Mock,
 } from "vitest";
 import { createStepHandler } from "./step-handler";
@@ -19,19 +18,6 @@ import {
 } from "../../types/plugin";
 import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Step Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
@@ -75,13 +61,6 @@ describe("Step Handler - plugin hooks", () => {
 
     (mockPlugin.wrapOperationAttemptFn as Mock).mockImplementation(
       (_info: unknown, fn: () => unknown) => fn(),
-    );
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
     );
   });
 

@@ -10,11 +10,6 @@ import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
-// Mock dependencies
-vi.mock("../../utils/logger/logger", () => ({
-  log: vi.fn(),
-}));
-
 describe("Checkpoint Integration Tests", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;

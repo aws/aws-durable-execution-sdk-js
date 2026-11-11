@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   ExecutionContext,
@@ -15,29 +7,30 @@ import {
   OperationSubType,
   DurableLogger,
   OperationLifecycleState,
+  DurableExecutionMode,
 } from "../../types";
 import { OperationType, OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-vi.mock("../../utils/context-tracker/context-tracker");
+import { getActiveContext } from "../../utils/context-tracker/context-tracker";
+import { TerminationReason } from "../../termination-manager/types";
 
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
+// A fake Serdes. The handler passes it to the real safeSerialize and
+// safeDeserialize, so the tests stub and assert on its methods.
+let fakeSerdes: { serialize: Mock; deserialize: Mock };
+const getFakeSerdes = () => fakeSerdes;
 
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
-const mockRunWithContext = runWithContext as MockedFunction<
-  typeof runWithContext
->;
+// The active context that the real runWithContext sets for one check run.
+const activeContextFor = (attempt: number, parentId: string | undefined) => ({
+  contextId: "step-1",
+  parentId,
+  attempt,
+  durableExecutionMode: DurableExecutionMode.ExecutionMode,
+  operationName: undefined,
+  execution: undefined,
+});
 
 describe("WaitForCondition Handler", () => {
   let mockContext: ExecutionContext;
@@ -46,6 +39,7 @@ describe("WaitForCondition Handler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    fakeSerdes = { serialize: vi.fn(), deserialize: vi.fn() };
 
     mockContext = {
       getStepData: vi.fn().mockReturnValue(null),
@@ -65,17 +59,12 @@ describe("WaitForCondition Handler", () => {
 
     createStepId = vi.fn().mockReturnValue("step-1");
 
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
+    fakeSerdes.serialize.mockImplementation(async (value) =>
       JSON.stringify(value),
     );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
+    fakeSerdes.deserialize.mockImplementation(async (value) =>
       value ? JSON.parse(value) : undefined,
     );
-
-    // Set up mockRunWithContext to execute the provided function
-    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
-      return await fn();
-    });
   });
 
   describe("Parameter parsing", () => {
@@ -86,6 +75,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         "parent-123",
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -116,6 +106,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -146,6 +137,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> =
@@ -185,6 +177,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -232,6 +225,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> =
@@ -253,6 +247,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi
@@ -277,6 +272,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       let callCount = 0;
@@ -318,6 +314,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -340,11 +337,16 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         "parent-123",
+        getFakeSerdes,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
-        .fn()
-        .mockResolvedValue("result");
+      const activeContexts: unknown[] = [];
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi.fn(
+        async () => {
+          activeContexts.push(getActiveContext());
+          return "result";
+        },
+      );
       const waitStrategy = vi.fn().mockReturnValue({ shouldContinue: false });
       const config: WaitForConditionConfig<string> = {
         waitStrategy,
@@ -353,15 +355,9 @@ describe("WaitForCondition Handler", () => {
 
       await handler(checkFunc, config);
 
-      // Verify currentAttempt is passed correctly to both functions
-      expect(mockRunWithContext).toHaveBeenCalledWith(
-        "step-1",
-        "parent-123",
-        expect.any(Function),
-        1, // currentAttempt should be 1 on first execution
-        expect.any(String), // DurableExecutionMode.ExecutionMode
-        undefined, // operationName (no name configured in test)
-      );
+      // Verify currentAttempt is passed correctly to both functions.
+      // currentAttempt should be 1 on first execution.
+      expect(activeContexts).toEqual([activeContextFor(1, "parent-123")]);
       expect(waitStrategy).toHaveBeenCalledWith("result", 1);
     });
 
@@ -372,6 +368,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc = vi.fn().mockResolvedValue("result");
@@ -412,6 +409,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc = vi.fn().mockResolvedValue("result");
@@ -449,11 +447,16 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         "parent-123",
+        getFakeSerdes,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
-        .fn()
-        .mockResolvedValue("result");
+      const activeContexts: unknown[] = [];
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi.fn(
+        async () => {
+          activeContexts.push(getActiveContext());
+          return "result";
+        },
+      );
       const waitStrategy = vi.fn().mockReturnValue({ shouldContinue: false });
       const config: WaitForConditionConfig<string> = {
         waitStrategy,
@@ -462,15 +465,9 @@ describe("WaitForCondition Handler", () => {
 
       await handler(checkFunc, config);
 
-      // Verify currentAttempt = Attempt + 1 for both functions
-      expect(mockRunWithContext).toHaveBeenCalledWith(
-        "step-1",
-        "parent-123",
-        expect.any(Function),
-        3, // currentAttempt should be Attempt + 1 = 2 + 1 = 3
-        expect.any(String),
-        undefined, // operationName (no name configured in test)
-      );
+      // Verify currentAttempt = Attempt + 1 for both functions.
+      // currentAttempt should be Attempt + 1 = 2 + 1 = 3.
+      expect(activeContexts).toEqual([activeContextFor(3, "parent-123")]);
       expect(waitStrategy).toHaveBeenCalledWith("result", 3);
     });
 
@@ -512,11 +509,16 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
-      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi
-        .fn()
-        .mockResolvedValue(10);
+      const activeContexts: unknown[] = [];
+      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = vi.fn(
+        async () => {
+          activeContexts.push(getActiveContext());
+          return 10;
+        },
+      );
 
       const waitStrategy = vi
         .fn()
@@ -542,35 +544,12 @@ describe("WaitForCondition Handler", () => {
       expect(waitStrategy).toHaveBeenNthCalledWith(2, 10, 2); // second attempt
       expect(waitStrategy).toHaveBeenNthCalledWith(3, 10, 3); // third attempt
 
-      // Verify runWithContext was also called with correct attempts
-      expect(mockRunWithContext).toHaveBeenCalledTimes(3);
-      expect(mockRunWithContext).toHaveBeenNthCalledWith(
-        1,
-        "step-1",
-        undefined,
-        expect.any(Function),
-        1,
-        expect.any(String),
-        undefined, // operationName (no name configured in test)
-      );
-      expect(mockRunWithContext).toHaveBeenNthCalledWith(
-        2,
-        "step-1",
-        undefined,
-        expect.any(Function),
-        2,
-        expect.any(String),
-        undefined, // operationName (no name configured in test)
-      );
-      expect(mockRunWithContext).toHaveBeenNthCalledWith(
-        3,
-        "step-1",
-        undefined,
-        expect.any(Function),
-        3,
-        expect.any(String),
-        undefined, // operationName (no name configured in test)
-      );
+      // Verify runWithContext also set the correct attempts
+      expect(activeContexts).toEqual([
+        activeContextFor(1, undefined),
+        activeContextFor(2, undefined),
+        activeContextFor(3, undefined),
+      ]);
     });
   });
 
@@ -591,12 +570,9 @@ describe("WaitForCondition Handler", () => {
         (mockContext as any)._stepData[hashedStepId],
       );
 
-      // safeDeserialize is mocked for this suite, so production code never
-      // reaches the real terminate call. Return a never-resolving promise, as
-      // the real helper does after requesting termination.
-      mockSafeDeserialize.mockImplementationOnce(
-        () => new Promise(() => {}) as Promise<string>,
-      );
+      // The real safeDeserialize catches this error, requests termination
+      // and returns a promise that never resolves.
+      fakeSerdes.deserialize.mockRejectedValueOnce(new Error("bad state"));
 
       const handler = createWaitForConditionHandler(
         mockContext,
@@ -604,6 +580,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -618,19 +595,21 @@ describe("WaitForCondition Handler", () => {
       // don't await it -- just yield to the event loop so the handler can run
       // up to the checkpoint-restore point.
       void handler(checkFunc, config);
-      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
 
-      // The contract this change introduces: the STARTED restore path delegates
-      // to safeDeserialize, handing it the termination manager. Terminating on
-      // failure is safeDeserialize's own separately tested responsibility.
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.anything(),
+      // The STARTED restore path deserializes through safeDeserialize, which
+      // terminates the execution when the serdes fails.
+      expect(fakeSerdes.deserialize).toHaveBeenCalledWith(
         JSON.stringify("checkpointed-state"),
-        stepId,
-        undefined,
-        mockContext.terminationManager,
-        mockContext.durableExecutionArn,
+        {
+          entityId: stepId,
+          durableExecutionArn: mockContext.durableExecutionArn,
+        },
       );
+      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.SERDES_FAILED,
+        message: "Deserialization failed for step (step-1): bad state",
+      });
       expect(checkFunc).not.toHaveBeenCalled();
     });
 
@@ -651,12 +630,9 @@ describe("WaitForCondition Handler", () => {
         (mockContext as any)._stepData[hashedStepId],
       );
 
-      // safeDeserialize is mocked for this suite, so production code never
-      // reaches the real terminate call. Return a never-resolving promise, as
-      // the real helper does after requesting termination.
-      mockSafeDeserialize.mockImplementationOnce(
-        () => new Promise(() => {}) as Promise<string>,
-      );
+      // The real safeDeserialize catches this error, requests termination
+      // and returns a promise that never resolves.
+      fakeSerdes.deserialize.mockRejectedValueOnce(new Error("bad state"));
 
       const handler = createWaitForConditionHandler(
         mockContext,
@@ -664,6 +640,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = vi
@@ -678,19 +655,21 @@ describe("WaitForCondition Handler", () => {
       // don't await it -- just yield to the event loop so the handler can run
       // up to the checkpoint-restore point.
       void handler(checkFunc, config);
-      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
 
-      // The contract this change introduces: the READY restore path delegates
-      // to safeDeserialize, handing it the termination manager. Terminating on
-      // failure is safeDeserialize's own separately tested responsibility.
-      expect(mockSafeDeserialize).toHaveBeenCalledWith(
-        expect.anything(),
+      // The READY restore path deserializes through safeDeserialize, which
+      // terminates the execution when the serdes fails.
+      expect(fakeSerdes.deserialize).toHaveBeenCalledWith(
         JSON.stringify("checkpointed-state"),
-        stepId,
-        undefined,
-        mockContext.terminationManager,
-        mockContext.durableExecutionArn,
+        {
+          entityId: stepId,
+          durableExecutionArn: mockContext.durableExecutionArn,
+        },
       );
+      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.SERDES_FAILED,
+        message: "Deserialization failed for step (step-1): bad state",
+      });
       expect(checkFunc).not.toHaveBeenCalled();
     });
   });
@@ -703,6 +682,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const initialState = { count: 0, created: "now" };
@@ -717,22 +697,16 @@ describe("WaitForCondition Handler", () => {
       const firstCheckState = checkFunc.mock.calls[0][0];
       expect(firstCheckState).toEqual(initialState);
       expect(firstCheckState).not.toBe(initialState);
-      expect(mockSafeSerialize).toHaveBeenCalledWith(
-        expect.anything(),
-        initialState,
-        "step-1",
-        undefined,
-        mockContext.terminationManager,
-        mockContext.durableExecutionArn,
-      );
+      expect(fakeSerdes.serialize).toHaveBeenCalledWith(initialState, {
+        entityId: "step-1",
+        durableExecutionArn: mockContext.durableExecutionArn,
+      });
     });
 
     it("should not run the first check when initialState fails serialization", async () => {
-      // safeSerialize is mocked for this suite. Return a never-resolving
-      // promise, as the real helper does after requesting termination.
-      mockSafeSerialize.mockImplementationOnce(
-        () => new Promise(() => {}) as Promise<string>,
-      );
+      // The real safeSerialize catches this error, requests termination and
+      // returns a promise that never resolves.
+      fakeSerdes.serialize.mockRejectedValueOnce(new Error("bad state"));
 
       const handler = createWaitForConditionHandler(
         mockContext,
@@ -740,6 +714,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc = vi.fn().mockResolvedValue("ready");
@@ -752,6 +727,10 @@ describe("WaitForCondition Handler", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(checkFunc).not.toHaveBeenCalled();
+      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.SERDES_FAILED,
+        message: "Serialization failed for step (step-1): bad state",
+      });
     });
 
     it("should return the checkpointed value when waitStrategy mutates the state", async () => {
@@ -761,6 +740,7 @@ describe("WaitForCondition Handler", () => {
         createStepId,
         createDefaultLogger(),
         undefined,
+        getFakeSerdes,
       );
 
       const checkFunc = vi.fn().mockResolvedValue({ status: "done" });
