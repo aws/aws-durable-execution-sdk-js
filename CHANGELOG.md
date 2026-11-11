@@ -31,6 +31,19 @@ below describe each change in detail.
   plugin is `1.2.0`. So the fixes merged after their published versions ship.
 
 
+### Added
+
+- **Experimental.** `agentcore` in `@aws/durable-execution-sdk-js-extras/compute/agentcore`
+  runs one job in a new Amazon Bedrock AgentCore Runtime session. It sends the job with
+  InvokeAgentRuntime, waits on a durable callback, and stops the session with
+  StopRuntimeSession. Failures are `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, and
+  `AgentcoreTimeoutError`, all subclasses of `AgentcoreError` and `ComputeError`. The subpath
+  needs the optional peer dependency `@aws-sdk/client-bedrock-agentcore`.
+- **Experimental.** `startAgentcoreWorker` in
+  `@aws/durable-execution-sdk-js-compute-worker/agentcore` runs the jobs of `agentcore` inside
+  the agent runtime. It answers `GET /ping` and `POST /invocations` on port 8080, runs each
+  callback ID once, sends heartbeats, and reports the result.
+
 ### Changed
 
 - **Breaking (experimental).** `@aws/durable-execution-sdk-js-microvm-worker` is renamed to

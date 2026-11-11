@@ -4,7 +4,7 @@
 
 Run job handlers inside an AWS Lambda MicroVM for the [`microvm` and `microvmSession` operations](../aws-durable-execution-sdk-js-extras). The worker receives each job, sends heartbeats while it runs, and reports its result to the durable function.
 
-The package root exports the code that every compute type shares, such as `CallbackReporter`. The MicroVM worker is in the `@aws/durable-execution-sdk-js-compute-worker/microvm` subpath. That subpath also exports the shared code.
+The package root exports the code that every compute type shares, such as `CallbackReporter`. The MicroVM worker is in the `@aws/durable-execution-sdk-js-compute-worker/microvm` subpath. The AgentCore Runtime worker is in the `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath. Both subpaths also export the shared code.
 
 ## Install
 
@@ -130,9 +130,55 @@ The MicroVM execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `
 
 A session with `autoSuspendOnIdle: true` also needs `lambda:SuspendMicrovm` on the MicroVM image. That permission lets any MicroVM of the image suspend any other. So use one image per trust boundary.
 
+## Run a job in AgentCore Runtime
+
+> **Experimental.** The `agentcore` subpath is experimental, like `microvm`.
+
+The `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath runs the jobs of the [`agentcore` operation](../aws-durable-execution-sdk-js-extras#run-a-job-in-agentcore-runtime) inside an Amazon Bedrock AgentCore Runtime agent. It implements the AgentCore HTTP contract itself and adds no dependency.
+
+The durable function:
+
+```typescript
+import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+
+const review = await agentcore<{ approved: boolean }>(context, "review", { pr: 7 }, {
+  agentRuntimeArn: process.env.AGENT_RUNTIME_ARN!,
+  timeout: { hours: 1 },
+  heartbeatTimeout: { minutes: 5 },
+});
+```
+
+The agent's container entry point:
+
+```typescript
+import { startAgentcoreWorker } from "@aws/durable-execution-sdk-js-compute-worker/agentcore";
+
+await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
+  handler: async (input, context) => {
+    context.logger.info("reviewing", { pr: input.pr });
+    return { approved: true };
+  },
+});
+```
+
+The worker listens on `0.0.0.0:8080`, because AgentCore Runtime requires that port inside the container:
+
+- `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and `{"status": "Healthy"}` otherwise.
+- `POST /invocations` answers `{"accepted": true}` at once and runs the handler in the background. A repeated callback ID gets the same answer and does not run again. A document that does not match the contract gets HTTP 400.
+
+The worker sends heartbeats while the job runs, when the job has a `heartbeatTimeout`. It then completes the callback with the handler's result or error.
+
+The agent runtime's idle timeout (`idleRuntimeSessionTimeout`) must be longer than the job's silent periods. The `agentcore` operation does not keep a session across jobs.
+
+Permissions:
+
+- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on the agent runtime ARN.
+- The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
+
 ## Reference
 
 - [MicroVM worker reference](docs/worker.md): hook handling, heartbeats, result reporting, duplicate jobs, idle suspend, suspend and terminate hooks, and best practices.
 - [MicroVM operations reference](../aws-durable-execution-sdk-js-extras/docs/microvm.md): the contract between the operations and the worker.
 - Lower-level exports: `parseRunHookRequest`, `parseJobRequest`, and `CallbackReporter`.
 - Source: [`src/microvm/worker.ts`](src/microvm/worker.ts), [`src/callback-reporter.ts`](src/callback-reporter.ts), and [`src/microvm/payload.ts`](src/microvm/payload.ts).
+- AgentCore worker source: [`src/agentcore/worker.ts`](src/agentcore/worker.ts).

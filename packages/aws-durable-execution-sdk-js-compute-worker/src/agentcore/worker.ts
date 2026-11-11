@@ -1,0 +1,367 @@
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import type { AddressInfo } from "node:net";
+import type { LambdaClient } from "@aws-sdk/client-lambda";
+import {
+  CallbackReporter,
+  ResultSerializationError,
+  ResultTooLargeError,
+} from "../callback-reporter";
+import { parseJobRequest } from "../microvm/payload";
+import { readJson, startHeartbeats } from "../microvm/worker";
+
+/**
+ * The port that AgentCore Runtime sends requests to inside the container.
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const AGENTCORE_PORT = 8080;
+
+/** The largest job body that the worker reads. */
+const MAX_JOB_BODY_BYTES = 6 * 1024 * 1024;
+
+/**
+ * How many callback IDs the worker remembers.
+ *
+ * InvokeAgentRuntime has no idempotency token. So the durable function's
+ * request step can deliver the same job twice, for example after a lost
+ * answer. Each callback ID belongs to one job. So the worker runs a callback
+ * ID once. A callback ID is a short string, so 1,000 of them use well under
+ * 1 MB.
+ */
+const MAX_REMEMBERED_JOBS = 1_000;
+
+/**
+ * The job document that the `agentcore` operation sends as the
+ * InvokeAgentRuntime payload.
+ *
+ * @remarks
+ * The same type is declared in
+ * `@aws/durable-execution-sdk-js-extras/compute/agentcore`. The two
+ * packages do not depend on each other, because one runs in the function
+ * and the other in the agent runtime. So a change to one declaration must be
+ * made in the other too.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentcoreJobDocument<TInput = unknown> {
+  /** The document format version. */
+  version: 1;
+  /** The Region of the durable function, for the callback API calls. */
+  region: string;
+  /** The callback ID that the worker completes with the job's outcome. */
+  callbackId: string;
+  /** The heartbeat timeout in seconds, when the caller set one. */
+  heartbeatTimeoutSeconds?: number;
+  /**
+   * The caller's input. The document has no `input` field when the input
+   * encodes to no value, such as `undefined`.
+   */
+  input: TInput;
+}
+
+/**
+ * The logger the worker writes to.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentcoreWorkerLogger {
+  info(message: string, data?: Record<string, unknown>): void;
+  warn(message: string, data?: Record<string, unknown>): void;
+  error(message: string, data?: Record<string, unknown>): void;
+}
+
+/**
+ * What the job handler receives besides its input.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentcoreJobContext {
+  /** The callback ID that the worker completes with the handler's result. */
+  callbackId: string;
+  /** The Region of the durable function. */
+  region: string;
+  /**
+   * Aborted when a heartbeat finds that the durable function no longer
+   * accepts the result, for example after a callback timeout. The handler
+   * should then stop its work. This case fires only when the job has a
+   * heartbeat timeout.
+   */
+  signal: AbortSignal;
+  /** The worker's logger. */
+  logger: AgentcoreWorkerLogger;
+}
+
+/**
+ * The job to run. Its resolved value becomes the durable function's result.
+ * A rejection fails the durable operation with the error's name and message.
+ *
+ * @public
+ *
+ * @experimental This type is experimental and may be changed or removed in future releases.
+ */
+export type AgentcoreJobHandler<TInput = unknown, TOutput = unknown> = (
+  input: TInput,
+  context: AgentcoreJobContext,
+) => Promise<TOutput>;
+
+/**
+ * Options for {@link startAgentcoreWorker}.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
+  /** The job to run for each job document. */
+  handler: AgentcoreJobHandler<TInput, TOutput>;
+  /**
+   * Creates the Lambda client for a Region. Defaults to a client that uses
+   * the default credential chain, which resolves the agent runtime's
+   * execution role. Called for each job. The worker never destroys a client
+   * that this function returns.
+   */
+  createClient?: (region: string) => LambdaClient;
+  /** Defaults to single-line JSON on stdout and stderr. */
+  logger?: AgentcoreWorkerLogger;
+}
+
+/**
+ * A running worker server.
+ *
+ * @public
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface AgentcoreWorker {
+  /** The port the server listens on. */
+  port: number;
+  /** Resolves when every job started so far has ended. */
+  idle(): Promise<void>;
+  /** Stops accepting connections. Running jobs continue. */
+  close(): Promise<void>;
+}
+
+/**
+ * Starts an HTTP server that implements the AgentCore Runtime service
+ * contract for jobs from the `agentcore` operation.
+ *
+ * @remarks
+ * The server answers two routes:
+ *
+ * - `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and
+ *   `{"status": "Healthy"}` otherwise. AgentCore Runtime keeps a busy
+ *   session alive past its idle timeout.
+ * - `POST /invocations` reads the job document. It answers
+ *   `{"accepted": true}` at once and runs `handler` in the background. A
+ *   document that does not match the contract gets HTTP 400.
+ *
+ * A second delivery of a callback ID starts no job. It gets
+ * `{"accepted": true}` again. The worker remembers the last 1,000 callback
+ * IDs. So a retried delivery runs a job once, unless at least 1,000 other
+ * jobs arrived in between, or the agent's process restarted.
+ *
+ * For each job, the worker sends heartbeats while the job runs, when the job
+ * sets a heartbeat timeout. When the handler ends, the worker completes the
+ * job's callback with the result, or fails it with the error.
+ *
+ * @param options - The worker options.
+ * @param port - The port to listen on. Defaults to 8080, the port that
+ * AgentCore Runtime requires.
+ * @param host - The address to listen on. Defaults to `0.0.0.0`, because
+ * AgentCore Runtime requires the container to listen on all interfaces.
+ * The port is reachable only inside the agent runtime's network, through
+ * InvokeAgentRuntime. Tests pass `127.0.0.1`.
+ * @returns The running worker. The promise rejects when the port cannot be
+ * bound.
+ *
+ * @public
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
+  options: AgentcoreWorkerOptions<TInput, TOutput>,
+  port: number = AGENTCORE_PORT,
+  host = "0.0.0.0",
+): Promise<AgentcoreWorker> {
+  const logger = options.logger ?? jsonLogger;
+  const running = new Set<Promise<void>>();
+  // Every callback ID that the worker accepted, oldest first. A Set keeps
+  // insertion order.
+  const accepted = new Set<string>();
+
+  const listener = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+  ): Promise<void> => {
+    const path = (request.url ?? "").split("?")[0];
+    if (request.method === "GET" && path === "/ping") {
+      // The contract also allows `time_of_last_update`. The worker never
+      // sends it. The service then measures idle time from its own view.
+      respond(response, 200, {
+        status: running.size > 0 ? "HealthyBusy" : "Healthy",
+      });
+      return;
+    }
+    if (request.method !== "POST" || path !== "/invocations") {
+      respond(response, 404, { error: "not found" });
+      return;
+    }
+    let job: AgentcoreJobDocument<TInput>;
+    try {
+      job = parseJobRequest<TInput>(
+        await readJson(request, MAX_JOB_BODY_BYTES),
+      ) as AgentcoreJobDocument<TInput>;
+    } catch (error) {
+      // readJson and parseJobRequest throw InvalidRunHookPayloadError for a
+      // body that is too large, not JSON, or not a valid job document.
+      const message = (error as Error).message;
+      logger.warn("invalid job document", { error: message });
+      respond(response, 400, { error: message });
+      return;
+    }
+    if (accepted.has(job.callbackId)) {
+      logger.info("job already accepted", { callbackId: job.callbackId });
+      respond(response, 200, { accepted: true });
+      return;
+    }
+    accepted.add(job.callbackId);
+    if (accepted.size > MAX_REMEMBERED_JOBS) {
+      accepted.delete(accepted.values().next().value as string);
+    }
+    const run = runJob(options, logger, job).finally(() => running.delete(run));
+    running.add(run);
+    respond(response, 200, { accepted: true });
+  };
+
+  const server: Server = createServer((request, response) => {
+    void listener(request, response);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  return {
+    port: (server.address() as AddressInfo).port,
+    idle: async (): Promise<void> => {
+      while (running.size > 0) {
+        await Promise.allSettled([...running]);
+      }
+    },
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
+  };
+}
+
+/**
+ * Runs one job: heartbeats while the handler runs, then the outcome. It
+ * never rejects. A failure to report is logged.
+ */
+async function runJob<TInput, TOutput>(
+  options: AgentcoreWorkerOptions<TInput, TOutput>,
+  logger: AgentcoreWorkerLogger,
+  job: AgentcoreJobDocument<TInput>,
+): Promise<void> {
+  const { callbackId, region } = job;
+  const reporter = new CallbackReporter({
+    callbackId,
+    region,
+    client: options.createClient?.(region),
+    warn: (message, data) => logger.warn(message, data),
+  });
+  const controller = new AbortController();
+  const heartbeats = startHeartbeats(
+    reporter,
+    job,
+    controller,
+    undefined,
+    logger,
+  );
+  logger.info("job started", { callbackId });
+  try {
+    let outcome: { ok: true; value: TOutput } | { ok: false; error: unknown };
+    try {
+      outcome = {
+        ok: true,
+        value: await options.handler(job.input, {
+          callbackId,
+          region,
+          signal: controller.signal,
+          logger,
+        }),
+      };
+    } catch (error) {
+      outcome = { ok: false, error };
+    }
+    // Heartbeats keep running while the outcome is reported. A completion
+    // attempt can stall for up to 30 seconds.
+    heartbeats.handlerSettled();
+    if (controller.signal.aborted) {
+      logger.warn("job outcome not reported: the callback is gone", {
+        callbackId,
+      });
+      return;
+    }
+    if (outcome.ok) {
+      try {
+        await reporter.succeed(outcome.value);
+      } catch (error) {
+        // A result over the size limit, or one that is not JSON-serializable,
+        // is never sent. Report it as a failure, so the durable function
+        // learns why instead of waiting for its timeout.
+        if (
+          !(error instanceof ResultTooLargeError) &&
+          !(error instanceof ResultSerializationError)
+        ) {
+          throw error;
+        }
+        await reporter.fail(error);
+      }
+      logger.info("job succeeded", { callbackId });
+    } else {
+      await reporter.fail(outcome.error);
+      logger.info("job failed", { callbackId });
+    }
+  } catch (error) {
+    logger.error("job outcome could not be reported", {
+      callbackId,
+      error: String(error),
+    });
+  } finally {
+    await heartbeats.stop();
+    reporter.close();
+  }
+}
+
+function respond(
+  response: ServerResponse,
+  status: number,
+  body: Record<string, unknown>,
+): void {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
+const jsonLogger: AgentcoreWorkerLogger = {
+  info: (message, data) =>
+    console.log(JSON.stringify({ level: "INFO", message, ...data })),
+  warn: (message, data) =>
+    console.warn(JSON.stringify({ level: "WARN", message, ...data })),
+  error: (message, data) =>
+    console.error(JSON.stringify({ level: "ERROR", message, ...data })),
+};
