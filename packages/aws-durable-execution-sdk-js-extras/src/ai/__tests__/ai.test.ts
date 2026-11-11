@@ -544,6 +544,12 @@ describe("decider()", () => {
         () => decide.label(context, "Q?", ["a", ""], "x"),
         () => decide.score(context, "Q?", ["one"] as never, "x"),
         () => decide.score(context, "Q?", tooLong, "x"),
+        // A value that JSON.stringify encodes as undefined.
+        () => decide.check(context, "Q?", (() => 1) as never),
+        () => decide.classify(context, "Q?", "ab" as never, "x"),
+        () => decide.label(context, "Q?", { 0: "a" } as never, "x"),
+        () => decide.score(context, "Q?", "low-high" as never, "x"),
+        () => decide.score(context, "Q?", ["low", ""], "x"),
       ]),
     );
 
@@ -556,6 +562,11 @@ describe("decider()", () => {
       "TypeError",
       "RangeError",
       "RangeError",
+      "TypeError",
+      "TypeError",
+      "TypeError",
+      "TypeError",
+      "TypeError",
     ]);
     expect(result.getOperations()).toHaveLength(0);
     expect(fake.requests).toHaveLength(0);
