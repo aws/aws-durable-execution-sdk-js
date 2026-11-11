@@ -11,7 +11,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Decider Custom Transport",
   description:
-    "Routes a support ticket with decider() check and classify, through a custom transport",
+    "Triages a support ticket with decider() check, classify, label and score, through a custom transport",
 };
 
 /**
@@ -31,10 +31,24 @@ const keywordModel: DeciderTransport = async (request) => {
       criteria?: Record<string, unknown>;
     };
     if (type === "noul") {
-      const urgent = ["now", "urgent", "failing"].some((word) =>
+      // `label` asks one yes-or-no question per label, and names the label
+      // on the last line. `check` asks one question with no label.
+      const { instructions } = question as { instructions: string };
+      const label = /Does this label apply: (.+)$/.exec(instructions)?.[1];
+      const words = label ? [label] : ["now", "urgent", "failing"];
+      const yes = words.some((word) => text.includes(word.toLowerCase()));
+      answers[key] = { type: "noul", noul: yes ? 0.9 : 0.1 };
+    } else if (type === "score") {
+      // The score is the position on the scale, from 0 to its last entry.
+      const levels = criteria as unknown as string[];
+      const angry = ["!", "again", "still"].filter((word) =>
         text.includes(word),
-      );
-      answers[key] = { type: "noul", noul: urgent ? 0.9 : 0.1 };
+      ).length;
+      answers[key] = {
+        type: "score",
+        score: Math.min(angry, levels.length - 1),
+        probabilities: {},
+      };
     } else if (type === "choice") {
       const options = Object.keys(criteria ?? {});
       const choice =
@@ -62,6 +76,18 @@ export const handler = withDurableExecution(
       ["billing", "shipping", "other"],
       event.ticket,
     );
-    return { urgent, team };
+    const topics = await decide.label(
+      context,
+      "Which topics does the ticket mention?",
+      ["refund", "invoice", "delivery"],
+      event.ticket,
+    );
+    const frustration = await decide.score(
+      context,
+      "How frustrated is the customer?",
+      ["calm", "annoyed", "angry"],
+      event.ticket,
+    );
+    return { urgent, team, topics, frustration };
   },
 );

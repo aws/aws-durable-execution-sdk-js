@@ -1530,3 +1530,41 @@ describe("llm() guardrail", () => {
     expect(client.inputs[0]).not.toHaveProperty("guardrailConfig");
   });
 });
+
+describe("decider().score boundaries", () => {
+  // The scale has 3 entries, so the model's position runs from 0 to 2. A
+  // position within 0.01 outside that range is rounding, and is clamped. A
+  // position farther out is an invalid reply.
+  it.each([
+    [-0.01, 0],
+    [2.01, 1],
+    [1, 0.5],
+  ])("maps position %d to %d", async (position, expected) => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: scoreAnswer(position, 1) })];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      decide.score(context, "How?", ["low", "mid", "high"], "x"),
+    );
+
+    expect(result.getResult()).toBe(expected);
+  });
+
+  it.each([-0.02, 2.02])(
+    "fails with DeciderInvalidResponseError for position %d",
+    async (position) => {
+      const fake = new FakeDecider();
+      fake.replies = [answers({ answer: scoreAnswer(position, 1) })];
+      const decide = fakeDecider(fake);
+
+      const result = await run((context) =>
+        outcomes([
+          () => decide.score(context, "How?", ["low", "mid", "high"], "x"),
+        ]),
+      );
+
+      expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+    },
+  );
+});

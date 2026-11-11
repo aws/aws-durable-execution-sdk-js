@@ -2,11 +2,11 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "d6fbb1bc-ecac-4ced-9ee4-5b2e8ac5140c",
-    "EventTimestamp": "2026-11-11T04:56:23.524Z",
+    "Id": "86f180dc-91d4-4203-b19f-4eec7da4a97a",
+    "EventTimestamp": "2026-11-11T05:17:11.172Z",
     "ExecutionStartedDetails": {
       "Input": {
-        "Payload": "{\"ticket\":\"My billing page is failing right now.\"}"
+        "Payload": "{\"ticket\":\"My billing invoice is failing again right now!\"}"
       }
     }
   },
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "decider.check",
-    "EventTimestamp": "2026-11-11T04:56:23.645Z",
+    "EventTimestamp": "2026-11-11T05:17:11.279Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "decider.check",
-    "EventTimestamp": "2026-11-11T04:56:23.645Z",
+    "EventTimestamp": "2026-11-11T05:17:11.279Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "true"
@@ -39,7 +39,7 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "decider.classify",
-    "EventTimestamp": "2026-11-11T04:56:23.648Z",
+    "EventTimestamp": "2026-11-11T05:17:11.282Z",
     "StepStartedDetails": {}
   },
   {
@@ -48,7 +48,7 @@
     "EventId": 5,
     "Id": "c81e728d9d4c2f63",
     "Name": "decider.classify",
-    "EventTimestamp": "2026-11-11T04:56:23.648Z",
+    "EventTimestamp": "2026-11-11T05:17:11.283Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"billing\""
@@ -57,24 +57,70 @@
     }
   },
   {
-    "EventType": "InvocationCompleted",
+    "EventType": "StepStarted",
+    "SubType": "DeciderLabel",
     "EventId": 6,
-    "EventTimestamp": "2026-11-11T04:56:23.649Z",
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "decider.label",
+    "EventTimestamp": "2026-11-11T05:17:11.285Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "DeciderLabel",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "decider.label",
+    "EventTimestamp": "2026-11-11T05:17:11.285Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "[\"invoice\"]"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "DeciderScore",
+    "EventId": 8,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "decider.score",
+    "EventTimestamp": "2026-11-11T05:17:11.287Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "DeciderScore",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "decider.score",
+    "EventTimestamp": "2026-11-11T05:17:11.287Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "1"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-11-11T05:17:11.287Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-11-11T04:56:23.524Z",
-      "EndTimestamp": "2026-11-11T04:56:23.649Z",
+      "StartTimestamp": "2026-11-11T05:17:11.172Z",
+      "EndTimestamp": "2026-11-11T05:17:11.287Z",
       "Error": {},
-      "RequestId": "f1928924-58f0-4001-ad6c-fad688014150"
+      "RequestId": "5339c6a4-d349-4230-aa6f-9d5668d49dfb"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
-    "EventId": 7,
-    "Id": "d6fbb1bc-ecac-4ced-9ee4-5b2e8ac5140c",
-    "EventTimestamp": "2026-11-11T04:56:23.649Z",
+    "EventId": 11,
+    "Id": "86f180dc-91d4-4203-b19f-4eec7da4a97a",
+    "EventTimestamp": "2026-11-11T05:17:11.288Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"urgent\":true,\"team\":\"billing\"}"
+        "Payload": "{\"urgent\":true,\"team\":\"billing\",\"topics\":[\"invoice\"],\"frustration\":1}"
       }
     }
   }
