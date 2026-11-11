@@ -30,7 +30,10 @@
   "files": [
     "dist/",
     "dist-cjs/",
-    "dist-types/"
+    "dist-types/",
+    "!dist-types/**/*.test.d.ts",
+    "!dist-types/**/*.test-d.d.ts",
+    "!dist-types/**/*.d.ts.map"
   ],
   "sideEffects": false,
   "scripts": {
@@ -47,7 +50,7 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "check:package": "node --test scripts/*.test.mjs && attw --pack . && publint --strict && node scripts/check-package-contents.mjs",
+    "check:package": "attw --pack . && publint --strict",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },

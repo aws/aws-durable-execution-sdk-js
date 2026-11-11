@@ -100,7 +100,6 @@ jobs:
       - name: Verify every package ships the files its package.json declares
         run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
       # attw and publint check the core package's type resolution and package.json.
-      # check-package-contents.mjs checks the tarball for test declarations and maps.
       # npm pack runs the package's prepack build first.
       - name: Check the core package with attw and publint
         run: npm run check:package -w packages/aws-durable-execution-sdk-js
