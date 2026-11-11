@@ -47,12 +47,15 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prepublishOnly": "npm test && npm run lint && npm run build",
+    "check:package": "attw --pack . && publint --strict && node scripts/check-package-contents.mjs",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "2.5.15",
     "@vitest/coverage-v8": "^5.1.0",
+    "publint": "^0.3.25",
     "rimraf": "^6.1.4",
     "typescript": "^6.0.3",
     "vitest": "^5.1.0"
