@@ -146,6 +146,42 @@ describe("invocation deadline", () => {
     expect(updates).toEqual(["START ignores-signal"]);
   });
 
+  it("does not serialize the result of a step that returns after the deadline", async () => {
+    // A serdes can write the result somewhere, such as a file keyed by the step. After the
+    // deadline the retry may have written it already, so the old step must not write.
+    const { client } = recordingClient();
+    const serialized: unknown[] = [];
+
+    const outcome = await invoke(
+      async (_event, context) => {
+        await context.step(
+          "ignores-signal",
+          async () => {
+            await sleep(DEADLINE_MS * 3);
+            return "late";
+          },
+          {
+            serdes: {
+              serialize: async (value) => {
+                serialized.push(value);
+                return JSON.stringify(value);
+              },
+              deserialize: async (data) =>
+                data === undefined ? undefined : JSON.parse(data),
+            },
+          },
+        );
+      },
+      contextWithDeadline(DEADLINE_MS),
+      client,
+    );
+
+    expect((outcome as Error).name).toBe("InvocationDeadlineError");
+    // Let the step that ignored the signal finish.
+    await sleep(DEADLINE_MS * 4);
+    expect(serialized).toEqual([]);
+  });
+
   it("refuses an operation that an abort listener starts at the deadline", async () => {
     const { client } = recordingClient();
     let lateRan = false;
