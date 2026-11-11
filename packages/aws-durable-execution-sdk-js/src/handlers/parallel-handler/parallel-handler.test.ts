@@ -36,14 +36,18 @@ describe("Parallel Handler", () => {
   describe("validation", () => {
     it("should throw for non-array branches", async () => {
       await expect(parallelHandler("not-array" as any)).rejects.toThrow(
-        "Parallel operation requires an array of branch functions",
+        new TypeError(
+          "Parallel operation requires an array of branch functions",
+        ),
       );
     });
 
     it("should throw for non-function branches", async () => {
       const branches = [vi.fn(), "not-function" as any];
       await expect(parallelHandler(branches as any)).rejects.toThrow(
-        "All branches must be functions",
+        new TypeError(
+          "All branches must be functions or NamedParallelBranch objects",
+        ),
       );
     });
   });
