@@ -881,6 +881,11 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    *
    * Per-operation `serdes` options always take precedence over these defaults.
    *
+   * When `defaultCallbackDeserializer` is a `createFileSystemSerdes` serdes, the
+   * callback sender must send `{"data": "<JSON>"}`. A `{"file": "<path>"}` result is
+   * read from the path that the serdes builds for the callback operation, not from the
+   * path in the result.
+   *
    * @param config - Serdes configuration options
    * @example
    * ```typescript

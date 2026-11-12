@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { SerdesContext } from "./serdes";
 import {
   createFileSystemSerdes,
@@ -292,6 +292,79 @@ describe("createFileSystemSerdes path encoding", () => {
       expect(fileName).toBe(`${sha256("x".repeat(10_000))}.json`);
       expect(fileName.length).toBe(64 + ".json".length);
     });
+  });
+});
+
+describe("createFileSystemSerdes deserialize path", () => {
+  const REALISTIC_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:54/durable-execution/exec-a/d6a8ddb8-0286-39d6-89bd-8f13b33d4722";
+  const OTHER_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:54/durable-execution/exec-b/0f1e2d3c-0286-39d6-89bd-8f13b33d4722";
+  const context: SerdesContext = {
+    entityId: "1",
+    durableExecutionArn: REALISTIC_ARN,
+  };
+
+  for (const pathEncoding of [
+    FileSystemPathEncoding.URI,
+    FileSystemPathEncoding.HASH,
+  ]) {
+    describe(`${pathEncoding} encoding`, () => {
+      let serdes: ReturnType<typeof createFileSystemSerdes>;
+      beforeEach(() => {
+        serdes = createFileSystemSerdes(BASE_PATH, { pathEncoding });
+      });
+
+      it("reads back the value that serialize wrote", async () => {
+        const envelope = await serdes.serialize({ id: 1 }, context);
+
+        expect(await serdes.deserialize(envelope, context)).toEqual({ id: 1 });
+      });
+
+      it("reads the step's own file when the envelope points to another execution", async () => {
+        await serdes.serialize({ owner: "self" }, context);
+        const otherEnvelope = await serdes.serialize(
+          { owner: "other" },
+          { entityId: "1", durableExecutionArn: OTHER_ARN },
+        );
+
+        expect(await serdes.deserialize(otherEnvelope, context)).toEqual({
+          owner: "self",
+        });
+      });
+
+      it("reads the step's own file when the envelope points to another entity", async () => {
+        await serdes.serialize({ owner: "self" }, context);
+        const otherEnvelope = await serdes.serialize(
+          { owner: "other" },
+          { entityId: "2", durableExecutionArn: REALISTIC_ARN },
+        );
+
+        expect(await serdes.deserialize(otherEnvelope, context)).toEqual({
+          owner: "self",
+        });
+      });
+    });
+  }
+
+  it("does not read a path outside basePath", async () => {
+    const outside = join(
+      BASE_PATH,
+      "..",
+      `${basename(BASE_PATH)}-outside.json`,
+    );
+    await writeJsonFile(outside, { owner: "outside" });
+    const serdes = createFileSystemSerdes(BASE_PATH);
+
+    try {
+      // The step has no file of its own. So the read fails, and the outside
+      // file is not returned.
+      await expect(
+        serdes.deserialize(JSON.stringify({ file: outside }), context),
+      ).rejects.toThrow("ENOENT");
+    } finally {
+      await rm(outside, { force: true });
+    }
   });
 });
 
