@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import type { SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
@@ -204,22 +204,36 @@ function resolveExecutionDir(
   return join(basePath, encodeSegment(arn, pathEncoding));
 }
 
+/**
+ * Resolves the file path for one entity of one execution.
+ *
+ * The path depends only on `basePath`, the execution ARN, the entity ID and the
+ * path encoding. All four are the same when a value is written and when it is
+ * read back on replay, so `serialize` and `deserialize` both use this function.
+ *
+ * @internal
+ */
+function resolveFilePath(
+  basePath: string,
+  context: SerdesContext,
+  pathEncoding: FileSystemPathEncoding,
+): string {
+  const dir = resolveExecutionDir(
+    basePath,
+    context.durableExecutionArn,
+    pathEncoding,
+  );
+  return join(dir, `${encodeSegment(context.entityId, pathEncoding)}.json`);
+}
+
 async function writeToFile(
   basePath: string,
   value: unknown,
   context: SerdesContext,
   pathEncoding: FileSystemPathEncoding,
 ): Promise<string> {
-  const dir = resolveExecutionDir(
-    basePath,
-    context.durableExecutionArn,
-    pathEncoding,
-  );
-  await mkdir(dir, { recursive: true });
-  const filePath = join(
-    dir,
-    `${encodeSegment(context.entityId, pathEncoding)}.json`,
-  );
+  const filePath = resolveFilePath(basePath, context, pathEncoding);
+  await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(value), "utf-8");
   return filePath;
 }
@@ -244,6 +258,11 @@ async function writeToFile(
  * - `{"data":"<inline JSON>"}` — value stored inline (OVERFLOW mode, under threshold)
  * - `{"file":"<path>"}` — value stored in a file
  * - `{"file":"<path>","preview":{...}}` — file pointer with inline preview (when preview is configured)
+ *
+ * The `file` path in the envelope is for people who browse the mount, for
+ * example to find a value from the console. `deserialize` does not read that
+ * path. It builds the path again from the execution ARN and entity ID, the
+ * same way `serialize` does, and reads that file.
  *
  * @param basePath - Directory path where data files will be stored (e.g. `/mnt/s3` for S3 Files, `/mnt/efs` for EFS)
  * @param config - Optional configuration options
@@ -331,14 +350,18 @@ export function createFileSystemSerdes(
 
     deserialize: async (
       data: string | undefined,
-      _context: SerdesContext,
+      context: SerdesContext,
     ): Promise<unknown> => {
       if (data === undefined) return undefined;
 
       const envelope = JSON.parse(data) as FileSystemEnvelope;
 
       if ("file" in envelope) {
-        const contents = await readFile(envelope.file, "utf-8");
+        // The path in the envelope is for people who browse the mount. The
+        // SDK does not read it. serialize writes each value to one known path,
+        // so deserialize builds that path again and reads it.
+        const filePath = resolveFilePath(basePath, context, pathEncoding);
+        const contents = await readFile(filePath, "utf-8");
         return JSON.parse(contents);
       }
 
