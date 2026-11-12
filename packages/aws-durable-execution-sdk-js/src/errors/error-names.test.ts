@@ -4,6 +4,7 @@ import {
   CheckpointUnrecoverableInvocationError,
 } from "./checkpoint-errors/checkpoint-errors";
 import { SerdesFailedError } from "./serdes-errors/serdes-errors";
+import { InvocationDeadlineError } from "./invocation-deadline-error/invocation-deadline-error";
 import { createErrorObjectFromError } from "../utils/error-object/error-object";
 
 // createErrorObjectFromError writes `error.name` as the checkpoint ErrorType
@@ -22,6 +23,11 @@ const cases: Array<[string, { name: string }, () => Error]> = [
     () => new CheckpointUnrecoverableExecutionError(),
   ],
   ["SerdesFailedError", SerdesFailedError, () => new SerdesFailedError()],
+  [
+    "InvocationDeadlineError",
+    InvocationDeadlineError,
+    () => new InvocationDeadlineError(),
+  ],
 ];
 
 const renamed: Array<{ name: string }> = [];

@@ -260,6 +260,8 @@ describe("runInChildContext serdes round-trip", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        Name: "large-child",
+        SubType: "RunInChildContext",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {

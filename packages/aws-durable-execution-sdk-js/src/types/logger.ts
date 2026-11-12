@@ -77,8 +77,9 @@ export interface StepContext<Logger extends DurableLogger>
    *
    * The SDK aborts this signal in two cases only:
    *
-   * 1. The SDK terminates the invocation, for example to suspend for a wait or
-   *    to fail after a checkpoint error.
+   * 1. The SDK terminates the invocation, for example to suspend for a wait,
+   *    to fail after a checkpoint error, or because the invocation's deadline
+   *    passed.
    * 2. A non-virtual context that holds this step finishes. For example, a
    *    `map` or `parallel` call returns early because its `completionConfig`
    *    is met, while some items still run.

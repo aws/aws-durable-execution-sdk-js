@@ -165,7 +165,7 @@ describe("Map Handler", () => {
       const mapFunc: MapFunc<string, string, DurableLogger> = vi.fn();
 
       await expect(mapHandler("not-an-array" as any, mapFunc)).rejects.toThrow(
-        "Map operation requires an array of items",
+        new TypeError("Map operation requires an array of items"),
       );
     });
 
@@ -173,7 +173,7 @@ describe("Map Handler", () => {
       const items = ["item1", "item2"];
 
       await expect(mapHandler(items, "not-a-function" as any)).rejects.toThrow(
-        "Map operation requires a function to process items",
+        new TypeError("Map operation requires a function to process items"),
       );
     });
   });

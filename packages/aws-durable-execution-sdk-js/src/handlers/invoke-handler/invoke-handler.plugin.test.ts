@@ -41,7 +41,10 @@ describe("InvokeHandler - plugin hooks", () => {
     } as any;
     mockContext = {
       getStepData: vi.fn().mockReturnValue(undefined),
-      terminationManager: { terminate: vi.fn() },
+      terminationManager: {
+        terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
+      },
       durableExecutionArn: "test-arn",
       isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
     } as any;

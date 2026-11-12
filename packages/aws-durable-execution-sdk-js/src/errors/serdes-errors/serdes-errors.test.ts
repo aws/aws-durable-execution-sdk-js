@@ -19,6 +19,7 @@ describe("Serdes Errors", () => {
     beforeEach(() => {
       mockTerminationManager = {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
         getTerminationPromise: vi.fn(),
       } as unknown as Mocked<TerminationManager>;
 
@@ -215,6 +216,7 @@ describe("Serdes Errors", () => {
     beforeEach(() => {
       mockTerminationManager = {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
         getTerminationPromise: vi.fn(),
       } as unknown as Mocked<TerminationManager>;
 

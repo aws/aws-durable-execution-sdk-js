@@ -26,6 +26,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       getStepData: vi.fn().mockReturnValue(null),
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
       durableExecutionArn: "test-arn",
       isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
