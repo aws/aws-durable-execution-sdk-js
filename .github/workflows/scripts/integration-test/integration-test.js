@@ -1084,17 +1084,12 @@ class IntegrationTestRunner {
   async cleanupLambdaFunctions(functionNameMap) {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
-    const cloudwatchLogsClient = new CloudWatchLogsClient({
-      region: CONFIG.AWS_REGION,
-    });
 
-    // A new pull request stack runs this for all ~120 functions before its
-    // first create, so the deletes run side by side.
-    const functionNames = Object.values(functionNameMap).map(
-      ({ functionName }) => functionName,
-    );
-    await runWithConcurrency(functionNames, async (functionName) => {
+    for (const { functionName } of Object.values(functionNameMap)) {
       log.info(`Deleting function: ${functionName}`);
+      const cloudwatchLogsClient = new CloudWatchLogsClient({
+        region: CONFIG.AWS_REGION,
+      });
 
       const deleteCommand = new DeleteFunctionCommand({
         FunctionName: functionName,
@@ -1121,13 +1116,13 @@ class IntegrationTestRunner {
       } catch (err) {
         if (err instanceof ResourceNotFoundExceptionCloudwatch) {
           log.warning(`Log group not found: ${logGroupName}`);
-          return;
+          continue;
         }
         throw err;
       }
 
       log.success(`Deleted log group ${logGroupName}`);
-    });
+    }
   }
 
   /**
