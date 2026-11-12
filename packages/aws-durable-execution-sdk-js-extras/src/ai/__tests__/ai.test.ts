@@ -1742,3 +1742,34 @@ describe("decider().classify non-string choice", () => {
     },
   );
 });
+
+describe("llm().ask incomplete replies", () => {
+  it("fails with LlmStoppedError when the reply has no stop reason", async () => {
+    const client = new FakeBedrock();
+    client.replies = [{}];
+    const model = fakeLlm(client);
+
+    const result = await run((context) =>
+      outcomes([() => model.ask(context, "Q?")]),
+    );
+
+    expect(result.getResult()).toEqual(["LlmStoppedError"]);
+  });
+
+  it.each([
+    [{ stopReason: "end_turn" }],
+    [{ stopReason: "end_turn", output: { message: { content: [] } } }],
+    [{ stopReason: "end_turn", output: { message: { content: [{}] } } }],
+  ])(
+    "returns an empty answer for a complete reply with no text: %j",
+    async (reply) => {
+      const client = new FakeBedrock();
+      client.replies = [reply];
+      const model = fakeLlm(client);
+
+      const result = await run((context) => model.ask(context, "Q?"));
+
+      expect(result.getResult()).toBe("");
+    },
+  );
+});

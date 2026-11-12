@@ -1,4 +1,4 @@
-import { sdkLoadError } from "./aws-sdk";
+import { once, sdkLoadError } from "./aws-sdk";
 import { LlmMaxTokensError, LlmStoppedError } from "./errors";
 import { deadlineError, type RequestSignals, serializeInput } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
@@ -37,25 +37,20 @@ function userMessage(question: string, input: unknown): string {
 
 type BedrockRuntime = typeof import("@aws-sdk/client-bedrock-runtime");
 
-let runtime: Promise<BedrockRuntime> | undefined;
-
 /**
  * Loads `@aws-sdk/client-bedrock-runtime`, an optional peer dependency, on
- * first use.
+ * first use. A failed load is not cached, so a later call tries again.
  *
- * The `.catch` on the `import()` lets a bundler such as esbuild leave a
- * missing package to run time instead of failing the build. So `decider()`
- * works without the package, and `ask` fails with a clear message.
+ * The `.catch` sits directly on the `import()`, so a bundler such as esbuild
+ * leaves a missing package to run time instead of failing the build. So
+ * `decider()` works without the package, and `ask` fails with a clear message.
  */
-function loadBedrockRuntime(): Promise<BedrockRuntime> {
-  runtime ??= import("@aws-sdk/client-bedrock-runtime").catch(
-    (cause: unknown) => {
-      runtime = undefined;
-      return sdkLoadError("@aws-sdk/client-bedrock-runtime", "llm()")(cause);
-    },
-  );
-  return runtime;
-}
+const loadBedrockRuntime = once(
+  (): Promise<BedrockRuntime> =>
+    import("@aws-sdk/client-bedrock-runtime").catch(
+      sdkLoadError("@aws-sdk/client-bedrock-runtime", "llm()"),
+    ),
+);
 
 /** Stop reasons that end a complete reply. */
 const COMPLETE_STOP_REASONS: ReadonlySet<string> = new Set([
@@ -140,10 +135,11 @@ export class BedrockConverse {
         "The reply stopped at the token limit. Raise maxTokens.",
       );
     }
-    if (stopReason !== undefined && !COMPLETE_STOP_REASONS.has(stopReason)) {
+    if (stopReason === undefined || !COMPLETE_STOP_REASONS.has(stopReason)) {
       // A guardrail's message, a filtered reply, or a partial reply is not the
-      // model's answer. So it is not checkpointed as one.
-      throw new LlmStoppedError(stopReason);
+      // model's answer. A reply with no stop reason is not known to be
+      // complete either. So neither is checkpointed as an answer.
+      throw new LlmStoppedError(stopReason ?? "missing");
     }
     return (response.output?.message?.content ?? [])
       .map((block) => block.text ?? "")

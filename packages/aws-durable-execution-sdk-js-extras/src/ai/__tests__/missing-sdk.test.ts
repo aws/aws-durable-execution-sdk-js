@@ -222,3 +222,39 @@ it("loads the AWS SDK client again after a failed load", async () => {
   expect(second).toEqual({ answers: { answer: { type: "noul", noul: 0.9 } } });
   expect(loads).toBe(2);
 });
+
+it("loads the Bedrock client again after a failed load, through the same llm()", async () => {
+  let loads = 0;
+  vi.resetModules();
+  vi.doMock("@aws-sdk/client-bedrock-runtime", () => {
+    loads += 1;
+    if (loads === 1) {
+      throw missingModule();
+    }
+    return {
+      BedrockRuntimeClient: class {
+        async send(): Promise<unknown> {
+          return {
+            stopReason: "end_turn",
+            output: { message: { content: [{ text: "ok" }] } },
+          };
+        }
+      },
+      ConverseCommand: class {
+        constructor(readonly input: unknown) {}
+      },
+    };
+  });
+  const ai = await import("..");
+  const model = ai.llm();
+
+  const first = await model.ask(ctx, "Q?").then(
+    () => undefined,
+    (e: unknown) => e as Error,
+  );
+  const second = await model.ask(ctx, "Q?");
+
+  expect(first).toBeInstanceOf(ai.AiError);
+  expect(second).toBe("ok");
+  expect(loads).toBe(2);
+});
