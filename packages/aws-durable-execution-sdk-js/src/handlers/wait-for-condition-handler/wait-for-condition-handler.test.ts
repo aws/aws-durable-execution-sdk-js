@@ -149,6 +149,7 @@ describe("WaitForCondition Handler", () => {
         handler(checkFunc, undefined as any);
         expect.fail("Should have thrown an error");
       } catch (error: any) {
+        expect(error).toBeInstanceOf(TypeError);
         expect(error.message).toContain(
           "waitForCondition requires config with waitStrategy and initialState",
         );

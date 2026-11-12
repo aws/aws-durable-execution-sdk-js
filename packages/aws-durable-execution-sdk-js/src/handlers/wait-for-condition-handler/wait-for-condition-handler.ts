@@ -75,7 +75,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
     }
 
     if (!config?.waitStrategy || config.initialState === undefined) {
-      throw new Error(
+      throw new TypeError(
         "waitForCondition requires config with waitStrategy and initialState",
       );
     }

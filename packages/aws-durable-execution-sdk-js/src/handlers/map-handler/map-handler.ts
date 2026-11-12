@@ -62,11 +62,13 @@ export const createMapHandler = <Logger extends DurableLogger>(
 
       // Validate inputs
       if (!Array.isArray(items)) {
-        throw new Error("Map operation requires an array of items");
+        throw new TypeError("Map operation requires an array of items");
       }
 
       if (typeof mapFunc !== "function") {
-        throw new Error("Map operation requires a function to process items");
+        throw new TypeError(
+          "Map operation requires a function to process items",
+        );
       }
 
       // Convert to concurrent execution items
