@@ -356,6 +356,12 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   private checkForNonResolvingPromise(): Promise<never> | null {
+    // A terminated invocation records nothing further, so an operation it starts must not
+    // run. On Lambda Managed Instances the handler's code keeps running after termination,
+    // and a step started then would run its function with no record of it.
+    if (this._executionContext.terminationManager.isTerminationRequested()) {
+      return new Promise<never>(() => {});
+    }
     if (
       this.durableExecutionMode === DurableExecutionMode.ReplaySucceededContext
     ) {

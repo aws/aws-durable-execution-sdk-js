@@ -42,10 +42,12 @@ export class TerminationManager extends EventEmitter {
   terminate(options: TerminationOptions = {}): void {
     if (this.isTerminated) return;
 
+    // Set first: the callback below aborts the invocation's signal, and an abort listener
+    // that starts an operation must already see the invocation as terminated.
+    this.isTerminated = true;
+
     // Set checkpoint termination flag before any other termination logic
     this.setCheckpointTerminating?.();
-
-    this.isTerminated = true;
 
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,
@@ -60,6 +62,11 @@ export class TerminationManager extends EventEmitter {
         this.resolveTermination,
       );
     }
+  }
+
+  /** Whether `terminate` was called for this invocation. */
+  isTerminationRequested(): boolean {
+    return this.isTerminated;
   }
 
   getTerminationPromise(): Promise<TerminationResponse> {

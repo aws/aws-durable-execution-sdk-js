@@ -47,6 +47,7 @@ describe("WaitForCondition Handler", () => {
       durableExecutionArn: "test-arn",
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
     } as any;
 

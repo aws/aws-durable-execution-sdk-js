@@ -47,7 +47,10 @@ describe("Step Handler subType", () => {
       getStepData: vi.fn().mockReturnValue(undefined),
       _stepData: {},
       durableExecutionArn: "test-arn",
-      terminationManager: { terminate: vi.fn() },
+      terminationManager: {
+        terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
+      },
     } as unknown as ExecutionContext;
     mockCheckpoint = {
       checkpoint: vi.fn().mockResolvedValue(undefined),
