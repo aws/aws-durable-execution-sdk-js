@@ -1773,3 +1773,23 @@ describe("llm().ask incomplete replies", () => {
     },
   );
 });
+
+describe("decider() overrides", () => {
+  it("sends the configured model, and uses a custom step name", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: noul(0.9) })];
+    const decide = decider({
+      transport: fake.transport,
+      model: "hobson-latest",
+      retryStrategy: noRetry,
+    });
+
+    const result = await run((context) =>
+      decide.check(context, "Q?", "x", { name: "is-urgent" }),
+    );
+
+    expect(result.getResult()).toBe(true);
+    expect(fake.requests[0]?.model).toBe("hobson-latest");
+    expect(history(result)).toEqual([["is-urgent", "DeciderCheck"]]);
+  });
+});
