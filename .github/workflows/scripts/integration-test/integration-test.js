@@ -338,9 +338,35 @@ class IntegrationTestRunner {
     );
   }
 
+  /**
+   * The pull request this run tests, or undefined outside a pull request.
+   * Both pull_request and pull_request_target runs (label changes) count.
+   * @returns {string | undefined}
+   */
+  getPullRequestNumber() {
+    const eventName = process.env.GITHUB_EVENT_NAME;
+    if (eventName !== "pull_request" && eventName !== "pull_request_target") {
+      return undefined;
+    }
+    if (!process.env.GITHUB_EVENT_NUMBER) {
+      throw new Error(
+        "Could not find GITHUB_EVENT_NUMBER environment variable",
+      );
+    }
+    return process.env.GITHUB_EVENT_NUMBER;
+  }
+
+  // Each pull request gets its own stack. With one shared stack per runtime,
+  // runs from different branches replaced each other's template, so most
+  // deploys went through a full CloudFormation update (140-290s) instead of a
+  // direct code update (30-60s). They also had to wait for each other.
   getSamStackName() {
     const runtimeId = this.getRuntimeId().toLowerCase();
-    return `aws-durable-execution-sdk-js-integ-${runtimeId}`;
+    const pullRequestNumber = this.isGitHubActions
+      ? this.getPullRequestNumber()
+      : undefined;
+    const suffix = pullRequestNumber ? `-pr-${pullRequestNumber}` : "";
+    return `aws-durable-execution-sdk-js-integ-${runtimeId}${suffix}`;
   }
 
   samStackExists(/** @type {string | undefined} */ stackName = undefined) {
@@ -416,6 +442,13 @@ class IntegrationTestRunner {
             );
           }
           baseFunctionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
+        } else if (!options.capacityProviderOnly) {
+          // Function names are unique per account, so each pull request
+          // stack needs its own. See getSamStackName.
+          const pullRequestNumber = this.getPullRequestNumber();
+          baseFunctionName = pullRequestNumber
+            ? `${baseName}-PR-${pullRequestNumber}`
+            : baseName;
         } else {
           baseFunctionName = baseName;
         }
@@ -1051,12 +1084,17 @@ class IntegrationTestRunner {
   async cleanupLambdaFunctions(functionNameMap) {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
+    const cloudwatchLogsClient = new CloudWatchLogsClient({
+      region: CONFIG.AWS_REGION,
+    });
 
-    for (const { functionName } of Object.values(functionNameMap)) {
+    // A new pull request stack runs this for all ~120 functions before its
+    // first create, so the deletes run side by side.
+    const functionNames = Object.values(functionNameMap).map(
+      ({ functionName }) => functionName,
+    );
+    await runWithConcurrency(functionNames, async (functionName) => {
       log.info(`Deleting function: ${functionName}`);
-      const cloudwatchLogsClient = new CloudWatchLogsClient({
-        region: CONFIG.AWS_REGION,
-      });
 
       const deleteCommand = new DeleteFunctionCommand({
         FunctionName: functionName,
@@ -1083,13 +1121,13 @@ class IntegrationTestRunner {
       } catch (err) {
         if (err instanceof ResourceNotFoundExceptionCloudwatch) {
           log.warning(`Log group not found: ${logGroupName}`);
-          continue;
+          return;
         }
         throw err;
       }
 
       log.success(`Deleted log group ${logGroupName}`);
-    }
+    });
   }
 
   /**
