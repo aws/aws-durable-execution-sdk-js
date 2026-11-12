@@ -1084,12 +1084,18 @@ class IntegrationTestRunner {
   async cleanupLambdaFunctions(functionNameMap) {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
+    // A new pull request stack runs this for ~120 functions before its first
+    // create, while the job for the other runtime does the same in the same
+    // account. DeleteLogGroup allows only a few calls per second, so adaptive
+    // retry slows down when throttled instead of failing the deploy.
+    const cloudwatchLogsClient = new CloudWatchLogsClient({
+      region: CONFIG.AWS_REGION,
+      maxAttempts: 10,
+      retryMode: "adaptive",
+    });
 
     for (const { functionName } of Object.values(functionNameMap)) {
       log.info(`Deleting function: ${functionName}`);
-      const cloudwatchLogsClient = new CloudWatchLogsClient({
-        region: CONFIG.AWS_REGION,
-      });
 
       const deleteCommand = new DeleteFunctionCommand({
         FunctionName: functionName,
