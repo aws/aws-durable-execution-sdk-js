@@ -34,6 +34,13 @@ export async function safeSerialize<T>(
   terminationManager: TerminationManager,
   durableExecutionArn: string,
 ): Promise<string | undefined> {
+  // A terminated invocation records nothing further, so its result is not needed. A serdes
+  // can also write the value somewhere, such as a file keyed by the step. On Lambda Managed
+  // Instances a step can return after the deadline, when the retry may have written the same
+  // value already. So no serialization starts after termination.
+  if (terminationManager.isTerminationRequested()) {
+    return new Promise<string | undefined>(() => {});
+  }
   try {
     const context: SerdesContext = {
       entityId: stepId,

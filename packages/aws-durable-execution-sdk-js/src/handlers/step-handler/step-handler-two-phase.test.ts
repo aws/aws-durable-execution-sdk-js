@@ -22,6 +22,7 @@ describe("Step Handler Two-Phase Execution", () => {
       durableExecutionArn: "test-arn",
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
     } as any;
 

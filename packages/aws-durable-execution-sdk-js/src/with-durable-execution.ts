@@ -6,6 +6,8 @@ import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
+import { InvocationDeadlineError } from "./errors/invocation-deadline-error/invocation-deadline-error";
+import { MAX_TIMER_DELAY_MS } from "./utils/constants/constants";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import {
@@ -335,8 +337,8 @@ async function runHandler<
          *    invocation, and the next one replays.
          * 2. A checkpoint failure throws its classified error. That class decides whether
          *    Lambda retries the invocation or the execution fails.
-         * 3. A serdes failure throws SerdesFailedError, which is an invocation error, so
-         *    Lambda retries.
+         * 3. A serdes failure throws SerdesFailedError, and a passed deadline throws
+         *    InvocationDeadlineError. Both are invocation errors, so Lambda retries.
          * 4. Every other reason is decided by its class. A suspend answers PENDING. A fault
          *    answers FAILED and carries the error. See TERMINATION_CLASS.
          */
@@ -365,6 +367,20 @@ async function runHandler<
           if (termination.reason === TerminationReason.SERDES_FAILED) {
             log("🛑", "Serdes failed - terminating Lambda execution");
             throw new SerdesFailedError(termination.message);
+          }
+
+          // An invocation error, so Lambda retries the invocation. PENDING is wrong when the
+          // timer fires just before Lambda's own timeout: a running step is not a pending
+          // operation, and the service rejects PENDING without one. FAILED would fail the
+          // execution.
+          if (
+            termination.reason === TerminationReason.INVOCATION_DEADLINE_PASSED
+          ) {
+            log(
+              "🛑",
+              "Invocation deadline passed - terminating Lambda execution",
+            );
+            throw new InvocationDeadlineError();
           }
 
           if (classifyTermination(termination.reason) === "suspend") {
@@ -585,6 +601,37 @@ async function runHandler<
       }
     };
 
+  // Terminates the invocation when its deadline passes. On Lambda Managed Instances a timeout
+  // does not stop the code that runs, so without this the SDK keeps checkpointing and starting
+  // operations for an invocation that Lambda has already answered. Termination aborts the
+  // signal of every running step, stops checkpoints, and refuses new operations.
+  //
+  // The context decides whether the deadline passed, not the timer. So when the timer fires,
+  // the remaining time is read again, and the timer is set again while time is left. A timer
+  // can fire before the context's deadline: fake timers advance it, and the local test
+  // runner's context reports a constant remaining time. Each delay is capped at the
+  // setTimeout limit, because setTimeout turns a larger delay into 1 ms. A reading of
+  // Infinity means no deadline, so no timer is set.
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const watchDeadline = (): void => {
+    const remainingTimeMs = executionContext.getRemainingTimeMs();
+    if (!Number.isFinite(remainingTimeMs)) {
+      return;
+    }
+    if (remainingTimeMs > 0) {
+      deadlineTimer = setTimeout(
+        watchDeadline,
+        Math.min(remainingTimeMs, MAX_TIMER_DELAY_MS),
+      );
+      return;
+    }
+    executionContext.terminationManager.terminate({
+      reason: TerminationReason.INVOCATION_DEADLINE_PASSED,
+      message: "Invocation deadline passed",
+    });
+  };
+  watchDeadline();
+
   try {
     return await (plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
       executeInvocation());
@@ -592,6 +639,9 @@ async function runHandler<
     // Every exit from the invocation funnels through here, including the normal-completion
     // path that never terminates. Without this, poll timers stay armed after the handler
     // returns and can fire during a later invocation in a reused execution environment.
+    // The deadline timer is cleared for the same reason: after the invocation answered, it
+    // would abort the signal of leftover steps.
+    clearTimeout(deadlineTimer);
     checkpointManager.dispose();
   }
 }

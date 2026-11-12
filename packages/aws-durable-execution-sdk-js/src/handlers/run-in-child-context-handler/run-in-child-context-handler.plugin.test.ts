@@ -37,7 +37,10 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     vi.resetAllMocks();
     mockExecutionContext = {
       _stepData: {},
-      terminationManager: { terminate: vi.fn() },
+      terminationManager: {
+        terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
+      },
       getStepData: vi.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
