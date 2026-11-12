@@ -1793,3 +1793,41 @@ describe("decider() overrides", () => {
     expect(history(result)).toEqual([["is-urgent", "DeciderCheck"]]);
   });
 });
+
+describe("decider() HTTP error with a body that cannot be read", () => {
+  it.each([
+    [503, true],
+    [422, false],
+  ])("keeps status %d and its retry decision", async (status, retried) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status,
+      text: () => Promise.reject(new TypeError("terminated")),
+    } as unknown as Response);
+    let seen: Error | undefined;
+    try {
+      const decide = decider({
+        endpoint: "https://svc.example/v1/systemone",
+        retryStrategy: (error) => {
+          seen = error;
+          return { shouldRetry: false };
+        },
+      });
+      await run((context) => decide.check(context, "Q?", "x"));
+    } finally {
+      fetchMock.mockRestore();
+    }
+
+    expect(seen).toBeInstanceOf(DeciderError);
+    expect((seen as DeciderError).status).toBe(status);
+    expect(defaultAiRetryStrategy(seen as Error, 1).shouldRetry).toBe(retried);
+  });
+});
+
+describe("llm() destination", () => {
+  it("rejects a single unsupported destination when the factory runs", () => {
+    expect(() => llm({ destination: { openai: {} } as never })).toThrow(
+      /exactly one key, "bedrock"/,
+    );
+  });
+});
