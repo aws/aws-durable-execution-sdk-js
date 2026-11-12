@@ -95,13 +95,17 @@ describe("Concurrent Execution Handler", () => {
     it("should throw for non-array items", async () => {
       await expect(
         concurrentExecutionHandler("not-array" as any, vi.fn()),
-      ).rejects.toThrow("Concurrent execution requires an array of items");
+      ).rejects.toThrow(
+        new TypeError("Concurrent execution requires an array of items"),
+      );
     });
 
     it("should throw for non-function executor", async () => {
       await expect(
         concurrentExecutionHandler([], "not-function" as any),
-      ).rejects.toThrow("Concurrent execution requires an executor function");
+      ).rejects.toThrow(
+        new TypeError("Concurrent execution requires an executor function"),
+      );
     });
 
     it("should terminate execution for invalid maxConcurrency", async () => {

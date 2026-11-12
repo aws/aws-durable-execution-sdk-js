@@ -62,7 +62,7 @@ export const createParallelHandler = <Logger extends DurableLogger>(
 
       // Validate inputs
       if (!Array.isArray(branches)) {
-        throw new Error(
+        throw new TypeError(
           "Parallel operation requires an array of branch functions",
         );
       }
@@ -80,7 +80,7 @@ export const createParallelHandler = <Logger extends DurableLogger>(
             (typeof branch !== "object" || typeof branch.func !== "function"),
         )
       ) {
-        throw new Error(
+        throw new TypeError(
           "All branches must be functions or NamedParallelBranch objects",
         );
       }

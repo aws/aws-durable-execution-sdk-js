@@ -1071,11 +1071,13 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
       });
 
       if (!Array.isArray(items)) {
-        throw new Error("Concurrent execution requires an array of items");
+        throw new TypeError("Concurrent execution requires an array of items");
       }
 
       if (typeof executor !== "function") {
-        throw new Error("Concurrent execution requires an executor function");
+        throw new TypeError(
+          "Concurrent execution requires an executor function",
+        );
       }
 
       // Invalid maxConcurrency is a deterministic, non-retryable
