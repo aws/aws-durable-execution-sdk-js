@@ -42,6 +42,7 @@ describe("InvokeHandler", () => {
       getStepData: vi.fn().mockReturnValue(undefined),
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
       durableExecutionArn: "test-arn",
       isOperationUpdatedBetweenInvocation: vi.fn().mockReturnValue(false),
