@@ -42,12 +42,13 @@ export function deadlineSignal(
   const lambdaContext = context.lambdaContext as
     | { getRemainingTimeInMillis?: unknown }
     | undefined;
-  const read = lambdaContext?.getRemainingTimeInMillis;
-  if (typeof read !== "function") {
-    return undefined;
-  }
   let remaining: unknown;
   try {
+    // The lookup is inside the try too, because a getter can throw.
+    const read = lambdaContext?.getRemainingTimeInMillis;
+    if (typeof read !== "function") {
+      return undefined;
+    }
     remaining = read.call(lambdaContext);
   } catch {
     // A deadline that cannot be read means no deadline, as in the core SDK.

@@ -1831,3 +1831,30 @@ describe("llm() destination", () => {
     );
   });
 });
+
+describe("a deadline getter that throws", () => {
+  it("counts as no deadline", async () => {
+    let received: AbortSignal | undefined;
+    const decide = decider({
+      transport: async (_request, { abortSignal }) => {
+        received = abortSignal;
+        return answers({ answer: noul(0.9) });
+      },
+    });
+    const step = new AbortController().signal;
+    const lambdaContext = {};
+    Object.defineProperty(lambdaContext, "getRemainingTimeInMillis", {
+      get() {
+        throw new Error("no deadline here");
+      },
+    });
+    const context = {
+      lambdaContext,
+      step: (_name: string, fn: (ctx: unknown) => Promise<unknown>) =>
+        new DurablePromise(() => fn({ signal: step })),
+    } as unknown as DurableContext;
+
+    await expect(decide.check(context, "Q?", "x")).resolves.toBe(true);
+    expect(received).toBe(step);
+  });
+});

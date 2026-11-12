@@ -265,3 +265,23 @@ it("loads the Bedrock client again after a failed load, through the same llm()",
   // The default client is created once and reused.
   expect(clients).toBe(1);
 });
+
+it.each(["MODULE_NOT_FOUND", "ERR_MODULE_NOT_FOUND"])(
+  "names the package to install for code %s",
+  async (code) => {
+    const missing = Object.assign(new Error("Cannot find module"), { code });
+    const ai = await loadWithout("@aws-sdk/client-lambda", missing);
+    const decide = ai.decider({
+      transport: ai.lambdaTransport({ functionName: "x" }),
+    });
+
+    const error = await decide.check(ctx, "Q?", "x").then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(error?.message).toContain(
+      "lambdaTransport() needs the @aws-sdk/client-lambda package",
+    );
+  },
+);
