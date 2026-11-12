@@ -72,14 +72,14 @@ export interface StepContext<Logger extends DurableLogger>
   attempt: number;
 
   /**
-   * Aborted when the invocation terminates, or when a non-virtual context
+   * Aborted when the invocation ends, or when a non-virtual context
    * that holds this step finishes.
    *
    * The SDK aborts this signal in two cases only:
    *
-   * 1. The SDK terminates the invocation, for example to suspend for a wait,
-   *    to fail after a checkpoint error, or because the invocation's deadline
-   *    passed.
+   * 1. The invocation ends, whether the handler returns or throws, or the SDK
+   *    terminates it to suspend for a wait, handle a checkpoint error, or
+   *    enforce its deadline. Steps the handler did not await can then stop.
    * 2. A non-virtual context that holds this step finishes. For example, a
    *    `map` or `parallel` call returns early because its `completionConfig`
    *    is met, while some items still run.
@@ -92,10 +92,6 @@ export interface StepContext<Logger extends DurableLogger>
    * `parallel` item with `NestingType.FLAT` runs in a virtual context. So its
    * steps share the signal of the batch's context, and that signal aborts
    * when the batch's context finishes.
-   *
-   * Returning or throwing from the handler does not abort this signal. So a
-   * step that the handler did not await keeps a live signal after the
-   * handler ends.
    *
    * When the signal aborts while the step still runs, the SDK drops the
    * result of the step. But the step function keeps running until it

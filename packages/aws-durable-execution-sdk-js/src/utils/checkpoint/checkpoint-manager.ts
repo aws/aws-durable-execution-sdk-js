@@ -151,9 +151,9 @@ export class CheckpointManager implements Checkpoint {
    * Clears currently armed timers and closes checkpoint admission.
    *
    * An already in-flight checkpoint retains its completion behavior. Its continuation can
-   * still rearm a poll timer in forceRefreshAndCheckStatus or a termination timer through
-   * processQueue's finally block. That pre-existing timer race is outside this checkpoint
-   * admission fix; processQueue still prevents any subsequent dispatch after disposal.
+   * still rearm a poll timer in forceRefreshAndCheckStatus. That pre-existing timer race is
+   * outside this checkpoint admission fix; processQueue prevents subsequent dispatch and
+   * checkAndTerminate prevents termination timers after disposal.
    *
    * Timers outlive the invocation that armed them. Nothing else clears them on the normal
    * path: cleanupAllOperations is only reached through executeTermination, and

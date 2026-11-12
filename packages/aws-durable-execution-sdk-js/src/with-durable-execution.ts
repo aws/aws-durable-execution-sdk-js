@@ -639,8 +639,7 @@ async function runHandler<
     // Every exit from the invocation funnels through here, including the normal-completion
     // path that never terminates. Without this, poll timers stay armed after the handler
     // returns and can fire during a later invocation in a reused execution environment.
-    // The deadline timer is cleared for the same reason: after the invocation answered, it
-    // would abort the signal of leftover steps.
+    // Clear the deadline timer so it cannot terminate an invocation that already answered.
     clearTimeout(deadlineTimer);
     checkpointManager.dispose();
     // dispose closes admission without the termination callback. So abort the
