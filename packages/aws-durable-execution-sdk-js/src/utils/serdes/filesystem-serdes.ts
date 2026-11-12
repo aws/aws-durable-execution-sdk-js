@@ -259,9 +259,10 @@ async function writeToFile(
  * - `{"file":"<path>"}` — value stored in a file
  * - `{"file":"<path>","preview":{...}}` — file pointer with inline preview (when preview is configured)
  *
- * `deserialize` reads only the path that `serialize` writes for the same
- * execution ARN and entity ID. If the envelope holds any other path,
- * `deserialize` throws and reads no file.
+ * The `file` path in the envelope is for people who browse the mount, for
+ * example to find a value from the console. `deserialize` does not read that
+ * path. It builds the path again from the execution ARN and entity ID, the
+ * same way `serialize` does, and reads that file.
  *
  * @param basePath - Directory path where data files will be stored (e.g. `/mnt/s3` for S3 Files, `/mnt/efs` for EFS)
  * @param config - Optional configuration options
@@ -356,15 +357,11 @@ export function createFileSystemSerdes(
       const envelope = JSON.parse(data) as FileSystemEnvelope;
 
       if ("file" in envelope) {
-        // serialize writes each value to one known path. So deserialize reads
-        // only that path, and rejects an envelope that points anywhere else.
-        const expectedPath = resolveFilePath(basePath, context, pathEncoding);
-        if (envelope.file !== expectedPath) {
-          throw new Error(
-            `File path in the checkpoint does not match the path for entity ${context.entityId}`,
-          );
-        }
-        const contents = await readFile(expectedPath, "utf-8");
+        // The path in the envelope is for people who browse the mount. The
+        // SDK does not read it. serialize writes each value to one known path,
+        // so deserialize builds that path again and reads it.
+        const filePath = resolveFilePath(basePath, context, pathEncoding);
+        const contents = await readFile(filePath, "utf-8");
         return JSON.parse(contents);
       }
 
