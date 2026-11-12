@@ -225,6 +225,7 @@ it("loads the AWS SDK client again after a failed load", async () => {
 
 it("loads the Bedrock client again after a failed load, through the same llm()", async () => {
   let loads = 0;
+  let clients = 0;
   vi.resetModules();
   vi.doMock("@aws-sdk/client-bedrock-runtime", () => {
     loads += 1;
@@ -233,6 +234,9 @@ it("loads the Bedrock client again after a failed load, through the same llm()",
     }
     return {
       BedrockRuntimeClient: class {
+        constructor() {
+          clients += 1;
+        }
         async send(): Promise<unknown> {
           return {
             stopReason: "end_turn",
@@ -253,8 +257,11 @@ it("loads the Bedrock client again after a failed load, through the same llm()",
     (e: unknown) => e as Error,
   );
   const second = await model.ask(ctx, "Q?");
+  await model.ask(ctx, "Q?");
 
   expect(first).toBeInstanceOf(ai.AiError);
   expect(second).toBe("ok");
   expect(loads).toBe(2);
+  // The default client is created once and reused.
+  expect(clients).toBe(1);
 });
