@@ -212,7 +212,12 @@ export class InstalledCoreFixture {
     const result = spawnSync(
       process.execPath,
       [
-        fromWorkspace.resolve("typescript/bin/tsc"),
+        // TypeScript 7 is installed as @typescript/native. Its exports map does
+        // not expose bin/tsc, so the path is built from its package.json.
+        join(
+          dirname(fromWorkspace.resolve("@typescript/native/package.json")),
+          "bin/tsc",
+        ),
         "--project",
         "tsconfig.json",
       ],
