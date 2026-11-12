@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { SerdesContext } from "./serdes";
 import {
   createFileSystemSerdes,
@@ -292,6 +292,81 @@ describe("createFileSystemSerdes path encoding", () => {
       expect(fileName).toBe(`${sha256("x".repeat(10_000))}.json`);
       expect(fileName.length).toBe(64 + ".json".length);
     });
+  });
+});
+
+describe("createFileSystemSerdes deserialize path check", () => {
+  const REALISTIC_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:54/durable-execution/exec-a/d6a8ddb8-0286-39d6-89bd-8f13b33d4722";
+  const OTHER_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:54/durable-execution/exec-b/0f1e2d3c-0286-39d6-89bd-8f13b33d4722";
+  const context: SerdesContext = {
+    entityId: "1",
+    durableExecutionArn: REALISTIC_ARN,
+  };
+
+  for (const pathEncoding of [
+    FileSystemPathEncoding.URI,
+    FileSystemPathEncoding.HASH,
+  ]) {
+    describe(`${pathEncoding} encoding`, () => {
+      let serdes: ReturnType<typeof createFileSystemSerdes>;
+      beforeEach(() => {
+        serdes = createFileSystemSerdes(BASE_PATH, { pathEncoding });
+      });
+
+      it("reads back the value that serialize wrote", async () => {
+        const envelope = await serdes.serialize({ id: 1 }, context);
+
+        expect(await serdes.deserialize(envelope, context)).toEqual({ id: 1 });
+      });
+
+      it("rejects a file written for another execution", async () => {
+        const otherEnvelope = await serdes.serialize(
+          { owner: "other" },
+          { entityId: "1", durableExecutionArn: OTHER_ARN },
+        );
+
+        await expect(
+          serdes.deserialize(otherEnvelope, context),
+        ).rejects.toThrow("does not match");
+      });
+
+      it("rejects a file written for another entity in the same execution", async () => {
+        const otherEnvelope = await serdes.serialize(
+          { owner: "other" },
+          { entityId: "2", durableExecutionArn: REALISTIC_ARN },
+        );
+
+        await expect(
+          serdes.deserialize(otherEnvelope, context),
+        ).rejects.toThrow("does not match");
+      });
+    });
+  }
+
+  it("rejects a path outside basePath and reads no file", async () => {
+    const outside = join(BASE_PATH, "..", "outside.json");
+    const serdes = createFileSystemSerdes(BASE_PATH);
+
+    // The file does not exist. So an ENOENT error would mean the read was tried.
+    await expect(
+      serdes.deserialize(JSON.stringify({ file: outside }), context),
+    ).rejects.toThrow("does not match");
+  });
+
+  it("rejects a different spelling of the expected path", async () => {
+    const serdes = createFileSystemSerdes(BASE_PATH);
+    const envelope = await serdes.serialize({ id: 1 }, context);
+    const { file } = JSON.parse(envelope!) as { file: string };
+    const sameFileOtherSpelling = `${dirname(file)}${sep}.${sep}${basename(file)}`;
+
+    await expect(
+      serdes.deserialize(
+        JSON.stringify({ file: sameFileOtherSpelling }),
+        context,
+      ),
+    ).rejects.toThrow("does not match");
   });
 });
 
