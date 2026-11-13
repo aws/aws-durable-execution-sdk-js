@@ -21,9 +21,11 @@ import { execFileSync } from "node:child_process";
 export const STACK_PATTERN =
   /^aws-durable-execution-sdk-js-integ-[a-z0-9]+-pr-(\d+)$/;
 
-// Stacks that CloudFormation can delete now. A stack in an *_IN_PROGRESS
-// status rejects DeleteStack, so it is left for the next cleanup.
-// DELETE_COMPLETE stacks are already gone.
+// Stacks that CloudFormation can delete now. A stack in most *_IN_PROGRESS
+// statuses rejects DeleteStack, so it is left for the next cleanup.
+// REVIEW_IN_PROGRESS is the exception: a first deploy that stopped after it
+// created its change set leaves the stack there, and the status never moves
+// on by itself. DELETE_COMPLETE stacks are already gone.
 export const DELETABLE_STATUSES = [
   "CREATE_FAILED",
   "CREATE_COMPLETE",
@@ -34,6 +36,7 @@ export const DELETABLE_STATUSES = [
   "UPDATE_FAILED",
   "UPDATE_ROLLBACK_FAILED",
   "UPDATE_ROLLBACK_COMPLETE",
+  "REVIEW_IN_PROGRESS",
   "IMPORT_COMPLETE",
   "IMPORT_ROLLBACK_FAILED",
   "IMPORT_ROLLBACK_COMPLETE",
@@ -99,13 +102,15 @@ export async function cleanupClosedPullRequestStacks(deps) {
 
 /**
  * @param {string} region
+ * @param {(file: string, args: string[]) => string} [run] runs the aws CLI
  * @returns {Pick<CleanupDeps, "listStacks" | "startDelete" | "waitForDelete">}
  */
-function awsCli(region) {
+export function awsCli(
+  region,
+  run = (file, args) => execFileSync(file, args, { encoding: "utf8" }),
+) {
   const aws = (/** @type {string[]} */ args) =>
-    execFileSync("aws", [...args, "--region", region, "--output", "json"], {
-      encoding: "utf8",
-    });
+    run("aws", [...args, "--region", region, "--output", "json"]);
   return {
     listStacks: () =>
       JSON.parse(
@@ -136,11 +141,12 @@ function awsCli(region) {
 /**
  * @param {string} repository
  * @param {string} token
+ * @param {typeof fetch} [fetchFn]
  * @returns {(number: string) => Promise<boolean>}
  */
-function gitHubIsClosed(repository, token) {
+export function gitHubIsClosed(repository, token, fetchFn = fetch) {
   return async (number) => {
-    const response = await fetch(
+    const response = await fetchFn(
       `https://api.github.com/repos/${repository}/pulls/${number}`,
       {
         headers: {

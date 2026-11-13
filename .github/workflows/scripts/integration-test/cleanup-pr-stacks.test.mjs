@@ -5,7 +5,11 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { cleanupClosedPullRequestStacks } from "./cleanup-pr-stacks.mjs";
+import {
+  awsCli,
+  cleanupClosedPullRequestStacks,
+  gitHubIsClosed,
+} from "./cleanup-pr-stacks.mjs";
 
 /**
  * @param {object} options
@@ -109,5 +113,102 @@ describe("cleanupClosedPullRequestStacks", () => {
     const result = await cleanupClosedPullRequestStacks(deps);
     assert.deepEqual(result.deleted, [stack("24x", "2")]);
     assert.deepEqual(result.failed, [stack("24x", "1")]);
+  });
+});
+
+describe("gitHubIsClosed", () => {
+  /**
+   * @param {number} status
+   * @param {object} [body]
+   * @returns {{ fetchFn: typeof fetch, urls: string[] }}
+   */
+  const fakeFetch = (status, body = {}) => {
+    /** @type {string[]} */
+    const urls = [];
+    const fetchFn = /** @type {typeof fetch} */ (
+      /** @type {unknown} */ (
+        async (/** @type {string} */ url) => {
+          urls.push(url);
+          return {
+            ok: status >= 200 && status < 300,
+            status,
+            json: async () => body,
+          };
+        }
+      )
+    );
+    return { fetchFn, urls };
+  };
+
+  test("a closed pull request is closed", async () => {
+    const { fetchFn, urls } = fakeFetch(200, { state: "closed" });
+    assert.equal(await gitHubIsClosed("aws/repo", "t", fetchFn)("7"), true);
+    assert.deepEqual(urls, ["https://api.github.com/repos/aws/repo/pulls/7"]);
+  });
+
+  test("an open pull request is not closed", async () => {
+    const { fetchFn } = fakeFetch(200, { state: "open" });
+    assert.equal(await gitHubIsClosed("aws/repo", "t", fetchFn)("7"), false);
+  });
+
+  test("an API error throws instead of counting as closed", async () => {
+    const { fetchFn } = fakeFetch(404);
+    await assert.rejects(
+      gitHubIsClosed("aws/repo", "t", fetchFn)("7"),
+      /GitHub returned 404 for pull request #7/,
+    );
+  });
+});
+
+describe("awsCli", () => {
+  /** @param {string} output */
+  const record = (output) => {
+    /** @type {string[][]} */
+    const calls = [];
+    const run = (/** @type {string} */ file, /** @type {string[]} */ args) => {
+      calls.push([file, ...args]);
+      return output;
+    };
+    return { calls, run };
+  };
+
+  test("lists stacks a first deploy left in REVIEW_IN_PROGRESS", () => {
+    const { calls, run } = record('["a"]');
+    assert.deepEqual(awsCli("us-west-2", run).listStacks(), ["a"]);
+    const args = calls[0];
+    const filter = args.slice(
+      args.indexOf("--stack-status-filter") + 1,
+      args.indexOf("--query"),
+    );
+    assert.ok(filter.includes("REVIEW_IN_PROGRESS"));
+  });
+
+  test("skips the other in-progress statuses, which reject DeleteStack", () => {
+    const { calls, run } = record("[]");
+    awsCli("us-west-2", run).listStacks();
+    const inProgress = calls[0].filter(
+      (arg) => arg.endsWith("_IN_PROGRESS") && arg !== "REVIEW_IN_PROGRESS",
+    );
+    assert.deepEqual(inProgress, []);
+  });
+
+  test("deletes and waits for the named stack in the region", () => {
+    const { calls, run } = record("");
+    const cli = awsCli("us-west-2", run);
+    cli.startDelete("s");
+    cli.waitForDelete("s");
+    const tail = ["--region", "us-west-2", "--output", "json"];
+    assert.deepEqual(calls, [
+      ["aws", "cloudformation", "delete-stack", "--stack-name", "s", ...tail],
+      [
+        "aws",
+        "cloudformation",
+        "wait",
+        "stack-delete-complete",
+        "--stack-name",
+        "s",
+        ...tail,
+      ],
+    ]);
   });
 });
