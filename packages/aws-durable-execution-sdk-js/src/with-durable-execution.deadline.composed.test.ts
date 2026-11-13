@@ -25,6 +25,8 @@ import {
   WireOperation,
 } from "./types/wire";
 import { MAX_TIMER_DELAY_MS } from "./utils/constants/constants";
+import { TerminationManager } from "./termination-manager/termination-manager";
+import { TerminationReason } from "./termination-manager/types";
 
 const DEADLINE_MS = 40;
 
@@ -301,26 +303,43 @@ describe("invocation deadline", () => {
     }
   });
 
-  it("does not abort the signal after the invocation returned", async () => {
-    const { client } = recordingClient();
-    let signal: AbortSignal | undefined;
+  it("aborts the signal on return and clears the deadline timer", async () => {
+    // Advance the reported deadline with the timers. Keep setImmediate real so
+    // checkpoint processing can finish before advancing past the deadline.
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const terminateSpy = vi.spyOn(TerminationManager.prototype, "terminate");
+    try {
+      const { client } = recordingClient();
+      let signal: AbortSignal | undefined;
 
-    const outcome = await invoke(
-      async (_event, context) => {
-        await context.step("quick", async (ctx) => {
-          signal = ctx.signal;
-        });
-        return "done";
-      },
-      contextWithDeadline(DEADLINE_MS),
-      client,
-    );
+      const outcome = await invoke(
+        async (_event, context) => {
+          await context.step("quick", async (ctx) => {
+            signal = ctx.signal;
+          });
+          return "done";
+        },
+        contextWithDeadline(DEADLINE_MS),
+        client,
+      );
 
-    expect(outcome).toEqual({
-      Status: InvocationStatus.SUCCEEDED,
-      Result: JSON.stringify("done"),
-    });
-    await sleep(DEADLINE_MS * 2);
-    expect(signal?.aborted).toBe(false);
+      expect(outcome).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: JSON.stringify("done"),
+      });
+      expect(signal?.aborted).toBe(true);
+
+      // The signal is already aborted, so it cannot reveal a leaked timer.
+      // Check that the deadline does not terminate the completed invocation.
+      await vi.advanceTimersByTimeAsync(DEADLINE_MS * 2);
+      expect(terminateSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.INVOCATION_DEADLINE_PASSED,
+        }),
+      );
+    } finally {
+      terminateSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });
