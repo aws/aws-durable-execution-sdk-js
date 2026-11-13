@@ -149,6 +149,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
   context checkpoint limit, and a new function version for any change.
 
+### Deprecated
+
+- `WaitStrategyConfig.timeoutSeconds` in `@aws/durable-execution-sdk-js`. The wait
+  strategy never read it. Limit the total wait with `maxAttempts`, `initialDelay`,
+  `maxDelay` and `backoffRate`.
+
 ## [3.0.0] - 2026-10-26
 
 ### Coordinated release summary

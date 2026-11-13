@@ -263,7 +263,15 @@ export interface DurableInstrumentationPlugin {
   providePropagationMetadata?(
     input: PropagationInput,
   ): PropagationMetadata | undefined;
+  /**
+   * Called once when an invocation starts, before the handler runs. The SDK
+   * awaits this hook, so a plugin can finish its setup here.
+   */
   onInvocationStart?(info: InvocationInfo): Promise<void>;
+  /**
+   * Wraps the whole invocation. Call `fn` exactly once, inline, and return its
+   * result.
+   */
   wrapInvocation?(
     info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
@@ -294,13 +302,52 @@ export interface DurableInstrumentationPlugin {
    * result or error, input, and operations.
    */
   onInvocationEnd?(info: InvocationEndInfo): Promise<void>;
+  /**
+   * Called when an operation starts. During replay it is also called for an
+   * operation that started in an earlier invocation, with `isReplay` set to
+   * `true`. The SDK does not wait for the returned promise.
+   */
   onOperationStart?(info: OperationInfo): Promise<void>;
+  /**
+   * Wraps the function that runs in a child context, for example the function
+   * passed to `runInChildContext`. Call `fn` exactly once, inline, and return
+   * its result.
+   */
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
+  /**
+   * Called when an operation ends, with its outcome. The SDK does not wait for
+   * the returned promise.
+   */
   onOperationEnd?(info: OperationEndInfo): Promise<void>;
+  /**
+   * Called before each attempt of a `step`, and before each check of a
+   * `waitForCondition`. The SDK does not wait for the returned promise.
+   */
   onOperationAttemptStart?(info: AttemptInfo): Promise<void>;
+  /**
+   * Wraps the function of one attempt of a `step`, or of one check of a
+   * `waitForCondition`. Call `fn` exactly once, inline, and return its result.
+   */
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
+  /**
+   * Called after each attempt of a `step`, and after each check of a
+   * `waitForCondition`, with the outcome of that attempt. The SDK does not wait
+   * for the returned promise.
+   */
   onOperationAttemptEnd?(info: AttemptEndInfo): Promise<void>;
+  /**
+   * Called when a checkpoint response changes the status of one or more
+   * operations. `info.updatedOperations` holds the changed operations, and
+   * `info.operations` holds every operation the SDK knows. The SDK does not
+   * wait for the returned promise.
+   */
   onOperationChange?(info: OperationChangeInfo): Promise<void>;
+  /**
+   * Returns fields that the default logger adds to each log entry, for example
+   * a trace ID. The SDK calls it for every entry, so keep it synchronous and
+   * cheap. Return `undefined` to add no fields. The SDK ignores errors from
+   * this hook.
+   */
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
 
