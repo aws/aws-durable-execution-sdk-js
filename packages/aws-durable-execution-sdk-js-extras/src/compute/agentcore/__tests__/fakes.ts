@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import {
   type BedrockAgentCoreClient,
   InvokeAgentRuntimeCommand,
@@ -12,7 +13,14 @@ process.env.AWS_REGION ??= "us-east-1";
 export const RUNTIME_ARN =
   "arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/reviewer-abc123";
 
-export type Handler = (input: unknown) => Promise<unknown>;
+export type Handler = (
+  input: unknown,
+  options?: { abortSignal?: AbortSignal },
+) => Promise<unknown>;
+
+/** A stream that yields `chunks`, as the AWS SDK returns a body in Node.js. */
+export const bodyOf = (...chunks: string[]): Readable =>
+  Readable.from(chunks.map((chunk) => Buffer.from(chunk, "utf8")));
 
 /** An InvokeAgentRuntime answer whose streamed body is `body`. */
 export const answer =
@@ -20,7 +28,15 @@ export const answer =
   async () => ({
     statusCode,
     contentType: "application/json",
-    response: { transformToString: async () => body },
+    response: bodyOf(body),
+  });
+
+/** A call that ends only when its abort signal fires. */
+export const hangUntilAborted: Handler = (_input, options) =>
+  new Promise((_, reject) => {
+    options?.abortSignal?.addEventListener("abort", () =>
+      reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+    );
   });
 
 /**
@@ -41,7 +57,10 @@ export class FakeAgentcoreClient {
     | ((input: InvokeAgentRuntimeCommand["input"]) => Promise<unknown>)
     | undefined;
 
-  async send(command: unknown): Promise<unknown> {
+  async send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown> {
     if (command instanceof InvokeAgentRuntimeCommand) {
       this.invokeInputs.push(command.input);
       const forwarded = await this.onInvoke?.(command.input);
@@ -49,12 +68,12 @@ export class FakeAgentcoreClient {
         return forwarded;
       }
       const next = this.invokeResponses.shift() ?? answer('{"accepted":true}');
-      return next(command.input);
+      return next(command.input, options);
     }
     if (command instanceof StopRuntimeSessionCommand) {
       this.stopInputs.push(command.input);
       const next = this.stopResponses.shift();
-      return next ? next(command.input) : { statusCode: 200 };
+      return next ? next(command.input, options) : { statusCode: 200 };
     }
     throw new Error("unexpected command");
   }

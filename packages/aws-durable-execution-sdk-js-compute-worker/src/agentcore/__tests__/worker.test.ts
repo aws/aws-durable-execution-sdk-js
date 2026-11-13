@@ -587,3 +587,139 @@ describe("startAgentcoreWorker", () => {
     });
   });
 });
+
+describe("startAgentcoreWorker with a failing logger", () => {
+  /** Collects the unhandled rejections while `run` runs. */
+  async function unhandledDuring(run: () => Promise<void>): Promise<unknown[]> {
+    const seen: unknown[] = [];
+    const record = (reason: unknown): void => {
+      seen.push(reason);
+    };
+    process.on("unhandledRejection", record);
+    try {
+      await run();
+      // Node reports an unhandled rejection after the microtask queue
+      // drains. So the check waits one timer turn.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      process.off("unhandledRejection", record);
+    }
+    return seen;
+  }
+
+  it.each<[string, (message: string) => unknown]>([
+    [
+      "throws synchronously on job started",
+      (message) => {
+        if (message === "job started") {
+          throw new Error("logger broke");
+        }
+      },
+    ],
+    [
+      "returns a rejected promise",
+      () => Promise.reject(new Error("logger broke")),
+    ],
+  ])(
+    "accepts the job and reports its outcome when the logger %s",
+    async (_label, write) => {
+      const client = new FakeLambdaClient();
+      const logger = {
+        info: write,
+        warn: write,
+        error: write,
+      } as unknown as AgentcoreWorkerLogger;
+      let answer: { status: number; body: unknown } | undefined;
+
+      const unhandled = await unhandledDuring(async () => {
+        await start(async () => "ok", client, logger as RecordingLogger);
+        answer = await invoke(job("cb-1"));
+        await worker?.idle();
+      });
+
+      expect(answer).toEqual({ status: 200, body: { accepted: true } });
+      expect(client.named(SUCCESS).map((input) => input.CallbackId)).toEqual([
+        "cb-1",
+      ]);
+      expect(unhandled).toEqual([]);
+    },
+  );
+});
+
+describe("startAgentcoreWorker session ID", () => {
+  const SESSION_HEADER = "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id";
+
+  /** A logger that keeps each line's data too. */
+  function dataLogger(): {
+    logger: AgentcoreWorkerLogger;
+    lines: { message: string; data?: Record<string, unknown> }[];
+  } {
+    const lines: { message: string; data?: Record<string, unknown> }[] = [];
+    const write = (message: string, data?: Record<string, unknown>): void => {
+      lines.push({ message, data });
+    };
+    return { logger: { info: write, warn: write, error: write }, lines };
+  }
+
+  async function invokeWith(
+    headers: Record<string, string>,
+    body: unknown,
+  ): Promise<number> {
+    const response = await fetch(url("/invocations"), {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+    await response.arrayBuffer();
+    return response.status;
+  }
+
+  it.each([SESSION_HEADER, SESSION_HEADER.toLowerCase()])(
+    "passes the session ID from the %s header to the handler and the log fields",
+    async (header) => {
+      const { logger, lines } = dataLogger();
+      const seen: (string | undefined)[] = [];
+      await start(
+        async (_input, context) => {
+          seen.push(context.sessionId);
+          return "ok";
+        },
+        new FakeLambdaClient(),
+        logger as RecordingLogger,
+      );
+
+      expect(await invokeWith({ [header]: "session-1" }, job("cb-1"))).toBe(
+        200,
+      );
+      expect(await invokeWith({ [header]: "session-1" }, job("cb-1"))).toBe(
+        200,
+      );
+      await worker?.idle();
+
+      expect(seen).toEqual(["session-1"]);
+      for (const message of [
+        "job started",
+        "job succeeded",
+        "job already accepted",
+      ]) {
+        expect(lines.find((line) => line.message === message)?.data).toEqual({
+          callbackId: "cb-1",
+          runtimeSessionId: "session-1",
+        });
+      }
+    },
+  );
+
+  it("leaves the session ID undefined without the header", async () => {
+    const seen: unknown[] = [];
+    await start(async (_input, context) => {
+      seen.push("sessionId" in context, context.sessionId);
+      return "ok";
+    });
+
+    await invokeWith({}, job("cb-1"));
+    await worker?.idle();
+
+    expect(seen).toEqual([false, undefined]);
+  });
+});

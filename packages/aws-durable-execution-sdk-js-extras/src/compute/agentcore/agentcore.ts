@@ -10,18 +10,16 @@ import {
   InvokeAgentRuntimeCommand,
   StopRuntimeSessionCommand,
 } from "@aws-sdk/client-bedrock-agentcore";
+import {
+  callBeforeDeadline,
+  INVOCATION_RESERVE_MS,
+  remainingTime,
+  reserveStartsAt,
+} from "../deadline";
 import { defaultMicrovmRetryStrategy } from "../microvm/retry";
 import { agentcoreErrorMapper, inStage } from "./errors";
 import { AgentcoreOperationSubType } from "./subtypes";
 import type { AgentcoreConfig, AgentcoreJobDocument } from "./types";
-
-/**
- * An agent runtime session lives at most 8 hours: `maxLifetime` is at most
- * 28,800 seconds.
- *
- * @experimental This constant is experimental and may be changed or removed in future releases.
- */
-export const MAX_AGENTCORE_JOB_SECONDS = 28_800;
 
 /**
  * The largest job input that {@link agentcore} accepts, in UTF-8 bytes of its
@@ -44,6 +42,15 @@ const NOT_ACCEPTED_ERROR_NAME = "AgentcoreNotAcceptedError";
 
 /** The longest part of a refused answer that the error message quotes. */
 const MAX_QUOTED_ANSWER_CHARS = 256;
+
+/**
+ * The most bytes of the agent's answer that the request step reads.
+ *
+ * The worker answers `{"accepted": true}`. Other code in the agent can
+ * answer with a long body. The step stops reading past this limit and
+ * cancels the stream. So a long answer cannot fill the function's memory.
+ */
+const MAX_ANSWER_BYTES = 64 * 1024;
 
 const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
 
@@ -71,7 +78,19 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  *
  * InvokeAgentRuntime has no idempotency token. So a retried request step can
  * deliver the job to the session twice. The worker accepts each callback ID
- * once per process, and answers a repeat without running it again.
+ * once per process, and answers a repeat without running it again. The
+ * worker keeps the callback IDs in memory. A retry can reach a new process,
+ * for example after the idle timeout replaced the old one. The new process
+ * does not know the callback ID, so it runs the job again. So delivery is
+ * at least once, and the job handler's side effects must be idempotent.
+ *
+ * InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the
+ * Lambda invocation times out. A Lambda timeout during a step attempt would
+ * record no outcome for the attempt. A call that stops this way fails its
+ * attempt with a retryable `TimeoutError`, so the step retries in a later
+ * invocation. The request step reads at most 64 KiB of the agent's answer.
+ * A longer answer fails the request step like any other answer without
+ * `{"accepted": true}`.
  *
  * The operation sends one job per session. After the agent runtime's
  * `idleRuntimeSessionTimeout`, the same session ID silently gets a new
@@ -101,8 +120,8 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * @throws \{TypeError\} When `name` is empty, `agentRuntimeArn` is not a
  * string, the Region of the function cannot be determined, or
  * `JSON.stringify` cannot encode `input`.
- * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
- * or the JSON form of `input` is too large.
+ * @throws \{RangeError\} When `timeout` or `heartbeatTimeout` is shorter
+ * than 1 second, or the JSON form of `input` is too large.
  * @throws \{AgentcoreDeliveryError\} When InvokeAgentRuntime fails after all
  * retries, or the agent does not accept the job.
  * @throws \{AgentcoreJobFailedError\} When the agent reports a failure.
@@ -172,26 +191,39 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
           child.step(
             `${name}.request`,
             async () => {
-              const response = await client().send(
-                new InvokeAgentRuntimeCommand({
-                  ...target,
-                  contentType: "application/json",
-                  accept: "application/json",
-                  payload: Buffer.from(payload, "utf8"),
-                }),
+              // The call and the read of the answer must end before the
+              // invocation reserve. The abort signal covers both.
+              await callBeforeDeadline(
+                async (sendOptions) => {
+                  const response = await client().send(
+                    new InvokeAgentRuntimeCommand({
+                      ...target,
+                      contentType: "application/json",
+                      accept: "application/json",
+                      payload: Buffer.from(payload, "utf8"),
+                    }),
+                    sendOptions,
+                  );
+                  const answer = await readAnswer(
+                    response.response,
+                    sendOptions.abortSignal,
+                  );
+                  if (answer === undefined) {
+                    throw notAccepted(
+                      response.statusCode,
+                      `longer than ${MAX_ANSWER_BYTES} bytes`,
+                    );
+                  }
+                  if (!isAccepted(answer)) {
+                    throw notAccepted(
+                      response.statusCode,
+                      answer.slice(0, MAX_QUOTED_ANSWER_CHARS),
+                    );
+                  }
+                },
+                reserveStartsAt(remainingTime(child)),
+                () => pastReserve(name, "InvokeAgentRuntime"),
               );
-              // The response body is a stream. Reading it to the end
-              // releases the connection.
-              const answer =
-                (await response.response?.transformToString()) ?? "";
-              if (!isAccepted(answer)) {
-                throw Object.assign(
-                  new Error(
-                    `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
-                  ),
-                  { name: NOT_ACCEPTED_ERROR_NAME },
-                );
-              }
             },
             { retryStrategy, subType: AgentcoreOperationSubType.REQUEST },
           ),
@@ -232,7 +264,15 @@ async function stop(
       `${name}.stop`,
       async () => {
         try {
-          await client().send(new StopRuntimeSessionCommand(target));
+          // The call must end before the invocation reserve. A Lambda
+          // timeout during it would end the invocation with the job's
+          // outcome recorded and the operation not complete.
+          await callBeforeDeadline(
+            (sendOptions) =>
+              client().send(new StopRuntimeSessionCommand(target), sendOptions),
+            reserveStartsAt(remainingTime(child)),
+            () => pastReserve(name, "StopRuntimeSession"),
+          );
         } catch (error) {
           // The service answers ResourceNotFoundException (HTTP 404) for a
           // session that a stop already ended, and for a session ID that
@@ -256,6 +296,99 @@ async function stop(
   }
 }
 
+/**
+ * Reads the agent's answer, at most {@link MAX_ANSWER_BYTES} of it.
+ *
+ * 1. A missing body is an empty answer.
+ * 2. A body over the limit is not read to the end. The read stops, cancels
+ *    the stream, and returns `undefined`.
+ * 3. An abort of `signal` stops the read and cancels the stream. So a body
+ *    that stops sending data cannot hold the step past the invocation
+ *    reserve.
+ *
+ * In Node.js the AWS SDK returns the body as a readable stream, which is
+ * async iterable. Another runtime can return an object with
+ * `transformToWebStream()`, whose web stream is async iterable too.
+ */
+async function readAnswer(
+  body: unknown,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  if (body === undefined || body === null) {
+    return "";
+  }
+  const iterable = (
+    Symbol.asyncIterator in (body as object)
+      ? body
+      : (body as { transformToWebStream(): unknown }).transformToWebStream()
+  ) as AsyncIterable<Uint8Array | string>;
+  const iterator = iterable[Symbol.asyncIterator]();
+  // Rejects when the signal aborts. Each read races against it.
+  const aborted =
+    signal &&
+    new Promise<never>((_, reject) => {
+      const onAbort = (): void => reject(signal.reason);
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+    });
+  aborted?.catch(() => undefined);
+  const cancel = (): void => {
+    // A stalled stream may never settle its return() call. So the read does
+    // not wait for it.
+    void Promise.resolve()
+      .then(() => iterator.return?.())
+      .catch(() => undefined);
+  };
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const next = await (aborted
+        ? Promise.race([iterator.next(), aborted])
+        : iterator.next());
+      if (next.done) {
+        return Buffer.concat(chunks).toString("utf8");
+      }
+      const chunk = Buffer.from(next.value);
+      bytes += chunk.byteLength;
+      if (bytes > MAX_ANSWER_BYTES) {
+        cancel();
+        return undefined;
+      }
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    cancel();
+    throw error;
+  }
+}
+
+/** The error for an answer without `{"accepted": true}`. */
+function notAccepted(status: number | undefined, quoted: string): Error {
+  return Object.assign(
+    new Error(
+      `the agent did not accept the job. It must answer {"accepted": true}. Status ${status}, answer: ${quoted}`,
+    ),
+    { name: NOT_ACCEPTED_ERROR_NAME },
+  );
+}
+
+/**
+ * The error for a call that the invocation reserve stopped. Its name is
+ * `TimeoutError`, which the default retry strategy retries.
+ */
+function pastReserve(name: string, call: string): Error {
+  return Object.assign(
+    new Error(
+      `AgentCore "${name}": ${call} did not end ${INVOCATION_RESERVE_MS / 1_000} seconds before the Lambda invocation times out, so the attempt stopped. A later attempt runs in a new invocation.`,
+    ),
+    { name: "TimeoutError" },
+  );
+}
+
 /** Whether the agent's answer is the JSON object `{"accepted": true}`. */
 function isAccepted(answer: string): boolean {
   try {
@@ -272,15 +405,26 @@ function validateConfig(name: string, config: AgentcoreConfig): void {
   if (typeof config?.agentRuntimeArn !== "string") {
     throw new TypeError(`AgentCore "${name}": agentRuntimeArn is required`);
   }
+  // The agent runtime's maxLifetime limits the session: 8 hours for a
+  // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
+  // not say which one the runtime uses. So only the lower limit is checked.
   const seconds = durationToSeconds(config.timeout);
-  if (
-    !Number.isFinite(seconds) ||
-    seconds < 1 ||
-    seconds > MAX_AGENTCORE_JOB_SECONDS
-  ) {
+  if (!Number.isFinite(seconds) || seconds < 1) {
     throw new RangeError(
-      `AgentCore "${name}": timeout must be between 1 second and ${MAX_AGENTCORE_JOB_SECONDS} seconds (8 hours), because an agent runtime session lives at most 8 hours. Got ${seconds} seconds.`,
+      `AgentCore "${name}": timeout must be at least 1 second. Got ${seconds} seconds.`,
     );
+  }
+  // The callback service reads a heartbeat timeout of 0 as no heartbeat
+  // timeout. The worker rejects a job document whose heartbeatTimeoutSeconds
+  // is below 1. So such a value fails here, before the operation starts a
+  // session.
+  if (config.heartbeatTimeout !== undefined) {
+    const heartbeatSeconds = durationToSeconds(config.heartbeatTimeout);
+    if (!Number.isFinite(heartbeatSeconds) || heartbeatSeconds < 1) {
+      throw new RangeError(
+        `AgentCore "${name}": heartbeatTimeout must be at least 1 second. Got ${heartbeatSeconds} seconds.`,
+      );
+    }
   }
 }
 

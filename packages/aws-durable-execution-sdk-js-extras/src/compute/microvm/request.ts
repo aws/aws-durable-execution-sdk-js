@@ -4,7 +4,16 @@ import {
   type LambdaMicrovmsClient,
 } from "@aws-sdk/client-lambda-microvms";
 import { addRequestId, microvmNotFound, withRequestId } from "./aws-errors";
+import {
+  callBeforeDeadline,
+  callBudgetMs,
+  INVOCATION_RESERVE_MS,
+  MIN_CALL_MS,
+  reserveStartsAt,
+} from "../deadline";
 import { MicrovmDeliveryError } from "./errors";
+
+export { callBeforeDeadline, INVOCATION_RESERVE_MS, reserveStartsAt };
 
 /**
  * The MicroVM endpoint forwards to this port when no port header is sent.
@@ -27,20 +36,6 @@ export const DEFAULT_MICROVM_JOB_PATH = "/durable-execution/v1/job";
 /** The default length of the first retry tier, inside one step attempt. */
 export const DEFAULT_REQUEST_RETRY_WINDOW_MS = 60_000;
 
-/**
- * The first retry tier stops this long before the invocation times out. A
- * Lambda timeout during a step attempt records no outcome for the attempt.
- * So the step keeps time to throw and to checkpoint the second-tier retry.
- */
-export const INVOCATION_RESERVE_MS = 10_000;
-
-/**
- * A call that would start with less than this much time before the reserve
- * is not started. A shorter call is unlikely to finish, and the step retries
- * the job in a later invocation anyway.
- */
-const MIN_CALL_MS = 1_000;
-
 const INITIAL_DELAY_MS = 250;
 const MAX_DELAY_MS = 4_000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -57,79 +52,6 @@ const CONNECT_FAILED = "MICROVM_CONNECT_FAILED";
 
 /** The shortest time between two calls of {@link SendJobOptions.stateCheck}. */
 const STATE_CHECK_INTERVAL_MS = 2_000;
-
-/**
- * Returns the time by which every call of the first tier must end: the
- * start of the invocation reserve. Returns `undefined` when the compute
- * reports no deadline.
- *
- * A Lambda timeout during a step attempt records no outcome for the attempt.
- * So the reserve is a hard limit. A call that is still running at the reserve
- * uses the time that the step needs to throw and to checkpoint.
- */
-export function reserveStartsAt(
-  remainingTimeMs: (() => number | undefined) | undefined,
-): number | undefined {
-  const remaining = remainingTimeMs?.();
-  // remainingTime() passes on the compute's value unchanged. So this check
-  // turns a value that is not a finite number into no deadline.
-  return remaining === undefined || !Number.isFinite(remaining)
-    ? undefined
-    : Date.now() + remaining - INVOCATION_RESERVE_MS;
-}
-
-/**
- * Returns how long the next call may run: at most `capMs`, and never past
- * `hardDeadline`. Throws the result of `onExpired` when less than
- * {@link MIN_CALL_MS} remains before `hardDeadline`.
- */
-function callBudgetMs(
-  hardDeadline: number | undefined,
-  capMs: number,
-  onExpired: () => Error,
-): number {
-  if (hardDeadline === undefined) {
-    return capMs;
-  }
-  const left = hardDeadline - Date.now();
-  if (left < MIN_CALL_MS) {
-    throw onExpired();
-  }
-  return Math.min(capMs, left);
-}
-
-/**
- * Runs one AWS SDK call that must end before `hardDeadline`.
- *
- * 1. Without a deadline, the call runs with the client's own settings.
- * 2. With a deadline, the call gets an abort signal that fires at the
- *    deadline. The signal also stops the AWS SDK's own retries of the call.
- * 3. An aborted call throws the result of `onExpired`. That error is
- *    retryable, so the step retries the job in a later invocation. The
- *    AWS SDK's `AbortError` is not retryable, so it is not rethrown.
- *
- * @internal
- */
-export async function callBeforeDeadline<T>(
-  call: (options: { abortSignal?: AbortSignal }) => Promise<T>,
-  hardDeadline: number | undefined,
-  onExpired: () => Error,
-): Promise<T> {
-  if (hardDeadline === undefined) {
-    return call({});
-  }
-  const signal = AbortSignal.timeout(
-    callBudgetMs(hardDeadline, Number.MAX_SAFE_INTEGER, onExpired),
-  );
-  try {
-    return await call({ abortSignal: signal });
-  } catch (error) {
-    if (signal.aborted) {
-      throw onExpired();
-    }
-    throw error;
-  }
-}
 
 /**
  * Thrown when the endpoint rejects the job with a status that a retry cannot

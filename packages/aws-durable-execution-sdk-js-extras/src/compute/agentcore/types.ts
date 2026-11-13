@@ -26,10 +26,15 @@ export interface AgentcoreConfig {
   qualifier?: string;
 
   /**
-   * The maximum time to wait for the agent to report a result.
+   * The maximum time to wait for the agent to report a result. It must be
+   * at least 1 second.
    *
-   * An agent runtime session lives at most 8 hours. So the timeout must be
-   * between 1 second and 8 hours.
+   * The session ends at the agent runtime's `maxLifetime`, and the job ends
+   * with it. `maxLifetime` is at most 8 hours for a microVM runtime, and up
+   * to 14 days for a runtime on Instances. The operation cannot read the
+   * runtime's setting. So set a timeout that fits the configured
+   * `maxLifetime`. With a longer timeout, a job that ends with its session
+   * fails only at its heartbeat timeout or its timeout.
    */
   timeout: Duration;
 
@@ -38,7 +43,7 @@ export interface AgentcoreConfig {
    *
    * When it is set, an agent that stops responding fails the operation after
    * this duration, instead of after `timeout`. The agent receives this value
-   * in the job document.
+   * in the job document. It must be at least 1 second.
    */
   heartbeatTimeout?: Duration;
 

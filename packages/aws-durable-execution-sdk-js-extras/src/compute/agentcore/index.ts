@@ -1,9 +1,5 @@
 export { ComputeError } from "../errors";
-export {
-  agentcore,
-  MAX_AGENTCORE_JOB_INPUT_BYTES,
-  MAX_AGENTCORE_JOB_SECONDS,
-} from "./agentcore";
+export { agentcore, MAX_AGENTCORE_JOB_INPUT_BYTES } from "./agentcore";
 export {
   AgentcoreDeliveryError,
   AgentcoreError,

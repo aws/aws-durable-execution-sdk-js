@@ -252,6 +252,12 @@ The operation creates the steps `<name>.session` (the runtime session ID), `<nam
 
 After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
 
+InvokeAgentRuntime has no idempotency token. So a retried request step can deliver the same job again, for example after the `{"accepted": true}` answer was lost. The worker remembers the callback IDs of its process and does not run a repeated one. A retry can reach a new process, for example after the idle timeout replaced the old one. The new process does not know the callback ID, so it runs the job again. So delivery is at least once, and the handler's side effects must be idempotent.
+
+The session ends at the agent runtime's `maxLifetime`, and a running job ends with it. `maxLifetime` is at most 8 hours for a microVM runtime, and up to 14 days for a runtime on Instances. The operation cannot read the runtime's setting, so it checks only that `timeout` is at least 1 second. Set a `timeout` that fits the configured `maxLifetime`. A `heartbeatTimeout` must be at least 1 second too.
+
+InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the Lambda invocation times out, and the step retries in a later invocation. The request step reads at most 64 KiB of the agent's answer. A longer answer fails the operation with `AgentcoreDeliveryError`, like any answer without `{"accepted": true}`.
+
 Permissions:
 
 - The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.

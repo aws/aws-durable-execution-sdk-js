@@ -47,6 +47,17 @@ vi.mock("fs", () => {
           },
           usesMicrovm: true,
         },
+        {
+          name: "AgentCore Run Job",
+          description: "Runs one job in an AgentCore Runtime agent",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/agentcore/run-job/agentcore-run-job.ts",
+          handler: "agentcore-run-job.handler",
+          durableConfig: {
+            ExecutionTimeout: 900,
+            RetentionPeriodInDays: 7,
+          },
+          usesAgentcore: true,
+        },
       ]),
     ),
   };
@@ -247,6 +258,29 @@ describe("generate-sam-template", () => {
         template.Resources.HelloWorld.Properties.Environment.Variables
           .MICROVM_IMAGE_ARN,
       ).toBeUndefined();
+    });
+
+    test("leaves out an AgentCore example when no agent runtime is given", () => {
+      const template = generateTemplate();
+
+      expect(template.Resources.HelloWorld).toBeDefined();
+      expect(template.Resources.AgentcoreRunJob).toBeUndefined();
+    });
+
+    test("sets the agent runtime ARN on an AgentCore example only", () => {
+      const agentRuntimeArn =
+        "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/sdk_js_examples-abc";
+      const template = generateTemplate({ agentRuntimeArn });
+
+      expect(
+        template.Resources.AgentcoreRunJob.Properties.Environment.Variables
+          .AGENT_RUNTIME_ARN,
+      ).toBe(agentRuntimeArn);
+      expect(
+        template.Resources.HelloWorld.Properties.Environment.Variables
+          .AGENT_RUNTIME_ARN,
+      ).toBeUndefined();
+      expect(template.Resources.MicrovmRunJob).toBeUndefined();
     });
   });
 

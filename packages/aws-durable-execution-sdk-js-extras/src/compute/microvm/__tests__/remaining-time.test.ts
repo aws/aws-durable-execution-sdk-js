@@ -10,7 +10,7 @@ import {
   microvm,
 } from "..";
 import { sendJob } from "../request";
-import { remainingTime } from "../shared";
+import { remainingTime } from "../../deadline";
 import { baseConfig, FakeEndpoint, FakeMicrovmsClient } from "./fakes";
 
 const contextWith = (lambdaContext: unknown): DurableContext =>

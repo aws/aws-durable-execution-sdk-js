@@ -87,6 +87,10 @@ export const config: ExampleConfig = {
   - An example that sets `suspendAfter` on a job, as in `src/examples/microvm/session-suspend-after/`, also sets `idlePolicy.autoResumeEnabled` in the session config. The durable function suspends the MicroVM, and the service resumes it on the next request. The SDK never calls `ResumeMicrovm`.
   - A MicroVM test that acts while the execution runs, such as one that completes a callback, sets `invocationType: InvocationType.Event` in `createTests`. A `RequestResponse` Invoke returns only when the execution ends, and the cloud runner reads the history only after that.
   - A missing `lambda:TerminateMicrovm` does not fail the operation. So the MicroVM tests check with `GetMicrovm` that the MicroVM terminated. The test credentials need `lambda:GetMicrovm`.
+- `usesAgentcore`: (Default: false) The example runs a job in an Amazon Bedrock AgentCore Runtime agent, as in `src/examples/agentcore/`. The SAM template sets `AGENT_RUNTIME_ARN` on the function from `--agent-runtime-arn`. A SAM template generated without `--agent-runtime-arn` leaves the example out. The integration test passes the `AGENT_RUNTIME_ARN` environment variable as that argument. Without the variable, the integration test leaves the example out of the deployment and skips its test. Pair it with `cloudOnly: true` in `createTests`, because the local runner cannot start an AgentCore session.
+  - The agent runtime runs `agentcore-agent/app.ts`. Its header comment describes the deployment. The integration test does not create the agent runtime.
+  - The function role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on the agent runtime ARN and on `<runtime ARN>/runtime-endpoint/*`. In CI, `TEST_LAMBDA_EXECUTION_ROLE_ARN` is that role.
+  - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function.
 
 ### 3. Create the Test File
 

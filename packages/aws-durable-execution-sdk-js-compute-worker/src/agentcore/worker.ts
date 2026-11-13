@@ -12,7 +12,13 @@ import {
   ResultTooLargeError,
 } from "../callback-reporter";
 import { parseJobRequest } from "../microvm/payload";
-import { readJson, startHeartbeats } from "../microvm/worker";
+import { readJson, safeLogger, startHeartbeats } from "../microvm/worker";
+
+/**
+ * The request header in which AgentCore Runtime passes the runtime session
+ * ID. Node.js gives header names in lower case, so the lookup ignores case.
+ */
+const SESSION_ID_HEADER = "x-amzn-bedrock-agentcore-runtime-session-id";
 
 /**
  * The port that AgentCore Runtime sends requests to inside the container.
@@ -89,6 +95,12 @@ export interface AgentcoreWorkerLogger {
 export interface AgentcoreJobContext {
   /** The callback ID that the worker completes with the handler's result. */
   callbackId: string;
+  /**
+   * The AgentCore runtime session ID, from the
+   * `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` request header.
+   * `undefined` when the request had no such header.
+   */
+  sessionId?: string;
   /** The Region of the durable function. */
   region: string;
   /**
@@ -136,7 +148,11 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    * that this function returns.
    */
   createClient?: (region: string) => LambdaClient;
-  /** Defaults to single-line JSON on stdout and stderr. */
+  /**
+   * Defaults to single-line JSON on stdout and stderr. The worker drops an
+   * error that a logger method throws, and a rejection of a promise that it
+   * returns. So a failing logger cannot end the worker process.
+   */
   logger?: AgentcoreWorkerLogger;
 }
 
@@ -177,8 +193,12 @@ export interface AgentcoreWorker {
  *
  * A second delivery of a callback ID starts no job. It gets
  * `{"accepted": true}` again. The worker remembers the last 1,000 callback
- * IDs. So a retried delivery runs a job once, unless at least 1,000 other
- * jobs arrived in between, or the agent's process restarted.
+ * IDs in memory. So a retried delivery runs a job once, unless at least
+ * 1,000 other jobs arrived in between, or the worker process restarted. A
+ * retry can reach a new process, for example after the agent runtime's idle
+ * timeout replaced the old one. The new process does not know the callback
+ * ID, so it runs the job again. So delivery is at least once, and the
+ * handler's side effects must be idempotent.
  *
  * For each job, the worker sends heartbeats while the job runs, when the job
  * sets a heartbeat timeout. When the handler ends, the worker completes the
@@ -213,7 +233,7 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   port: number = AGENTCORE_PORT,
   host: string = defaultHost(),
 ): Promise<AgentcoreWorker> {
-  const logger = options.logger ?? jsonLogger;
+  const logger = safeLogger(options.logger ?? jsonLogger);
   const running = new Set<Promise<void>>();
   // Every callback ID that the worker accepted, oldest first. A Set keeps
   // insertion order.
@@ -264,8 +284,13 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
       respond(response, 400, { error: message });
       return;
     }
+    const header = request.headers[SESSION_ID_HEADER];
+    const sessionId = typeof header === "string" ? header : undefined;
     if (accepted.has(job.callbackId)) {
-      logger.info("job already accepted", { callbackId: job.callbackId });
+      logger.info("job already accepted", {
+        callbackId: job.callbackId,
+        runtimeSessionId: sessionId,
+      });
       respond(response, 200, { accepted: true });
       return;
     }
@@ -273,15 +298,22 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
     if (accepted.size > MAX_REMEMBERED_JOBS) {
       accepted.delete(accepted.values().next().value as string);
     }
-    const run: Promise<void> = runJob(options, logger, job).finally(() =>
-      updateRunning(() => running.delete(run)),
-    );
+    // runJob never rejects, and the logger never throws. The last catch is a
+    // guard: an unhandled rejection would end the process.
+    const run: Promise<void> = runJob(options, logger, job, sessionId)
+      .finally(() => updateRunning(() => running.delete(run)))
+      .catch(() => undefined);
     updateRunning(() => running.add(run));
     respond(response, 200, { accepted: true });
   };
 
   const server: Server = createServer((request, response) => {
-    void listener(request, response);
+    void listener(request, response).catch((error: unknown) => {
+      logger.error("request handling failed", { error: String(error) });
+      if (!response.headersSent) {
+        respond(response, 500, { error: "internal error" });
+      }
+    });
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -318,9 +350,12 @@ async function runJob<TInput, TOutput>(
   options: AgentcoreWorkerOptions<TInput, TOutput>,
   logger: AgentcoreWorkerLogger,
   job: AgentcoreJobDocument<TInput>,
+  sessionId: string | undefined,
 ): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
   const { callbackId, region } = job;
+  // The fields of every log line of the job.
+  const fields = { callbackId, runtimeSessionId: sessionId };
   let reporter: CallbackReporter;
   try {
     reporter = new CallbackReporter({
@@ -334,7 +369,7 @@ async function runJob<TInput, TOutput>(
     // function fails the job at its heartbeat timeout or its timeout. The
     // MicroVM worker handles this case the same way.
     logger.error("could not create the Lambda client for the job", {
-      callbackId,
+      ...fields,
       error: String(error),
     });
     return;
@@ -348,21 +383,21 @@ async function runJob<TInput, TOutput>(
     // only at its heartbeat timeout. So the worker fails the callback at
     // once and does not run the handler.
     logger.error("could not start heartbeats for the job", {
-      callbackId,
+      ...fields,
       error: String(error),
     });
     try {
       await reporter.fail(error);
     } catch (reportError) {
       logger.error("job outcome could not be reported", {
-        callbackId,
+        ...fields,
         error: String(reportError),
       });
     }
     reporter.close();
     return;
   }
-  logger.info("job started", { callbackId });
+  logger.info("job started", fields);
   try {
     let outcome: { ok: true; value: TOutput } | { ok: false; error: unknown };
     try {
@@ -370,6 +405,7 @@ async function runJob<TInput, TOutput>(
         ok: true,
         value: await options.handler(job.input, {
           callbackId,
+          ...(sessionId !== undefined && { sessionId }),
           region,
           signal: controller.signal,
           logger,
@@ -382,9 +418,7 @@ async function runJob<TInput, TOutput>(
     // attempt can stall for up to 30 seconds.
     heartbeats.handlerSettled();
     if (controller.signal.aborted) {
-      logger.warn("job outcome not reported: the callback is gone", {
-        callbackId,
-      });
+      logger.warn("job outcome not reported: the callback is gone", fields);
       return;
     }
     if (outcome.ok) {
@@ -402,14 +436,14 @@ async function runJob<TInput, TOutput>(
         }
         await reporter.fail(error);
       }
-      logger.info("job succeeded", { callbackId });
+      logger.info("job succeeded", fields);
     } else {
       await reporter.fail(outcome.error);
-      logger.info("job failed", { callbackId });
+      logger.info("job failed", fields);
     }
   } catch (error) {
     logger.error("job outcome could not be reported", {
-      callbackId,
+      ...fields,
       error: String(error),
     });
   } finally {

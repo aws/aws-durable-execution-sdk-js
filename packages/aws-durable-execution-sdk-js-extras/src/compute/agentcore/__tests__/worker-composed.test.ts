@@ -20,7 +20,7 @@ import {
 } from "@aws/durable-execution-sdk-js-compute-worker/agentcore";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { agentcore } from "..";
-import { baseConfig, FakeAgentcoreClient } from "./fakes";
+import { baseConfig, bodyOf, FakeAgentcoreClient } from "./fakes";
 
 beforeAll(() =>
   LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
@@ -82,7 +82,7 @@ function forwardTo(client: FakeAgentcoreClient, times = 1): void {
     return {
       statusCode: (response as Response).status,
       contentType: "application/json",
-      response: { transformToString: async () => body },
+      response: bodyOf(body),
     };
   };
 }
