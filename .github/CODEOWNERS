@@ -17,3 +17,13 @@
 /.github/CODEOWNERS @aws/aws-lambda-durable-functions-js-maintain
 /.github/prompts/ @aws/aws-lambda-durable-functions-js-maintain
 /packages/aws-durable-execution-sdk-js/src/context/execution-context/execution-context.ts @aws/aws-lambda-durable-functions-js-maintain
+
+# The release path. These files decide what CI runs, which dependencies the
+# packages install, and what gets published to npm.
+/.github/workflows/ @aws/aws-lambda-durable-functions-js-maintain
+/.github/actions/ @aws/aws-lambda-durable-functions-js-maintain
+/.github/dependabot.yml @aws/aws-lambda-durable-functions-js-maintain
+/package.json @aws/aws-lambda-durable-functions-js-maintain
+/package-lock.json @aws/aws-lambda-durable-functions-js-maintain
+/packages/*/package.json @aws/aws-lambda-durable-functions-js-maintain
+/rollup.config.js @aws/aws-lambda-durable-functions-js-maintain
