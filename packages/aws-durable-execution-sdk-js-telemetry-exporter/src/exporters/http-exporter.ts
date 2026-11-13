@@ -4,6 +4,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the HTTP/Webhook exporter.
@@ -61,6 +62,7 @@ export class HttpExporter implements TelemetryExporter {
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.maxRecordSizeBytes = config.maxRecordSizeBytes;
     this.operationsFormat = config.operationsFormat ?? "array";
+    registerTruncationFormat(this, { operations: this.operationsFormat });
   }
 
   render(record: DurableExecutionTelemetryRecord): unknown {
