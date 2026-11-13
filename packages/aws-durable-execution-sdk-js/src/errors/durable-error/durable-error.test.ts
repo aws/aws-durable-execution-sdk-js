@@ -5,6 +5,8 @@ import {
   StepError,
   CallbackError,
   InvokeError,
+  DistributedMapError,
+  DistributedMapItemError,
 } from "./durable-error";
 
 describe("DurableOperationError", () => {
@@ -143,5 +145,47 @@ describe("DurableOperationError", () => {
         StackTrace: undefined,
       });
     });
+  });
+});
+
+describe("DistributedMapError factories", () => {
+  const errorObject: ErrorObject = {
+    ErrorType: "SourceReadError",
+    ErrorMessage: "object not found",
+    ErrorData: '{"key":"k"}',
+    StackTrace: ["at a", "at b"],
+  };
+
+  it("fromRunErrorObject builds the run error from the status and the run Error", () => {
+    const error = DistributedMapError.fromRunErrorObject("FAILED", errorObject);
+
+    expect(error).toBeInstanceOf(DistributedMapError);
+    expect(error).not.toBeInstanceOf(DistributedMapItemError);
+    expect(error.message).toBe("Map run ended FAILED: object not found");
+    expect(error.cause?.name).toBe("SourceReadError");
+    expect(error.cause?.message).toBe("object not found");
+    expect(error.cause?.stack).toBe("at a\nat b");
+    expect(error.errorData).toBe('{"key":"k"}');
+  });
+
+  it("fromRunErrorObject builds the run error from the status alone when the run has no Error", () => {
+    const error = DistributedMapError.fromRunErrorObject("STOPPED", undefined);
+
+    expect(error.message).toBe("Map run ended STOPPED");
+    expect(error.cause).toBeUndefined();
+    expect(error.errorData).toBeUndefined();
+    expect(
+      DistributedMapError.fromRunErrorObject(undefined, undefined).message,
+    ).toBe("Map run ended unknown");
+  });
+
+  it("fromItemErrorObject builds the item error from the item Error", () => {
+    const error = DistributedMapItemError.fromItemErrorObject(errorObject);
+
+    expect(error).toBeInstanceOf(DistributedMapItemError);
+    expect(error.message).toBe("object not found");
+    expect(error.cause?.name).toBe("SourceReadError");
+    expect(error.cause?.stack).toBe("at a\nat b");
+    expect(error.errorData).toBe('{"key":"k"}');
   });
 });

@@ -34,7 +34,18 @@ export function historyEventsToOperationEvents(
       throw new Error("Missing required 'Id' field in event");
     }
 
-    const historyEventType = historyEventTypes[event.EventType];
+    const historyEventType = historyEventTypes[event.EventType] as
+      | (typeof historyEventTypes)[EventType]
+      | undefined;
+
+    if (!historyEventType) {
+      const dmapNote = event.EventType?.startsWith("DistributedMap")
+        ? " Distributed map is not supported by the testing library yet."
+        : "";
+      throw new Error(
+        `Unsupported event type "${event.EventType}" for event "${event.Id}".${dmapNote}`,
+      );
+    }
 
     if (!event[historyEventType.detailPlace]) {
       throw new Error(`Details missing for event "${event.Id}"`);

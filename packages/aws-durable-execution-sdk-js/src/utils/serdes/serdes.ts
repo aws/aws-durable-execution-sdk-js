@@ -1,6 +1,8 @@
 /**
  * Context information passed to Serdes for external storage operations
  *
+ * The context is not stored with the payload.
+ *
  * @public
  */
 export interface SerdesContext {
@@ -17,6 +19,8 @@ export interface SerdesContext {
  *
  * Both methods are async to support custom implementations that need to
  * interact with external services (e.g., AWS S3, DynamoDB, etc.)
+ *
+ * A value may be deserialized with a different context from the one it was serialized with, for example in another function. So deserialize must not need the original context to find the value.
  *
  * @public
  */

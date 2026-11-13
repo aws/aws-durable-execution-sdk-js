@@ -29,6 +29,7 @@ describe("package entry point", () => {
       CALLBACK: "CALLBACK",
       CHAINED_INVOKE: "CHAINED_INVOKE",
       CONTEXT: "CONTEXT",
+      DISTRIBUTED_MAP: "DISTRIBUTED_MAP",
       EXECUTION: "EXECUTION",
       STEP: "STEP",
       WAIT: "WAIT",

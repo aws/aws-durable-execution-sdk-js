@@ -73,6 +73,18 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "DistributedMapError":
+        return new DistributedMapError(
+          errorObject.ErrorMessage || "Distributed map run failed",
+          cause,
+          errorObject.ErrorData,
+        );
+      case "DistributedMapItemError":
+        return new DistributedMapItemError(
+          errorObject.ErrorMessage || "Distributed map item failed",
+          cause,
+          errorObject.ErrorData,
+        );
       case "ChildContextError":
         return new ChildContextError(
           errorObject.ErrorMessage || "Child context failed",
@@ -216,6 +228,64 @@ export class InvokeError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Invoke failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a distributed map run does not fully succeed
+ * @public
+ */
+export class DistributedMapError extends DurableOperationError {
+  readonly errorType: string = "DistributedMapError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Distributed map run failed", cause, errorData);
+  }
+
+  /** Builds an Error whose name and stack come from a recorded ErrorObject. */
+  protected static createCause(errorObject: ErrorObject): Error {
+    const cause = new Error(errorObject.ErrorMessage);
+    cause.name = errorObject.ErrorType || "Error";
+    Object.assign(cause, { stack: errorObject.StackTrace?.join("\n") });
+    return cause;
+  }
+
+  /** Builds the error for a map run that did not succeed. A run gets its ErrorType from the durable execution service, which does not use SDK error types. */
+  static fromRunErrorObject(
+    status: string | undefined,
+    errorObject: ErrorObject | undefined,
+  ): DistributedMapError {
+    const ended = `Map run ended ${status ?? "unknown"}`;
+    return new DistributedMapError(
+      errorObject?.ErrorMessage
+        ? `${ended}: ${errorObject.ErrorMessage}`
+        : ended,
+      errorObject ? this.createCause(errorObject) : undefined,
+      errorObject?.ErrorData,
+    );
+  }
+}
+
+/**
+ * Error recorded for a single failed item in a distributed map run
+ * @public
+ */
+export class DistributedMapItemError extends DistributedMapError {
+  readonly errorType = "DistributedMapItemError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Distributed map item failed", cause, errorData);
+  }
+
+  /** Builds the error for one failed item in a collected result. */
+  static fromItemErrorObject(
+    errorObject: ErrorObject,
+  ): DistributedMapItemError {
+    return new DistributedMapItemError(
+      errorObject.ErrorMessage,
+      this.createCause(errorObject),
+      errorObject.ErrorData,
+    );
   }
 }
 

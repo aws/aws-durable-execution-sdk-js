@@ -26,6 +26,11 @@ import {
   type BatchResult,
   DurablePromise,
   type DurableLogData,
+  type DistributedMapSource,
+  type DistributedMapProcessor,
+  type DistributedMapConfig,
+  type DistributedMapSummary,
+  type DistributedMapResult,
 } from "../../types";
 import type { InternalDurableContext } from "../../types/internal-context";
 import type { Context } from "aws-lambda";
@@ -43,6 +48,7 @@ import {
 } from "../../handlers/callback-handler/callback";
 import { createWaitForCallbackHandler } from "../../handlers/wait-for-callback-handler/wait-for-callback-handler";
 import { createMapHandler } from "../../handlers/map-handler/map-handler";
+import { createDistributedMapHandler } from "../../handlers/distributed-map-handler/distributed-map-handler";
 import { createParallelHandler } from "../../handlers/parallel-handler/parallel-handler";
 import { createPromiseHandler } from "../../handlers/promise-handler/promise-handler";
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
@@ -473,6 +479,65 @@ export class DurableContextImpl<Logger extends DurableLogger>
           inputOrConfig,
           maybeConfig,
         ] as Parameters<typeof invokeHandler<I, O>>),
+      );
+    });
+  }
+
+  distributedMap<TItem, TOutput>(
+    name: string | undefined,
+    source: DistributedMapSource<TItem> | TItem[],
+    processor: DistributedMapProcessor<TOutput>,
+    maxConcurrency: number,
+    config: DistributedMapConfig<TOutput> & { collectResults: true },
+  ): DurablePromise<DistributedMapResult<TOutput>>;
+  distributedMap<TItem, TOutput>(
+    source: DistributedMapSource<TItem> | TItem[],
+    processor: DistributedMapProcessor<TOutput>,
+    maxConcurrency: number,
+    config: DistributedMapConfig<TOutput> & { collectResults: true },
+  ): DurablePromise<DistributedMapResult<TOutput>>;
+  distributedMap<TItem, TOutput>(
+    name: string | undefined,
+    source: DistributedMapSource<TItem> | TItem[],
+    processor: DistributedMapProcessor<TOutput>,
+    maxConcurrency: number,
+    config?: DistributedMapConfig<TOutput>,
+  ): DurablePromise<DistributedMapSummary>;
+  distributedMap<TItem, TOutput>(
+    source: DistributedMapSource<TItem> | TItem[],
+    processor: DistributedMapProcessor<TOutput>,
+    maxConcurrency: number,
+    config?: DistributedMapConfig<TOutput>,
+  ): DurablePromise<DistributedMapSummary>;
+  distributedMap<TItem, TOutput>(
+    arg0: string | undefined | DistributedMapSource<TItem> | TItem[],
+    arg1:
+      | DistributedMapSource<TItem>
+      | TItem[]
+      | DistributedMapProcessor<TOutput>,
+    arg2: DistributedMapProcessor<TOutput> | number,
+    arg3?: number | DistributedMapConfig<TOutput>,
+    arg4?: DistributedMapConfig<TOutput>,
+  ): DurablePromise<DistributedMapSummary | DistributedMapResult<TOutput>> {
+    validateContextUsage(
+      this._stepPrefix,
+      "distributedMap",
+      this._executionContext.terminationManager,
+    );
+    return this.withDurableModeManagement(() => {
+      const distributedMapHandler = createDistributedMapHandler(
+        this._executionContext,
+        this.checkpoint,
+        this.createStepId.bind(this),
+        this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
+        () => this._defaultSerdes,
+        this.durableExecution.plugin,
+      );
+      return distributedMapHandler<TItem, TOutput>(
+        ...([arg0, arg1, arg2, arg3, arg4] as Parameters<
+          typeof distributedMapHandler<TItem, TOutput>
+        >),
       );
     });
   }
