@@ -1,7 +1,13 @@
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
 import { BedrockConverse, DEFAULT_LLM_MODEL_ID } from "./bedrock";
 import { defaultAiRetryStrategy } from "./retry";
-import { aiStep, rejected, serializeInput, validateQuestion } from "./shared";
+import {
+  aiStep,
+  rejected,
+  serializeInput,
+  validateQuestion,
+  validateStepName,
+} from "./shared";
 import { AiOperationSubType } from "./subtypes";
 import type { BedrockConfig, Llm, LlmConfig } from "./types";
 
@@ -54,9 +60,13 @@ export function llm(config: LlmConfig = {}): Llm {
 
   return {
     ask(context: DurableContext, question, input, options) {
+      // The input is serialized once, here, so a toJSON hook runs once and
+      // the model gets the value that was checked.
+      let text: string | undefined;
       try {
         validateQuestion(question);
-        serializeInput(input);
+        validateStepName(options?.name);
+        text = input === undefined ? undefined : serializeInput(input);
       } catch (error) {
         return rejected(error);
       }
@@ -64,7 +74,7 @@ export function llm(config: LlmConfig = {}): Llm {
         context,
         options?.name ?? "llm.ask",
         { retryStrategy, subType: AiOperationSubType.LLM_ASK },
-        (signals) => bedrock.ask(question, input, options?.bedrock, signals),
+        (signals) => bedrock.ask(question, text, options?.bedrock, signals),
       );
     },
   };

@@ -1882,3 +1882,142 @@ describe("malformed error metadata", () => {
     expect(result.getResult()).toEqual(["DeciderError"]);
   });
 });
+
+describe("yaythomas review", () => {
+  /** A context whose step passes `stepContext` to the step function. */
+  const contextWith = (stepContext: unknown) =>
+    ({
+      step: (_name: string, fn: (ctx: unknown) => Promise<unknown>) =>
+        new DurablePromise(() => fn(stepContext)),
+    }) as unknown as DurableContext;
+
+  it("fails with AiError when the core SDK gives the step no signal", async () => {
+    const fake = new FakeDecider();
+    const decide = fakeDecider(fake);
+
+    const error = await decide.check(contextWith({}), "Q?", "x").then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+
+    expect(error).toBeInstanceOf(AiError);
+    expect(error?.message).toContain("step context has a signal");
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it.each([1.5, -0.5, 7, -3])(
+    "rejects probability %d for check and label",
+    async (value) => {
+      const fake = new FakeDecider();
+      fake.replies = [
+        answers({ answer: noul(value) }),
+        answers({ o0: noul(0.9), o1: noul(value) }),
+      ];
+      const decide = fakeDecider(fake);
+
+      const result = await run((context) =>
+        outcomes([
+          () => decide.check(context, "Q?", "x"),
+          () => decide.label(context, "Q?", ["a", "b"], "x"),
+        ]),
+      );
+
+      expect(result.getResult()).toEqual([
+        "DeciderInvalidResponseError",
+        "DeciderInvalidResponseError",
+      ]);
+    },
+  );
+
+  it.each([
+    [1.005, true],
+    [-0.005, false],
+  ])(
+    "clamps probability %d, within rounding of the range",
+    async (value, expected) => {
+      const fake = new FakeDecider();
+      fake.replies = [answers({ answer: noul(value) })];
+      const decide = fakeDecider(fake);
+
+      const result = await run((context) => decide.check(context, "Q?", "x"));
+
+      expect(result.getResult()).toBe(expected);
+    },
+  );
+
+  it("rejects headers together with a transport", () => {
+    const fake = new FakeDecider();
+    expect(() =>
+      decider({
+        transport: fake.transport,
+        headers: { authorization: "Bearer t" },
+      }),
+    ).toThrow(/headers only with endpoint/);
+  });
+
+  it.each(["", "x".repeat(257), "caf\u00e9", "line\nbreak"])(
+    "rejects step name %j before any operation or model call",
+    async (name) => {
+      const fake = new FakeDecider();
+      const client = new FakeBedrock();
+      const decide = fakeDecider(fake);
+      const model = fakeLlm(client);
+
+      const result = await run((context) =>
+        outcomes([
+          () => decide.check(context, "Q?", "x", { name }),
+          () => model.ask(context, "Q?", undefined, { name }),
+        ]),
+      );
+
+      expect(result.getResult()).toEqual(
+        name === "" || name.length > 256
+          ? ["RangeError", "RangeError"]
+          : ["TypeError", "TypeError"],
+      );
+      expect(result.getOperations()).toHaveLength(0);
+      expect(fake.requests).toHaveLength(0);
+      expect(client.inputs).toHaveLength(0);
+    },
+  );
+
+  it("accepts a 256-character step name", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: noul(0.9) })];
+    const decide = fakeDecider(fake);
+    const name = "x".repeat(256);
+
+    const result = await run((context) =>
+      decide.check(context, "Q?", "x", { name }),
+    );
+
+    expect(result.getResult()).toBe(true);
+  });
+
+  it("serializes the input once, for decider and llm", async () => {
+    let calls = 0;
+    const input = {
+      toJSON: () => {
+        calls += 1;
+        return { call: calls };
+      },
+    };
+    const fake = new FakeDecider();
+    fake.replies = [answers({ answer: noul(0.9) })];
+    const client = new FakeBedrock();
+    client.replies = [converseReply("ok")];
+    const decide = fakeDecider(fake);
+    const model = fakeLlm(client);
+
+    await run(async (context) => {
+      await decide.check(context, "Q?", input);
+      await model.ask(context, "Q?", input);
+    });
+
+    expect(calls).toBe(2);
+    expect(fake.requests[0]?.state).toBe('{"call":1}');
+    expect(client.inputs[0]?.messages?.[0]?.content?.[0]?.text).toContain(
+      '{"call":2}',
+    );
+  });
+});

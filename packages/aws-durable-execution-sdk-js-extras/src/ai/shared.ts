@@ -4,6 +4,7 @@ import {
   type StepConfig,
 } from "@aws/durable-execution-sdk-js";
 import {
+  AiError,
   AiTimeoutError,
   DeciderInvalidResponseError,
   rebuildAiError,
@@ -113,7 +114,17 @@ export function aiStep<T>(
 ): DurablePromise<T> {
   const step = context.step(
     name,
-    async (stepContext) => body(requestSignals(context, stepContext.signal)),
+    async (stepContext) => {
+      // Core releases before StepContext.signal pass no signal. Without it, a
+      // cancelled step would keep its request running with no sign. So the
+      // call fails at once and names the requirement.
+      if (!(stepContext.signal instanceof AbortSignal)) {
+        throw new AiError(
+          "The decider and llm operations need a version of @aws/durable-execution-sdk-js whose step context has a signal.",
+        );
+      }
+      return body(requestSignals(context, stepContext.signal));
+    },
     config,
   );
   return new DurablePromise<T>(() =>
@@ -195,6 +206,42 @@ export function serializeInput(input: unknown): string {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/** The longest step name that the service accepts. */
+const STEP_NAME_MAX_LENGTH = 256;
+
+/**
+ * Checks a step name against the service's limits: 1 to 256 printable ASCII
+ * characters (0x20 to 0x7E). A step with the default at-least-once semantics
+ * runs its function before the service accepts the START checkpoint. So a name
+ * that the service rejects would call the model and then fail the execution.
+ * This check runs before the step is created.
+ *
+ * @throws \{TypeError\} When the name is not a string, or has a character
+ * outside printable ASCII.
+ * @throws \{RangeError\} When the name is empty or longer than 256 characters.
+ */
+export function validateStepName(name: unknown): void {
+  if (name === undefined) {
+    return;
+  }
+  if (typeof name !== "string") {
+    throw new TypeError("The step name must be a string.");
+  }
+  if (name.length === 0 || name.length > STEP_NAME_MAX_LENGTH) {
+    throw new RangeError(
+      `The step name must have 1 to ${STEP_NAME_MAX_LENGTH} characters.`,
+    );
+  }
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x20 || code > 0x7e) {
+      throw new TypeError(
+        "The step name must contain only printable ASCII characters (0x20 to 0x7E).",
+      );
+    }
+  }
 }
 
 /**

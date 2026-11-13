@@ -18,6 +18,7 @@ import {
   toUnitScore,
   validateOptions,
   validateQuestion,
+  validateStepName,
   validateScale,
 } from "./shared";
 import { AiOperationSubType } from "./subtypes";
@@ -162,6 +163,22 @@ function numberField(
   return value;
 }
 
+/**
+ * Returns the model's probability of yes, from 0 to 1. A value within
+ * {@link SCORE_TOLERANCE} outside that range is rounding, and is clamped. A
+ * value farther out is an invalid reply. Otherwise a reply such as 7 or -3
+ * would be checkpointed as a confident answer.
+ */
+function probability(answer: Record<string, unknown> | undefined): number {
+  const value = numberField(answer, "noul", "noul");
+  if (value < -SCORE_TOLERANCE || value > 1 + SCORE_TOLERANCE) {
+    return invalid(
+      `The decision model's probability ${value} is outside 0 to 1.`,
+    );
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
 function threshold(value: number | undefined): number {
   if (value === undefined) {
     return 0.5;
@@ -235,6 +252,13 @@ export function decider(config: DeciderConfig = {}): Decider {
   if (config.transport !== undefined && config.endpoint !== undefined) {
     throw new TypeError("decider() takes only one of transport and endpoint.");
   }
+  if (config.transport !== undefined && config.headers !== undefined) {
+    // The headers are sent only on the endpoint path. Dropping them could
+    // send a request without the authorization header the caller expected.
+    throw new TypeError(
+      "decider() takes headers only with endpoint, not with transport.",
+    );
+  }
   const endpoint = config.endpoint ?? process.env.STRANDS_DECIDER_ENDPOINT;
   const transport =
     config.transport ??
@@ -252,15 +276,11 @@ export function decider(config: DeciderConfig = {}): Decider {
   const retryStrategy = config.retryStrategy ?? defaultAiRetryStrategy;
 
   async function ask(
-    input: unknown,
+    state: string,
     questions: Record<string, unknown>,
     { signal, deadline }: RequestSignals,
   ): Promise<Answers> {
-    const request: DeciderRequest = {
-      model,
-      state: serializeInput(input),
-      questions,
-    };
+    const request: DeciderRequest = { model, state, questions };
     let response: unknown;
     try {
       response = await send(request, { abortSignal: signal });
@@ -284,21 +304,36 @@ export function decider(config: DeciderConfig = {}): Decider {
     );
   }
 
+  /**
+   * Checks the arguments that every operation shares, and serializes the
+   * input once. A `toJSON` hook then runs once, and the model gets the value
+   * that was checked.
+   */
+  function prepare(
+    question: unknown,
+    input: unknown,
+    options: AiCallOptions | undefined,
+  ): string {
+    validateQuestion(question);
+    validateStepName(options?.name);
+    return serializeInput(input);
+  }
+
   return {
     check(context, question, input, options) {
+      let state: string;
       try {
-        validateQuestion(question);
-        serializeInput(input);
+        state = prepare(question, input, options);
       } catch (error) {
         return rejected(error);
       }
       return run(context, "check", options, async (signals) => {
         const answers = await ask(
-          input,
+          state,
           { [ANSWER]: { type: "noul", instructions: question } },
           signals,
         );
-        return numberField(answers[ANSWER], "noul", "noul") >= yesAt;
+        return probability(answers[ANSWER]) >= yesAt;
       });
     },
 
@@ -309,10 +344,10 @@ export function decider(config: DeciderConfig = {}): Decider {
       input: unknown,
       options?: AiCallOptions,
     ) {
+      let state: string;
       try {
-        validateQuestion(question);
         validateOptions(choices, MAX_CLASSIFY_OPTIONS);
-        serializeInput(input);
+        state = prepare(question, input, options);
       } catch (error) {
         return rejected<T[number]>(error);
       }
@@ -321,7 +356,7 @@ export function decider(config: DeciderConfig = {}): Decider {
           choices.map((option) => [option, null]),
         );
         const answers = await ask(
-          input,
+          state,
           { [ANSWER]: { type: "choice", instructions: question, criteria } },
           signals,
         );
@@ -343,10 +378,10 @@ export function decider(config: DeciderConfig = {}): Decider {
       input: unknown,
       options?: AiCallOptions,
     ) {
+      let state: string;
       try {
-        validateQuestion(question);
         validateOptions(choices);
-        serializeInput(input);
+        state = prepare(question, input, options);
       } catch (error) {
         return rejected<T[number][]>(error);
       }
@@ -361,25 +396,24 @@ export function decider(config: DeciderConfig = {}): Decider {
             },
           ]),
         );
-        const answers = await ask(input, questions, signals);
+        const answers = await ask(state, questions, signals);
         return choices.filter(
-          (_option, i) =>
-            numberField(answers[`o${i}`], "noul", "noul") >= yesAt,
+          (_option, i) => probability(answers[`o${i}`]) >= yesAt,
         );
       });
     },
 
     score(context, question, scale, input, options) {
+      let state: string;
       try {
-        validateQuestion(question);
         validateScale(scale);
-        serializeInput(input);
+        state = prepare(question, input, options);
       } catch (error) {
         return rejected(error);
       }
       return run(context, "score", options, async (signals) => {
         const answers = await ask(
-          input,
+          state,
           {
             [ANSWER]: {
               type: "score",

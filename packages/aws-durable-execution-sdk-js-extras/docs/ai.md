@@ -134,6 +134,10 @@ A call that breaks an argument limit creates no durable operation. The returned 
 
 Each request listens to two signals: the step's own `signal`, and the invocation deadline. The SDK fires the step's signal when it no longer needs the result, for example when a `map` or `parallel` batch completes early. The request then stops. That stop is not an `AiTimeoutError`.
 
+The 10-second reserve depends on the transport. The built-in transports stop when `abortSignal` aborts. A custom `transport` must stop and reject when its `abortSignal` aborts. The SDK cannot stop a promise that ignores the signal, so such a transport can run past the reserve, and the invocation can time out before the step records its outcome.
+
+The operations need a core SDK whose step context has a `signal`. With an older core, every call fails with an `AiError` that says so.
+
 ## Errors and retries
 
 Every error class extends `AiError`, which extends the SDK's `DurableOperationError`. A call rejects with the class that the step's last attempt threw, on the first run and on replay. `DeciderError.status` and `LlmStoppedError.stopReason` are stored in `errorData`, so they are the same on replay. Any other step failure, such as an AWS access-denied error, rejects with the SDK's `StepError`. A caller's own `runInChildContext` wraps the failure in `ChildContextError`, whose inner `StepError` has the AI error type as `cause.name`.

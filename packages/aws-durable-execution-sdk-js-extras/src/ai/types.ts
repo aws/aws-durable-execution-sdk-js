@@ -65,6 +65,13 @@ export interface DeciderRequest {
  * `agentCoreTransport`, `sageMakerTransport`, and `lambdaTransport` return
  * one. Write your own to reach a model another way.
  *
+ * @remarks
+ * A transport must stop and reject when `abortSignal` aborts. The signal
+ * aborts 10 seconds before the invocation runs out of time, and when the SDK
+ * cancels the step. The SDK cannot stop a promise that ignores the signal. So
+ * a transport that ignores it can run past the 10-second reserve, and the
+ * invocation can time out before the step records its outcome.
+ *
  * @public
  *
  * @experimental This type is experimental and may be changed or removed in future releases.
