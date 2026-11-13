@@ -16,21 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the table's data. See the
   [release notes](release-notes/telemetry-mcp-1.1.0.md).
 
-### Coordinated release summary
-
-Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
-below describe each change in detail.
-
-- Plugin factories replace plugin instances in `DurableExecutionConfig.plugins`.
-  The SDK creates one plugin per invocation. (6597e075)
-- The SDK no longer awaits operation plugin hooks. (4e4e9407)
-- OTel reports `faas.max_memory` in bytes, not MiB. (e049d07c)
-- `InvokeError.cause.name` is the invoked function's error type. (a0d310f5)
-- The idle cooldown before an invocation suspends is 3 ms, not 20 ms. (c0a7e349)
-- Telemetry Exporter and Telemetry MCP are `0.1.0-alpha.1`, and the ESLint
-  plugin is `1.2.0`. So the fixes merged after their published versions ship.
-
-
 ### Changed
 
 - **Breaking (experimental).** `@aws/durable-execution-sdk-js-microvm-worker` is renamed to
@@ -71,6 +56,116 @@ below describe each change in detail.
     did not end before the invocation reserve, after <n> ms.`
   - The warning after a failed GetMicrovm now reads: `GetMicrovm failed, so the operation could
     not check whether the MicroVM has ended. The request step keeps sending the job.`
+- `microvm` in `@aws/durable-execution-sdk-js-extras` now requires `lambda:GetMicrovm` for HTTP
+  delivery.
+  A role without `lambda:GetMicrovm` now fails a job whose request gets no answer, even when
+  the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
+  such a job logged a warning and succeeded. See the Fixed entry for a `microvm` job that kept retrying an ended MicroVM.
+
+### Fixed
+
+- A `microvm` job over HTTP in `@aws/durable-execution-sdk-js-extras` kept retrying a MicroVM
+  that had ended. The endpoint of a terminated MicroVM answers HTTP 502 with
+  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, measured in us-east-1. The request step retried
+  that 502 as a MicroVM that is still starting. The launch uses a client token, so every retry
+  reached the same dead MicroVM. So the job failed with `MicrovmDeliveryError` only after both
+  retry tiers, several minutes later. A session job already checked the state after that answer.
+  Every job over HTTP now runs the same check: after that 502, or a request without an answer,
+  the request step calls GetMicrovm after each such answer, at most once per 2 seconds. A
+  terminating, terminated, or removed MicroVM fails the job at once with
+  `MicrovmNotRunningError`. The message names the `stateReason` and ends with
+  `GetMicrovm request ID: <id>.`. `lambda:GetMicrovm` is now required for HTTP delivery. A
+  denied GetMicrovm fails the job at once with `MicrovmDeliveryError`, without a retry. The
+  message names `lambda:GetMicrovm` and ends with `GetMicrovm request ID: <id>.`. This applies
+  to `microvm` and to `microvmSession`, because both use the same check. A GetMicrovm that fails
+  otherwise, such as throttling, a server error, a timeout, or a connection error, logs one
+  warning per step attempt, so up to 5 with the default retry strategy, and the job keeps its
+  retries. A job in the
+  `run` hook has no request step, so it still fails with `MicrovmTimeoutError` at its
+  `heartbeatTimeout`.
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` could suspend its
+  MicroVM during a job. The worker's own `SuspendMicrovm` client made up to 3 attempts. The
+  sequence:
+  1. An attempt suspended the MicroVM, and its answer was lost across the freeze.
+  2. The durable function resumed the MicroVM. The `resume` hook ended the worker's refusal, and
+     the next job started.
+  3. The client retried. The retry suspended the MicroVM with the job inside. Nothing resumed it,
+     so the job failed at its heartbeat timeout or its timeout.
+
+  `SuspendMicrovm` succeeds on a MicroVM that is already suspending or suspended. So a retry
+  gains nothing. The worker's own client now makes one attempt. The worker also aborts the call
+  when the `resume` hook arrives while the call runs. So a client from `createMicrovmsClient`
+  that retries sends no later attempt either. An aborted call is an unknown outcome. The
+  `resume` hook has already ended the refusal, so the worker starts no new one. With one attempt,
+  a throttle or a clock-skew error on the worker's own client now counts as refused for now. So
+  the worker accepts jobs again at once, and tries the call again after at least 30 seconds.
+  Before, the retried error counted as unknown, and the worker refused jobs for up to 30 seconds.
+  With one attempt, a server error or a dropped connection on the worker's own client now counts
+  as unknown. Before, the client retried it, and a retry often succeeded. So the worker now
+  refuses jobs for up to 30 seconds on a MicroVM that did not suspend. That is the accepted cost
+  of the fix, because a retry could suspend the MicroVM with the next job inside.
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` answered a second delivery
+  of a finished job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
+  durable function sends a job again when it lost the first 202, or when its request step runs
+  again on replay. After the 503, it resumed the MicroVM, sent the job again, and got 202. So the
+  MicroVM ran again for nothing. The worker now answers a second delivery this way, and starts no
+  job:
+  - A finished job gets HTTP 202 in every state. Its outcome is already reported.
+  - A running job gets HTTP 202 while the MicroVM terminates. The `terminate` hook fails its
+    callback.
+  - A running job gets HTTP 503 while the worker refuses jobs for a suspend, as before. The job
+    can freeze with the MicroVM. A 202 would end the delivery, and nothing would resume the
+    MicroVM. The 503 makes the durable function check the state and resume the MicroVM.
+
+  Outside a refusal, a second delivery gets HTTP 202, as before. A new job still gets HTTP 503
+  during the refusal. The `run` hook already checked for a known job first.
+
+### Added
+
+- **eslint-plugin**: a new rule, `valid-operation-identifiers`, in `flat/recommended`. It reports
+  an operation name that is empty, is not printable ASCII or is over 256 characters, and a
+  `subType` that is not `[a-zA-Z0-9-_]` or is over 32 characters. The service rejects these values
+  at the first checkpoint and fails the execution. A step with the default semantics runs its
+  function once before that. The rule checks string literals and the fixed parts of template
+  literals, on calls whose receiver is a durable context. **Upgrading can make lint fail** on a
+  project that has such a value, even if that call has not run yet.
+- `MicrovmInvokeOptions.suspendAfter` in `@aws/durable-execution-sdk-js-extras`. A session job
+  with `suspendAfter: true` makes the durable function call SuspendMicrovm with the session's
+  MicroVM ID after the job's result arrives, whether the job succeeded or failed. The call runs
+  inside the job's child context, so a replay of a completed job does not send it again. A
+  failed call logs a warning and does not fail the job. The session handle then records that the
+  MicroVM may be suspended, so each later job checks the state before delivery and resumes a
+  suspended MicroVM. `microvm` rejects `suspendAfter` in `config.request` with a
+  `TypeError`, and both operations reject a value that is not a boolean, before any durable
+  operation starts. The function's role needs `lambda:SuspendMicrovm` on the image, plus
+  `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. The MicroVM's role needs `lambda:SuspendMicrovm`
+  only for `autoSuspendOnIdle`. Every session job also checks the state after an HTTP 502 with
+  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
+  2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
+  GetMicrovm fails the job at once with `MicrovmDeliveryError`. A GetMicrovm that fails otherwise
+  logs one warning per step attempt, so up to 5 with the default retry strategy, and the job
+  keeps its retries. A denied ResumeMicrovm for
+  a suspended MicroVM fails the job at once with `MicrovmDeliveryError`. The doc comment of
+  `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
+  context checkpoint limit, and a new function version for any change.
+
+## [3.0.0] - 2026-10-26
+
+### Coordinated release summary
+
+Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 release together. The entries
+below describe each change in detail.
+
+- Plugin factories replace plugin instances in `DurableExecutionConfig.plugins`.
+  The SDK creates one plugin per invocation. (6597e075)
+- The SDK no longer awaits operation plugin hooks. (4e4e9407)
+- OTel reports `faas.max_memory` in bytes, not MiB. (e049d07c)
+- `InvokeError.cause.name` is the invoked function's error type. (a0d310f5)
+- The idle cooldown before an invocation suspends is 3 ms, not 20 ms. (c0a7e349)
+- Telemetry Exporter and Telemetry MCP are `0.1.0-alpha.1`, and the ESLint
+  plugin is `1.2.0`. So the fixes merged after their published versions ship.
+
+### Changed
 
 - **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
   operation plugin hooks: `onOperationStart`, `onOperationEnd`, `onOperationAttemptStart`,
@@ -99,83 +194,6 @@ below describe each change in detail.
 - A `wrapChildContextFn` hook that does asynchronous work after the child function settles no
   longer lets the invocation suspend during that work. Before, with another operation such as a
   callback waiting, the caller's next line did not run in that invocation.
-
-- Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
-  or invoke has missing wire error data or no defined diagnostic values.
-  Instrumentation should use
-  `status` to identify failure and `error` for available exception details.
-  Caller-facing callback and invoke failures are unchanged.
-
-- The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
-  it accepted some updates that the service rejects, and it rejected others with different
-  messages. So a test could pass locally for a handler that fails in AWS. The changes:
-  - The model checks now cover `Id`, `ParentId`, `Name`, `Type`, and `Action`, as well as
-    `SubType`. `Id` and `ParentId` must have 1 to 64 characters from `[a-zA-Z0-9-_]`. `Name` must
-    have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
-    member rejects the whole request with HTTP 400 `ValidationException`, with the service's
-    message. The message lists at most 10 errors, as the service's does.
-  - The model checks also cover the options. `ChainedInvokeOptions.FunctionName` is required, and
-    must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
-    `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
-    31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
-  - A member of the wrong JSON type rejects the request with HTTP 400 `SerializationException`,
-    with the service's message. The check covers every member of `OperationUpdate`, including
-    `Payload`, the `Error` members, and `ContextOptions.ReplayChildren`. For example, a step that
-    throws `{ name: "X", message: 1 }` now fails the checkpoint, as it does in AWS. The service
-    reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted as 1,
-    and `WaitSeconds: 0.5` is rejected as 0. The local server also stores and schedules that
-    integer, as the service applies it. So `context.wait({ seconds: 1.5 })` waits and records 1
-    second.
-  - A callback timeout or heartbeat timeout of 0 means no timeout, as it does in the service. The
-    local server timed the callback out at once.
-  - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
-    `ParentId`. A different value usually means that the handler is not deterministic.
-  - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.
-  - Payloads now have the service's limits: 262144 bytes for STEP and CONTEXT output, 1048576
-    bytes for CHAINED_INVOKE input, and 6291456 bytes for EXECUTION output. So a handler result
-    over 6291456 bytes now fails the checkpoint, as it does in AWS.
-  - A CALLBACK and a CHAINED_INVOKE accept only `START`. The local server accepted `CANCEL`.
-  - A WAIT `START` requires `WaitOptions`. A CHAINED_INVOKE `START` requires
-    `ChainedInvokeOptions`.
-  - The error messages are the service's. For example, "Cannot start a WAIT that already exists."
-    is now "Cannot start a WAIT operation that already exists.". A test that matches the old
-    message text must update it.
-  - A validation failure now carries HTTP status 400, as the service's `InvalidParameterValueException`
-    does. The SDK classifies a 4xx checkpoint failure as unrecoverable for the execution. So the
-    local execution now ends `FAILED` with `CheckpointUnrecoverableExecutionError`, as it does in
-    AWS. Before, the error carried no status, so it failed only the invocation, and `run()` rejected.
-
-- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
-  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
-  withdraws the invocation's ability to record anything further — for instance because a newer
-  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
-  kept the token it had just spent and presented it again on the next call, which the service
-  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
-  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
-  one call later.
-
-  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
-  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
-  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
-  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
-  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
-  point where the service can be told anything — starting its next step, or reaching a result that
-  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
-  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
-
-  The same applies when the handler has already returned or thrown while a checkpoint it did not
-  await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
-  early completion. If that checkpoint is answered without a token, the invocation answers
-  `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
-  A `PENDING` that follows a handler error carries that error to plugins, which report no outcome
-  to the service in any case.
-
-  The condition is logged at `WARN` rather than passing silently, since an absent token is
-  indistinguishable from a client that dropped the field.
-
-  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
-  SDK's set of invocation responses is unchanged.
-
 - The failed-suspend warning of the MicroVM worker in
   `@aws/durable-execution-sdk-js-microvm-worker` now has one message per outcome:
   - "could not suspend the idle MicroVM, because the service rejected the call. A missing
@@ -186,7 +204,6 @@ below describe each change in detail.
   Before, the text also described the worker state. The state is now in the fields `outcome`,
   `suspendHookArrived`, `terminating`, `closed`, and `refusingJobs`. A log query that matched an
   old text must match the new message or the `outcome` field.
-
 - `microvm` and `vm.invoke` in `@aws/durable-execution-sdk-js-extras` now reject a job input
   whose JSON form has more than `MAX_JOB_INPUT_BYTES` UTF-8 bytes: 6,283,264 bytes, 6 MiB minus
   8 KiB. They reject it with a `RangeError`, before any durable operation starts. The worker
@@ -198,33 +215,8 @@ below describe each change in detail.
   execution that started on an earlier build, with an input in the last 8 KiB below the old
   limit, fails at its next replay.
 
-- `microvm` in `@aws/durable-execution-sdk-js-extras` now requires `lambda:GetMicrovm` for HTTP
-  delivery.
-  A role without `lambda:GetMicrovm` now fails a job whose request gets no answer, even when
-  the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
-  such a job logged a warning and succeeded. See the Fixed entry for a `microvm` job that kept retrying an ended MicroVM.
-
 ### Fixed
 
-- A `microvm` job over HTTP in `@aws/durable-execution-sdk-js-extras` kept retrying a MicroVM
-  that had ended. The endpoint of a terminated MicroVM answers HTTP 502 with
-  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, measured in us-east-1. The request step retried
-  that 502 as a MicroVM that is still starting. The launch uses a client token, so every retry
-  reached the same dead MicroVM. So the job failed with `MicrovmDeliveryError` only after both
-  retry tiers, several minutes later. A session job already checked the state after that answer.
-  Every job over HTTP now runs the same check: after that 502, or a request without an answer,
-  the request step calls GetMicrovm after each such answer, at most once per 2 seconds. A
-  terminating, terminated, or removed MicroVM fails the job at once with
-  `MicrovmNotRunningError`. The message names the `stateReason` and ends with
-  `GetMicrovm request ID: <id>.`. `lambda:GetMicrovm` is now required for HTTP delivery. A
-  denied GetMicrovm fails the job at once with `MicrovmDeliveryError`, without a retry. The
-  message names `lambda:GetMicrovm` and ends with `GetMicrovm request ID: <id>.`. This applies
-  to `microvm` and to `microvmSession`, because both use the same check. A GetMicrovm that fails
-  otherwise, such as throttling, a server error, a timeout, or a connection error, logs one
-  warning per step attempt, so up to 5 with the default retry strategy, and the job keeps its
-  retries. A job in the
-  `run` hook has no request step, so it still fails with `MicrovmTimeoutError` at its
-  `heartbeatTimeout`.
 - After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
   fail to suspend the invocation. The same held after any child context returned while a step
   it started was still running. A step still running in an abandoned item tries to checkpoint
@@ -252,7 +244,6 @@ below describe each change in detail.
 - After a `map` or `parallel` resolved, an item that was still running could start another item
   when it settled. This happened with a `shouldComplete` predicate that returns continue after it
   has completed the batch. Now no item starts after the batch has resolved.
-
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
   target region, and fail before anything is created. Before, an unsupported version failed only
@@ -337,25 +328,11 @@ below describe each change in detail.
 - **Durable Execution Telemetry**: the bundled Glue table (`cdk/stack.ts`) and the
   telemetry-core Athena DDL and schema prompt now include the `droppedcauses` column, so a
   record cut only by dropping causes can be told apart from other truncations.
-
-- **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
-  including later-invocation continuations, even without error details.
-  Exception events still require an actual error object.
-- **OpenTelemetry**: flush the default global provider's public SDK delegate.
-  Both provider paths share a configurable `flushTimeoutMillis` wait budget
-  across invocation-end flush rounds (default 1000 ms). Expiry preserves one
-  bounded snapshot of already-received completion metadata; it does not cancel
-  export requests or shut down application-owned providers.
-- **OpenTelemetry**: retain external notifications received during a flush,
-  preserve an already-exported context's identity for delayed child completion,
-  and use the known backend end as a zero-duration start fallback when no start
-  was recorded. Existing supplied timestamps and caller outcomes are preserved.
 - **OpenTelemetry**: `ExecutionOtelPlugin` with an application-owned provider now sets
   `faas.max_memory` on the Invocation span in bytes, as the semantic conventions define it.
   Before, it reported the `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` value unchanged, in MiB, so a
   1024 MiB function reported `1024` instead of `1073741824`. Update any query or alarm that
   reads this attribute.
-
 - With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
   duration of every wait and retry delay. The checkpoint server recorded times on its own real
   clock, while the runner and the SDK read a fake clock that runs ahead after the first wait. So a
@@ -401,58 +378,6 @@ below describe each change in detail.
     moved the clock, which fired the step's timer early as a side effect. A step's timer without
     a wait beside it already ran in real time. A test that relied on the side effect can get
     slower or time out. Shorten the delay in the test, or use `context.wait` for a durable delay.
-
-- The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
-  before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
-  with the real `setImmediate`, so the fake clock controls durable time without delaying scheduler
-  progress.
-
-- The testing SDK's local runner no longer waits a fixed 100 ms after an execution finishes.
-  It now drains the final checkpoint updates from the local checkpoint server before `run()`
-  settles. A failed drain request after a successful execution rejects `run()` instead of
-  returning a result that may omit its final updates. A test expecting `run()` to reject must
-  attach its rejection handler before it awaits other work. The old wait accidentally allowed
-  that handler to be attached up to 100 ms late; a later handler was never supported.
-
-- The testing SDK's local runner sent every operation of the execution in the input of each
-  invocation. The service omits every descendant of a completed CONTEXT whose `ReplayChildren` is
-  not `true`, because the SDK replays such a context from its result. So a test exercised a replay
-  path with operations that the SDK never receives in AWS. The local runner and
-  `GetDurableExecutionState` now omit the same operations as the service:
-  - The rule walks every ancestor. A STARTED context under such a completed context is omitted
-    with its children. This happens to a branch that is still running when a `map` or `parallel`
-    completes early. The earlier `GetDurableExecutionState` check looked only at the parent.
-  - A completed context records `ReplayChildren` from its closing update only, as the service does.
-    A close without `ContextOptions` sets it to `false`. `START` no longer records it. So the
-    `ContextDetails` of a completed context in `getOperationData()` now includes
-    `ReplayChildren: false`, as the service's operation does.
-  - The test runner's own results, the checkpoint responses, and `UpdatedOperationIds` still
-    include every operation, as they do in the service.
-
-- **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
-  and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
-  plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
-  `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
-  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is
-  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
-- **eslint-plugin**: the `eslint` peer range is now `^8.57.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
-  This is the range `@typescript-eslint/parser` 8 requires, and the setup the README documents
-  needs that parser. The eslintrc setup never worked on any version.
-
-- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
-  `InvalidParameterValueException` as the answer for a callback that is already complete. The
-  service answers `CallbackTimeoutException` ("The callback is either timed out or already
-  completed") for a callback that is already complete, timed out, or whose execution stopped.
-  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
-  the real answer:
-  - A completion whose earlier attempt reached the service, although its answer was lost, failed
-    on the retry instead of counting as delivered. The worker then logged that the outcome could
-    not be reported. It now logs a warning that names both cases the code covers: an earlier
-    attempt delivered the outcome, or the callback timed out first. A callback that really timed
-    out is now a warning where it was an error. The durable function sees the timeout either way.
-  - A heartbeat that met the completion while it was in flight logged "the callback no longer
-    accepts heartbeats". It is no longer logged.
-
 - The MicroVM worker classified a failed `SuspendMicrovm` call of its own by HTTP status alone. So
   expired credentials or a signature error with a 4xx status counted as a rejection. After a
   rejection, the worker did not try the call again until a job ended. The service answers these
@@ -470,14 +395,6 @@ below describe each change in detail.
   example a client from `createMicrovmsClient` with `maxAttempts: 1`. A `ConflictException` is
   now an unknown outcome whatever its status. The Python worker classifies these errors the same
   way.
-
-- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
-  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
-  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
-  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
-  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
-  heartbeat timeout before the same change.
-
 - The MicroVM worker could run two `SuspendMicrovm` calls at once. A `resume` hook that arrived
   during the worker's own call ended the refusal and started the idle time. The session sends an
   `autoSuspendIdleSeconds` of at least 10, but the `run` hook accepts any positive number. With an
@@ -487,7 +404,6 @@ below describe each change in detail.
   now runs one call at a time. A `resume` hook or a job end during the call starts the idle time
   when the call ends. The idle time then starts only if no job runs and no `suspend` hook refusal
   is in effect. The Python worker made the same change. (#1038)
-
 - The `microvm` request step in `@aws/durable-execution-sdk-js-extras` followed redirects. A 301,
   302, or 303 turned the job POST into a GET without the job, and a 2xx for that GET counted as
   accepted, so the job never started. A redirect to another host also received the auth token.
@@ -495,7 +411,6 @@ below describe each change in detail.
   `MicrovmRequestRejectedError`, and so does a redirect that a custom `fetch` follows. A 307 or
   308 for a missing trailing slash used to deliver the job and now fails, so set the path with its
   trailing slash.
-
 - A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
   `MicrovmDeliveryError` for a removed MicroVM. ResumeMicrovm answers `ResourceNotFoundException`
   when the MicroVM is removed between the state check and the resume. The request step rethrew
@@ -562,76 +477,7 @@ below describe each change in detail.
   STS inside each call, and its error carries the request ID of STS. When a custom client throws one
   error object for several calls, the message names only the last call. (#1050, #1058)
 
-- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
-  `SyntaxError` as its `cause`. Its message names the position of the error.
-
-- An oversized result could keep the invocation running until the Lambda timeout. The SDK
-  checkpoints a result over the response size limit after the handler returns, and waited for
-  that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
-  token, the checkpoint manager cleared the queue without sending the result, so the wait never
-  ended. The manager now reports whether it sent that update. An update it never sent answers from
-  the termination: a failed checkpoint throws its classified error, and a withdrawn token answers
-  `PENDING`. An update the service accepted still reports `SUCCEEDED`, even when a termination
-  arrived while it was in flight, because the execution is then recorded as finished.
-
-- An invocation could report an outcome the service had already refused to record. Every exit that
-  reports `SUCCEEDED` or `FAILED` now consults the termination and the token state first, so these
-  cases agree rather than depending on which exit was taken:
-  - A checkpoint that failed after the handler returned answered `SUCCEEDED` for a small result and
-    threw for an oversized one. Both now throw the classified error.
-  - A serdes failure during the oversized-result path threw a plain `Error` instead of
-    `SerdesFailedError`, so the execution failed for good rather than the invocation being retried.
-  - A fault termination followed by a withdrawn token answered `FAILED`. It now answers `PENDING`.
-  - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
-    with a token the service had already rejected. It now answers `PENDING`.
-
-- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` could suspend its
-  MicroVM during a job. The worker's own `SuspendMicrovm` client made up to 3 attempts. The
-  sequence:
-  1. An attempt suspended the MicroVM, and its answer was lost across the freeze.
-  2. The durable function resumed the MicroVM. The `resume` hook ended the worker's refusal, and
-     the next job started.
-  3. The client retried. The retry suspended the MicroVM with the job inside. Nothing resumed it,
-     so the job failed at its heartbeat timeout or its timeout.
-
-  `SuspendMicrovm` succeeds on a MicroVM that is already suspending or suspended. So a retry
-  gains nothing. The worker's own client now makes one attempt. The worker also aborts the call
-  when the `resume` hook arrives while the call runs. So a client from `createMicrovmsClient`
-  that retries sends no later attempt either. An aborted call is an unknown outcome. The
-  `resume` hook has already ended the refusal, so the worker starts no new one. With one attempt,
-  a throttle or a clock-skew error on the worker's own client now counts as refused for now. So
-  the worker accepts jobs again at once, and tries the call again after at least 30 seconds.
-  Before, the retried error counted as unknown, and the worker refused jobs for up to 30 seconds.
-  With one attempt, a server error or a dropped connection on the worker's own client now counts
-  as unknown. Before, the client retried it, and a retry often succeeded. So the worker now
-  refuses jobs for up to 30 seconds on a MicroVM that did not suspend. That is the accepted cost
-  of the fix, because a retry could suspend the MicroVM with the next job inside.
-
-- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` answered a second delivery
-  of a finished job with HTTP 503 while it refused jobs for a suspend or a `terminate` hook. The
-  durable function sends a job again when it lost the first 202, or when its request step runs
-  again on replay. After the 503, it resumed the MicroVM, sent the job again, and got 202. So the
-  MicroVM ran again for nothing. The worker now answers a second delivery this way, and starts no
-  job:
-  - A finished job gets HTTP 202 in every state. Its outcome is already reported.
-  - A running job gets HTTP 202 while the MicroVM terminates. The `terminate` hook fails its
-    callback.
-  - A running job gets HTTP 503 while the worker refuses jobs for a suspend, as before. The job
-    can freeze with the MicroVM. A 202 would end the delivery, and nothing would resume the
-    MicroVM. The 503 makes the durable function check the state and resume the MicroVM.
-
-  Outside a refusal, a second delivery gets HTTP 202, as before. A new job still gets HTTP 503
-  during the refusal. The `run` hook already checked for a known job first.
-
 ### Added
-
-- **eslint-plugin**: a new rule, `valid-operation-identifiers`, in `flat/recommended`. It reports
-  an operation name that is empty, is not printable ASCII or is over 256 characters, and a
-  `subType` that is not `[a-zA-Z0-9-_]` or is over 32 characters. The service rejects these values
-  at the first checkpoint and fails the execution. A step with the default semantics runs its
-  function once before that. The rule checks string literals and the fixed parts of template
-  literals, on calls whose receiver is a durable context. **Upgrading can make lint fail** on a
-  project that has such a value, even if that call has not run yet.
 
 - **eslint-plugin**: a new rule, `require-durable-operation-in-child-context`. It reports a
   `runInChildContext` function, a `map` function, or a `parallel` branch that calls no durable
@@ -640,7 +486,6 @@ below describe each change in detail.
   functions declared in the same file. It reports nothing when the context reaches code it
   cannot read, such as an imported function. The rule is not in `flat/recommended`, because
   the code it reports still replays correctly.
-
 - `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
   interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry
   contains the durable execution metadata (`executionArn`, `requestId`, `tenantId`,
@@ -657,6 +502,235 @@ below describe each change in detail.
   and the Python SDK use. Its entries also gain `operationName`. If you copied the old example,
   update log queries and metric filters that use the snake_case names.
 
+## [2.7.1] - 2026-10-19
+
+### Changed
+
+- Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
+  or invoke has missing wire error data or no defined diagnostic values.
+  Instrumentation should use
+  `status` to identify failure and `error` for available exception details.
+  Caller-facing callback and invoke failures are unchanged.
+
+### Fixed
+
+- **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
+  including later-invocation continuations, even without error details.
+  Exception events still require an actual error object.
+- **OpenTelemetry**: flush the default global provider's public SDK delegate.
+  Both provider paths share a configurable `flushTimeoutMillis` wait budget
+  across invocation-end flush rounds (default 1000 ms). Expiry preserves one
+  bounded snapshot of already-received completion metadata; it does not cancel
+  export requests or shut down application-owned providers.
+- **OpenTelemetry**: retain external notifications received during a flush,
+  preserve an already-exported context's identity for delayed child completion,
+  and use the known backend end as a zero-duration start fallback when no start
+  was recorded. Existing supplied timestamps and caller outcomes are preserved.
+
+## [2.7.0] - 2026-10-16
+
+### Changed
+
+- The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
+  it accepted some updates that the service rejects, and it rejected others with different
+  messages. So a test could pass locally for a handler that fails in AWS. The changes:
+  - The model checks now cover `Id`, `ParentId`, `Name`, `Type`, and `Action`, as well as
+    `SubType`. `Id` and `ParentId` must have 1 to 64 characters from `[a-zA-Z0-9-_]`. `Name` must
+    have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
+    member rejects the whole request with HTTP 400 `ValidationException`, with the service's
+    message. The message lists at most 10 errors, as the service's does.
+  - The model checks also cover the options. `ChainedInvokeOptions.FunctionName` is required, and
+    must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
+    `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
+    31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
+  - A member of the wrong JSON type rejects the request with HTTP 400 `SerializationException`,
+    with the service's message. The check covers every member of `OperationUpdate`, including
+    `Payload`, the `Error` members, and `ContextOptions.ReplayChildren`. For example, a step that
+    throws `{ name: "X", message: 1 }` now fails the checkpoint, as it does in AWS. The service
+    reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted as 1,
+    and `WaitSeconds: 0.5` is rejected as 0. The local server also stores and schedules that
+    integer, as the service applies it. So `context.wait({ seconds: 1.5 })` waits and records 1
+    second.
+  - A callback timeout or heartbeat timeout of 0 means no timeout, as it does in the service. The
+    local server timed the callback out at once.
+  - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
+    `ParentId`. A different value usually means that the handler is not deterministic.
+  - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.
+  - Payloads now have the service's limits: 262144 bytes for STEP and CONTEXT output, 1048576
+    bytes for CHAINED_INVOKE input, and 6291456 bytes for EXECUTION output. So a handler result
+    over 6291456 bytes now fails the checkpoint, as it does in AWS.
+  - A CALLBACK and a CHAINED_INVOKE accept only `START`. The local server accepted `CANCEL`.
+  - A WAIT `START` requires `WaitOptions`. A CHAINED_INVOKE `START` requires
+    `ChainedInvokeOptions`.
+  - The error messages are the service's. For example, "Cannot start a WAIT that already exists."
+    is now "Cannot start a WAIT operation that already exists.". A test that matches the old
+    message text must update it.
+  - A validation failure now carries HTTP status 400, as the service's `InvalidParameterValueException`
+    does. The SDK classifies a 4xx checkpoint failure as unrecoverable for the execution. So the
+    local execution now ends `FAILED` with `CheckpointUnrecoverableExecutionError`, as it does in
+    AWS. Before, the error carried no status, so it failed only the invocation, and `run()` rejected.
+
+### Fixed
+
+- The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
+  before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
+  with the real `setImmediate`, so the fake clock controls durable time without delaying scheduler
+  progress.
+- The testing SDK's local runner no longer waits a fixed 100 ms after an execution finishes.
+  It now drains the final checkpoint updates from the local checkpoint server before `run()`
+  settles. A failed drain request after a successful execution rejects `run()` instead of
+  returning a result that may omit its final updates. A test expecting `run()` to reject must
+  attach its rejection handler before it awaits other work. The old wait accidentally allowed
+  that handler to be attached up to 100 ms late; a later handler was never supported.
+- The testing SDK's local runner sent every operation of the execution in the input of each
+  invocation. The service omits every descendant of a completed CONTEXT whose `ReplayChildren` is
+  not `true`, because the SDK replays such a context from its result. So a test exercised a replay
+  path with operations that the SDK never receives in AWS. The local runner and
+  `GetDurableExecutionState` now omit the same operations as the service:
+  - The rule walks every ancestor. A STARTED context under such a completed context is omitted
+    with its children. This happens to a branch that is still running when a `map` or `parallel`
+    completes early. The earlier `GetDurableExecutionState` check looked only at the parent.
+  - A completed context records `ReplayChildren` from its closing update only, as the service does.
+    A close without `ContextOptions` sets it to `false`. `START` no longer records it. So the
+    `ContextDetails` of a completed context in `getOperationData()` now includes
+    `ReplayChildren: false`, as the service's operation does.
+  - The test runner's own results, the checkpoint responses, and `UpdatedOperationIds` still
+    include every operation, as they do in the service.
+- **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
+  and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
+  plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
+  `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
+  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is
+  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
+- **eslint-plugin**: the `eslint` peer range is now `^8.57.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
+  This is the range `@typescript-eslint/parser` 8 requires, and the setup the README documents
+  needs that parser. The eslintrc setup never worked on any version.
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
+  `InvalidParameterValueException` as the answer for a callback that is already complete. The
+  service answers `CallbackTimeoutException` ("The callback is either timed out or already
+  completed") for a callback that is already complete, timed out, or whose execution stopped.
+  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
+  the real answer:
+  - A completion whose earlier attempt reached the service, although its answer was lost, failed
+    on the retry instead of counting as delivered. The worker then logged that the outcome could
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
+  - A heartbeat that met the completion while it was in flight logged "the callback no longer
+    accepts heartbeats". It is no longer logged.
+- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
+  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
+  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
+  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
+  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
+  heartbeat timeout before the same change.
+- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
+  `SyntaxError` as its `cause`. Its message names the position of the error.
+
+### Added
+
+- New packages, **experimental**: `@aws/durable-execution-sdk-js-extras` and
+  `@aws/durable-execution-sdk-js-microvm-worker`, at `0.1.0-alpha.0`. The extras package adds
+  `microvm(context, ...)`, which runs one job in a new Lambda MicroVM, and
+  `microvmSession(context, ...)`, which sends several jobs to one MicroVM. Both are built from
+  `step`, `createCallback`, and `runInChildContext`, and label their parts with `subType`. The
+  worker package runs in the MicroVM image. It answers the lifecycle hooks, runs each job, sends
+  heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle, if
+  the session opts in with `autoSuspendOnIdle: true`.
+  The extras package requires core SDK 2.6.0 or later.
+- The MicroVM worker acts on the `suspend` and `terminate` lifecycle hooks, when the image enables
+  them. On `terminate` it fails the callback of each running job with `MicrovmTerminatedError`,
+  so the `microvm` operation fails at once with a `MicrovmJobFailedError` instead of at the
+  job's heartbeat timeout or its timeout. It answers the hook after the reports end, or after 5
+  seconds. On `suspend` it refuses new jobs with HTTP 503 until the `resume` hook, or for 30
+  seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
+  `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
+  that the MicroVM endpoint forwarded to one of these hook paths.
+- **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
+  `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
+  `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
+  cached lint result no longer survives an upgrade of the plugin. The README now documents the
+  flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
+  also run against the latest ESLint 8 and 9 in CI. The plugin's types are
+  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
+  type-checked `eslint.config.ts` accepts them.
+
+## [2.6.0] - 2026-10-02
+
+### Added
+
+- `StepConfig.subType` and `CreateCallbackConfig.subType` label a step or a callback with a custom
+  subtype, as `ChildConfig.subType` already does for child contexts. The subtype is recorded on
+  the operation's checkpoint and passed to plugin events. It replaces the default `Step` or
+  `Callback` subtype. So history tools can tell the parts of a composed operation apart without
+  parsing names. Replay compares the subtype, and a replayed operation whose subtype changed
+  terminates as non-deterministic. A step with a custom subtype that waits for a retry still
+  suspends the invocation with `RETRY_SCHEDULED`.
+- The testing SDK's local checkpoint server validates `SubType` as the service does. A subtype
+  must have 1 to 32 characters from `[a-zA-Z0-9-_]`. An invalid subtype rejects the whole
+  checkpoint request with HTTP 400 `ValidationException`, with the service's message. So a test
+  with an invalid subtype fails the same way as an execution in AWS. Errors from the local
+  checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
+  classifies them as it classifies the service's errors.
+
+## [2.5.0] - 2026-09-29
+
+### Changed
+
+- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
+  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
+  withdraws the invocation's ability to record anything further — for instance because a newer
+  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
+  kept the token it had just spent and presented it again on the next call, which the service
+  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
+  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
+  one call later.
+
+  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
+  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
+  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
+  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
+  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
+  point where the service can be told anything — starting its next step, or reaching a result that
+  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
+  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
+
+  The same applies when the handler has already returned or thrown while a checkpoint it did not
+  await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
+  early completion. If that checkpoint is answered without a token, the invocation answers
+  `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
+  A `PENDING` that follows a handler error carries that error to plugins, which report no outcome
+  to the service in any case.
+
+  The condition is logged at `WARN` rather than passing silently, since an absent token is
+  indistinguishable from a client that dropped the field.
+
+  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
+  SDK's set of invocation responses is unchanged.
+
+### Fixed
+
+- An oversized result could keep the invocation running until the Lambda timeout. The SDK
+  checkpoints a result over the response size limit after the handler returns, and waited for
+  that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
+  token, the checkpoint manager cleared the queue without sending the result, so the wait never
+  ended. The manager now reports whether it sent that update. An update it never sent answers from
+  the termination: a failed checkpoint throws its classified error, and a withdrawn token answers
+  `PENDING`. An update the service accepted still reports `SUCCEEDED`, even when a termination
+  arrived while it was in flight, because the execution is then recorded as finished.
+- An invocation could report an outcome the service had already refused to record. Every exit that
+  reports `SUCCEEDED` or `FAILED` now consults the termination and the token state first, so these
+  cases agree rather than depending on which exit was taken:
+  - A checkpoint that failed after the handler returned answered `SUCCEEDED` for a small result and
+    threw for an oversized one. Both now throw the classified error.
+  - A serdes failure during the oversized-result path threw a plain `Error` instead of
+    `SerdesFailedError`, so the execution failed for good rather than the invocation being retried.
+  - A fault termination followed by a withdrawn token answered `FAILED`. It now answers `PENDING`.
+  - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
+    with a token the service had already rejected. It now answers `PENDING`.
+
+### Added
+
 - `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
   test a handler
   against the suspend path above. Pausing answers the running invocation's next checkpoint
@@ -670,68 +744,10 @@ below describe each change in detail.
   Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
   either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
 
-- `StepConfig.subType` and `CreateCallbackConfig.subType` label a step or a callback with a custom
-  subtype, as `ChildConfig.subType` already does for child contexts. The subtype is recorded on
-  the operation's checkpoint and passed to plugin events. It replaces the default `Step` or
-  `Callback` subtype. So history tools can tell the parts of a composed operation apart without
-  parsing names. Replay compares the subtype, and a replayed operation whose subtype changed
-  terminates as non-deterministic. A step with a custom subtype that waits for a retry still
-  suspends the invocation with `RETRY_SCHEDULED`.
+## [2.4.0] - 2026-09-08
 
-- The testing SDK's local checkpoint server validates `SubType` as the service does. A subtype
-  must have 1 to 32 characters from `[a-zA-Z0-9-_]`. An invalid subtype rejects the whole
-  checkpoint request with HTTP 400 `ValidationException`, with the service's message. So a test
-  with an invalid subtype fails the same way as an execution in AWS. Errors from the local
-  checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
-  classifies them as it classifies the service's errors.
-
-- New packages, **experimental**: `@aws/durable-execution-sdk-js-extras` and
-  `@aws/durable-execution-sdk-js-microvm-worker`, at `0.1.0-alpha.0`. The extras package adds
-  `microvm(context, ...)`, which runs one job in a new Lambda MicroVM, and
-  `microvmSession(context, ...)`, which sends several jobs to one MicroVM. Both are built from
-  `step`, `createCallback`, and `runInChildContext`, and label their parts with `subType`. The
-  worker package runs in the MicroVM image. It answers the lifecycle hooks, runs each job, sends
-  heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle, if
-  the session opts in with `autoSuspendOnIdle: true`.
-  The extras package requires core SDK 2.6.0 or later.
-
-- The MicroVM worker acts on the `suspend` and `terminate` lifecycle hooks, when the image enables
-  them. On `terminate` it fails the callback of each running job with `MicrovmTerminatedError`,
-  so the `microvm` operation fails at once with a `MicrovmJobFailedError` instead of at the
-  job's heartbeat timeout or its timeout. It answers the hook after the reports end, or after 5
-  seconds. On `suspend` it refuses new jobs with HTTP 503 until the `resume` hook, or for 30
-  seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
-  `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
-  that the MicroVM endpoint forwarded to one of these hook paths.
-
-- `MicrovmInvokeOptions.suspendAfter` in `@aws/durable-execution-sdk-js-extras`. A session job
-  with `suspendAfter: true` makes the durable function call SuspendMicrovm with the session's
-  MicroVM ID after the job's result arrives, whether the job succeeded or failed. The call runs
-  inside the job's child context, so a replay of a completed job does not send it again. A
-  failed call logs a warning and does not fail the job. The session handle then records that the
-  MicroVM may be suspended, so each later job checks the state before delivery and resumes a
-  suspended MicroVM. `microvm` rejects `suspendAfter` in `config.request` with a
-  `TypeError`, and both operations reject a value that is not a boolean, before any durable
-  operation starts. The function's role needs `lambda:SuspendMicrovm` on the image, plus
-  `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. The MicroVM's role needs `lambda:SuspendMicrovm`
-  only for `autoSuspendOnIdle`. Every session job also checks the state after an HTTP 502 with
-  `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, or a request without an answer, at most once per
-  2 seconds. It resumes a suspending or suspended MicroVM, and sends the job again. A denied
-  GetMicrovm fails the job at once with `MicrovmDeliveryError`. A GetMicrovm that fails otherwise
-  logs one warning per step attempt, so up to 5 with the default retry strategy, and the job
-  keeps its retries. A denied ResumeMicrovm for
-  a suspended MicroVM fails the job at once with `MicrovmDeliveryError`. The doc comment of
-  `suspendAfter` lists the rules that the caller keeps: no use next to parallel jobs, the child
-  context checkpoint limit, and a new function version for any change.
-
-- **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
-  `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
-  `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
-  cached lint result no longer survives an upgrade of the plugin. The README now documents the
-  flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
-  also run against the latest ESLint 8 and 9 in CI. The plugin's types are
-  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
-  type-checked `eslint.config.ts` accepts them.
+This release has no entries in this file. See the
+[release notes](https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-2.4.0%2Ftest-1.1.4%2Fotel-1.0.0).
 
 ## [2.3.1]
 
@@ -834,6 +850,16 @@ below describe each change in detail.
   observability, and the SDK now emits one warning per execution environment describing exactly
   what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
   behaviour that carries a CloudWatch cost on long executions.
+
+## [2.2.0] - 2026-07-16
+
+This release has no entries in this file. See the
+[release notes](https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-2.2.0%2Finsight-0.1.0).
+
+## [2.1.0] - 2026-07-06
+
+This release has no entries in this file. See the
+[release notes](https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-2.1.0%2Ftest-1.1.3%2Fotel-0.1.1).
 
 ## [2.0.0]
 
@@ -1143,4 +1169,15 @@ durable context without importing the SDK or relying on name checks.
   `lodash`, `minimatch`, `picomatch`, and `vite`; update `eslint-plugin-tsdoc` to
   `^0.5.2`.
 
+[Unreleased]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...HEAD
+[3.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...sdk-3.0.0
+[2.7.1]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...sdk-2.7.1
+[2.7.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.6.0%2Ftest-1.3.0...sdk-2.7.0
+[2.6.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.5.0%2Ftest-1.2.0...sdk-2.6.0%2Ftest-1.3.0
+[2.5.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.4.0%2Ftest-1.1.4%2Fotel-1.0.0...sdk-2.5.0%2Ftest-1.2.0
+[2.4.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.3.1...sdk-2.4.0%2Ftest-1.1.4%2Fotel-1.0.0
+[2.3.1]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.3.0...sdk-2.3.1
+[2.3.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.2.0%2Finsight-0.1.0...sdk-2.3.0
+[2.2.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.1.0%2Ftest-1.1.3%2Fotel-0.1.1...sdk-2.2.0%2Finsight-0.1.0
+[2.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.0.0...sdk-2.1.0%2Ftest-1.1.3%2Fotel-0.1.1
 [2.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-1.1.7...sdk-2.0.0
