@@ -100,9 +100,6 @@ const CONFIG = {
   TEST_ACCOUNT_ID: process.env.TEST_ACCOUNT_ID,
   TEST_CAPACITY_PROVIDER_ARN: process.env.TEST_CAPACITY_PROVIDER_ARN,
   TEST_LAMBDA_EXECUTION_ROLE_ARN: process.env.TEST_LAMBDA_EXECUTION_ROLE_ARN,
-  // The agent runtime that the AgentCore examples run their jobs in. Without
-  // it, the run leaves those examples out.
-  AGENT_RUNTIME_ARN: process.env.AGENT_RUNTIME_ARN,
   PROJECT_ROOT: join(__dirname, "../../../.."),
   // Package directory paths
   SDK_PACKAGE_PATH: join(
@@ -379,9 +376,6 @@ class IntegrationTestRunner {
         !example.localOnly &&
         // Covered by other examples' tests and has none of its own.
         !example.testedBy &&
-        // An AgentCore example needs an agent runtime that this run does
-        // not create.
-        !(example.usesAgentcore && !CONFIG.AGENT_RUNTIME_ARN) &&
         !(
           example.excludeRuntimes &&
           example.excludeRuntimes.includes(this.runtime)
@@ -630,12 +624,6 @@ class IntegrationTestRunner {
       templateArgs.push(
         `--microvm-image-arn ${shellQuote(imageArn)}`,
         `--microvm-execution-role-arn ${shellQuote(executionRoleArn)}`,
-      );
-    }
-
-    if (examples.some((example) => example.usesAgentcore)) {
-      templateArgs.push(
-        `--agent-runtime-arn ${shellQuote(CONFIG.AGENT_RUNTIME_ARN)}`,
       );
     }
 

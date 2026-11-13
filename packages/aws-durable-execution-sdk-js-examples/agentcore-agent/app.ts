@@ -12,8 +12,7 @@
 // lambda:SendDurableExecutionCallbackSuccess,
 // lambda:SendDurableExecutionCallbackFailure, and
 // lambda:SendDurableExecutionCallbackHeartbeat on the example functions.
-// The integration test passes the agent runtime ARN to the example functions
-// as AGENT_RUNTIME_ARN.
+// The example function reads the agent runtime ARN from AGENT_RUNTIME_ARN.
 import { createHash } from "node:crypto";
 import { startAgentcoreWorker } from "@aws/durable-execution-sdk-js-compute-worker/agentcore";
 

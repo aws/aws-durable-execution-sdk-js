@@ -252,16 +252,26 @@ The operation creates the steps `<name>.session` (the runtime session ID), `<nam
 
 After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
 
-InvokeAgentRuntime has no idempotency token. So a retried request step can deliver the same job again, for example after the `{"accepted": true}` answer was lost. The worker remembers the callback IDs of its process and does not run a repeated one. A retry can reach a new process, for example after the idle timeout replaced the old one. The new process does not know the callback ID, so it runs the job again. So delivery is at least once, and the handler's side effects must be idempotent.
+InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the Lambda invocation times out, and the step retries in a later invocation.
 
-The session ends at the agent runtime's `maxLifetime`, and a running job ends with it. `maxLifetime` is at most 8 hours for a microVM runtime, and up to 14 days for a runtime on Instances. The operation cannot read the runtime's setting, so it checks only that `timeout` is at least 1 second. Set a `timeout` that fits the configured `maxLifetime`. A `heartbeatTimeout` must be at least 1 second too.
+InvokeAgentRuntime has no idempotency token. So a retried request step can deliver the same job again. The worker remembers the callback IDs of its process and does not run a repeated one. A new process does not know them.
 
-InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the Lambda invocation times out, and the step retries in a later invocation. The request step reads at most 64 KiB of the agent's answer. A longer answer fails the operation with `AgentcoreDeliveryError`, like any answer without `{"accepted": true}`.
+`maxLifetime` is at most 8 hours for a microVM runtime, and up to 14 days for a runtime on Instances. The operation cannot read it, so it checks only that `timeout` is at least 1 second.
+
+An example is in [`src/examples/agentcore/run-job`](../aws-durable-execution-sdk-js-examples/src/examples/agentcore/run-job/agentcore-run-job.ts).
 
 Permissions:
 
 - The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
+
+### Rules for AgentCore jobs
+
+- Set `heartbeatTimeout` to at least 1 second. It ends the job when the worker crashes or stops reporting.
+- `timeout` must fit the agent runtime's configured `maxLifetime`.
+- A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
+- Your logger must not throw.
+- The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
 
 ## Reference
 

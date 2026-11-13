@@ -32,7 +32,6 @@ interface FunctionNameConfig {
 }
 
 interface TemplateOptions {
-  agentRuntimeArn?: string;
   awsRegion?: string;
   codeUri?: string;
   functionNameMap?: Record<string, FunctionNameConfig>;
@@ -133,10 +132,6 @@ function createFunctionResource(
       options.microvmExecutionRoleArn!;
   }
 
-  if (catalog.usesAgentcore) {
-    environmentVariables.AGENT_RUNTIME_ARN = options.agentRuntimeArn!;
-  }
-
   const functionResource: Record<string, any> = {
     Type: "AWS::Serverless::Function",
     Properties: {
@@ -220,9 +215,6 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
     normalizedOptions.microvmImageArn &&
     normalizedOptions.microvmExecutionRoleArn
   );
-  // An AgentCore example needs an agent runtime. Without one, its function
-  // would fail on every invocation, so the template leaves it out.
-  const hasAgentRuntime = !!normalizedOptions.agentRuntimeArn;
 
   if (!normalizedOptions.lambdaExecutionRoleArn) {
     template.Resources.DurableFunctionRole = {
@@ -274,14 +266,12 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
         localOnly?: boolean;
         testedBy?: string[];
         usesMicrovm?: boolean;
-        usesAgentcore?: boolean;
       }) =>
         !catalog.localOnly &&
         // The integration template (built with a function name map) leaves out
         // examples with no test of their own. The published template keeps them.
         !(normalizedOptions.functionNameMap && catalog.testedBy) &&
         (!catalog.usesMicrovm || hasMicrovmImage) &&
-        (!catalog.usesAgentcore || hasAgentRuntime) &&
         !catalog.excludeRuntimes?.includes(normalizedOptions.runtime ?? "22.x"),
     )
     .forEach((catalog: { name: string; handler: string }) => {
@@ -336,7 +326,6 @@ function getMainOptions(args: string[]): TemplateOptions {
   const functionNameMapFile = getArgValue(args, "--function-name-map-file");
 
   return {
-    agentRuntimeArn: getArgValue(args, "--agent-runtime-arn"),
     awsRegion: getArgValue(args, "--aws-region") ?? "us-west-2",
     codeUri: getArgValue(args, "--code-uri"),
     functionNameMap: loadFunctionNameMap(functionNameMapFile),

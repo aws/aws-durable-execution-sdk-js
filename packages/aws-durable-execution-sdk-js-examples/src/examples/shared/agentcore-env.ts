@@ -1,7 +1,6 @@
 /**
- * Reads the agent runtime ARN that the integration test deploys with the
- * AgentCore examples. The SAM template sets `AGENT_RUNTIME_ARN` on every
- * example with `usesAgentcore`. The agent runtime runs `agentcore-agent/`.
+ * Reads the agent runtime ARN of the AgentCore examples from
+ * `AGENT_RUNTIME_ARN`. The agent runtime runs `agentcore-agent/`.
  */
 export function requireAgentcoreEnv(): { agentRuntimeArn: string } {
   const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN;

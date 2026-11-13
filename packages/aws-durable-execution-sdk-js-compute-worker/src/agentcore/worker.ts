@@ -12,7 +12,7 @@ import {
   ResultTooLargeError,
 } from "../callback-reporter";
 import { parseJobRequest } from "../microvm/payload";
-import { readJson, safeLogger, startHeartbeats } from "../microvm/worker";
+import { readJson, startHeartbeats } from "../microvm/worker";
 
 /**
  * The request header in which AgentCore Runtime passes the runtime session
@@ -149,9 +149,8 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    */
   createClient?: (region: string) => LambdaClient;
   /**
-   * Defaults to single-line JSON on stdout and stderr. The worker drops an
-   * error that a logger method throws, and a rejection of a promise that it
-   * returns. So a failing logger cannot end the worker process.
+   * Defaults to single-line JSON on stdout and stderr. The logger must not
+   * throw.
    */
   logger?: AgentcoreWorkerLogger;
 }
@@ -233,7 +232,7 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   port: number = AGENTCORE_PORT,
   host: string = defaultHost(),
 ): Promise<AgentcoreWorker> {
-  const logger = safeLogger(options.logger ?? jsonLogger);
+  const logger = options.logger ?? jsonLogger;
   const running = new Set<Promise<void>>();
   // Every callback ID that the worker accepted, oldest first. A Set keeps
   // insertion order.
@@ -298,8 +297,8 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
     if (accepted.size > MAX_REMEMBERED_JOBS) {
       accepted.delete(accepted.values().next().value as string);
     }
-    // runJob never rejects, and the logger never throws. The last catch is a
-    // guard: an unhandled rejection would end the process.
+    // runJob catches the failures of the job. The last catch is a guard: an
+    // unhandled rejection would end the process.
     const run: Promise<void> = runJob(options, logger, job, sessionId)
       .finally(() => updateRunning(() => running.delete(run)))
       .catch(() => undefined);
@@ -308,12 +307,7 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   };
 
   const server: Server = createServer((request, response) => {
-    void listener(request, response).catch((error: unknown) => {
-      logger.error("request handling failed", { error: String(error) });
-      if (!response.headersSent) {
-        respond(response, 500, { error: "internal error" });
-      }
-    });
+    void listener(request, response);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

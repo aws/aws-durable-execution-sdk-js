@@ -14,7 +14,12 @@ export const config: ExampleConfig = {
     ExecutionTimeout: 900,
     RetentionPeriodInDays: 7,
   },
-  usesAgentcore: true,
+  // The CI test account has no agent runtime yet. So the example is left out
+  // of the SAM template and the integration run. Its test is cloud-only, so
+  // it does not run until the CI infrastructure exists and this flag is
+  // removed. The function reads the agent runtime ARN from
+  // AGENT_RUNTIME_ARN.
+  localOnly: true,
 };
 
 export interface WordCount {

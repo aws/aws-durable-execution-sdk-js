@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import {
   type BedrockAgentCoreClient,
   InvokeAgentRuntimeCommand,
@@ -18,25 +17,13 @@ export type Handler = (
   options?: { abortSignal?: AbortSignal },
 ) => Promise<unknown>;
 
-/** A stream that yields `chunks`, as the AWS SDK returns a body in Node.js. */
-export const bodyOf = (...chunks: string[]): Readable =>
-  Readable.from(chunks.map((chunk) => Buffer.from(chunk, "utf8")));
-
 /** An InvokeAgentRuntime answer whose streamed body is `body`. */
 export const answer =
   (body: string, statusCode = 200): Handler =>
   async () => ({
     statusCode,
     contentType: "application/json",
-    response: bodyOf(body),
-  });
-
-/** A call that ends only when its abort signal fires. */
-export const hangUntilAborted: Handler = (_input, options) =>
-  new Promise((_, reject) => {
-    options?.abortSignal?.addEventListener("abort", () =>
-      reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
-    );
+    response: { transformToString: async () => body },
   });
 
 /**

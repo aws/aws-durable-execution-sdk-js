@@ -607,43 +607,24 @@ describe("startAgentcoreWorker with a failing logger", () => {
     return seen;
   }
 
-  it.each<[string, (message: string) => unknown]>([
-    [
-      "throws synchronously on job started",
-      (message) => {
-        if (message === "job started") {
-          throw new Error("logger broke");
-        }
-      },
-    ],
-    [
-      "returns a rejected promise",
-      () => Promise.reject(new Error("logger broke")),
-    ],
-  ])(
-    "accepts the job and reports its outcome when the logger %s",
-    async (_label, write) => {
-      const client = new FakeLambdaClient();
-      const logger = {
-        info: write,
-        warn: write,
-        error: write,
-      } as unknown as AgentcoreWorkerLogger;
-      let answer: { status: number; body: unknown } | undefined;
+  it("accepts the job and does not crash when the logger throws", async () => {
+    const write = (message: string): void => {
+      if (message === "job started") {
+        throw new Error("logger broke");
+      }
+    };
+    const logger = { info: write, warn: write, error: write };
+    let answer: { status: number; body: unknown } | undefined;
 
-      const unhandled = await unhandledDuring(async () => {
-        await start(async () => "ok", client, logger as RecordingLogger);
-        answer = await invoke(job("cb-1"));
-        await worker?.idle();
-      });
+    const unhandled = await unhandledDuring(async () => {
+      await start(async () => "ok", new FakeLambdaClient(), logger as never);
+      answer = await invoke(job("cb-1"));
+      await worker?.idle();
+    });
 
-      expect(answer).toEqual({ status: 200, body: { accepted: true } });
-      expect(client.named(SUCCESS).map((input) => input.CallbackId)).toEqual([
-        "cb-1",
-      ]);
-      expect(unhandled).toEqual([]);
-    },
-  );
+    expect(answer).toEqual({ status: 200, body: { accepted: true } });
+    expect(unhandled).toEqual([]);
+  });
 });
 
 describe("startAgentcoreWorker session ID", () => {

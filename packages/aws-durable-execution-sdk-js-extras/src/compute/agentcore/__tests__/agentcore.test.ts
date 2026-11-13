@@ -481,21 +481,6 @@ describe("agentcore", () => {
     ["a timeout below 1 second", { timeout: { seconds: 0 } }, "RangeError"],
     ["a missing timeout", { timeout: undefined as never }, "RangeError"],
     [
-      "a heartbeat timeout of 0 seconds",
-      { heartbeatTimeout: { seconds: 0 } },
-      "RangeError",
-    ],
-    [
-      "a heartbeat timeout that is not finite",
-      { heartbeatTimeout: { seconds: Number.POSITIVE_INFINITY } },
-      "RangeError",
-    ],
-    [
-      "a heartbeat timeout that is not a number",
-      { heartbeatTimeout: { seconds: Number.NaN } },
-      "RangeError",
-    ],
-    [
       "a missing agentRuntimeArn",
       { agentRuntimeArn: undefined as never },
       "TypeError",
@@ -517,7 +502,7 @@ describe("agentcore", () => {
     },
   );
 
-  it("accepts a timeout of 14 days and a heartbeat timeout of 1 second", async () => {
+  it("accepts a timeout of 14 days", async () => {
     // A runtime on Instances can set maxLifetime up to 14 days. The ARN does
     // not say which limit applies, so the operation does not cap it.
     const client = new FakeAgentcoreClient();
@@ -526,10 +511,7 @@ describe("agentcore", () => {
         context,
         "review",
         {},
-        baseConfig(client, {
-          timeout: { days: 14 },
-          heartbeatTimeout: { seconds: 1 },
-        }),
+        baseConfig(client, { timeout: { days: 14 } }),
       ),
     );
 
@@ -537,7 +519,6 @@ describe("agentcore", () => {
     await completeJob(runner, "ok");
 
     expect((await executionPromise).getResult()).toBe("ok");
-    expect(client.document().heartbeatTimeoutSeconds).toBe(1);
   });
 
   it("rejects an empty name with a TypeError before any durable operation", async () => {

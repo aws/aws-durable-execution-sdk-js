@@ -1997,10 +1997,8 @@ function describe(value: unknown): unknown {
 /**
  * Wraps a logger so that an error it throws, or a promise it returns that
  * rejects, is dropped.
- *
- * @internal
  */
-export function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
+function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
   const guard =
     (write: MicrovmWorkerLogger["info"]): MicrovmWorkerLogger["info"] =>
     (message, data) => {

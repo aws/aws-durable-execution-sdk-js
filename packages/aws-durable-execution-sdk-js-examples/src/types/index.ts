@@ -54,12 +54,6 @@ export interface ExampleConfig {
    * without an image leaves the example out.
    */
   usesMicrovm?: boolean;
-  /**
-   * If true, the example runs a job in an Amazon Bedrock AgentCore Runtime
-   * agent. The SAM template sets `AGENT_RUNTIME_ARN` on the function. A SAM
-   * template generated without an agent runtime ARN leaves the example out.
-   */
-  usesAgentcore?: boolean;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {

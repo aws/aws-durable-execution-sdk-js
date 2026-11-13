@@ -43,15 +43,6 @@ const NOT_ACCEPTED_ERROR_NAME = "AgentcoreNotAcceptedError";
 /** The longest part of a refused answer that the error message quotes. */
 const MAX_QUOTED_ANSWER_CHARS = 256;
 
-/**
- * The most bytes of the agent's answer that the request step reads.
- *
- * The worker answers `{"accepted": true}`. Other code in the agent can
- * answer with a long body. The step stops reading past this limit and
- * cancels the stream. So a long answer cannot fill the function's memory.
- */
-const MAX_ANSWER_BYTES = 64 * 1024;
-
 const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
 
 /**
@@ -88,9 +79,7 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * Lambda invocation times out. A Lambda timeout during a step attempt would
  * record no outcome for the attempt. A call that stops this way fails its
  * attempt with a retryable `TimeoutError`, so the step retries in a later
- * invocation. The request step reads at most 64 KiB of the agent's answer.
- * A longer answer fails the request step like any other answer without
- * `{"accepted": true}`.
+ * invocation.
  *
  * The operation sends one job per session. After the agent runtime's
  * `idleRuntimeSessionTimeout`, the same session ID silently gets a new
@@ -120,8 +109,8 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * @throws \{TypeError\} When `name` is empty, `agentRuntimeArn` is not a
  * string, the Region of the function cannot be determined, or
  * `JSON.stringify` cannot encode `input`.
- * @throws \{RangeError\} When `timeout` or `heartbeatTimeout` is shorter
- * than 1 second, or the JSON form of `input` is too large.
+ * @throws \{RangeError\} When `timeout` is shorter than 1 second, or the
+ * JSON form of `input` is too large.
  * @throws \{AgentcoreDeliveryError\} When InvokeAgentRuntime fails after all
  * retries, or the agent does not accept the job.
  * @throws \{AgentcoreJobFailedError\} When the agent reports a failure.
@@ -204,20 +193,17 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
                     }),
                     sendOptions,
                   );
-                  const answer = await readAnswer(
-                    response.response,
-                    sendOptions.abortSignal,
-                  );
-                  if (answer === undefined) {
-                    throw notAccepted(
-                      response.statusCode,
-                      `longer than ${MAX_ANSWER_BYTES} bytes`,
-                    );
-                  }
+                  // The response body is a stream. Reading it to the end
+                  // releases the connection. The abort signal also ends the
+                  // read.
+                  const answer =
+                    (await response.response?.transformToString()) ?? "";
                   if (!isAccepted(answer)) {
-                    throw notAccepted(
-                      response.statusCode,
-                      answer.slice(0, MAX_QUOTED_ANSWER_CHARS),
+                    throw Object.assign(
+                      new Error(
+                        `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
+                      ),
+                      { name: NOT_ACCEPTED_ERROR_NAME },
                     );
                   }
                 },
@@ -297,86 +283,6 @@ async function stop(
 }
 
 /**
- * Reads the agent's answer, at most {@link MAX_ANSWER_BYTES} of it.
- *
- * 1. A missing body is an empty answer.
- * 2. A body over the limit is not read to the end. The read stops, cancels
- *    the stream, and returns `undefined`.
- * 3. An abort of `signal` stops the read and cancels the stream. So a body
- *    that stops sending data cannot hold the step past the invocation
- *    reserve.
- *
- * In Node.js the AWS SDK returns the body as a readable stream, which is
- * async iterable. Another runtime can return an object with
- * `transformToWebStream()`, whose web stream is async iterable too.
- */
-async function readAnswer(
-  body: unknown,
-  signal: AbortSignal | undefined,
-): Promise<string | undefined> {
-  if (body === undefined || body === null) {
-    return "";
-  }
-  const iterable = (
-    Symbol.asyncIterator in (body as object)
-      ? body
-      : (body as { transformToWebStream(): unknown }).transformToWebStream()
-  ) as AsyncIterable<Uint8Array | string>;
-  const iterator = iterable[Symbol.asyncIterator]();
-  // Rejects when the signal aborts. Each read races against it.
-  const aborted =
-    signal &&
-    new Promise<never>((_, reject) => {
-      const onAbort = (): void => reject(signal.reason);
-      if (signal.aborted) {
-        onAbort();
-      } else {
-        signal.addEventListener("abort", onAbort, { once: true });
-      }
-    });
-  aborted?.catch(() => undefined);
-  const cancel = (): void => {
-    // A stalled stream may never settle its return() call. So the read does
-    // not wait for it.
-    void Promise.resolve()
-      .then(() => iterator.return?.())
-      .catch(() => undefined);
-  };
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  try {
-    for (;;) {
-      const next = await (aborted
-        ? Promise.race([iterator.next(), aborted])
-        : iterator.next());
-      if (next.done) {
-        return Buffer.concat(chunks).toString("utf8");
-      }
-      const chunk = Buffer.from(next.value);
-      bytes += chunk.byteLength;
-      if (bytes > MAX_ANSWER_BYTES) {
-        cancel();
-        return undefined;
-      }
-      chunks.push(chunk);
-    }
-  } catch (error) {
-    cancel();
-    throw error;
-  }
-}
-
-/** The error for an answer without `{"accepted": true}`. */
-function notAccepted(status: number | undefined, quoted: string): Error {
-  return Object.assign(
-    new Error(
-      `the agent did not accept the job. It must answer {"accepted": true}. Status ${status}, answer: ${quoted}`,
-    ),
-    { name: NOT_ACCEPTED_ERROR_NAME },
-  );
-}
-
-/**
  * The error for a call that the invocation reserve stopped. Its name is
  * `TimeoutError`, which the default retry strategy retries.
  */
@@ -413,18 +319,6 @@ function validateConfig(name: string, config: AgentcoreConfig): void {
     throw new RangeError(
       `AgentCore "${name}": timeout must be at least 1 second. Got ${seconds} seconds.`,
     );
-  }
-  // The callback service reads a heartbeat timeout of 0 as no heartbeat
-  // timeout. The worker rejects a job document whose heartbeatTimeoutSeconds
-  // is below 1. So such a value fails here, before the operation starts a
-  // session.
-  if (config.heartbeatTimeout !== undefined) {
-    const heartbeatSeconds = durationToSeconds(config.heartbeatTimeout);
-    if (!Number.isFinite(heartbeatSeconds) || heartbeatSeconds < 1) {
-      throw new RangeError(
-        `AgentCore "${name}": heartbeatTimeout must be at least 1 second. Got ${heartbeatSeconds} seconds.`,
-      );
-    }
   }
 }
 

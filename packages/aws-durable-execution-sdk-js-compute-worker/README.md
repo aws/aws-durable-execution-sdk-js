@@ -166,11 +166,9 @@ The worker listens on port 8080. AgentCore Runtime requires the agent to listen 
 - `GET /ping` answers `{"status": "HealthyBusy"}` while a job runs, and `{"status": "Healthy"}` otherwise. The answer also has `time_of_last_update`: the Unix time, in seconds, of the last status change. The worker sets it when it starts and when the status changes, not on every ping.
 - `POST /invocations` answers `{"accepted": true}` and then starts the handler on a later turn of the event loop. So synchronous work at the start of the handler cannot delay the answer. A repeated callback ID gets the same answer and does not run again. A document that does not match the contract gets HTTP 400.
 
-The worker remembers the last 1,000 callback IDs in memory. So a retried delivery runs a job once, unless at least 1,000 other jobs arrived in between, or the worker process restarted. A retry can reach a new process, for example after the agent runtime's idle timeout replaced the old one. The new process does not know the callback ID, so it runs the job again. So delivery is at least once, and the handler's side effects must be idempotent.
+The worker remembers the last 1,000 callback IDs in memory. So a retried delivery runs a job once, unless at least 1,000 other jobs arrived in between, or the worker process restarted.
 
 The handler's context has `sessionId`: the AgentCore runtime session ID from the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` request header. It is `undefined` when the request has no such header. The worker's log lines for a job carry it as `runtimeSessionId`, next to `callbackId`.
-
-The worker drops an error that a logger method throws, and a rejection of a promise that it returns. So a failing logger cannot end the worker process.
 
 The worker sends heartbeats while the job runs, when the job has a `heartbeatTimeout`. It then completes the callback with the handler's result or error.
 
@@ -182,6 +180,14 @@ Permissions:
 
 - The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
+
+### Rules for AgentCore jobs
+
+- Set `heartbeatTimeout` to at least 1 second. It ends the job when the worker crashes or stops reporting.
+- `timeout` must fit the agent runtime's configured `maxLifetime`.
+- A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
+- Your logger must not throw.
+- The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
 
 ## Reference
 
