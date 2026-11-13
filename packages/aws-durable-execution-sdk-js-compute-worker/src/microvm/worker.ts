@@ -1827,7 +1827,15 @@ export function heartbeatDelayMs(
   return Math.round(intervalMs - jitterMs);
 }
 
-async function readJson(
+/**
+ * Reads a request body of at most `maxBytes` and parses it as JSON.
+ *
+ * @throws \{InvalidRunHookPayloadError\} When the body is too large or is
+ * not valid JSON.
+ *
+ * @internal
+ */
+export async function readJson(
   request: IncomingMessage,
   maxBytes: number,
 ): Promise<unknown> {
@@ -1989,8 +1997,10 @@ function describe(value: unknown): unknown {
 /**
  * Wraps a logger so that an error it throws, or a promise it returns that
  * rejects, is dropped.
+ *
+ * @internal
  */
-function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
+export function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
   const guard =
     (write: MicrovmWorkerLogger["info"]): MicrovmWorkerLogger["info"] =>
     (message, data) => {
