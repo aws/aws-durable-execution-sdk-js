@@ -1,0 +1,1 @@
+{"finding_digest":"eeb225fdf641c4807d3ba89b72d6b13b83729949e26f6d078244338a682786c2","finding_id":"arf_v1_52zcl7pwihcia7j3vcnxfvvrho","identity_key":"integration-test/integration-test.js::deleterolledbackstack::missing-recovery-tests","pull_request_number":1222,"repository":{"full_name":"aws/aws-durable-execution-sdk-js","id":1038735190},"reviewer":"codex","schema_version":1}
