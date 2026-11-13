@@ -4,7 +4,6 @@
 name: npm publish
 
 permissions:
-  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -21,10 +20,32 @@ env:
 jobs:
   npm-publish:
     runs-on: ubuntu-latest
+    # A repository admin sets the required reviewers of this environment. The
+    # job then waits for one of them to approve before it can publish.
+    environment: npm-publish
+    permissions:
+      id-token: write # Required for OIDC
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
+          # The tag check below needs the history of the release branches.
+          fetch-depth: 0
+      # Anyone who can create a release can tag any commit. So publish only a
+      # commit that is on a release branch, where every change was reviewed.
+      - name: Check that the release tag is on a release branch
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          for branch in main v1.x; do
+            if git merge-base --is-ancestor HEAD "origin/$branch"; then
+              echo "Tag $TAG is on $branch."
+              exit 0
+            fi
+          done
+          echo "::error::Tag $TAG is not on main or v1.x. Publish only from a release branch."
+          exit 1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -35,6 +56,12 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm run test
+      # The same package checks that run on every pull request. They catch a
+      # tarball that misses a declared file or has wrong type resolution.
+      - name: Verify every package ships the files its package.json declares
+        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
+      - name: Check the core package with attw and publint
+        run: npm run check:package -w packages/aws-durable-execution-sdk-js
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish
