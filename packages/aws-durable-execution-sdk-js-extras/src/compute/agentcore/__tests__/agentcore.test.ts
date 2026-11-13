@@ -249,6 +249,52 @@ describe("agentcore", () => {
     expect(client.document(1).callbackId).toBe(client.document(0).callbackId);
   });
 
+  it("uses a custom retryStrategy for the request step", async () => {
+    const client = new FakeAgentcoreClient();
+    client.invokeResponses = [
+      throwing(new ThrottlingException({ message: "slow down", ...metadata })),
+    ];
+    const seen = await bothViews((context) =>
+      agentcore(
+        context,
+        "review",
+        {},
+        baseConfig(client, { retryStrategy: () => ({ shouldRetry: false }) }),
+      ),
+    );
+
+    expect(seen.className).toBe("AgentcoreDeliveryError");
+    expect(client.invokeInputs).toHaveLength(1);
+  });
+
+  it("uses a custom retryStrategy for the stop step", async () => {
+    const client = new FakeAgentcoreClient();
+    client.stopResponses = [
+      throwing(new ThrottlingException({ message: "slow down", ...metadata })),
+    ];
+    let calls = 0;
+    const runner = runnerFor((context) =>
+      agentcore(
+        context,
+        "review",
+        {},
+        baseConfig(client, {
+          retryStrategy: () => {
+            calls++;
+            return { shouldRetry: true, delay: { seconds: 1 } };
+          },
+        }),
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "ok");
+    expect((await executionPromise).getStatus()).toBe("SUCCEEDED");
+
+    expect(client.stopInputs).toHaveLength(2);
+    expect(calls).toBe(1);
+  });
+
   it("reports the agent's failure as AgentcoreJobFailedError and stops the session", async () => {
     const client = new FakeAgentcoreClient();
     const seen = await bothViews(

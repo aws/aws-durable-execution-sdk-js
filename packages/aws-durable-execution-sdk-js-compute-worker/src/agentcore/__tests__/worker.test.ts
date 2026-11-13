@@ -249,6 +249,19 @@ describe("startAgentcoreWorker", () => {
     );
   });
 
+  it("reports a result that is not JSON-serializable as a failure", async () => {
+    const { client } = await start(async () => ({ n: 1n }));
+
+    await invoke(job("cb-1"));
+    await worker?.idle();
+
+    expect(client.named(SUCCESS)).toEqual([]);
+    const [failure] = client.named(FAILURE);
+    expect((failure.Error as { ErrorType: string }).ErrorType).toBe(
+      "ResultSerializationError",
+    );
+  });
+
   it("runs a callback ID once and accepts the repeat without running it", async () => {
     let runs = 0;
     const { client } = await start(async () => {
