@@ -23,9 +23,12 @@ function fakeDeps({ stacks, closed, startFails = [], waitFails = [] }) {
   const started = [];
   /** @type {string[]} */
   const looked = [];
+  /** @type {string[]} */
+  const waited = [];
   return {
     started,
     looked,
+    waited,
     deps: {
       listStacks: () => stacks,
       isClosed: async (/** @type {string} */ number) => {
@@ -39,6 +42,7 @@ function fakeDeps({ stacks, closed, startFails = [], waitFails = [] }) {
         started.push(stack);
       },
       waitForDelete: (/** @type {string} */ stack) => {
+        waited.push(stack);
         if (waitFails.includes(stack)) throw new Error("DELETE_FAILED");
       },
       log: () => {},
@@ -55,9 +59,9 @@ describe("cleanupClosedPullRequestStacks", () => {
       stacks: [stack("24x", "1"), stack("22x", "1"), stack("24x", "2")],
       closed: { 1: true, 2: false },
     });
-    const result = await cleanupClosedPullRequestStacks(deps);
+    const deleted = await cleanupClosedPullRequestStacks(deps);
     assert.deepEqual(started, [stack("24x", "1"), stack("22x", "1")]);
-    assert.deepEqual(result, { deleted: started, failed: [] });
+    assert.deepEqual(deleted, started);
   });
 
   test("never touches the shared stack or unrelated stacks", async () => {
@@ -92,27 +96,31 @@ describe("cleanupClosedPullRequestStacks", () => {
     assert.deepEqual(started, []);
   });
 
-  test("a stack that cannot start deleting does not stop the others", async () => {
-    const { deps, started } = fakeDeps({
+  test("a stack that cannot start deleting does not stop the others, then fails the run", async () => {
+    const { deps, started, waited } = fakeDeps({
       stacks: [stack("24x", "1"), stack("24x", "2"), stack("22x", "2")],
       closed: { 1: true, 2: true },
       startFails: [stack("24x", "1")],
     });
-    const result = await cleanupClosedPullRequestStacks(deps);
+    await assert.rejects(
+      cleanupClosedPullRequestStacks(deps),
+      new Error(`Could not delete 1 stack(s): ${stack("24x", "1")}`),
+    );
     assert.deepEqual(started, [stack("24x", "2"), stack("22x", "2")]);
-    assert.deepEqual(result.deleted, started);
-    assert.deepEqual(result.failed, [stack("24x", "1")]);
+    assert.deepEqual(waited, started);
   });
 
-  test("a stack that fails to delete does not stop the others", async () => {
-    const { deps } = fakeDeps({
+  test("a stack that fails to delete does not stop the others, then fails the run", async () => {
+    const { deps, waited } = fakeDeps({
       stacks: [stack("24x", "1"), stack("24x", "2")],
       closed: { 1: true, 2: true },
       waitFails: [stack("24x", "1")],
     });
-    const result = await cleanupClosedPullRequestStacks(deps);
-    assert.deepEqual(result.deleted, [stack("24x", "2")]);
-    assert.deepEqual(result.failed, [stack("24x", "1")]);
+    await assert.rejects(
+      cleanupClosedPullRequestStacks(deps),
+      new Error(`Could not delete 1 stack(s): ${stack("24x", "1")}`),
+    );
+    assert.deepEqual(waited, [stack("24x", "1"), stack("24x", "2")]);
   });
 });
 

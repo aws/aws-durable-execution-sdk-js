@@ -53,9 +53,11 @@ export const DELETABLE_STATUSES = [
 
 /**
  * Deletes the pull request stacks whose pull request is closed. A stack that
- * fails to delete does not stop the others.
+ * fails to delete does not stop the others. After every stack has been tried,
+ * it throws one error that names each stack it could not delete, so the
+ * workflow fails and the leaked stacks show in its log.
  * @param {CleanupDeps} deps
- * @returns {Promise<{ deleted: string[], failed: string[] }>}
+ * @returns {Promise<string[]>} the deleted stacks
  */
 export async function cleanupClosedPullRequestStacks(deps) {
   const stacks = deps.listStacks().filter((name) => STACK_PATTERN.test(name));
@@ -97,7 +99,12 @@ export async function cleanupClosedPullRequestStacks(deps) {
       deps.log(`Could not delete ${stack}: ${error}`);
     }
   }
-  return { deleted, failed };
+  if (failed.length > 0) {
+    throw new Error(
+      `Could not delete ${failed.length} stack(s): ${failed.join(", ")}`,
+    );
+  }
+  return deleted;
 }
 
 /**
@@ -175,14 +182,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       "AWS_REGION, GITHUB_REPOSITORY and GITHUB_TOKEN are required",
     );
   }
-  const { failed } = await cleanupClosedPullRequestStacks({
+  await cleanupClosedPullRequestStacks({
     ...awsCli(region),
     isClosed: gitHubIsClosed(repository, token),
     log: console.log,
   });
-  if (failed.length > 0) {
-    throw new Error(
-      `Could not delete ${failed.length} stack(s): ${failed.join(", ")}`,
-    );
-  }
 }
