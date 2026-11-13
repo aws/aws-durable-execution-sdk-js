@@ -303,8 +303,15 @@ class IntegrationTestRunner {
    * @param {string} [options.cwd]
    * @param {Object} [options.env]
    * @param {number} [maxAttempts]
+   * @param {() => void | Promise<void>} [beforeRetry] runs after a failed
+   *   attempt, before the wait for the next one
    */
-  async execCommandWithRetry(command, options = {}, maxAttempts = 5) {
+  async execCommandWithRetry(
+    command,
+    options = {},
+    maxAttempts = 5,
+    beforeRetry = undefined,
+  ) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return this.execCommand(command, options);
@@ -313,6 +320,7 @@ class IntegrationTestRunner {
           throw error;
         }
 
+        await beforeRetry?.();
         const delayMs = Math.min(15000 * attempt, 60000);
         log.warning(
           `Command failed; retrying attempt ${attempt + 1}/${maxAttempts} in ${delayMs}ms`,
@@ -737,7 +745,9 @@ class IntegrationTestRunner {
 
     log.info(`Deploying SAM stack: ${stackName}`);
     await timed("sam deploy", () =>
-      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }),
+      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }, 5, () =>
+        this.deleteRolledBackStack(),
+      ),
     );
 
     // A direct update leaves CloudFormation's recorded code behind the code
@@ -803,6 +813,30 @@ class IntegrationTestRunner {
       }),
     );
     return this.getPackagedCodeLocation(packagedTemplatePath);
+  }
+
+  /**
+   * A stack whose first create failed is left in ROLLBACK_COMPLETE, and
+   * CloudFormation cannot update it. So a retried deploy would fail the same
+   * way every time. Delete the stack so the next attempt creates it again.
+   * Pull requests create stacks often, and a create of ~250 resources can
+   * fail on a transient error, such as a log group that CloudWatch Logs does
+   * not report yet.
+   */
+  deleteRolledBackStack() {
+    const stack = this.describeSamStack();
+    if (stack?.StackStatus !== "ROLLBACK_COMPLETE") return;
+    const stackName = this.getSamStackName();
+    const region = shellQuote(CONFIG.AWS_REGION);
+    log.warning(`${stackName} is in ROLLBACK_COMPLETE; deleting it to retry`);
+    this.execCommand(
+      `aws cloudformation delete-stack --stack-name ${shellQuote(stackName)} --region ${region}`,
+      { silent: true },
+    );
+    this.execCommand(
+      `aws cloudformation wait stack-delete-complete --stack-name ${shellQuote(stackName)} --region ${region}`,
+      { silent: true },
+    );
   }
 
   /** @returns {any | undefined} the stack, or undefined if it does not exist */
