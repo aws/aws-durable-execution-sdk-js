@@ -1858,3 +1858,27 @@ describe("a deadline getter that throws", () => {
     expect(received).toBe(step);
   });
 });
+
+describe("malformed error metadata", () => {
+  // errorData comes back from a checkpoint, so it can be in any form. The
+  // error must keep its AI class and read no field from it.
+  it.each(["not json", "[1]", "42", "null"])(
+    "reads no field from errorData %s",
+    (errorData) => {
+      expect(new DeciderError("x", { errorData }).status).toBeUndefined();
+      expect(new LlmStoppedError("x", { errorData }).stopReason).toBe("");
+    },
+  );
+
+  it("rebuilds a step failure with malformed data as the AI class", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [new DeciderError("bad", { errorData: "not json" })];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      outcomes([() => decide.check(context, "Q?", "x")]),
+    );
+
+    expect(result.getResult()).toEqual(["DeciderError"]);
+  });
+});
