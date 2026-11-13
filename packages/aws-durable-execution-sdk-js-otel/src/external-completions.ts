@@ -5,7 +5,8 @@ function isExternalOperation(info: OperationInfo): boolean {
     info.type === "WAIT" ||
     info.type === "INVOKE" ||
     info.type === "CHAINED_INVOKE" ||
-    info.type === "CALLBACK"
+    info.type === "CALLBACK" ||
+    info.type === "DISTRIBUTED_MAP"
   );
 }
 

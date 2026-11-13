@@ -159,7 +159,7 @@ const DURABLE_EXECUTION_ARN_PATTERN =
   /^arn:[^:]*:lambda:[^:]*:[^:]*:function:([^:/]+):[^:/]+\/durable-execution\/([^/]+)\/([^/]+)$/;
 
 /** @internal */
-function parseDurableExecutionArn(
+export function parseDurableExecutionArn(
   arn: string,
 ): DurableExecutionArnParts | undefined {
   const match = DURABLE_EXECUTION_ARN_PATTERN.exec(arn);

@@ -64,6 +64,10 @@ export function validateValidActionsByOperationType(
     case OperationType.EXECUTION:
       validActions = VALID_ACTIONS_FOR_EXECUTION;
       break;
+    case OperationType.DISTRIBUTED_MAP:
+      throw invalidParameterValue(
+        "Distributed map is not supported by the testing library yet.",
+      );
     default:
       throw invalidParameterValue("Invalid operation type.");
   }

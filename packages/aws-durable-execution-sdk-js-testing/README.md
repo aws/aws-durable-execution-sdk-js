@@ -2,6 +2,8 @@
 
 Test durable functions written with [`@aws/durable-execution-sdk-js`](../aws-durable-execution-sdk-js), locally or against a deployed Lambda function.
 
+> **Note:** Distributed map (`context.distributedMap`) is not supported by the testing library yet. Both runners throw a "not supported" error when they reach a distributed map operation.
+
 ## Install
 
 ```bash
