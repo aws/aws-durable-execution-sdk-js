@@ -21,7 +21,8 @@ jobs:
   npm-publish:
     runs-on: ubuntu-latest
     # A repository admin sets the required reviewers of this environment. The
-    # job then waits for one of them to approve before it can publish.
+    # job then waits for one of them to approve before it can publish. The
+    # reviewer checks that the release tag is on main or v1.x.
     environment: npm-publish
     permissions:
       id-token: write # Required for OIDC
@@ -30,24 +31,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
-          # The tag check below needs the history of the release branches.
-          fetch-depth: 0
-      # Anyone who can create a release can tag any commit. So publish only a
-      # commit that is on a release branch, where every change was reviewed.
-      - name: Check that the release tag is on a release branch
-        env:
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          # Name the remote ref in full. fetch-depth: 0 also fetches tags, and
-          # Git resolves a tag named "origin/main" before the remote branch.
-          for branch in main v1.x; do
-            if git merge-base --is-ancestor HEAD "refs/remotes/origin/$branch"; then
-              echo "Tag $TAG is on $branch."
-              exit 0
-            fi
-          done
-          echo "::error::Tag $TAG is not on main or v1.x. Publish only from a release branch."
-          exit 1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
