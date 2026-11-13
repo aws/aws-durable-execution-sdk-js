@@ -2,8 +2,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   type DurableContext,
+  type DurableLogger,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { AccessDeniedException } from "@aws-sdk/client-bedrock-agentcore";
 import {
   LocalDurableTestRunner,
   WaitingOperationStatus,
@@ -119,5 +121,96 @@ describe("agentcore invocation reserve", () => {
     // The stopped attempt is retryable. The second attempt stops the
     // session.
     expect(client.stopInputs).toHaveLength(2);
+  });
+});
+
+describe("agentcore with too little time in the invocation", () => {
+  /** A durable logger that keeps the error messages. */
+  function errorLogger(errors: string[]): DurableLogger {
+    const ignore = (): void => {};
+    return {
+      log: ignore,
+      info: ignore,
+      debug: ignore,
+      warn: ignore,
+      error: (message: string) => {
+        errors.push(message);
+      },
+    };
+  }
+
+  it("makes no AgentCore call, says to raise the function timeout, and diagnoses no permission", async () => {
+    const client = new FakeAgentcoreClient();
+    const errors: string[] = [];
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          // Lambda's default function timeout is 3 seconds.
+          (
+            context.lambdaContext as { getRemainingTimeInMillis: () => number }
+          ).getRemainingTimeInMillis = () => 3_000;
+          context.configureLogger({ customLogger: errorLogger(errors) });
+          return agentcore(context, "review", {}, baseConfig(client)).catch(
+            (error: unknown) => (error as Error).message,
+          );
+        },
+      ),
+    }) as Runner;
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toContain(
+      "The request step had 3.0 seconds left in the Lambda invocation, and it needs at least 11 seconds to send the job. Raise the function timeout.",
+    );
+    expect(client.invokeInputs).toHaveLength(0);
+    expect(client.stopInputs).toHaveLength(0);
+    const stopErrors = errors.filter((message) =>
+      message.includes("StopRuntimeSession failed"),
+    );
+    expect(stopErrors).toHaveLength(1);
+    expect(stopErrors[0]).not.toContain("bedrock-agentcore:StopRuntimeSession");
+    expect(
+      JSON.stringify(
+        runner.getOperation("review.stop").getStepDetails()?.error,
+      ),
+    ).toContain(
+      "needs at least 11 seconds to stop the session. Raise the function timeout.",
+    );
+  });
+
+  it("names the stop permission for AccessDeniedException, and maxLifetime for a running handler", async () => {
+    const client = new FakeAgentcoreClient();
+    client.stopResponses = [
+      async () => {
+        throw new AccessDeniedException({ message: "denied", $metadata: {} });
+      },
+    ];
+    const errors: string[] = [];
+    endsAt = farAway();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          context.configureLogger({ customLogger: errorLogger(errors) });
+          return agentcore(context, "review", {}, baseConfig(client));
+        },
+      ),
+    }) as Runner;
+
+    const executionPromise = runner.run({ payload: {} });
+    await runner
+      .getOperation("review.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await runner
+      .getOperation("review.callback")
+      .sendCallbackSuccess(JSON.stringify("ok"));
+    expect((await executionPromise).getResult()).toBe("ok");
+
+    const [stopError] = errors.filter((message) =>
+      message.includes("StopRuntimeSession failed"),
+    );
+    expect(stopError).toContain("until the runtime's maxLifetime");
+    expect(stopError).toContain(
+      "needs bedrock-agentcore:StopRuntimeSession on the agent runtime ARN",
+    );
   });
 });

@@ -15,6 +15,7 @@ import {
   INVOCATION_RESERVE_MS,
   remainingTime,
   reserveStartsAt,
+  tooLittleTimeMessage,
 } from "../deadline";
 import { defaultMicrovmRetryStrategy } from "../microvm/retry";
 import { agentcoreErrorMapper, inStage } from "./errors";
@@ -79,7 +80,9 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * Lambda invocation times out. A Lambda timeout during a step attempt would
  * record no outcome for the attempt. A call that stops this way fails its
  * attempt with a retryable `TimeoutError`, so the step retries in a later
- * invocation.
+ * invocation. So the function timeout must be at least 11 seconds. With
+ * less time left, the request and stop steps make no call and fail with a
+ * message that says to raise the function timeout.
  *
  * The operation sends one job per session. After the agent runtime's
  * `idleRuntimeSessionTimeout`, the same session ID silently gets a new
@@ -180,6 +183,7 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
           child.step(
             `${name}.request`,
             async () => {
+              assertTimeToCall(child, name, "request", "send the job");
               // The call and the read of the answer must end before the
               // invocation reserve. The abort signal covers both.
               await callBeforeDeadline(
@@ -249,6 +253,7 @@ async function stop(
     await child.step(
       `${name}.stop`,
       async () => {
+        assertTimeToCall(child, name, "stop", "stop the session");
         try {
           // The call must end before the invocation reserve. A Lambda
           // timeout during it would end the invocation with the job's
@@ -272,13 +277,40 @@ async function stop(
     );
   } catch (error) {
     // The job's outcome is already recorded, so the operation still returns
-    // it. The session keeps running until its idle timeout ends it. A
-    // missing permission fails every stop this way, and this log is the only
-    // sign of it. So it is an error, not a warning.
+    // it. The worker reports HealthyBusy while its handler runs, and the
+    // service keeps such a session alive. So a session whose handler still
+    // runs ends only at the runtime's maxLifetime. An idle session ends at
+    // the idle timeout. A missing permission fails every stop, and this log
+    // is the only sign of it. So it is an error, not a warning, and it names
+    // the permission only for AccessDeniedException.
+    const causeName = (error as { cause?: { name?: unknown } }).cause?.name;
+    const hint =
+      causeName === "AccessDeniedException"
+        ? " The function's execution role needs bedrock-agentcore:StopRuntimeSession on the agent runtime ARN and on <runtime ARN>/runtime-endpoint/*."
+        : "";
     child.logger.error(
-      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session keeps running until the agent runtime's idle timeout ends it. A missing permission needs bedrock-agentcore:StopRuntimeSession on the agent runtime ARN and on <runtime ARN>/runtime-endpoint/* in the function's execution role.`,
+      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session keeps running until the agent runtime's idle timeout ends it, or, while the handler still runs, until the runtime's maxLifetime.${hint}`,
       { error },
     );
+  }
+}
+
+/**
+ * Throws a retryable `TimeoutError` when the step has too little time left
+ * before the invocation reserve to make its call. The step then makes no
+ * call. See {@link tooLittleTimeMessage}.
+ */
+function assertTimeToCall(
+  child: DurableContext,
+  name: string,
+  step: string,
+  action: string,
+): void {
+  const message = tooLittleTimeMessage(remainingTime(child), step, action);
+  if (message !== undefined) {
+    throw Object.assign(new Error(`AgentCore "${name}": ${message}`), {
+      name: "TimeoutError",
+    });
   }
 }
 

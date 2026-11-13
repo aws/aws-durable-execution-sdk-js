@@ -237,7 +237,7 @@ describe("startAgentcoreWorker", () => {
   });
 
   it("reports a result over 256 KB as a failure", async () => {
-    const { client } = await start(async () => "x".repeat(300 * 1024));
+    const { client, logger } = await start(async () => "x".repeat(300 * 1024));
 
     await invoke(job("cb-1"));
     await worker?.idle();
@@ -247,10 +247,16 @@ describe("startAgentcoreWorker", () => {
     expect((failure.Error as { ErrorType: string }).ErrorType).toBe(
       "ResultTooLargeError",
     );
+    expect(
+      logger.lines.filter((line) => line.message.startsWith("job ")),
+    ).toEqual([
+      { level: "info", message: "job started" },
+      { level: "info", message: "job failed" },
+    ]);
   });
 
   it("reports a result that is not JSON-serializable as a failure", async () => {
-    const { client } = await start(async () => ({ n: 1n }));
+    const { client, logger } = await start(async () => ({ n: 1n }));
 
     await invoke(job("cb-1"));
     await worker?.idle();
@@ -260,6 +266,12 @@ describe("startAgentcoreWorker", () => {
     expect((failure.Error as { ErrorType: string }).ErrorType).toBe(
       "ResultSerializationError",
     );
+    expect(
+      logger.lines.filter((line) => line.message.startsWith("job ")),
+    ).toEqual([
+      { level: "info", message: "job started" },
+      { level: "info", message: "job failed" },
+    ]);
   });
 
   it("runs a callback ID once and accepts the repeat without running it", async () => {
@@ -607,24 +619,70 @@ describe("startAgentcoreWorker with a failing logger", () => {
     return seen;
   }
 
-  it("accepts the job and does not crash when the logger throws", async () => {
-    const write = (message: string): void => {
-      if (message === "job started") {
-        throw new Error("logger broke");
-      }
+  it("answers 400 and stays up when warn throws on an invalid request", async () => {
+    const throwing = (): void => {
+      throw new Error("logger broke");
     };
-    const logger = { info: write, warn: write, error: write };
+    const logger = { info: throwing, warn: throwing, error: throwing };
     let answer: { status: number; body: unknown } | undefined;
 
     const unhandled = await unhandledDuring(async () => {
       await start(async () => "ok", new FakeLambdaClient(), logger as never);
-      answer = await invoke(job("cb-1"));
-      await worker?.idle();
+      answer = await invoke("not json");
     });
 
-    expect(answer).toEqual({ status: 200, body: { accepted: true } });
+    expect(answer?.status).toBe(400);
+    expect(await ping()).toMatchObject({ status: "Healthy" });
     expect(unhandled).toEqual([]);
   });
+
+  it.each<[string, (message: string) => unknown]>([
+    [
+      "throws",
+      (message) => {
+        if (message === "job started") {
+          throw new Error("logger broke");
+        }
+      },
+    ],
+    [
+      "returns a rejected promise",
+      (message) =>
+        message === "job started"
+          ? Promise.reject(new Error("logger broke"))
+          : undefined,
+    ],
+  ])(
+    'runs the handler, sends the callback, and stops heartbeats when info("job started") %s',
+    async (_label, write) => {
+      const client = new FakeLambdaClient();
+      const logger = { info: write, warn: write, error: write };
+      let ran = false;
+
+      const unhandled = await unhandledDuring(async () => {
+        await start(
+          async () => {
+            ran = true;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            return "ok";
+          },
+          client,
+          logger as never,
+        );
+        await invoke(job("cb-1", { heartbeatTimeoutSeconds: 1 }));
+        await worker?.idle();
+      });
+
+      expect(ran).toBe(true);
+      expect(client.named(SUCCESS).map((input) => input.CallbackId)).toEqual([
+        "cb-1",
+      ]);
+      const after = client.named(HEARTBEAT).length;
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      expect(client.named(HEARTBEAT)).toHaveLength(after);
+      expect(unhandled).toEqual([]);
+    },
+  );
 });
 
 describe("startAgentcoreWorker session ID", () => {

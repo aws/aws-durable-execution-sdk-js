@@ -43,8 +43,11 @@ export interface AgentcoreConfig {
    *
    * When it is set, an agent that stops responding fails the operation after
    * this duration, instead of after `timeout`. The agent receives this value
-   * in the job document. Set it to at least 1 second. It ends the job when
-   * the worker crashes or stops reporting.
+   * in the job document. It ends the job when the worker crashes or stops
+   * reporting. The first heartbeat period starts before the job is
+   * delivered. So it must cover the request retries and a cold session
+   * start, which took 1.4 to 3.1 seconds in a live test. Use 30 seconds or
+   * more.
    */
   heartbeatTimeout?: Duration;
 

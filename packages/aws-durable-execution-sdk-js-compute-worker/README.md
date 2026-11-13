@@ -183,7 +183,8 @@ Permissions:
 
 ### Rules for AgentCore jobs
 
-- Set `heartbeatTimeout` to at least 1 second. It ends the job when the worker crashes or stops reporting.
+- Set `heartbeatTimeout`. It ends the job when the worker crashes or stops reporting. The first heartbeat period starts before the job is delivered. So it must cover the request retries and a cold session start, which took 1.4 to 3.1 seconds in a live test. Use 30 seconds or more.
+- Set the function timeout to at least 11 seconds. The request and stop steps keep 10 seconds before the invocation times out, and each call needs at least 1 second more.
 - `timeout` must fit the agent runtime's configured `maxLifetime`.
 - A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
 - Your logger must not throw.

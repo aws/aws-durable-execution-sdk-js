@@ -58,6 +58,35 @@ export function callBudgetMs(
 }
 
 /**
+ * Returns the message for a step that has too little time left to make its
+ * first call, or `undefined` when the time suffices or is unknown.
+ *
+ * A call that would start with less than {@link MIN_CALL_MS} before the
+ * invocation reserve does not start. So with less than 11 seconds left, the
+ * step makes no call. The cause is the function timeout, so the message says
+ * to raise it.
+ *
+ * The message rounds the time down. So it never reads "11.0 seconds left"
+ * next to "needs at least 11 seconds".
+ */
+export function tooLittleTimeMessage(
+  remainingTimeMs: (() => number | undefined) | undefined,
+  step: string,
+  action: string,
+): string | undefined {
+  const remaining = remainingTimeMs?.();
+  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
+  if (
+    remaining === undefined ||
+    !Number.isFinite(remaining) ||
+    remaining >= neededMs
+  ) {
+    return undefined;
+  }
+  return `The ${step} step had ${(Math.floor(remaining / 100) / 10).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to ${action}. Raise the function timeout.`;
+}
+
+/**
  * Runs one AWS SDK call that must end before `hardDeadline`.
  *
  * 1. Without a deadline, the call runs with the client's own settings.

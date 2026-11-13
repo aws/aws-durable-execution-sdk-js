@@ -12,7 +12,7 @@ import {
   ResultTooLargeError,
 } from "../callback-reporter";
 import { parseJobRequest } from "../microvm/payload";
-import { readJson, startHeartbeats } from "../microvm/worker";
+import { readJson, safeLogger, startHeartbeats } from "../microvm/worker";
 
 /**
  * The request header in which AgentCore Runtime passes the runtime session
@@ -149,8 +149,9 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    */
   createClient?: (region: string) => LambdaClient;
   /**
-   * Defaults to single-line JSON on stdout and stderr. The logger must not
-   * throw.
+   * Defaults to single-line JSON on stdout and stderr. The worker drops an
+   * error that a logger method throws, and a rejection of a promise that it
+   * returns.
    */
   logger?: AgentcoreWorkerLogger;
 }
@@ -232,7 +233,10 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   port: number = AGENTCORE_PORT,
   host: string = defaultHost(),
 ): Promise<AgentcoreWorker> {
-  const logger = options.logger ?? jsonLogger;
+  // A logger call that throws, or that returns a rejected promise, would
+  // end the process or skip the job's cleanup. So the worker wraps the
+  // logger like the MicroVM worker does.
+  const logger = safeLogger(options.logger ?? jsonLogger);
   const running = new Set<Promise<void>>();
   // Every callback ID that the worker accepted, oldest first. A Set keeps
   // insertion order.
@@ -391,8 +395,10 @@ async function runJob<TInput, TOutput>(
     reporter.close();
     return;
   }
-  logger.info("job started", fields);
+  // Every step after the heartbeats start is inside the try. So the
+  // finally block always stops them.
   try {
+    logger.info("job started", fields);
     let outcome: { ok: true; value: TOutput } | { ok: false; error: unknown };
     try {
       outcome = {
@@ -429,6 +435,8 @@ async function runJob<TInput, TOutput>(
           throw error;
         }
         await reporter.fail(error);
+        logger.info("job failed", { ...fields, error: error.name });
+        return;
       }
       logger.info("job succeeded", fields);
     } else {

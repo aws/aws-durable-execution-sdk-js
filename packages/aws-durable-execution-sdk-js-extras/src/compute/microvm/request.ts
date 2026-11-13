@@ -8,8 +8,8 @@ import {
   callBeforeDeadline,
   callBudgetMs,
   INVOCATION_RESERVE_MS,
-  MIN_CALL_MS,
   reserveStartsAt,
+  tooLittleTimeMessage,
 } from "../deadline";
 import { MicrovmDeliveryError } from "./errors";
 
@@ -142,31 +142,24 @@ export class MicrovmEndpointUnavailableError extends MicrovmDeliveryError {
  * Throws when the request step has too little time left to make its first
  * call.
  *
- * A call that would start with less than {@link MIN_CALL_MS} before the
- * invocation reserve does not start. So with less than 11 seconds left, the
- * step makes no call, and the first tier's own error would blame the
- * MicroVM. The cause is the function timeout. The error stays retryable: a
- * retry in a new invocation has more time when this invocation spent its
- * time before the step.
- *
- * The message rounds the time down. So it never reads "11.0 seconds left" next
- * to "needs at least 11 seconds".
+ * With less than 11 seconds left, the step makes no call, and the first
+ * tier's own error would blame the MicroVM. The cause is the function
+ * timeout. The error stays retryable: a retry in a new invocation has more
+ * time when this invocation spent its time before the step. The message
+ * comes from `tooLittleTimeMessage`, which AgentCore shares.
  *
  * @internal
  */
 export function assertTimeToDeliver(
   remainingTimeMs: (() => number | undefined) | undefined,
 ): void {
-  const remaining = remainingTimeMs?.();
-  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
-  if (
-    remaining !== undefined &&
-    Number.isFinite(remaining) &&
-    remaining < neededMs
-  ) {
-    throw new MicrovmEndpointUnavailableError(
-      `The request step had ${(Math.floor(remaining / 100) / 10).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to send the job. Raise the function timeout.`,
-    );
+  const message = tooLittleTimeMessage(
+    remainingTimeMs,
+    "request",
+    "send the job",
+  );
+  if (message !== undefined) {
+    throw new MicrovmEndpointUnavailableError(message);
   }
 }
 
