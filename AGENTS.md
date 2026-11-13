@@ -71,6 +71,8 @@ More detail: [CONCEPTS.md](./packages/aws-durable-execution-sdk-js/src/documents
 1. The title is a conventional commit, such as `fix(sdk): ...`. The allowed types and scopes
    are in [.github/workflows/lintcommit.js](./.github/workflows/lintcommit.js).
 2. Never use `--no-verify`. CI runs the same checks.
+3. A breaking change or a deprecation adds an entry under `## [Unreleased]` in
+   [CHANGELOG.md](./CHANGELOG.md). Other changes add no entry.
 
 ## Reviewing a pull request
 

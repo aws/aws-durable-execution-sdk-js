@@ -104,8 +104,8 @@ jobs:
       - name: Check the core package with attw and publint
         run: npm run check:package -w packages/aws-durable-execution-sdk-js
       # Uses node:test only, so it needs no install. Takes under a second.
-      - name: Test the integration test timing report
-        run: node --test .github/workflows/scripts/integration-test/timing-report.test.mjs
+      - name: Test the integration test scripts
+        run: node --test .github/workflows/scripts/integration-test/*.test.mjs
 
   # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #

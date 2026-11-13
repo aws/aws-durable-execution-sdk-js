@@ -7,9 +7,11 @@ on:
         required: true
         type: string
 
-# Serialize updates to the shared runtime stack.
+# Serialize updates to each stack. A pull request deploys to its own stack
+# (see getSamStackName in integration-test.js), so pull requests do not wait
+# for each other. Runs outside a pull request share the runtime stack.
 concurrency:
-  group: runtime-${{ inputs.node-version }}-integ
+  group: runtime-${{ inputs.node-version }}-integ-${{ github.event.number && format('pr-{0}', github.event.number) || 'shared' }}
   cancel-in-progress: false
   queue: max
 
@@ -68,6 +70,7 @@ jobs:
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
           TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
@@ -78,6 +81,7 @@ jobs:
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           INTEG_TIMINGS_FILE: ${{ runner.temp }}/integration-results.json
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}
