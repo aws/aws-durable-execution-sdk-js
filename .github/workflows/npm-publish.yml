@@ -38,8 +38,10 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
+          # Name the remote ref in full. fetch-depth: 0 also fetches tags, and
+          # Git resolves a tag named "origin/main" before the remote branch.
           for branch in main v1.x; do
-            if git merge-base --is-ancestor HEAD "origin/$branch"; then
+            if git merge-base --is-ancestor HEAD "refs/remotes/origin/$branch"; then
               echo "Tag $TAG is on $branch."
               exit 0
             fi
