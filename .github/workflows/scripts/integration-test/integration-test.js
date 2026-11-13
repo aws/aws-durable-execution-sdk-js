@@ -30,6 +30,7 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import dotenv from "dotenv";
+import { baseFunctionName, samStackName } from "./integration-test-names.mjs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -346,35 +347,8 @@ class IntegrationTestRunner {
     );
   }
 
-  /**
-   * The pull request this run tests, or undefined outside a pull request.
-   * Both pull_request and pull_request_target runs (label changes) count.
-   * @returns {string | undefined}
-   */
-  getPullRequestNumber() {
-    const eventName = process.env.GITHUB_EVENT_NAME;
-    if (eventName !== "pull_request" && eventName !== "pull_request_target") {
-      return undefined;
-    }
-    if (!process.env.GITHUB_EVENT_NUMBER) {
-      throw new Error(
-        "Could not find GITHUB_EVENT_NUMBER environment variable",
-      );
-    }
-    return process.env.GITHUB_EVENT_NUMBER;
-  }
-
-  // Each pull request gets its own stack. With one shared stack per runtime,
-  // runs from different branches replaced each other's template, so most
-  // deploys went through a full CloudFormation update (140-290s) instead of a
-  // direct code update (30-60s). They also had to wait for each other.
   getSamStackName() {
-    const runtimeId = this.getRuntimeId().toLowerCase();
-    const pullRequestNumber = this.isGitHubActions
-      ? this.getPullRequestNumber()
-      : undefined;
-    const suffix = pullRequestNumber ? `-pr-${pullRequestNumber}` : "";
-    return `aws-durable-execution-sdk-js-integ-${runtimeId}${suffix}`;
+    return samStackName(this.runtime, process.env);
   }
 
   samStackExists(/** @type {string | undefined} */ stackName = undefined) {
@@ -427,44 +401,14 @@ class IntegrationTestRunner {
     /** @type {Record<string, {functionName: string, qualifier: string}>} */
     const functionNameMap = {};
 
-    // Get runtime suffix from argument or environment variable
-    const lambdaRuntime = this.runtime.replace(".", "");
-
     for (const example of examples) {
-      const exampleName = example.name;
       const exampleHandler = example.handler;
-
-      // Build base function name with runtime suffix
-      let baseFunctionName;
-      if (this.isGitHubActions) {
-        // Functions are named with the runtime first since the log scrubber cleans logs by the NodeJS- suffix
-        const baseName =
-          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS`;
-        if (
-          options.capacityProviderOnly &&
-          process.env.GITHUB_EVENT_NAME === "pull_request"
-        ) {
-          if (!process.env.GITHUB_EVENT_NUMBER) {
-            throw new Error(
-              "Could not find GITHUB_EVENT_NUMBER environment variable",
-            );
-          }
-          baseFunctionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
-        } else if (!options.capacityProviderOnly) {
-          // Function names are unique per account, so each pull request
-          // stack needs its own. See getSamStackName.
-          const pullRequestNumber = this.getPullRequestNumber();
-          baseFunctionName = pullRequestNumber
-            ? `${baseName}-PR-${pullRequestNumber}`
-            : baseName;
-        } else {
-          baseFunctionName = baseName;
-        }
-      } else {
-        const name =
-          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS-Local`;
-        baseFunctionName = name;
-      }
+      const name = baseFunctionName({
+        exampleName: example.name,
+        runtime: this.runtime,
+        capacityProviderOnly: options.capacityProviderOnly,
+        env: process.env,
+      });
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
 
@@ -473,13 +417,13 @@ class IntegrationTestRunner {
           functionNameMap[
             `${handlerFile}${CAPACITY_PROVIDER_FUNCTION_SUFFIX}`
           ] = {
-            functionName: `${baseFunctionName}-CapacityProvider`,
+            functionName: `${name}-CapacityProvider`,
             qualifier: "$LATEST.PUBLISHED",
           };
         }
       } else {
         functionNameMap[handlerFile] = {
-          functionName: baseFunctionName,
+          functionName: name,
           qualifier: "$LATEST",
         };
       }
