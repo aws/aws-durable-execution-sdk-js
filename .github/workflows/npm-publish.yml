@@ -29,7 +29,10 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-      - run: npm ci
+      # Skip the install scripts of dependencies. This job can publish to npm, so
+      # it must not run third-party code that the build does not need. The
+      # build and the tests pass without those scripts.
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm run test
       - name: Make script executable
