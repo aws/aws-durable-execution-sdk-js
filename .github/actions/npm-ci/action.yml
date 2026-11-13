@@ -14,7 +14,7 @@ runs:
       run: echo "version=$(node --version)" >> "$GITHUB_OUTPUT"
     - name: Restore node_modules
       id: cache
-      uses: actions/cache@v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           node_modules
@@ -22,7 +22,7 @@ runs:
         key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.version }}-${{ hashFiles('package-lock.json') }}
     - name: Restore the npm download cache
       if: steps.cache.outputs.cache-hit != 'true'
-      uses: actions/cache@v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.npm
         key: npm-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}

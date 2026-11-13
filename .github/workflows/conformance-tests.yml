@@ -45,7 +45,7 @@ jobs:
     outputs:
       suites: ${{ steps.discover.outputs.suites }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Discover suites from templates
         id: discover
@@ -75,10 +75,10 @@ jobs:
       run:
         working-directory: packages/aws-durable-execution-sdk-js-conformance-tests
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22.x"
           cache: "npm"
@@ -107,7 +107,7 @@ jobs:
         run: uv pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
 
       - name: Get AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           # SAM-capable deploy role (has CloudFormation/S3/IAM), same role the
           # SAM-based integration tests assume. NOT ACTIONS_INTEGRATION_ROLE_NAME
@@ -152,7 +152,7 @@ jobs:
 
       - name: Upload conformance report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: conformance-report-${{ matrix.suite }}
           path: |
