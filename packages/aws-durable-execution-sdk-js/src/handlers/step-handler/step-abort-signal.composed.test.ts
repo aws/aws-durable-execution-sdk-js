@@ -236,4 +236,33 @@ describe("StepContext.signal", () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it(
+    "aborts a step the handler did not await when the handler returns",
+    async () => {
+      const slow: SlowStep = { stoppedEarly: false };
+      let stepStarted!: () => void;
+      const running = new Promise<void>((resolve) => {
+        stepStarted = resolve;
+      });
+
+      // The handler returns without terminating, so only disposal ends the invocation.
+      const response = await run(async (_event, context) => {
+        void context
+          .step("slow", async (ctx) => {
+            stepStarted();
+            return slowStep(slow)(ctx);
+          })
+          .catch(() => undefined);
+        await running;
+        return "done";
+      });
+
+      expect(response).toMatchObject({ Status: InvocationStatus.SUCCEEDED });
+      expect(slow.signal?.aborted).toBe(true);
+      await sleep(0);
+      expect(slow.stoppedEarly).toBe(true);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
