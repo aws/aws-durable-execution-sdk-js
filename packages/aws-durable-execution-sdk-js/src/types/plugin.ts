@@ -303,9 +303,11 @@ export interface DurableInstrumentationPlugin {
    */
   onInvocationEnd?(info: InvocationEndInfo): Promise<void>;
   /**
-   * Called when an operation starts. During replay it is also called for an
-   * operation that started in an earlier invocation, with `isReplay` set to
-   * `true`. The SDK does not wait for the returned promise.
+   * Called when an operation starts. On replay it is also called for an
+   * operation that started in an earlier invocation and has not finished, with
+   * `isReplay` set to `true`. It is not called for an operation that finished
+   * in an earlier invocation. `InvocationInfo.operations` lists those
+   * operations. The SDK does not wait for the returned promise.
    */
   onOperationStart?(info: OperationInfo): Promise<void>;
   /**
