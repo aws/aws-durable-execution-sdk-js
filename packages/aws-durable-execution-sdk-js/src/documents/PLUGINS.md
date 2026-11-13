@@ -34,7 +34,11 @@ class AuditPlugin implements DurableInstrumentationPlugin {
     private readonly exporter: Exporter,
     private readonly executionArn: string,
   ) {}
-  // Implement the lifecycle hooks needed by this plugin.
+
+  // Implement the lifecycle hooks this plugin needs.
+  async onInvocationEnd(): Promise<void> {
+    await this.exporter.flush(this.executionArn);
+  }
 }
 
 // Built once for the execution environment and shared by every instance.
