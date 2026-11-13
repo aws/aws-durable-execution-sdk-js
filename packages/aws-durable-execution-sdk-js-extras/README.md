@@ -2,7 +2,7 @@
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
-Ready-made durable operations for the [AWS Durable Execution SDK](../aws-durable-execution-sdk-js). The first operations run jobs in [AWS Lambda MicroVMs](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html).
+Ready-made durable operations for the [AWS Durable Execution SDK](../aws-durable-execution-sdk-js). The first operations run jobs in [AWS Lambda MicroVMs](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html). The `ai` subpath asks a decision model or a large language model one question in one durable step ([AI operations reference](docs/ai.md)).
 
 ## Install
 
@@ -204,6 +204,7 @@ await microvmSession(
 ## Reference
 
 - [MicroVM operations reference](docs/microvm.md): delivery, the operation tree, subtypes, retries, the error tree, limits, permissions, suspend details, the worker contract, and best practices.
+- [AI operations reference](docs/ai.md): `decider()`, `llm()`, where the decision model can run, limits, errors, and permissions.
 - [End-to-end test](docs/e2e.md)
 - [Compute worker](../aws-durable-execution-sdk-js-compute-worker)
 - Examples: [one job](../aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts) and [a session](../aws-durable-execution-sdk-js-examples/src/examples/microvm/session/microvm-session.ts).

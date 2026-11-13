@@ -21,6 +21,17 @@ const CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
   "@aws-sdk/client-lambda-microvms": "../compute/microvm",
 };
 
+/**
+ * Each AWS SDK client that a subpath loads on first use, not when the
+ * subpath loads. Loading the subpath without the client must succeed.
+ */
+const LAZY_CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
+  "@aws-sdk/client-bedrock-agentcore": "../ai",
+  "@aws-sdk/client-bedrock-runtime": "../ai",
+  "@aws-sdk/client-lambda": "../ai",
+  "@aws-sdk/client-sagemaker-runtime": "../ai",
+};
+
 describe("package dependencies", () => {
   // A customer installs only the clients of the subpaths they import. So no
   // client can be a dependency that npm installs for every customer.
@@ -34,7 +45,12 @@ describe("package dependencies", () => {
 
   it("names the subpath of every AWS SDK client", () => {
     expect(clients.length).toBeGreaterThan(0);
-    expect(Object.keys(CLIENT_SUBPATHS).sort()).toEqual([...clients].sort());
+    expect(
+      [
+        ...Object.keys(CLIENT_SUBPATHS),
+        ...Object.keys(LAZY_CLIENT_SUBPATHS),
+      ].sort(),
+    ).toEqual([...clients].sort());
   });
 
   it.each(clients)("declares %s as an optional peer dependency", (name) => {
@@ -78,6 +94,25 @@ describe("package dependencies", () => {
         expect((error?.cause as Error | undefined)?.message).toBe(
           `Cannot find module '${client}'`,
         );
+      });
+    },
+  );
+
+  describe.each(Object.entries(LAZY_CLIENT_SUBPATHS))(
+    "without %s installed",
+    (client, subpath) => {
+      it(`loads the package root and ${subpath}`, async () => {
+        vi.resetModules();
+        vi.doMock(client, () => {
+          throw new Error(`Cannot find module '${client}'`);
+        });
+        try {
+          await expect(import("..")).resolves.toHaveProperty("ComputeError");
+          await expect(import(subpath)).resolves.toHaveProperty("decider");
+        } finally {
+          vi.doUnmock(client);
+          vi.resetModules();
+        }
       });
     },
   );

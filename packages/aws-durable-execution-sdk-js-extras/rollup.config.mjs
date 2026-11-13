@@ -8,6 +8,7 @@ const config = {
   input: /** @type {Record<string, string>} */ ({
     index: "./src/index.ts",
     "compute/microvm": "./src/compute/microvm/index.ts",
+    ai: "./src/ai/index.ts",
   }),
   plugins: [nodeExternals()],
 };
