@@ -31,6 +31,7 @@ import {
 
 import dotenv from "dotenv";
 import { baseFunctionName, samStackName } from "./integration-test-names.mjs";
+import { deployWithRollbackRecovery, retry } from "./sam-deploy.mjs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -304,33 +305,12 @@ class IntegrationTestRunner {
    * @param {string} [options.cwd]
    * @param {Object} [options.env]
    * @param {number} [maxAttempts]
-   * @param {() => void | Promise<void>} [beforeRetry] runs after a failed
-   *   attempt, before the wait for the next one
    */
-  async execCommandWithRetry(
-    command,
-    options = {},
-    maxAttempts = 5,
-    beforeRetry = undefined,
-  ) {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return this.execCommand(command, options);
-      } catch (error) {
-        if (attempt === maxAttempts) {
-          throw error;
-        }
-
-        await beforeRetry?.();
-        const delayMs = Math.min(15000 * attempt, 60000);
-        log.warning(
-          `Command failed; retrying attempt ${attempt + 1}/${maxAttempts} in ${delayMs}ms`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    }
-
-    throw new Error("Max command retry attempts exceeded");
+  execCommandWithRetry(command, options = {}, maxAttempts = 5) {
+    return retry(() => this.execCommand(command, options), {
+      maxAttempts,
+      log: log.warning,
+    });
   }
 
   getRuntimeId() {
@@ -689,8 +669,9 @@ class IntegrationTestRunner {
 
     log.info(`Deploying SAM stack: ${stackName}`);
     await timed("sam deploy", () =>
-      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }, 5, () =>
-        this.deleteRolledBackStack(),
+      deployWithRollbackRecovery(
+        () => this.execCommand(deployCommand, { cwd: examplesDir }),
+        this.getStackOps(),
       ),
     );
 
@@ -760,27 +741,29 @@ class IntegrationTestRunner {
   }
 
   /**
-   * A stack whose first create failed is left in ROLLBACK_COMPLETE, and
-   * CloudFormation cannot update it. So a retried deploy would fail the same
-   * way every time. Delete the stack so the next attempt creates it again.
-   * Pull requests create stacks often, and a create of ~250 resources can
-   * fail on a transient error, such as a log group that CloudWatch Logs does
-   * not report yet.
+   * The CloudFormation calls that deployWithRollbackRecovery needs.
+   * @returns {import("./sam-deploy.mjs").StackOps}
    */
-  deleteRolledBackStack() {
-    const stack = this.describeSamStack();
-    if (stack?.StackStatus !== "ROLLBACK_COMPLETE") return;
+  getStackOps() {
     const stackName = this.getSamStackName();
+    const stack = shellQuote(stackName);
     const region = shellQuote(CONFIG.AWS_REGION);
-    log.warning(`${stackName} is in ROLLBACK_COMPLETE; deleting it to retry`);
-    this.execCommand(
-      `aws cloudformation delete-stack --stack-name ${shellQuote(stackName)} --region ${region}`,
-      { silent: true },
-    );
-    this.execCommand(
-      `aws cloudformation wait stack-delete-complete --stack-name ${shellQuote(stackName)} --region ${region}`,
-      { silent: true },
-    );
+    return {
+      getStatus: () => this.describeSamStack()?.StackStatus,
+      deleteStack: () => {
+        this.execCommand(
+          `aws cloudformation delete-stack --stack-name ${stack} --region ${region}`,
+          { silent: true },
+        );
+      },
+      waitForDelete: () => {
+        this.execCommand(
+          `aws cloudformation wait stack-delete-complete --stack-name ${stack} --region ${region}`,
+          { silent: true },
+        );
+      },
+      log: (message) => log.warning(`${stackName}: ${message}`),
+    };
   }
 
   /** @returns {any | undefined} the stack, or undefined if it does not exist */
