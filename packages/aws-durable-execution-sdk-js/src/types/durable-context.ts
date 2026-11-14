@@ -27,6 +27,17 @@ import { DurablePromise } from "./durable-promise";
 import type { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
+ * The context that a durable handler receives. Its methods run durable
+ * operations: `step`, `wait`, `invoke`, `runInChildContext`, `map`,
+ * `parallel`, `waitForCallback`, `createCallback` and `waitForCondition`.
+ *
+ * @remarks
+ * The SDK checkpoints the result of each operation. On replay, a step that
+ * already finished returns its checkpointed result and does not run again. A
+ * child context can run its function again on replay. So call the operations
+ * in the same order on every replay. Put side effects in steps, and keep all
+ * other code deterministic, including code inside child contexts.
+ *
  * @public
  */
 export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {

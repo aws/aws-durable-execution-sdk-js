@@ -29,7 +29,7 @@ export const handler = withDurableExecution(
 
 `withDurableExecution` wraps your handler. Export the wrapped handler as the Lambda handler.
 
-Each `step` checkpoints its result. On replay, the SDK returns the checkpointed result and does not run the step again. Code outside a step runs again on every replay. So code outside a step must be deterministic. Read the time, generate IDs, and call APIs inside a step. [Concepts](src/documents/CONCEPTS.md) explains the replay model.
+Each `step` checkpoints its result. On replay, the SDK returns the checkpointed result and does not run the step again. Code outside a step runs again on every replay. So code outside a step must be deterministic. Read the time, generate IDs, and call APIs inside a step. [Concepts](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md) explains the replay model.
 
 ## Common uses
 
@@ -128,7 +128,7 @@ const [a, b] = (
 ).getResults();
 ```
 
-Without `completionConfig`, the first failed item completes the batch. `completionConfig` sets another rule, for example `{ minSuccessful: 8 }` or `{ toleratedFailureCount: 2 }`. To wait for every item, set `{ toleratedFailurePercentage: 100 }`. [Batch early completion](src/documents/BATCH_COMPLETION.md) explains what happens to items that are still running when a batch completes.
+Without `completionConfig`, the first failed item completes the batch. `completionConfig` sets another rule, for example `{ minSuccessful: 8 }` or `{ toleratedFailureCount: 2 }`. To wait for every item, set `{ toleratedFailurePercentage: 100 }`. [Batch early completion](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/BATCH_COMPLETION.md) explains what happens to items that are still running when a batch completes.
 
 `context.promise.all`, `race`, `any`, and `allSettled` combine durable promises that already run. They have no concurrency limit and no completion rule. So use them only for short operations, and use `map` or `parallel` for the rest.
 
@@ -142,7 +142,7 @@ await context.step("process", async (stepCtx) => {
 });
 ```
 
-The logger adds the execution ARN, the request ID, and the operation to each entry. By default it does not repeat log entries during replay. To log during replay, call `context.configureLogger({ modeAware: false })`. [Logging](src/documents/LOGGING.md) covers custom loggers and Powertools for AWS Lambda.
+The logger adds the execution ARN, the request ID, and the operation to each entry. By default it does not repeat log entries during replay. To log during replay, call `context.configureLogger({ modeAware: false })`. [Logging](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/LOGGING.md) covers custom loggers and Powertools for AWS Lambda.
 
 ## Advanced
 
@@ -200,26 +200,26 @@ Each durable operation throws its own error class when it fails, for example `St
 
 `withDurableExecution(handler, config)` takes a `DurableExecutionConfig`. Its options include:
 
-- `plugins`: instrumentation plugin factories. The `DURABLE_EXECUTION_PLUGINS` environment variable adds plugins at cold start. See [Instrumentation plugins](src/documents/PLUGINS.md).
-- `durableExecutionClient`: a custom transport, or a `DurableExecutionApiClient` with your own `LambdaClient`. See [Custom transport](src/documents/CUSTOM_TRANSPORT.md).
+- `plugins`: instrumentation plugin factories. The `DURABLE_EXECUTION_PLUGINS` environment variable adds plugins at cold start. See [Instrumentation plugins](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/PLUGINS.md).
+- `durableExecutionClient`: a custom transport, or a `DurableExecutionApiClient` with your own `LambdaClient`. See [Custom transport](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/CUSTOM_TRANSPORT.md).
 
-The SDK runs on the Lambda managed Node.js runtimes `nodejs22.x` and `nodejs24.x`. [Runtime requirements](src/documents/RUNTIME_REQUIREMENTS.md) lists what other runtimes, such as LLRT, need.
+The SDK runs on the Lambda managed Node.js runtimes `nodejs22.x` and `nodejs24.x`. [Runtime requirements](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/RUNTIME_REQUIREMENTS.md) lists what other runtimes, such as LLRT, need.
 
 ## Reference
 
-- [Concepts and use cases](src/documents/CONCEPTS.md): the replay model, best practices, and patterns.
-- [Batch early completion](src/documents/BATCH_COMPLETION.md)
-- [Logging](src/documents/LOGGING.md)
-- [Instrumentation plugins](src/documents/PLUGINS.md), including the SDK 3.x plugin migration.
-- [Custom transport](src/documents/CUSTOM_TRANSPORT.md)
-- [Runtime requirements](src/documents/RUNTIME_REQUIREMENTS.md)
-- [Running on Lambda Managed Instances](src/documents/LAMBDA_MANAGED_INSTANCES.md)
-- [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md)
-- [Examples](../aws-durable-execution-sdk-js-examples/src/examples)
-- [Testing SDK](../aws-durable-execution-sdk-js-testing): run durable functions in tests.
-- [API reference](https://docs.aws.amazon.com/durable-execution/)
-- [Source](src) and the TSDoc comments in [`src/types/durable-context.ts`](src/types/durable-context.ts).
-- [Contributing](../../CONTRIBUTING.md)
+- [Concepts and use cases](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md): the replay model, best practices, and patterns.
+- [Batch early completion](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/BATCH_COMPLETION.md)
+- [Logging](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/LOGGING.md)
+- [Instrumentation plugins](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/PLUGINS.md), including the SDK 3.x plugin migration.
+- [Custom transport](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/CUSTOM_TRANSPORT.md)
+- [Runtime requirements](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/RUNTIME_REQUIREMENTS.md)
+- [Running on Lambda Managed Instances](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/documents/LAMBDA_MANAGED_INSTANCES.md)
+- [2.x to 3.0 migration guide](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/docs/migration-2.x-to-3.0.md)
+- [Examples](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples/src/examples)
+- [Testing SDK](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing): run durable functions in tests.
+- [Developer guide](https://docs.aws.amazon.com/durable-execution/): operations, error handling, observability, and the [TypeScript SDK page](https://docs.aws.amazon.com/durable-execution/sdk-reference/languages/typescript/). To fix or add a page, open an issue or a pull request in [aws-durable-execution-docs](https://github.com/aws/aws-durable-execution-docs).
+- [Source](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js/src) and the TSDoc comments in [`src/types/durable-context.ts`](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/packages/aws-durable-execution-sdk-js/src/types/durable-context.ts).
+- [Contributing](https://github.com/aws/aws-durable-execution-sdk-js/blob/main/CONTRIBUTING.md)
 
 ## License
 
