@@ -14,6 +14,7 @@ import {
   SuspendMicrovmCommand,
   TerminateMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
+import { remainingTime } from "../deadline";
 import {
   DEFAULT_MICROVM_JOB_PATH,
   DEFAULT_MICROVM_PORT,
@@ -873,36 +874,6 @@ export function durationToSeconds(duration: Duration | undefined): number {
 
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-/**
- * Returns a function that reads the invocation's remaining time in
- * milliseconds. The first retry tier uses it to stop before the invocation
- * times out.
- *
- * AWS Lambda's context has `getRemainingTimeInMillis()`. A local or test
- * runner can pass no Lambda context, or one without that function. The
- * returned function then returns `undefined`, and the caller applies only its
- * own time limit.
- *
- * Otherwise the returned function passes on the value of
- * `getRemainingTimeInMillis()` unchanged. `reserveStartsAt` and
- * `assertTimeToDeliver` read it, and both treat a value that is not a finite
- * number as no deadline. A `getRemainingTimeInMillis()` that throws fails the
- * step that reads it. One that returns a value that is not a finite number
- * turns the reserve off.
- */
-export function remainingTime(
-  context: DurableContext,
-): () => number | undefined {
-  const lambdaContext = context.lambdaContext as
-    | { getRemainingTimeInMillis?: unknown }
-    | undefined;
-  const read = lambdaContext?.getRemainingTimeInMillis;
-  if (typeof read !== "function") {
-    return (): undefined => undefined;
-  }
-  return () => read.call(lambdaContext) as number | undefined;
 }
 
 /**

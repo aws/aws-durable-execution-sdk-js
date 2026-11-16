@@ -18,6 +18,7 @@ const packageJson = JSON.parse(
  * needs an entry here, so the test below knows which subpath needs it.
  */
 const CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
+  "@aws-sdk/client-bedrock-agentcore": "../compute/agentcore",
   "@aws-sdk/client-lambda-microvms": "../compute/microvm",
 };
 
@@ -65,6 +66,13 @@ describe("package dependencies", () => {
 
       it("loads the package root", async () => {
         await expect(load("..")).resolves.toHaveProperty("ComputeError");
+      });
+
+      // A subpath must load without the client of another subpath.
+      it.each(
+        Object.values(CLIENT_SUBPATHS).filter((other) => other !== subpath),
+      )("loads %s", async (other) => {
+        await expect(load(other)).resolves.toHaveProperty("ComputeError");
       });
 
       // The control: the mock does stop the subpath that imports this client.

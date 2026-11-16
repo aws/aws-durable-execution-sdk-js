@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-extras",
-  "description": "Custom durable operations for the AWS Durable Execution SDK, such as running a job in an AWS Lambda MicroVM",
+  "description": "Custom durable operations for the AWS Durable Execution SDK, such as running a job in an AWS Lambda MicroVM or in Amazon Bedrock AgentCore Runtime",
   "version": "0.1.0-alpha.0",
   "license": "Apache-2.0",
   "repository": {
@@ -38,6 +38,11 @@
       "types": "./dist-types/compute/microvm/index.d.ts",
       "import": "./dist/compute/microvm.mjs",
       "require": "./dist-cjs/compute/microvm.js"
+    },
+    "./compute/agentcore": {
+      "types": "./dist-types/compute/agentcore/index.d.ts",
+      "import": "./dist/compute/agentcore.mjs",
+      "require": "./dist-cjs/compute/agentcore.js"
     }
   },
   "files": [
@@ -46,6 +51,7 @@
     "dist-types"
   ],
   "devDependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.1164.0",
     "@aws-sdk/client-lambda-microvms": "^3.1164.0",
     "@aws/durable-execution-sdk-js-compute-worker": "0.1.0-alpha.0",
     "@aws/durable-execution-sdk-js-testing": "*",
@@ -57,9 +63,13 @@
   },
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": ">=2.6.0",
+    "@aws-sdk/client-bedrock-agentcore": "^3.1164.0",
     "@aws-sdk/client-lambda-microvms": "^3.1164.0"
   },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-bedrock-agentcore": {
+      "optional": true
+    },
     "@aws-sdk/client-lambda-microvms": {
       "optional": true
     }

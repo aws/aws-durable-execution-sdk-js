@@ -201,6 +201,79 @@ await microvmSession(
 - A job input is at most `MAX_JOB_INPUT_BYTES` (6,283,264 bytes) as UTF-8 JSON. Pass larger data by reference, for example as an S3 key.
 - A job result is at most 256 KB as JSON.
 
+## Run a job in AgentCore Runtime
+
+> **Experimental.** The `compute/agentcore` subpath is experimental, like `compute/microvm`.
+
+`agentcore` sends one job to a new session of an [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html) agent, waits for the result, and stops the session. You deploy the agent runtime outside the function. The subpath needs the optional peer dependency `@aws-sdk/client-bedrock-agentcore`:
+
+```bash
+npm install @aws-sdk/client-bedrock-agentcore
+```
+
+The durable function:
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+
+export const handler = withDurableExecution(
+  async (event: { pr: number }, context) => {
+    const review = await agentcore<{ approved: boolean }>(
+      context,
+      "review",
+      { pr: event.pr },
+      {
+        agentRuntimeArn: process.env.AGENT_RUNTIME_ARN!,
+        qualifier: "DEFAULT",
+        timeout: { hours: 1 },
+        heartbeatTimeout: { minutes: 5 },
+      },
+    );
+    return review.approved;
+  },
+);
+```
+
+The code in the agent runtime runs the [compute worker](../aws-durable-execution-sdk-js-compute-worker#run-a-job-in-agentcore-runtime):
+
+```typescript
+import { startAgentcoreWorker } from "@aws/durable-execution-sdk-js-compute-worker/agentcore";
+
+await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
+  handler: async (input, context) => {
+    context.logger.info("reviewing", { pr: input.pr });
+    return { approved: true };
+  },
+});
+```
+
+The operation creates the steps `<name>.session` (the runtime session ID), `<name>.request` (InvokeAgentRuntime), and `<name>.stop` (StopRuntimeSession), and the callback `<name>.callback`. The function invocation ends while the agent works. A failure is an `AgentcoreError`: `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. `AgentcoreError` extends `ComputeError`.
+
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
+
+InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the Lambda invocation times out, and the step retries in a later invocation.
+
+InvokeAgentRuntime has no idempotency token. So a retried request step can deliver the same job again. The worker remembers the callback IDs of its process and does not run a repeated one. A new process does not know them.
+
+`maxLifetime` is at most 8 hours for a microVM runtime, and up to 14 days for a runtime on Instances. The operation cannot read it, so it checks only that `timeout` is at least 1 second.
+
+An example is in [`src/examples/agentcore/run-job`](../aws-durable-execution-sdk-js-examples/src/examples/agentcore/run-job/agentcore-run-job.ts).
+
+Permissions:
+
+- The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
+- The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
+
+### Rules for AgentCore jobs
+
+- Set `heartbeatTimeout`. It ends the job when the worker crashes or stops reporting. The first heartbeat period starts before the job is delivered. So it must cover the request retries and a cold session start, which took 1.4 to 3.1 seconds in a live test. Use 30 seconds or more.
+- Set the function timeout to at least 11 seconds. The request and stop steps keep 10 seconds before the invocation times out, and each call needs at least 1 second more.
+- `timeout` must fit the agent runtime's configured `maxLifetime`.
+- A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
+- Your logger must not throw.
+- The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
+
 ## Reference
 
 - [MicroVM operations reference](docs/microvm.md): delivery, the operation tree, subtypes, retries, the error tree, limits, permissions, suspend details, the worker contract, and best practices.
@@ -208,4 +281,5 @@ await microvmSession(
 - [Compute worker](../aws-durable-execution-sdk-js-compute-worker)
 - Examples: [one job](../aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts) and [a session](../aws-durable-execution-sdk-js-examples/src/examples/microvm/session/microvm-session.ts).
 - Source: [`src/compute/microvm`](src/compute/microvm), with option docs in [`types.ts`](src/compute/microvm/types.ts).
+- AgentCore source: [`src/compute/agentcore`](src/compute/agentcore), with option docs in [`types.ts`](src/compute/agentcore/types.ts).
 - [Lambda MicroVMs guide](https://docs.aws.amazon.com/lambda/latest/dg/lambda-microvms-guide.html)
