@@ -27,3 +27,6 @@
 /package-lock.json @aws/aws-lambda-durable-functions-js-maintain
 /packages/*/package.json @aws/aws-lambda-durable-functions-js-maintain
 /rollup.config.js @aws/aws-lambda-durable-functions-js-maintain
+/packages/*/rollup.config.mjs @aws/aws-lambda-durable-functions-js-maintain
+/packages/*/tsconfig.build.json @aws/aws-lambda-durable-functions-js-maintain
+/packages/*/esbuild.mjs @aws/aws-lambda-durable-functions-js-maintain
