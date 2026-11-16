@@ -2021,3 +2021,41 @@ describe("yaythomas review", () => {
     );
   });
 });
+
+describe("Codex round after review", () => {
+  it("rejects a choice whose toString throws, with DeciderInvalidResponseError", async () => {
+    const fake = new FakeDecider();
+    fake.replies = [
+      answers({ answer: { type: "choice", choice: { toString: null } } }),
+    ];
+    const decide = fakeDecider(fake);
+
+    const result = await run((context) =>
+      outcomes([() => decide.classify(context, "Which?", ["a", "b"], "x")]),
+    );
+
+    expect(result.getResult()).toEqual(["DeciderInvalidResponseError"]);
+  });
+
+  it.each([42, null, { name: "x" }])(
+    "rejects step name %j that is not a string, before any operation",
+    async (name) => {
+      const fake = new FakeDecider();
+      const client = new FakeBedrock();
+      const decide = fakeDecider(fake);
+      const model = fakeLlm(client);
+
+      const result = await run((context) =>
+        outcomes([
+          () => decide.check(context, "Q?", "x", { name: name as never }),
+          () => model.ask(context, "Q?", undefined, { name: name as never }),
+        ]),
+      );
+
+      expect(result.getResult()).toEqual(["TypeError", "TypeError"]);
+      expect(result.getOperations()).toHaveLength(0);
+      expect(fake.requests).toHaveLength(0);
+      expect(client.inputs).toHaveLength(0);
+    },
+  );
+});

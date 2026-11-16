@@ -81,7 +81,13 @@ The automatic package list and the Extras and MicroVM deferrals are unchanged.
 
 ### 1. Bump the version
 
-Update the `version` string in the relevant `package.json` file(s). Commit and merge to `main`.
+Update the `version` string in the relevant `package.json` file(s).
+
+In the same pull request, move the entries under `## [Unreleased]` in `CHANGELOG.md` to a new
+`## [x.y.z] - YYYY-MM-DD` heading, and add its compare link at the end of the file. The changelog
+lists only breaking changes and deprecations. So skip this step when `[Unreleased]` is empty.
+
+Commit and merge to `main`.
 
 ### 2. Create a GitHub Release
 
@@ -247,6 +253,7 @@ If only one package is being released, include only that package's section. Each
 Before publishing a release:
 
 - [ ] Version bumped in the relevant `package.json` file(s)
+- [ ] `CHANGELOG.md` entries under `[Unreleased]` moved to the new version heading
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package

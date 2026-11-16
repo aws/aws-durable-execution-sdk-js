@@ -18,12 +18,15 @@ const packageJson = JSON.parse(
  * needs an entry here, so the test below knows which subpath needs it.
  */
 const CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
+  "@aws-sdk/client-bedrock-agentcore": "../compute/agentcore",
   "@aws-sdk/client-lambda-microvms": "../compute/microvm",
 };
 
 /**
  * Each AWS SDK client that a subpath loads on first use, not when the
- * subpath loads. Loading the subpath without the client must succeed.
+ * subpath loads. Loading the subpath without the client must succeed. A
+ * client can also be in CLIENT_SUBPATHS, when another subpath imports it at
+ * load time.
  */
 const LAZY_CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
   "@aws-sdk/client-bedrock-agentcore": "../ai",
@@ -47,8 +50,10 @@ describe("package dependencies", () => {
     expect(clients.length).toBeGreaterThan(0);
     expect(
       [
-        ...Object.keys(CLIENT_SUBPATHS),
-        ...Object.keys(LAZY_CLIENT_SUBPATHS),
+        ...new Set([
+          ...Object.keys(CLIENT_SUBPATHS),
+          ...Object.keys(LAZY_CLIENT_SUBPATHS),
+        ]),
       ].sort(),
     ).toEqual([...clients].sort());
   });
@@ -81,6 +86,13 @@ describe("package dependencies", () => {
 
       it("loads the package root", async () => {
         await expect(load("..")).resolves.toHaveProperty("ComputeError");
+      });
+
+      // A subpath must load without the client of another subpath.
+      it.each(
+        Object.values(CLIENT_SUBPATHS).filter((other) => other !== subpath),
+      )("loads %s", async (other) => {
+        await expect(load(other)).resolves.toHaveProperty("ComputeError");
       });
 
       // The control: the mock does stop the subpath that imports this client.

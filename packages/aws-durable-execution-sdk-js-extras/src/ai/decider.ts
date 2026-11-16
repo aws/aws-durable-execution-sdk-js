@@ -364,9 +364,14 @@ export function decider(config: DeciderConfig = {}): Decider {
         if (answer?.type !== "choice") {
           return invalid("The decision model's answer is not a choice.");
         }
+        // A choice that is not a string is never coerced to a string, because
+        // String() can throw on such a value.
+        if (typeof answer.choice !== "string") {
+          return invalid("The decision model's choice is not a string.");
+        }
         return (matchOption(choices, answer.choice) ??
           invalid(
-            `"${String(answer.choice)}" is not one of the options.`,
+            `"${answer.choice}" is not one of the options.`,
           )) as T[number];
       });
     },
