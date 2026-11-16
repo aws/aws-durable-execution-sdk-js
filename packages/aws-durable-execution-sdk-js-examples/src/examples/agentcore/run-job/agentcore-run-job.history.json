@@ -1,0 +1,168 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "db91a4eb-9d78-4f00-acf9-b97c48258f1b",
+    "EventTimestamp": "2026-11-13T19:18:15.186Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"text\":\"the quick brown fox jumps over the lazy dog\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Agentcore",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-words",
+    "EventTimestamp": "2026-11-13T19:18:15.300Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreSessionId",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "count-words.session",
+    "EventTimestamp": "2026-11-13T19:18:15.300Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreSessionId",
+    "EventId": 4,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "count-words.session",
+    "EventTimestamp": "2026-11-13T19:18:15.300Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"e6297ec7-f53d-46c7-b06e-36be293a281b\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "AgentcoreCallback",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-words.callback",
+    "EventTimestamp": "2026-11-13T19:18:15.304Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjgzNmFmMjhhLTQ3ZTktNDc0OS1iZDgwLTU1ZjJjNGM3MDc1ZCIsIm9wZXJhdGlvbklkIjoiOThjNmYyYzIyODdmNGM3MyIsInRva2VuIjoiYmNjMjJkZmYtODc0My00MTJiLTkzYTYtMWViYzJjODVhNGU3In0=",
+      "Timeout": 300,
+      "HeartbeatTimeout": 60,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreRequest",
+    "EventId": 6,
+    "Id": "13cee27a2bd93915",
+    "Name": "count-words.request",
+    "EventTimestamp": "2026-11-13T19:18:15.312Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreRequest",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "count-words.request",
+    "EventTimestamp": "2026-11-13T19:18:15.312Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "AgentcoreCallback",
+    "EventId": 8,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-words.callback",
+    "EventTimestamp": "2026-11-13T19:18:15.314Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"e6297ec7-f53d-46c7-b06e-36be293a281b\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-11-13T19:18:15.316Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-13T19:18:15.185Z",
+      "EndTimestamp": "2026-11-13T19:18:15.316Z",
+      "Error": {},
+      "RequestId": "701049e9-e3b6-4d76-a3b7-cf55a5d28af2"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreStop",
+    "EventId": 10,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "count-words.stop",
+    "EventTimestamp": "2026-11-13T19:18:15.321Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreStop",
+    "EventId": 11,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "count-words.stop",
+    "EventTimestamp": "2026-11-13T19:18:15.322Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Agentcore",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-words",
+    "EventTimestamp": "2026-11-13T19:18:15.324Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"e6297ec7-f53d-46c7-b06e-36be293a281b\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-11-13T19:18:15.324Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-13T19:18:15.318Z",
+      "EndTimestamp": "2026-11-13T19:18:15.324Z",
+      "Error": {},
+      "RequestId": "8c2c5293-33a7-4918-8678-35e4847f3184"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "db91a4eb-9d78-4f00-acf9-b97c48258f1b",
+    "EventTimestamp": "2026-11-13T19:18:15.325Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"e6297ec7-f53d-46c7-b06e-36be293a281b\"}"
+      }
+    }
+  }
+]
