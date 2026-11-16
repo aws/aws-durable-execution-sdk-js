@@ -1,5 +1,5 @@
 import {
-  ExecutionContext,
+  type ExecutionContext,
   DurablePromise,
   OperationLifecycleState,
 } from "../../types";
@@ -10,11 +10,11 @@ import {
   CallbackExternalError,
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
-import { Serdes } from "../../utils/serdes/serdes";
+import type { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import {
+import type {
   DurableInstrumentationPlugin,
   OperationInfo,
 } from "../../types/plugin";
@@ -85,7 +85,8 @@ export const createCallbackPromise = <T>(
       ? ((): CallbackError => {
           const cause = new Error(error.ErrorMessage);
           cause.name = error.ErrorType || "Error";
-          cause.stack = error.StackTrace?.join("\n");
+          // Error.stack is typed without undefined. A missing trace clears the stack.
+          Object.assign(cause, { stack: error.StackTrace?.join("\n") });
           if (isTimeout) {
             return new CallbackTimeoutError(
               error.ErrorMessage || "Callback timed out",

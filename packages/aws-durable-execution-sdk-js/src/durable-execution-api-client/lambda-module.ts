@@ -12,7 +12,7 @@ import type {
   GetDurableExecutionStateCommand as GetDurableExecutionStateCommandType,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import {
+import type {
   CheckpointDurableExecutionRequest,
   GetDurableExecutionStateRequest,
 } from "../types/wire";

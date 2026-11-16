@@ -14,6 +14,7 @@ export const createMockExecutionContext = (
   const mockTerminationManager = {
     terminate: vi.fn(),
     getTerminationPromise: vi.fn(),
+    isTerminationRequested: vi.fn().mockReturnValue(false),
   } as unknown as Mocked<TerminationManager>;
 
   const defaultMockContext: Mocked<ExecutionContext> = {

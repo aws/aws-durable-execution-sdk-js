@@ -13,9 +13,9 @@ Cons:
 
 import { EventEmitter } from "events";
 import {
-  TerminationOptions,
-  TerminationDetails,
-  TerminationResponse,
+  type TerminationOptions,
+  type TerminationDetails,
+  type TerminationResponse,
   TerminationReason,
 } from "./types";
 
@@ -24,7 +24,7 @@ export class TerminationManager extends EventEmitter {
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
-  private setCheckpointTerminating?: () => void;
+  private setCheckpointTerminating?: (() => void) | undefined;
 
   constructor(setCheckpointTerminating?: () => void) {
     super();
@@ -42,24 +42,31 @@ export class TerminationManager extends EventEmitter {
   terminate(options: TerminationOptions = {}): void {
     if (this.isTerminated) return;
 
+    // Set first: the callback below aborts the invocation's signal, and an abort listener
+    // that starts an operation must already see the invocation as terminated.
+    this.isTerminated = true;
+
     // Set checkpoint termination flag before any other termination logic
     this.setCheckpointTerminating?.();
-
-    this.isTerminated = true;
 
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,
       message: options.message ?? "Operation terminated",
       error: options.error,
-      cleanup: options.cleanup,
     };
 
     // Instead of emitting an event, resolve the promise
     if (this.resolveTermination) {
-      this.handleTermination(this.terminationDetails).then(
+      // handleTermination does not reject.
+      void this.handleTermination(this.terminationDetails).then(
         this.resolveTermination,
       );
     }
+  }
+
+  /** Whether `terminate` was called for this invocation. */
+  isTerminationRequested(): boolean {
+    return this.isTerminated;
   }
 
   getTerminationPromise(): Promise<TerminationResponse> {
@@ -69,12 +76,6 @@ export class TerminationManager extends EventEmitter {
   private async handleTermination(
     details: TerminationDetails,
   ): Promise<TerminationResponse> {
-    if (details.cleanup) {
-      try {
-        await details.cleanup();
-      } catch {}
-    }
-
     return {
       reason: details.reason,
       message: details.message,

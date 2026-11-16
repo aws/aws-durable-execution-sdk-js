@@ -19,7 +19,7 @@ createTests({
   // The local runner cannot launch a MicroVM.
   cloudOnly: true,
   tests: (runner, { assertEventSignatures }) => {
-    // The launch, the suspend, the 30-second wait, the resume and the
+    // The launch, the suspend, the 30-second wait, the auto-resume and the
     // terminate can take longer than the 120-second default timeout. So the
     // test sets its own timeout of 240 seconds.
     it("suspends the MicroVM between the jobs, and resumes it with the file of the first job", async () => {
@@ -52,18 +52,22 @@ createTests({
         value: string;
       };
       // The second job read the file that the first job wrote, so both
-      // jobs ran in the session's MicroVM, and the resume kept the file.
+      // jobs ran in the session's MicroVM, and the auto-resume kept the
+      // file.
       expect(result.value).toBe(`written-by-${key}`);
       expect(result.writtenBy).toBe(result.sessionMicrovmId);
       expect(result.readBy).toBe(result.sessionMicrovmId);
 
       await expectMicrovmTerminated(result.sessionMicrovmId);
 
+      // The number of invocations depends on how fast each job finishes.
       // A job can finish before the invocation that waits for it ends. The
-      // invocation then continues, and the execution has one invocation
-      // fewer.
+      // invocation then continues, so the execution has one invocation
+      // fewer. A slow job makes the invocation suspend, so the execution has
+      // one invocation more. Each of the two jobs can go either way. So the
+      // count can differ from the history by up to 2.
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
+        invocationCompletedDifference: 2,
       });
     }, 240_000);
   },

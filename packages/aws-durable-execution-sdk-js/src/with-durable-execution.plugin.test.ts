@@ -75,6 +75,7 @@ const mockExecutionContext = {
   durableExecutionArn: "arn:test",
   requestId: "req-123",
   terminationManager: mockTerminationManager,
+  getRemainingTimeMs: (): number => Infinity,
 };
 
 beforeEach(() => {

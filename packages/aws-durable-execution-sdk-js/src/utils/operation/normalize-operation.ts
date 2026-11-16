@@ -1,4 +1,4 @@
-import { Operation, WireOperation } from "../../types/wire";
+import type { Operation, WireOperation } from "../../types/wire";
 import { toDate } from "../timestamp/timestamp";
 
 /**

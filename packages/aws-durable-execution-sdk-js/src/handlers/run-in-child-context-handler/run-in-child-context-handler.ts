@@ -1,22 +1,22 @@
 import {
-  ExecutionContext,
-  ChildFunc,
-  ChildConfig,
+  type ExecutionContext,
+  type ChildFunc,
+  type ChildConfig,
   OperationSubType,
   DurableExecutionMode,
-  DurableContext,
+  type DurableContext,
   OperationLifecycleState,
 } from "../../types";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,
   OperationType,
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, type AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -29,10 +29,11 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
-import { DurableLogger } from "../../types/durable-logger";
+import type { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
 import {
-  DurableInstrumentationPlugin,
+  type CustomerFnResult,
+  type DurableInstrumentationPlugin,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {
@@ -84,6 +85,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     stepPrefix?: string,
     checkpointToken?: string,
     parentId?: string,
+    ownSignal?: AbortSignal,
   ) => DurableContext<Logger>,
   parentId?: string,
 
@@ -186,6 +188,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       if (phase1Error !== undefined) {
         throw phase1Error;
       }
+      // biome-ignore lint/style/noNonNullAssertion: phase 1 has settled without an error, so it set the result.
       return phase1Result!;
     });
   };
@@ -338,6 +341,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     entityId: string,
     checkpointToken: string | undefined,
     parentId?: string,
+    ownSignal?: AbortSignal,
   ) => DurableContext<Logger>,
   parentId?: string,
 
@@ -360,7 +364,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
+    // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+    void checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -379,6 +384,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   const childReplayMode = determineChildReplayMode(context, entityId);
 
+  // Aborted when this context finishes, right after markAncestorFinished.
+  // markAncestorFinished drops the checkpoints of the descendants. So the
+  // steps that still run inside this context learn that the SDK no longer uses
+  // their results. A virtual context does not call markAncestorFinished. So it
+  // never aborts this signal, and its steps see only the abort of a
+  // non-virtual context that holds it.
+  const finished = new AbortController();
+
   // Create a child context with appropriate parentId and stepPrefix
   const durableChildContext = createChildContext(
     context,
@@ -392,6 +405,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
     // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
+    finished.signal,
   );
 
   // From the moment `fn` returns or throws until this context settles, it does
@@ -439,11 +453,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
     };
+    const wrapChildContextFn = plugin.wrapChildContextFn;
     const result = (await runWithContext(
       entityId,
       parentId,
-      plugin.wrapChildContextFn
-        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
+      wrapChildContextFn
+        ? (): CustomerFnResult =>
+            wrapChildContextFn.call(plugin, wrapInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,
@@ -465,6 +481,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // below is unaffected (hasFinishedAncestor only inspects ancestors).
     if (!isVirtual) {
       checkpoint.markAncestorFinished(entityId);
+      finished.abort();
     }
 
     // Serialize the result for consistency
@@ -523,7 +540,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // checkpoint through during serialization.
     if (!isVirtual) {
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -596,9 +614,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // Mark this run-in-child-context as finished and checkpoint failure (only for non-virtual)
     if (!isVirtual) {
       checkpoint.markAncestorFinished(entityId);
+      finished.abort();
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint.checkpoint(entityId, {
+      // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
+      void checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.FAIL,

@@ -3,9 +3,9 @@ import { join } from "path";
 import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
-  DurableInstrumentationPluginFactory,
+  type DurableInstrumentationPluginFactory,
   DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
-  RegisteredDurableInstrumentationPluginFactory,
+  type RegisteredDurableInstrumentationPluginFactory,
 } from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
@@ -363,7 +363,8 @@ function describeValue(value: unknown): string {
  * happens once per invocation, in {@link createInvocationPluginRunner}, which is
  * what bounds a plugin instance's lifetime to a single invocation.
  *
- * @internal
+ * Not exported from the package entry point. Its declaration stays in
+ * `dist-types` on purpose: the OTel package tests take its type from there.
  */
 export async function loadConfiguredPlugins(
   explicitPlugins: readonly DurableInstrumentationPluginFactory[] | undefined,

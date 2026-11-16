@@ -5,10 +5,6 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
-vi.mock("../../utils/logger/logger", () => ({
-  log: vi.fn(),
-}));
-
 describe("CheckpointManager Queue Completion", () => {
   let checkpointManager: CheckpointManager;
   let mockContext: any;

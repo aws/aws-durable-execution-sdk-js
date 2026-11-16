@@ -1,14 +1,14 @@
 import {
-  ExecutionContext,
-  MapFunc,
-  MapConfig,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  ConcurrencyConfig,
+  type ExecutionContext,
+  type MapFunc,
+  type MapConfig,
+  type ConcurrentExecutionItem,
+  type ConcurrentExecutor,
+  type ConcurrencyConfig,
   OperationSubType,
-  BatchResult,
+  type BatchResult,
   DurablePromise,
-  DurableLogger,
+  type DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../../utils/summary-generators/summary-generators";
 
 export const createMapHandler = <Logger extends DurableLogger>(
-  context: ExecutionContext,
+  _context: ExecutionContext,
   executeConcurrently: <TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],
@@ -62,11 +62,13 @@ export const createMapHandler = <Logger extends DurableLogger>(
 
       // Validate inputs
       if (!Array.isArray(items)) {
-        throw new Error("Map operation requires an array of items");
+        throw new TypeError("Map operation requires an array of items");
       }
 
       if (typeof mapFunc !== "function") {
-        throw new Error("Map operation requires a function to process items");
+        throw new TypeError(
+          "Map operation requires a function to process items",
+        );
       }
 
       // Convert to concurrent execution items

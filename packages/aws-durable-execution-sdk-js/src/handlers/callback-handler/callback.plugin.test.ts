@@ -5,7 +5,6 @@ import {
   expect,
   beforeEach,
   type Mocked,
-  type MockedFunction,
   type Mock,
 } from "vitest";
 import { createCallback } from "./callback";
@@ -14,15 +13,6 @@ import { OperationStatus, Operation } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
-
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Callback Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
@@ -52,7 +42,6 @@ describe("Callback Handler - plugin hooks", () => {
       onOperationStart: vi.fn(),
       onOperationEnd: vi.fn(),
     };
-    mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
   it("should call onOperationEnd on replay succeeded", async () => {
@@ -211,7 +200,10 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
-      undefined,
+      () => ({
+        serialize: vi.fn(),
+        deserialize: vi.fn().mockResolvedValue("deserialized-result"),
+      }),
       {},
     );
 

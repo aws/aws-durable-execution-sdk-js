@@ -56,7 +56,7 @@ describe("template handler references", () => {
   const references = handlerReferences(template);
 
   it("finds a reference in every template function", () => {
-    expect(references).toHaveLength(2);
+    expect(references).toHaveLength(3);
   });
 
   it.each([
@@ -80,7 +80,11 @@ describe("template handler references", () => {
 
 describe("requirement coverage", () => {
   it("covers the telemetry suite", () => {
-    expect(requirementIds(template)).toEqual(["telemetry-1", "telemetry-2"]);
+    expect(requirementIds(template)).toEqual([
+      "telemetry-1",
+      "telemetry-2",
+      "telemetry-3",
+    ]);
   });
 });
 

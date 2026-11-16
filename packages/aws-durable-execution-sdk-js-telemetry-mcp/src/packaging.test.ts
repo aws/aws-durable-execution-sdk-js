@@ -98,7 +98,7 @@ describe("release pipeline actually publishes what claims to be published", () =
   // Remove each exception when its first publication is ready.
   const deferredFirstPublication = new Set([
     "aws-durable-execution-sdk-js-extras",
-    "aws-durable-execution-sdk-js-microvm-worker",
+    "aws-durable-execution-sdk-js-compute-worker",
   ]);
 
   const PUBLISH_SCRIPT = join(

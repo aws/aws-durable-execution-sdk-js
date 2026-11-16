@@ -4,7 +4,16 @@ import {
   type LambdaMicrovmsClient,
 } from "@aws-sdk/client-lambda-microvms";
 import { addRequestId, microvmNotFound, withRequestId } from "./aws-errors";
+import {
+  callBeforeDeadline,
+  callBudgetMs,
+  INVOCATION_RESERVE_MS,
+  reserveStartsAt,
+  tooLittleTimeMessage,
+} from "../deadline";
 import { MicrovmDeliveryError } from "./errors";
+
+export { callBeforeDeadline, INVOCATION_RESERVE_MS, reserveStartsAt };
 
 /**
  * The MicroVM endpoint forwards to this port when no port header is sent.
@@ -18,7 +27,7 @@ export const DEFAULT_MICROVM_PORT = 8080;
  *
  * The worker package serves this path with its `handler`. So the same handler
  * receives a job whether it arrives in the `run` hook or over HTTP. The value
- * must equal `MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-microvm-worker`.
+ * must equal `MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-compute-worker/microvm`.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */
@@ -27,20 +36,6 @@ export const DEFAULT_MICROVM_JOB_PATH = "/durable-execution/v1/job";
 /** The default length of the first retry tier, inside one step attempt. */
 export const DEFAULT_REQUEST_RETRY_WINDOW_MS = 60_000;
 
-/**
- * The first retry tier stops this long before the invocation times out. A
- * Lambda timeout during a step attempt records no outcome for the attempt.
- * So the step keeps time to throw and to checkpoint the second-tier retry.
- */
-export const INVOCATION_RESERVE_MS = 10_000;
-
-/**
- * A call that would start with less than this much time before the reserve
- * is not started. A shorter call is unlikely to finish, and the step retries
- * the job in a later invocation anyway.
- */
-const MIN_CALL_MS = 1_000;
-
 const INITIAL_DELAY_MS = 250;
 const MAX_DELAY_MS = 4_000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -48,87 +43,15 @@ const AUTH_TOKEN_MINUTES = 5;
 
 /**
  * The endpoint answers HTTP 502 with `x-aws-proxy-error:
- * MICROVM_CONNECT_FAILED` while the MicroVM is suspending or suspended. A
- * probe measured the answer in about 60 milliseconds.
+ * MICROVM_CONNECT_FAILED` for a terminated MicroVM, for a suspended MicroVM
+ * that the service does not resume, and for about 5 seconds after a
+ * suspend. A probe measured the answer in about 60 to 200 milliseconds.
  */
 const PROXY_ERROR_HEADER = "x-aws-proxy-error";
 const CONNECT_FAILED = "MICROVM_CONNECT_FAILED";
 
-/** The shortest time between two calls of {@link SendJobOptions.suspendCheck}. */
-const SUSPEND_CHECK_INTERVAL_MS = 2_000;
-
-/**
- * Returns the time by which every call of the first tier must end: the
- * start of the invocation reserve. Returns `undefined` when the compute
- * reports no deadline.
- *
- * A Lambda timeout during a step attempt records no outcome for the attempt.
- * So the reserve is a hard limit. A call that is still running at the reserve
- * uses the time that the step needs to throw and to checkpoint.
- */
-export function reserveStartsAt(
-  remainingTimeMs: (() => number | undefined) | undefined,
-): number | undefined {
-  const remaining = remainingTimeMs?.();
-  // remainingTime() passes on the compute's value unchanged. So this check
-  // turns a value that is not a finite number into no deadline.
-  return remaining === undefined || !Number.isFinite(remaining)
-    ? undefined
-    : Date.now() + remaining - INVOCATION_RESERVE_MS;
-}
-
-/**
- * Returns how long the next call may run: at most `capMs`, and never past
- * `hardDeadline`. Throws the result of `onExpired` when less than
- * {@link MIN_CALL_MS} remains before `hardDeadline`.
- */
-function callBudgetMs(
-  hardDeadline: number | undefined,
-  capMs: number,
-  onExpired: () => Error,
-): number {
-  if (hardDeadline === undefined) {
-    return capMs;
-  }
-  const left = hardDeadline - Date.now();
-  if (left < MIN_CALL_MS) {
-    throw onExpired();
-  }
-  return Math.min(capMs, left);
-}
-
-/**
- * Runs one AWS SDK call that must end before `hardDeadline`.
- *
- * 1. Without a deadline, the call runs with the client's own settings.
- * 2. With a deadline, the call gets an abort signal that fires at the
- *    deadline. The signal also stops the AWS SDK's own retries of the call.
- * 3. An aborted call throws the result of `onExpired`. That error is
- *    retryable, so the step retries the job in a later invocation. The
- *    AWS SDK's `AbortError` is not retryable, so it is not rethrown.
- *
- * @internal
- */
-export async function callBeforeDeadline<T>(
-  call: (options: { abortSignal?: AbortSignal }) => Promise<T>,
-  hardDeadline: number | undefined,
-  onExpired: () => Error,
-): Promise<T> {
-  if (hardDeadline === undefined) {
-    return call({});
-  }
-  const signal = AbortSignal.timeout(
-    callBudgetMs(hardDeadline, Number.MAX_SAFE_INTEGER, onExpired),
-  );
-  try {
-    return await call({ abortSignal: signal });
-  } catch (error) {
-    if (signal.aborted) {
-      throw onExpired();
-    }
-    throw error;
-  }
-}
+/** The shortest time between two calls of {@link SendJobOptions.stateCheck}. */
+const STATE_CHECK_INTERVAL_MS = 2_000;
 
 /**
  * Thrown when the endpoint rejects the job with a status that a retry cannot
@@ -141,8 +64,9 @@ export async function callBeforeDeadline<T>(
  * This error and {@link MicrovmRequestUnauthorizedError} and
  * {@link MicrovmEndpointUnavailableError} are thrown inside the request step.
  * Only the step retry strategy sees them. When the step fails, the operation
- * reports a {@link MicrovmDeliveryError} or a `MicrovmNotRunningError`,
- * and `cause.name` keeps the name of this error.
+ * reports a {@link MicrovmDeliveryError} or a `MicrovmNotRunningError`.
+ * The name of this error is in the checkpointed step error type and in the
+ * message.
  *
  * Each of them extends {@link MicrovmDeliveryError}, and records its own name
  * as its checkpointed type, as it did before it extended it.
@@ -218,31 +142,24 @@ export class MicrovmEndpointUnavailableError extends MicrovmDeliveryError {
  * Throws when the request step has too little time left to make its first
  * call.
  *
- * A call that would start with less than {@link MIN_CALL_MS} before the
- * invocation reserve does not start. So with less than 11 seconds left, the
- * step makes no call, and the first tier's own error would blame the
- * MicroVM. The cause is the function timeout. The error stays retryable: a
- * retry in a new invocation has more time when this invocation spent its
- * time before the step.
- *
- * The message rounds the time down. So it never reads "11.0 seconds left" next
- * to "needs at least 11 seconds".
+ * With less than 11 seconds left, the step makes no call, and the first
+ * tier's own error would blame the MicroVM. The cause is the function
+ * timeout. The error stays retryable: a retry in a new invocation has more
+ * time when this invocation spent its time before the step. The message
+ * comes from `tooLittleTimeMessage`, which AgentCore shares.
  *
  * @internal
  */
 export function assertTimeToDeliver(
   remainingTimeMs: (() => number | undefined) | undefined,
 ): void {
-  const remaining = remainingTimeMs?.();
-  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
-  if (
-    remaining !== undefined &&
-    Number.isFinite(remaining) &&
-    remaining < neededMs
-  ) {
-    throw new MicrovmEndpointUnavailableError(
-      `The request step had ${(Math.floor(remaining / 100) / 10).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to send the job. Raise the function timeout.`,
-    );
+  const message = tooLittleTimeMessage(
+    remainingTimeMs,
+    "request",
+    "send the job",
+  );
+  if (message !== undefined) {
+    throw new MicrovmEndpointUnavailableError(message);
   }
 }
 
@@ -257,13 +174,6 @@ export interface SendJobOptions {
   /** The first-tier retry window in milliseconds. */
   retryWindowMs: number;
   /**
-   * When the retry window started, in milliseconds since the epoch. The
-   * default is the moment `sendJob` is called. A session sets it to the start
-   * of the state check that runs before delivery. So the wait for a resume
-   * and the request's own retries share one window.
-   */
-  windowStartedAt?: number;
-  /**
    * The remaining invocation time. `undefined`, as a value or as a result,
    * means the compute reports no deadline, and only the retry window applies.
    * A result that is not a finite number means the same.
@@ -272,44 +182,26 @@ export interface SendJobOptions {
   log: (message: string, data: Record<string, unknown>) => void;
   sleep?: (ms: number) => Promise<void>;
   /**
-   * Makes sure the MicroVM runs, and returns its current endpoint. A session
-   * sets it, because its MicroVM can suspend itself while no job runs. The
-   * suspend can land between the state check before delivery and the
-   * request. The endpoint then answers 502, or the worker answers 503 while
-   * it suspends. So after a 502, 503, or 504, or a request that failed
-   * without a status, such as a refused connection or a timeout, the next
-   * attempt calls this first.
+   * Checks the MicroVM state once. It throws for a MicroVM that has ended,
+   * and returns the current endpoint.
    *
-   * `maxWaitMs` is what remains of the retry tier. So the wait for a resume
-   * never extends the tier.
-   */
-  recheck?: (maxWaitMs: number) => Promise<string | undefined>;
-  /**
-   * Resumes the MicroVM if it is suspended, and returns its current
+   * Every job over HTTP sets it, from `microvm` and from a session. A
+   * terminated MicroVM gets no answer to a request, or its endpoint answers
+   * HTTP 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`, measured in
+   * us-east-1. A suspending or suspended MicroVM gives the same signs. So
+   * the next attempt calls it after either sign, at most once per 2
+   * seconds. A booting MicroVM gets neither sign, because its endpoint holds
+   * the request until the worker listens. That holds unless the worker
+   * takes more than 10 seconds to start listening. Then the first delivery
+   * gets no answer, and the operation makes one GetMicrovm call. So a job
+   * whose MicroVM runs makes no extra call, except in that case.
+   *
+   * The call runs before the retry window and the backoff decide. So the
+   * window does not limit it, and only the invocation reserve does. At the
+   * reserve, the call does not start. `undefined` from it keeps the current
    * endpoint.
-   *
-   * A session job without {@link SendJobOptions.recheck} sets it. The durable
-   * function can suspend the MicroVM after a `suspendAfter` job, and the idle
-   * auto-suspend of the worker can suspend it. The session can lose the record
-   * of the first case on replay. A suspended or suspending MicroVM
-   * gets no answer to a request, or its endpoint answers HTTP 502 with
-   * `x-aws-proxy-error: MICROVM_CONNECT_FAILED`. So the next attempt calls
-   * it after either sign, at most once per 2 seconds. A booting MicroVM gets
-   * neither sign, because its endpoint holds the request until the worker
-   * listens. That holds unless the worker takes more than 10 seconds to
-   * start listening. Then the first delivery gets no answer, and the
-   * operation makes one GetMicrovm call. So a session that never suspends
-   * makes no extra call, except in that case. It receives what remains of
-   * the retry window, in milliseconds. `undefined` from it keeps the current
-   * endpoint. When {@link SendJobOptions.recheck} is set too, only `recheck`
-   * runs.
    */
-  suspendCheck?: (maxWaitMs: number) => Promise<string | undefined>;
-  /**
-   * Returns a sentence to add to the message of
-   * {@link MicrovmEndpointUnavailableError}, or `undefined`.
-   */
-  unavailableNote?: () => string | undefined;
+  stateCheck?: () => Promise<string | undefined>;
 }
 
 /**
@@ -362,12 +254,24 @@ export interface SendJobOptions {
  * request for a callback ID that runs or recently ended, so the job still
  * runs once.
  *
- * A session job checks the MicroVM state in one of two ways. With
- * {@link SendJobOptions.recheck}, it checks after any 502, 503, 504, or
- * request without an answer. With {@link SendJobOptions.suspendCheck}, it
- * checks only after a 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED`
- * or a request without an answer, at most once per 2 seconds. The function
- * then sends the job again to the endpoint that the check reports.
+ * With {@link SendJobOptions.stateCheck}, a job checks the MicroVM state
+ * after a 502 with `x-aws-proxy-error: MICROVM_CONNECT_FAILED` or a request
+ * without an answer, at most once per 2 seconds. That check runs first,
+ * before the retry window and the backoff decide, so a short window cannot
+ * skip it. A check that finds the
+ * MicroVM terminating, terminated, or removed throws `MicrovmStateError`,
+ * and the job fails with `MicrovmNotRunningError`. Otherwise the function
+ * sends the job again to the endpoint that the check reports.
+ *
+ * The function does not resume a suspended MicroVM. The service resumes a
+ * MicroVM that was launched with `idlePolicy.autoResumeEnabled: true` when a
+ * request arrives. For about 5 seconds after a suspend, the endpoint
+ * answers that 502 and does not resume the MicroVM, measured in us-east-1.
+ * The backoff reaches 7.75 seconds after 5 retries. So the retries outlast
+ * that window. With a `retryWindow` under about 9 seconds, the step retry
+ * strategy covers the rest of that window, at the cost of one or two more
+ * step attempts. A job sent right after a suspend can take up to about 10
+ * seconds.
  *
  * @returns The status that accepted the job.
  */
@@ -377,7 +281,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     options.sleep ??
     ((ms: number): Promise<void> =>
       new Promise((resolve) => setTimeout(resolve, ms)));
-  const started = options.windowStartedAt ?? Date.now();
+  const started = Date.now();
   const deadline = (): number => {
     const byWindow = started + options.retryWindowMs;
     const reserve = reserveStartsAt(options.remainingTimeMs);
@@ -389,12 +293,10 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
 
   let attempt = 0;
   let lastFailure = "no attempt";
-  const unavailable = (): MicrovmEndpointUnavailableError => {
-    const note = options.unavailableNote?.();
-    return new MicrovmEndpointUnavailableError(
-      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.${note ? ` ${note}` : ""}`,
+  const unavailable = (): MicrovmEndpointUnavailableError =>
+    new MicrovmEndpointUnavailableError(
+      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.`,
     );
-  };
   const newToken = (): Promise<Record<string, string>> =>
     callBeforeDeadline(
       (sendOptions) => createAuthToken(options, sendOptions),
@@ -407,7 +309,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
   let token = await newToken();
   let refreshedToken = false;
   let delay = INITIAL_DELAY_MS;
-  let lastSuspendCheck: number | undefined;
+  let lastStateCheck: number | undefined;
 
   for (attempt = 1; ; attempt++) {
     // The request must end before the reserve, like every call in the tier.
@@ -500,53 +402,33 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
     }
 
+    // A failed request or a 502 with MICROVM_CONNECT_FAILED can mean that
+    // the MicroVM ended. So the job checks the state first, before the
+    // window and the backoff decide, and the check throws for a MicroVM that
+    // ended. A booting MicroVM gives no such sign, unless the worker takes
+    // more than 10 seconds to start listening. A suspended MicroVM gives the
+    // same signs, and the check lets the job retry. The check repeats after
+    // each such failure, at most once per 2 seconds. Only the invocation
+    // reserve limits it, so a short retry window cannot skip it.
+    if (
+      options.stateCheck &&
+      (status === undefined || connectFailed) &&
+      (lastStateCheck === undefined ||
+        Date.now() - lastStateCheck >= STATE_CHECK_INTERVAL_MS)
+    ) {
+      // At the reserve, no call starts, and the tier ends as without a check.
+      callBudgetMs(reserveStartsAt(options.remainingTimeMs), 0, unavailable);
+      lastStateCheck = Date.now();
+      endpoint = (await options.stateCheck()) ?? endpoint;
+      url = endpointUrl(endpoint, options.path);
+    }
+
     if (Date.now() + delay > deadline()) {
       throw unavailable();
     }
     options.log("job not accepted yet", { attempt, failure: lastFailure });
     await sleep(delay);
     delay = Math.min(delay * 2, MAX_DELAY_MS);
-    // A failed request or a gateway error can mean that the MicroVM
-    // suspended itself. So a session checks the state, and resumes the
-    // MicroVM, before it retries.
-    //
-    // A session without the resume mode checks the state only after a sign
-    // of a suspended MicroVM. A booting MicroVM gives no such sign, unless
-    // the worker takes more than 10 seconds to start listening. The check
-    // repeats after each such failure, at most once per 2 seconds. The
-    // worker can still suspend the MicroVM on idle after a state check, and
-    // the last call to the service wins.
-    //
-    // A session sets only one of the two checks. So when both are set, only
-    // `recheck` runs.
-    if (
-      options.recheck &&
-      (status === undefined || (status >= 502 && status <= 504))
-    ) {
-      const remainingMs = deadline() - Date.now();
-      if (remainingMs <= 0) {
-        throw unavailable();
-      }
-      endpoint = (await options.recheck(remainingMs)) ?? endpoint;
-      url = endpointUrl(endpoint, options.path);
-    } else if (
-      options.suspendCheck &&
-      (status === undefined || connectFailed)
-    ) {
-      const now = Date.now();
-      if (
-        lastSuspendCheck === undefined ||
-        now - lastSuspendCheck >= SUSPEND_CHECK_INTERVAL_MS
-      ) {
-        lastSuspendCheck = now;
-        const remainingMs = deadline() - now;
-        if (remainingMs <= 0) {
-          throw unavailable();
-        }
-        endpoint = (await options.suspendCheck(remainingMs)) ?? endpoint;
-        url = endpointUrl(endpoint, options.path);
-      }
-    }
   }
 }
 
@@ -558,7 +440,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
  *
  * - `ResourceNotFoundException`: the MicroVM was removed after the launch or
  *   after the state check. So the call throws the same
- *   `MicrovmStateError` as GetMicrovm and ResumeMicrovm. The step fails
+ *   `MicrovmStateError` as GetMicrovm. The step fails
  *   at once, and the job fails with `MicrovmNotRunningError`.
  * - Any other error: the call rethrows the same error object. An error of
  *   the Lambda MicroVMs service gets the request ID in its message. See

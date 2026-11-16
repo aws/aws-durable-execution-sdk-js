@@ -14,22 +14,18 @@ import {
   SuspendMicrovmCommand,
   TerminateMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
+import { remainingTime } from "../deadline";
 import {
   DEFAULT_MICROVM_JOB_PATH,
   DEFAULT_MICROVM_PORT,
   DEFAULT_REQUEST_RETRY_WINDOW_MS,
   MicrovmEndpointUnavailableError,
-  assertTimeToDeliver,
   callBeforeDeadline,
   reserveStartsAt,
   sendJob,
 } from "./request";
 import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
-import {
-  ensureRunning,
-  MicrovmStateCheckError,
-  resumeIfSuspended,
-} from "./lifecycle";
+import { checkNotEnded, MicrovmStateCheckError } from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
 import type {
@@ -273,15 +269,9 @@ export interface LaunchResult {
    * So every replay delivers the job the way the launch prepared for.
    */
   delivery: JobDelivery;
-  /**
-   * Whether each session job checks the MicroVM state, and resumes a
-   * suspended MicroVM, before delivery. Replay reads it from the checkpoint.
-   * So every replay follows the mode that the launch prepared the MicroVM
-   * for. A session launch always records it. A `microvm()` launch does not
-   * record it, because a single job never resumes its MicroVM. So the field
-   * is optional.
-   */
-  resumeBeforeDelivery?: boolean;
+  // An earlier version also recorded `resumeBeforeDelivery` for a session
+  // launch. Replay of such a checkpoint reads the field, and no code uses
+  // it.
 }
 
 export type RetryStrategy = (
@@ -523,8 +513,6 @@ export function launch(
     defaultIngress: "NO_INGRESS" | "ALL_INGRESS";
     runHookPayload: string;
     delivery: JobDelivery;
-    /** The resume mode to record. Only a session launch sets it. */
-    resumeBeforeDelivery?: boolean;
     extra?: Partial<RunMicrovmCommandInput>;
   },
 ): Promise<LaunchResult> {
@@ -586,9 +574,6 @@ export function launch(
         microvmId: response.microvmId,
         ...(overHttp && { endpoint: response.endpoint }),
         delivery: options.delivery,
-        ...(options.resumeBeforeDelivery !== undefined && {
-          resumeBeforeDelivery: options.resumeBeforeDelivery,
-        }),
       };
     },
     {
@@ -649,41 +634,35 @@ export function jobDocumentJson(job: MeasuredJob): string {
   return withJsonMember(job.fields, "input", job.inputJson);
 }
 
-/** The options of {@link deliverJob}. */
-export interface DeliverJobOptions {
-  /**
-   * Whether each attempt first makes sure the MicroVM runs, and resumes a
-   * suspended one. A function is read at the start of each attempt. So a
-   * step retry, and a `map` item that starts after a sibling set the
-   * session's flag, see the current value.
-   */
-  resume?: boolean | (() => boolean);
-  /**
-   * Turns on the check after a sign of a suspended MicroVM, for an attempt
-   * without `resume`. See {@link resumeIfSuspended}. A session sets it for
-   * every job. A failed GetMicrovm call in that check logs one warning per
-   * job, and the attempt keeps sending the job.
-   */
-  suspendCheck?: boolean;
-}
-
 /**
- * The warning, once per job, after a failed state check of a session
- * without the resume mode.
+ * The warning, once per step attempt (so up to 5 with the default retry
+ * strategy), after a failed state check.
  */
 const STATE_CHECK_WARNING =
-  "GetMicrovm failed, so the operation could not check whether the MicroVM is suspended. The request step keeps sending the job.";
-
-/**
- * The sentence that the first tier adds to its final error after a denied
- * state check. Without it, the message names only the last HTTP failure.
- */
-const GET_DENIED_NOTE =
-  "GetMicrovm was denied, so the operation could not check whether the MicroVM is suspended.";
+  "GetMicrovm failed, so the operation could not check whether the MicroVM has ended. The request step keeps sending the job.";
 
 /**
  * Runs the request step: delivers one job over HTTP with the first retry
  * tier inside the step, and the step retry strategy as the second tier.
+ *
+ * An attempt checks the MicroVM state once after a sign that the MicroVM
+ * does not run: an HTTP 502 with `x-aws-proxy-error:
+ * MICROVM_CONNECT_FAILED`, or no answer. See {@link checkNotEnded}. Every
+ * job over HTTP runs this check, from `microvm` and from a session. The
+ * endpoint of a terminated MicroVM answers that 502, measured in us-east-1.
+ * Without the check, the request step retries the 502 as a MicroVM that is
+ * still starting, in both retry tiers. With the check, a terminating,
+ * terminated, or removed MicroVM fails the job at once with
+ * `MicrovmNotRunningError`.
+ *
+ * A suspended session MicroVM gives the same sign. The check lets the job
+ * retry, and the service resumes a MicroVM that was launched with
+ * `idlePolicy.autoResumeEnabled: true`.
+ *
+ * A denied GetMicrovm call in the check fails the job at once with
+ * `MicrovmDeliveryError`, and the message names `lambda:GetMicrovm`. Any
+ * other failed GetMicrovm call logs one warning per step attempt, so up to
+ * 5 with the default retry strategy. The attempt keeps sending the job.
  */
 export async function deliverJob(
   child: DurableContext,
@@ -692,7 +671,6 @@ export async function deliverJob(
   launched: LaunchResult,
   request: MicrovmRequestConfig,
   job: MeasuredJob,
-  options: DeliverJobOptions = {},
 ): Promise<void> {
   // The body ends with the input's measured JSON text. So it has the size
   // that validateJobInput checked.
@@ -706,66 +684,30 @@ export async function deliverJob(
     "input",
     job.inputJson,
   );
-  // One warning per job for a failed state check. The attempts of the step
-  // in this invocation share it.
+  // One warning per step attempt for a failed state check. The requests of
+  // the attempt in this invocation share it.
   let checkWarned = false;
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
-      // A session job calls GetMicrovm before sendJob, and that call has the
-      // same limit as the request. So the step checks the time before
-      // either call, and both kinds of job get the message that names the
-      // function timeout.
-      assertTimeToDeliver(remainingTime(child));
       const client = getClient(scope.config, scope.region);
       const log = (message: string, data: Record<string, unknown>): void =>
         stepContext.logger.info(`MicroVM "${jobName}": ${message}`, data);
-      const resume =
-        typeof options.resume === "function"
-          ? options.resume()
-          : options.resume === true;
       const retryWindowMs =
         request.retryWindow === undefined
           ? DEFAULT_REQUEST_RETRY_WINDOW_MS
           : durationToSeconds(request.retryWindow) * 1_000;
-      // A session MicroVM can be suspended between jobs. So a session job
-      // first makes sure the MicroVM runs, and uses the endpoint that
-      // GetMicrovm reports now.
-      // A transition must fit in the first retry tier, like the request
-      // that follows it. A recheck gets what remains of the tier.
-      // The state check before delivery and the request's retries share
-      // one window. So the wait for a resume counts toward it.
-      const windowStartedAt = Date.now();
-      const running = (
-        maxWaitMs = retryWindowMs,
-      ): Promise<string | undefined> =>
-        ensureRunning({
-          client,
-          microvmId: launched.microvmId,
-          maxWaitMs,
-          remainingTimeMs: remainingTime(child),
-          log,
-        });
-      const endpoint = resume
-        ? ((await running()) ?? launched.endpoint)
-        : launched.endpoint;
-      let getDenied = false;
-      const checkState = async (
-        maxWaitMs: number,
-      ): Promise<string | undefined> => {
+      const stateCheck = async (): Promise<string | undefined> => {
         try {
-          return await resumeIfSuspended({
+          return await checkNotEnded({
             client,
             microvmId: launched.microvmId,
-            maxWaitMs,
             remainingTimeMs: remainingTime(child),
-            log,
           });
         } catch (error) {
           if (!(error instanceof MicrovmStateCheckError)) {
             throw error;
           }
-          getDenied ||= error.denied;
           if (!checkWarned) {
             checkWarned = true;
             stepContext.logger.warn(STATE_CHECK_WARNING, {
@@ -780,7 +722,7 @@ export async function deliverJob(
       // caller delivers over HTTP only then. So a missing endpoint is a
       // defect, not a transient failure. The error name is not retryable,
       // so the step fails at once instead of sending to "https://undefined".
-      if (endpoint === undefined) {
+      if (launched.endpoint === undefined) {
         throw new Error(
           `MicroVM "${jobName}": the launch recorded no endpoint for MicroVM ${launched.microvmId}, so the job cannot be sent over HTTP`,
         );
@@ -789,18 +731,14 @@ export async function deliverJob(
         client,
         fetch: scope.config.fetch ?? fetch,
         microvmId: launched.microvmId,
-        endpoint,
+        endpoint: launched.endpoint,
         path: request.path ?? DEFAULT_MICROVM_JOB_PATH,
         port: request.port ?? DEFAULT_MICROVM_PORT,
         body,
         retryWindowMs,
-        windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
-        ...(resume && { recheck: running }),
-        ...(!resume &&
-          options.suspendCheck === true && { suspendCheck: checkState }),
-        unavailableNote: () => (getDenied ? GET_DENIED_NOTE : undefined),
+        stateCheck,
       });
     },
     {
@@ -871,9 +809,11 @@ export async function terminate(
  * checkpoint of its own. The child context's completion checkpoint covers
  * it, so a replay of a completed job does not call it again.
  *
- * A failed call must not fail the job, which has an outcome already. The next
- * job checks the MicroVM state and resumes it when needed. SuspendMicrovm
- * succeeds for a MicroVM that is suspending or suspended.
+ * A failed call must not fail the job, which has an outcome already. The
+ * next job works either way: a running MicroVM takes it, and the service
+ * resumes a suspended MicroVM that was launched with
+ * `idlePolicy.autoResumeEnabled: true`. SuspendMicrovm succeeds for a
+ * MicroVM that is suspending or suspended.
  */
 export async function suspendMicrovm(
   child: DurableContext,
@@ -934,36 +874,6 @@ export function durationToSeconds(duration: Duration | undefined): number {
 
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-/**
- * Returns a function that reads the invocation's remaining time in
- * milliseconds. The first retry tier uses it to stop before the invocation
- * times out.
- *
- * AWS Lambda's context has `getRemainingTimeInMillis()`. A local or test
- * runner can pass no Lambda context, or one without that function. The
- * returned function then returns `undefined`, and the caller applies only its
- * own time limit.
- *
- * Otherwise the returned function passes on the value of
- * `getRemainingTimeInMillis()` unchanged. `reserveStartsAt` and
- * `assertTimeToDeliver` read it, and both treat a value that is not a finite
- * number as no deadline. A `getRemainingTimeInMillis()` that throws fails the
- * step that reads it. One that returns a value that is not a finite number
- * turns the reserve off.
- */
-export function remainingTime(
-  context: DurableContext,
-): () => number | undefined {
-  const lambdaContext = context.lambdaContext as
-    | { getRemainingTimeInMillis?: unknown }
-    | undefined;
-  const read = lambdaContext?.getRemainingTimeInMillis;
-  if (typeof read !== "function") {
-    return (): undefined => undefined;
-  }
-  return () => read.call(lambdaContext) as number | undefined;
 }
 
 /**

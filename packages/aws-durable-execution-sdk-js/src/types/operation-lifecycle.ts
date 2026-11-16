@@ -7,10 +7,10 @@ import { OperationLifecycleState } from "./operation-lifecycle-state";
  */
 export interface OperationMetadata {
   stepId: string;
-  name?: string;
+  name?: string | undefined;
   type: OperationType;
   subType: OperationSubType;
-  parentId?: string;
+  parentId?: string | undefined;
 }
 
 /**
@@ -20,8 +20,8 @@ export interface OperationInfo {
   stepId: string;
   state: OperationLifecycleState;
   metadata: OperationMetadata;
-  endTimestamp?: Date;
-  timer?: NodeJS.Timeout;
-  resolver?: () => void;
-  pollCount?: number;
+  endTimestamp?: Date | undefined;
+  timer?: NodeJS.Timeout | undefined;
+  resolver?: (() => void) | undefined;
+  pollCount?: number | undefined;
 }

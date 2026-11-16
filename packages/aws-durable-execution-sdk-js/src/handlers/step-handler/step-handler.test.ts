@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createStepHandler } from "./step-handler";
 import {
   ExecutionContext,
@@ -19,19 +11,6 @@ import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("Step Handler", () => {
   let mockContext: ExecutionContext;
@@ -50,6 +29,7 @@ describe("Step Handler", () => {
       durableExecutionArn: "test-arn",
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
     } as any;
 
@@ -65,13 +45,6 @@ describe("Step Handler", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
   });
 
   it("should execute step function with StepContext", async () => {

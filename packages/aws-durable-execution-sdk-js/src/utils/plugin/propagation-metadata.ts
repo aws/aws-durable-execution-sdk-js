@@ -17,6 +17,7 @@ function pluginIdentity(
 
 function warn(message: string, details: Record<string, string | number>): void {
   try {
+    // biome-ignore lint/suspicious/noConsole: this diagnostic is for the developer and has no logger here.
     console.warn(message, details);
   } catch {
     // A diagnostic failure must not change the invocation outcome.
@@ -37,7 +38,8 @@ export function collectPropagationMetadata(
     targetFunctionName: input.targetFunctionName,
   });
   let xAmznTraceId: string | undefined;
-  let firstPlugin: string | undefined;
+  // Set together with xAmznTraceId, and read only after xAmznTraceId is set.
+  let firstPlugin = "";
   let conflictCount = 0;
   for (const [index, plugin] of plugins.entries()) {
     const identity = pluginIdentity(plugin, index);
@@ -68,7 +70,7 @@ export function collectPropagationMetadata(
       } else if (value !== xAmznTraceId) {
         warn("Conflicting propagation metadata; keeping the first value.", {
           field: "xAmznTraceId",
-          firstPlugin: firstPlugin!,
+          firstPlugin,
           laterPlugin: identity,
           conflictCount: ++conflictCount,
         });

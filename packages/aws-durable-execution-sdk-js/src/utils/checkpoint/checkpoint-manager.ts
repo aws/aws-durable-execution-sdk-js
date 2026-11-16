@@ -1,12 +1,12 @@
 import {
-  CheckpointDurableExecutionRequest,
-  OperationUpdate,
-  Operation,
+  type CheckpointDurableExecutionRequest,
+  type OperationUpdate,
+  type Operation,
   OperationStatus,
   OperationType,
   OperationAction,
 } from "../../types/wire";
-import { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -22,8 +22,8 @@ import {
   DurableExecutionClientErrorScope,
   isDurableExecutionClientError,
 } from "../../errors/durable-execution-client-error/durable-execution-client-error";
-import { DurableLogger } from "../../types/durable-logger";
-import { Checkpoint } from "./checkpoint-helper";
+import type { DurableLogger } from "../../types/durable-logger";
+import type { Checkpoint } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
   MAX_TIMER_DELAY_MS,
@@ -33,12 +33,12 @@ import {
   EXTENDED_POLL_INTERVAL_CEILING_MS,
   POLLS_BEFORE_EXTENDED_INTERVAL,
 } from "../constants/constants";
-import {
+import type {
   OperationInfo,
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
@@ -148,7 +148,12 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
-   * Releases everything this manager armed, and refuses to arm anything further.
+   * Clears currently armed timers and closes checkpoint admission.
+   *
+   * An already in-flight checkpoint retains its completion behavior. Its continuation can
+   * still rearm a poll timer in forceRefreshAndCheckStatus. That pre-existing timer race is
+   * outside this checkpoint admission fix; processQueue prevents subsequent dispatch and
+   * checkAndTerminate prevents termination timers after disposal.
    *
    * Timers outlive the invocation that armed them. Nothing else clears them on the normal
    * path: cleanupAllOperations is only reached through executeTermination, and
@@ -173,6 +178,8 @@ export class CheckpointManager implements Checkpoint {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Close admission while processQueue abandons queued work after any active batch.
+    this.setTerminating();
 
     if (this.terminationTimer) {
       clearTimeout(this.terminationTimer);
@@ -221,8 +228,8 @@ export class CheckpointManager implements Checkpoint {
 
   async forceCheckpoint(): Promise<void> {
     if (this.isTerminating) {
-      log("⚠️", "Force checkpoint skipped - termination in progress");
-      return new Promise(() => {}); // Never resolves during termination
+      log("⚠️", "Force checkpoint skipped - manager is terminating or disposed");
+      return new Promise(() => {}); // Never resumes work from an ended invocation
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -230,7 +237,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -289,16 +297,16 @@ export class CheckpointManager implements Checkpoint {
    * change that.
    *
    * Returns `"abandoned"` when the manager cannot send the update: it is already
-   * terminating, the token is already withdrawn, or the queue was cleared before the update
-   * went out. The termination details are set by then, so the caller decides its answer from
-   * the termination reason.
+   * terminating or disposed, the token is already withdrawn, or the queue was cleared before
+   * the update went out. When terminating, the termination details are set by then, so the
+   * caller decides its answer from the termination reason.
    */
   async checkpointExecutionResult(
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<CheckpointOutcome> {
     if (this.isTerminating || this.checkpointTokenRevoked) {
-      log("⚠️", "Execution result not checkpointed - manager is terminating:", {
+      log("⚠️", "Execution result not checkpointed - manager is inactive:", {
         stepId,
         checkpointTokenRevoked: this.checkpointTokenRevoked,
       });
@@ -326,7 +334,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -337,8 +346,10 @@ export class CheckpointManager implements Checkpoint {
     data: Partial<OperationUpdate>,
   ): Promise<void> {
     if (this.isTerminating) {
-      log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
-      return new Promise(() => {}); // Never resolves during termination
+      log("⚠️", "Checkpoint skipped - manager is terminating or disposed:", {
+        stepId,
+      });
+      return new Promise(() => {}); // Never resumes work from an ended invocation
     }
 
     // Check if any ancestor is finished - if so, don't queue and don't resolve
@@ -375,7 +386,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (!this.isProcessing) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       }
     });
@@ -480,10 +492,16 @@ export class CheckpointManager implements Checkpoint {
     // away is set by the termination manager's callback, which a directly constructed
     // manager need not have wired, and forceCheckpoint() reaches processQueue without
     // enqueueing anything at all.
-    if (this.checkpointTokenRevoked) {
-      log("⚠️", "Checkpoint skipped - checkpoint token was withdrawn", {
-        queueLength: this.queue.length,
-      });
+    // Disposal can happen after processing was scheduled or while an earlier batch was in
+    // flight. Drop queued work on either path rather than sending it in a later invocation.
+    if (this.checkpointTokenRevoked || this.disposed) {
+      log(
+        "⚠️",
+        "Checkpoint skipped - checkpoint token withdrawn or manager disposed",
+        {
+          queueLength: this.queue.length,
+        },
+      );
       this.clearQueue();
       return;
     }
@@ -504,9 +522,7 @@ export class CheckpointManager implements Checkpoint {
     // Cursor-based drain: sizes were computed at enqueue time, and a single
     // slice() replaces O(n²) per-item shift().
     let consumed = 0;
-    while (consumed < this.queue.length) {
-      const nextItem = this.queue[consumed];
-
+    for (const nextItem of this.queue) {
       if (
         (currentSize + nextItem.sizeBytes > this.MAX_PAYLOAD_SIZE ||
           batch.length >= this.MAX_ITEMS_IN_BATCH) &&
@@ -582,7 +598,8 @@ export class CheckpointManager implements Checkpoint {
 
       if (this.queue.length > 0) {
         setImmediate(() => {
-          this.processQueue();
+          // processQueue catches a failed batch and terminates, so it does not reject.
+          void this.processQueue();
         });
       } else {
         // Queue is empty and processing is done - notify all waiting promises
@@ -795,8 +812,8 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     state: OperationLifecycleState,
     options?: {
-      metadata?: OperationMetadata;
-      endTimestamp?: Date;
+      metadata?: OperationMetadata | undefined;
+      endTimestamp?: Date | undefined;
     },
   ): void {
     let op = this.operations.get(stepId);
@@ -1062,7 +1079,9 @@ export class CheckpointManager implements Checkpoint {
     // The invocation is already ending, and every reason this would schedule is a suspend
     // the termination manager would discard. Arming a cooldown timer for it only leaves a
     // timer pending past the invocation.
-    if (this.checkpointTokenRevoked) {
+    // After dispose, the invocation has ended. A timer armed now would call terminate()
+    // on it, for example when a checkpoint that was in flight at dispose completes.
+    if (this.checkpointTokenRevoked || this.disposed) {
       return;
     }
 
@@ -1202,7 +1221,8 @@ export class CheckpointManager implements Checkpoint {
     op.pollCount ??= 0;
 
     op.timer = setTimeout(() => {
-      this.forceRefreshAndCheckStatus(stepId);
+      // forceCheckpoint does not reject, so this timer callback does not reject.
+      void this.forceRefreshAndCheckStatus(stepId);
     }, delay);
   }
 
@@ -1268,7 +1288,8 @@ export class CheckpointManager implements Checkpoint {
       const nextDelay = Math.min(op.pollCount * 1000, intervalCeilingMs);
 
       op.timer = setTimeout(() => {
-        this.forceRefreshAndCheckStatus(stepId);
+        // forceCheckpoint does not reject, so this timer callback does not reject.
+        void this.forceRefreshAndCheckStatus(stepId);
       }, nextDelay);
     }
   }

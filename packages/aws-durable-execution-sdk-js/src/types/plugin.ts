@@ -1,4 +1,4 @@
-import { DurableExecutionInvocationOutput } from "./core";
+import type { DurableExecutionInvocationOutput } from "./core";
 
 /**
  * Status enumeration for plugin invocation end hooks.
@@ -11,6 +11,19 @@ export const PluginInvocationStatus = {
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
   PENDING: "PENDING",
+  /**
+   * The invocation ended with an invocation error, so Lambda normally invokes
+   * again.
+   *
+   * A retry does not always follow. The execution can be stopped, or reach its
+   * execution timeout, while a step runs. On Lambda Managed Instances the
+   * invocation keeps running, and the service then rejects its next
+   * checkpoint. The SDK cannot tell that rejection from one that Lambda
+   * retries, so it reports `RETRYING`, and no later invocation comes. So in
+   * `onInvocationEnd`, end every operation that is still in progress or
+   * retrying, with its status in `info.operations`. Do not wait for a later
+   * invocation to end it.
+   */
   RETRYING: "RETRYING",
 } as const;
 
@@ -42,14 +55,14 @@ export type PluginOperationStatus =
  */
 export interface OperationInfo {
   id: string;
-  name?: string;
+  name?: string | undefined;
   type: string;
-  subType?: string;
-  parentId?: string;
-  status?: PluginOperationStatus;
-  startTimestamp?: Date;
-  endTimestamp?: Date;
-  result?: string;
+  subType?: string | undefined;
+  parentId?: string | undefined;
+  status?: PluginOperationStatus | undefined;
+  startTimestamp?: Date | undefined;
+  endTimestamp?: Date | undefined;
+  result?: string | undefined;
   /**
    * Error details, when available. Checkpoint-derived metadata can omit this
    * field when wire error data is missing or empty, including during replay
@@ -59,12 +72,12 @@ export interface OperationInfo {
    * imply success. Supplied partial error details are retained, including
    * explicitly empty strings or an empty stack trace.
    */
-  error?: Error;
+  error?: Error | undefined;
   /**
    * The current attempt number for the operation (1-based), when applicable
    * (e.g. steps). Sourced from the checkpointed step details.
    */
-  attempt?: number;
+  attempt?: number | undefined;
   isReplay: boolean;
 }
 
@@ -72,7 +85,7 @@ export interface OperationInfo {
  * Information provided when a durable operation ends.
  */
 export interface OperationEndInfo extends OperationInfo {
-  error?: Error;
+  error?: Error | undefined;
 }
 
 /**
@@ -98,7 +111,7 @@ export type AttemptEndInfoOutcome =
  */
 export interface AttemptEndInfo extends AttemptInfo {
   outcome: AttemptEndInfoOutcome;
-  error?: Error;
+  error?: Error | undefined;
 }
 
 /**
@@ -114,7 +127,7 @@ export interface InvocationBaseInfo {
    * as reported by the backend. This remains the same across all
    * invocations (including replays) of a given execution.
    */
-  executionStartTimestamp?: Date;
+  executionStartTimestamp?: Date | undefined;
 }
 
 /**
@@ -149,7 +162,7 @@ export interface InvocationInfo extends InvocationBaseInfo {
 export interface InvocationEndInfo extends InvocationBaseInfo {
   status: PluginInvocationStatus;
   executionResult?: unknown;
-  executionError?: Error;
+  executionError?: Error | undefined;
 }
 
 /**
@@ -200,13 +213,40 @@ export interface OperationChangeInfo {
  *
  * So `onInvocationEnd` keeps its time even when earlier hook work is slow, and
  * an invocation that ends close to its timeout still flushes. Work that has not
- * settled by its deadline is abandoned, and the invocation returns. In Lambda
- * the execution environment is then frozen, so abandoned work may never
- * complete. If the context reports no deadline, both waits last until
- * everything settles.
+ * settled by its deadline is abandoned, and the invocation returns. On standard
+ * Lambda the execution environment is then frozen, so abandoned work may never
+ * complete. On Lambda Managed Instances the environment keeps running, so
+ * abandoned work keeps running too. If the context reports no deadline, both
+ * waits last until everything settles.
  *
  * Errors thrown or promises rejected by any hook are swallowed by the SDK and
  * never affect the execution outcome.
+ *
+ * **Lambda Managed Instances.** On Lambda Managed Instances (LMI), the
+ * execution environment does not freeze between invocations. Several
+ * invocations run at the same time in one Node.js worker. Code from an ended
+ * invocation can keep running and keep calling its plugin's hooks. So a plugin
+ * follows these rules:
+ *
+ * 1. A hook can run after `onInvocationEnd`. The plugin ignores that call. It
+ *    never changes the spans or buffers of another invocation.
+ * 2. A `wrap` hook calls `fn` exactly once, inline, and returns its result. It
+ *    never stores `fn` to call later.
+ * 3. Every export has its own timeout. The SDK does not wait for operation
+ *    hooks. An export without a timeout keeps its sockets and timers open while
+ *    the environment keeps running. Node.js `fetch` waits up to 300 seconds for
+ *    a response by default.
+ * 4. `onInvocationEnd` finishes before the deadline. It starts no work that
+ *    needs the invocation to keep running.
+ * 5. Plugin state lives on the instance. It never lives in module-level maps
+ *    keyed by execution ARN.
+ * 6. `RETRYING` does not promise a later invocation. A stop or an execution
+ *    timeout during a step can end the last invocation with `RETRYING`. So
+ *    `onInvocationEnd` ends every operation that is still in progress or
+ *    retrying, with its status in `info.operations`. See
+ *    {@link PluginInvocationStatus}.
+ *
+ * {@link DurableInstrumentationPluginFactory} states the rule for the factory.
  */
 export interface DurableInstrumentationPlugin {
   /**
@@ -223,7 +263,15 @@ export interface DurableInstrumentationPlugin {
   providePropagationMetadata?(
     input: PropagationInput,
   ): PropagationMetadata | undefined;
+  /**
+   * Called once when an invocation starts, before the handler runs. The SDK
+   * awaits this hook, so a plugin can finish its setup here.
+   */
   onInvocationStart?(info: InvocationInfo): Promise<void>;
+  /**
+   * Wraps the whole invocation. Call `fn` exactly once, inline, and return its
+   * result.
+   */
   wrapInvocation?(
     info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
@@ -243,22 +291,65 @@ export interface DurableInstrumentationPlugin {
    * invocation. Errors thrown (or rejected promises) are swallowed by the SDK
    * and never affect the execution outcome.
    *
-   * Do not start fire-and-forget work here and leave it un-awaited: this hook
-   * runs right before the Lambda response is returned, so the environment is
-   * frozen immediately afterward and such work will not complete. This is the
-   * place to flush exporters and other buffered work.
+   * Do not start fire-and-forget work here and leave it un-awaited. This hook
+   * runs right before the Lambda response is returned. On standard Lambda the
+   * environment is frozen right after that, so such work does not complete. On
+   * Lambda Managed Instances the environment keeps running, so such work runs
+   * after the invocation ended, next to other invocations. This is the place to
+   * flush exporters and other buffered work.
    *
    * @param info - Details about the completed invocation, including status,
    * result or error, input, and operations.
    */
   onInvocationEnd?(info: InvocationEndInfo): Promise<void>;
+  /**
+   * Called when an operation starts. On replay it is also called for an
+   * operation that started in an earlier invocation and has not finished, with
+   * `isReplay` set to `true`. It is not called for an operation that finished
+   * in an earlier invocation. `InvocationInfo.operations` lists those
+   * operations. The SDK does not wait for the returned promise.
+   */
   onOperationStart?(info: OperationInfo): Promise<void>;
+  /**
+   * Wraps the function that runs in a child context, for example the function
+   * passed to `runInChildContext`. Call `fn` exactly once, inline, and return
+   * its result.
+   */
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
+  /**
+   * Called when an operation ends, with its outcome. The SDK does not wait for
+   * the returned promise.
+   */
   onOperationEnd?(info: OperationEndInfo): Promise<void>;
+  /**
+   * Called before each attempt of a `step`, and before each check of a
+   * `waitForCondition`. The SDK does not wait for the returned promise.
+   */
   onOperationAttemptStart?(info: AttemptInfo): Promise<void>;
+  /**
+   * Wraps the function of one attempt of a `step`, or of one check of a
+   * `waitForCondition`. Call `fn` exactly once, inline, and return its result.
+   */
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
+  /**
+   * Called after each attempt of a `step`, and after each check of a
+   * `waitForCondition`, with the outcome of that attempt. The SDK does not wait
+   * for the returned promise.
+   */
   onOperationAttemptEnd?(info: AttemptEndInfo): Promise<void>;
+  /**
+   * Called when a checkpoint response changes the status of one or more
+   * operations. `info.updatedOperations` holds the changed operations, and
+   * `info.operations` holds every operation the SDK knows. The SDK does not
+   * wait for the returned promise.
+   */
   onOperationChange?(info: OperationChangeInfo): Promise<void>;
+  /**
+   * Returns fields that the default logger adds to each log entry, for example
+   * a trace ID. The SDK calls it for every entry, so keep it synchronous and
+   * cheap. Return `undefined` to add no fields. The SDK ignores errors from
+   * this hook.
+   */
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
 
@@ -268,7 +359,7 @@ export interface DurableInstrumentationPlugin {
 export interface PropagationInput {
   readonly executionArn: string;
   readonly operationId: string;
-  readonly parentOperationId?: string;
+  readonly parentOperationId?: string | undefined;
   readonly targetFunctionName: string;
 }
 
@@ -291,6 +382,11 @@ export interface PropagationMetadata {
  * instance never has to key its per-execution state by execution ARN, and two
  * executions running concurrently in one execution environment (as Lambda
  * Managed Instances makes routine) cannot observe each other's state.
+ *
+ * So `createPlugin` returns a new instance on every call. It never returns a
+ * cached or shared instance. A shared instance would serve several
+ * invocations, and on Lambda Managed Instances those invocations run at the
+ * same time.
  *
  * State that belongs to the execution environment rather than to one
  * invocation — a shared exporter, a tracer provider, a scheduler — belongs on

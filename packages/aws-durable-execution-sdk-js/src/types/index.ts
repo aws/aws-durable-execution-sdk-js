@@ -14,14 +14,16 @@ export * from "./durable-execution";
 export * from "./operation-lifecycle-state";
 export * from "./operation-lifecycle";
 export {
+  PluginInvocationStatus,
+  AttemptEndInfoOutcome,
+} from "./plugin";
+export type {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
   InvocationBaseInfo as InvokeInfo,
   InvocationInfo,
   InvocationEndInfo,
-  PluginInvocationStatus,
   OperationChangeInfo,
   AttemptInfo,
   AttemptEndInfo,
-  AttemptEndInfoOutcome,
 } from "./plugin";

@@ -1,6 +1,6 @@
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { DurableExecutionClient } from "./durable-execution";
-import { ErrorObject, Operation, WireOperation } from "./wire";
+import type { DurableExecutionClient } from "./durable-execution";
+import type { ErrorObject, Operation, WireOperation } from "./wire";
 
 /**
  * @internal
@@ -53,7 +53,7 @@ export interface DurableExecutionInvocationInput {
    * When undefined (e.g., first invocation), all pre-existing completed operations are
    * treated as replay.
    */
-  UpdatedOperationIds?: string[];
+  UpdatedOperationIds?: string[] | undefined;
 
   /**
    * Execution state including operation history and pagination information.

@@ -21,6 +21,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       terminationManager: {
         shouldTerminate: vi.fn().mockReturnValue(false),
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
     } as any;
 

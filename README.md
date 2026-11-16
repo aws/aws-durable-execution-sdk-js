@@ -66,7 +66,7 @@ These packages are in alpha. Their APIs may change without a major version bump.
 | Package                                                                                                | Description                                                                                  |
 | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | [@aws/durable-execution-sdk-js-extras](./packages/aws-durable-execution-sdk-js-extras)                 | Ready-made custom operations. `microvm` runs a job in an AWS Lambda MicroVM                  |
-| [@aws/durable-execution-sdk-js-microvm-worker](./packages/aws-durable-execution-sdk-js-microvm-worker) | Runs inside the MicroVM: receives jobs from `microvm`, sends heartbeats, and reports results |
+| [@aws/durable-execution-sdk-js-compute-worker](./packages/aws-durable-execution-sdk-js-compute-worker) | Runs jobs on external compute. The `microvm` subpath runs inside the MicroVM: receives jobs from `microvm`, sends heartbeats, and reports results |
 
 ### Internal packages
 
@@ -167,7 +167,7 @@ aws lambda invoke \
 
 - **[AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** – Official AWS Lambda durable functions guide
 - **[SDK README](./packages/aws-durable-execution-sdk-js/README.md)** – Detailed SDK usage guide with code examples
-- **[API Reference](https://docs.aws.amazon.com/durable-execution/)** – Complete technical reference with type definitions
+- **[Developer guide](https://docs.aws.amazon.com/durable-execution/)** – Operations, error handling and observability for every SDK language. The source is in [aws-durable-execution-docs](https://github.com/aws/aws-durable-execution-docs).
 - **[Concepts & Use Cases](./packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md)** – Replay model, best practices, and real-world patterns
 - **[Examples](./packages/aws-durable-execution-sdk-js-examples)** – Working examples including hello-world, callbacks, parallel processing, and more
 - **[OpenTelemetry plugin](./packages/aws-durable-execution-sdk-js-otel/README.md)** – Emit traces from your durable functions

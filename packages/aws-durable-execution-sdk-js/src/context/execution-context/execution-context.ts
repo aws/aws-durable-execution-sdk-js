@@ -1,18 +1,18 @@
-import { Operation } from "../../types/wire";
+import type { Operation } from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
-  DurableExecutionInvocationInput,
-  ExecutionContext,
+  type DurableExecutionInvocationInput,
+  type ExecutionContext,
   DurableExecutionMode,
-  DurableExecutionConfig,
+  type DurableExecutionConfig,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
-import { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 import { warnOnceIfContextStorageIsDegraded } from "../../utils/context-tracker/context-storage";
 import { normalizeOperations } from "../../utils/operation/normalize-operation";
@@ -142,7 +142,7 @@ export const initializeExecutionContext = async (
       // returns something other than a finite number states no deadline either, so it
       // reads as `Infinity` too. Otherwise a stub context in a unit test, or a context
       // from another compute, would fail the invocation when the SDK reads the deadline.
-      getRemainingTimeMs: () => {
+      getRemainingTimeMs: (): number => {
         try {
           const remaining = context.getRemainingTimeInMillis();
           return typeof remaining === "number" && Number.isFinite(remaining)

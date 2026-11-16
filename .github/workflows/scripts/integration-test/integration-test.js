@@ -30,6 +30,8 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import dotenv from "dotenv";
+import { baseFunctionName, samStackName } from "./integration-test-names.mjs";
+import { deployWithRollbackRecovery, retry } from "./sam-deploy.mjs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -304,24 +306,11 @@ class IntegrationTestRunner {
    * @param {Object} [options.env]
    * @param {number} [maxAttempts]
    */
-  async execCommandWithRetry(command, options = {}, maxAttempts = 5) {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return this.execCommand(command, options);
-      } catch (error) {
-        if (attempt === maxAttempts) {
-          throw error;
-        }
-
-        const delayMs = Math.min(15000 * attempt, 60000);
-        log.warning(
-          `Command failed; retrying attempt ${attempt + 1}/${maxAttempts} in ${delayMs}ms`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    }
-
-    throw new Error("Max command retry attempts exceeded");
+  execCommandWithRetry(command, options = {}, maxAttempts = 5) {
+    return retry(() => this.execCommand(command, options), {
+      maxAttempts,
+      log: log.warning,
+    });
   }
 
   getRuntimeId() {
@@ -339,8 +328,7 @@ class IntegrationTestRunner {
   }
 
   getSamStackName() {
-    const runtimeId = this.getRuntimeId().toLowerCase();
-    return `aws-durable-execution-sdk-js-integ-${runtimeId}`;
+    return samStackName(this.runtime, process.env);
   }
 
   samStackExists(/** @type {string | undefined} */ stackName = undefined) {
@@ -393,37 +381,14 @@ class IntegrationTestRunner {
     /** @type {Record<string, {functionName: string, qualifier: string}>} */
     const functionNameMap = {};
 
-    // Get runtime suffix from argument or environment variable
-    const lambdaRuntime = this.runtime.replace(".", "");
-
     for (const example of examples) {
-      const exampleName = example.name;
       const exampleHandler = example.handler;
-
-      // Build base function name with runtime suffix
-      let baseFunctionName;
-      if (this.isGitHubActions) {
-        // Functions are named with the runtime first since the log scrubber cleans logs by the NodeJS- suffix
-        const baseName =
-          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS`;
-        if (
-          options.capacityProviderOnly &&
-          process.env.GITHUB_EVENT_NAME === "pull_request"
-        ) {
-          if (!process.env.GITHUB_EVENT_NUMBER) {
-            throw new Error(
-              "Could not find GITHUB_EVENT_NUMBER environment variable",
-            );
-          }
-          baseFunctionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
-        } else {
-          baseFunctionName = baseName;
-        }
-      } else {
-        const name =
-          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS-Local`;
-        baseFunctionName = name;
-      }
+      const name = baseFunctionName({
+        exampleName: example.name,
+        runtime: this.runtime,
+        capacityProviderOnly: options.capacityProviderOnly,
+        env: process.env,
+      });
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
 
@@ -432,13 +397,13 @@ class IntegrationTestRunner {
           functionNameMap[
             `${handlerFile}${CAPACITY_PROVIDER_FUNCTION_SUFFIX}`
           ] = {
-            functionName: `${baseFunctionName}-CapacityProvider`,
+            functionName: `${name}-CapacityProvider`,
             qualifier: "$LATEST.PUBLISHED",
           };
         }
       } else {
         functionNameMap[handlerFile] = {
-          functionName: baseFunctionName,
+          functionName: name,
           qualifier: "$LATEST",
         };
       }
@@ -704,7 +669,10 @@ class IntegrationTestRunner {
 
     log.info(`Deploying SAM stack: ${stackName}`);
     await timed("sam deploy", () =>
-      this.execCommandWithRetry(deployCommand, { cwd: examplesDir }),
+      deployWithRollbackRecovery(
+        () => this.execCommand(deployCommand, { cwd: examplesDir }),
+        this.getStackOps(),
+      ),
     );
 
     // A direct update leaves CloudFormation's recorded code behind the code
@@ -770,6 +738,32 @@ class IntegrationTestRunner {
       }),
     );
     return this.getPackagedCodeLocation(packagedTemplatePath);
+  }
+
+  /**
+   * The CloudFormation calls that deployWithRollbackRecovery needs.
+   * @returns {import("./sam-deploy.mjs").StackOps}
+   */
+  getStackOps() {
+    const stackName = this.getSamStackName();
+    const stack = shellQuote(stackName);
+    const region = shellQuote(CONFIG.AWS_REGION);
+    return {
+      getStatus: () => this.describeSamStack()?.StackStatus,
+      deleteStack: () => {
+        this.execCommand(
+          `aws cloudformation delete-stack --stack-name ${stack} --region ${region}`,
+          { silent: true },
+        );
+      },
+      waitForDelete: () => {
+        this.execCommand(
+          `aws cloudformation wait stack-delete-complete --stack-name ${stack} --region ${region}`,
+          { silent: true },
+        );
+      },
+      log: (message) => log.warning(`${stackName}: ${message}`),
+    };
   }
 
   /** @returns {any | undefined} the stack, or undefined if it does not exist */
@@ -1051,12 +1045,18 @@ class IntegrationTestRunner {
   async cleanupLambdaFunctions(functionNameMap) {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
+    // A new pull request stack runs this for ~120 functions before its first
+    // create, while the job for the other runtime does the same in the same
+    // account. DeleteLogGroup allows only a few calls per second, so adaptive
+    // retry slows down when throttled instead of failing the deploy.
+    const cloudwatchLogsClient = new CloudWatchLogsClient({
+      region: CONFIG.AWS_REGION,
+      maxAttempts: 10,
+      retryMode: "adaptive",
+    });
 
     for (const { functionName } of Object.values(functionNameMap)) {
       log.info(`Deleting function: ${functionName}`);
-      const cloudwatchLogsClient = new CloudWatchLogsClient({
-        region: CONFIG.AWS_REGION,
-      });
 
       const deleteCommand = new DeleteFunctionCommand({
         FunctionName: functionName,

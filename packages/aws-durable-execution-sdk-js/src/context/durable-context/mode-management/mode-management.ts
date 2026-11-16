@@ -6,7 +6,6 @@ export class ModeManagement {
     private captureExecutionState: () => boolean,
     private checkAndUpdateReplayMode: () => void,
     private checkForNonResolvingPromise: () => Promise<never> | null,
-    private getDurableExecutionMode: () => DurableExecutionMode,
     private setDurableExecutionMode: (mode: DurableExecutionMode) => void,
   ) {}
 
@@ -15,7 +14,7 @@ export class ModeManagement {
 
     this.checkAndUpdateReplayMode();
     const nonResolvingPromise = this.checkForNonResolvingPromise();
-    if (nonResolvingPromise) return nonResolvingPromise;
+    if (nonResolvingPromise !== null) return nonResolvingPromise;
 
     try {
       return operation();
@@ -33,7 +32,7 @@ export class ModeManagement {
 
     this.checkAndUpdateReplayMode();
     const nonResolvingPromise = this.checkForNonResolvingPromise();
-    if (nonResolvingPromise) {
+    if (nonResolvingPromise !== null) {
       return new DurablePromise(async () => {
         await nonResolvingPromise;
         // This will never be reached

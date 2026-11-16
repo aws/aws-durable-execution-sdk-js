@@ -1,27 +1,27 @@
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
-  ExecutionContext,
-  WaitForCallbackSubmitterFunc,
-  WaitForCallbackConfig,
-  CreateCallbackConfig,
-  DurableContext,
+  type ExecutionContext,
+  type WaitForCallbackSubmitterFunc,
+  type WaitForCallbackConfig,
+  type CreateCallbackConfig,
+  type DurableContext,
   OperationSubType,
-  WaitForCallbackContext,
-  StepContext,
-  StepConfig,
+  type WaitForCallbackContext,
+  type StepContext,
+  type StepConfig,
   DurablePromise,
-  DurableLogger,
+  type DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createPassThroughSerdes } from "../callback-handler/callback";
-import { AnySerdesDeserializer } from "../../utils/serdes/serdes";
+import type { AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
 import type { InternalDurableContext } from "../../types/internal-context";
 import { OperationType } from "../../types/wire";
-import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { completeAfter } from "../../utils/checkpoint/complete-after";
 
 /**
@@ -142,6 +142,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
               callbackId,
               name,
             });
+            // biome-ignore lint/nursery/useAwaitThenable: WaitForCallbackSubmitterFunc returns Promise<void>; Biome does not infer the type of this generic `let`.
             await submitter(callbackId, callbackContext);
             log("✅", "Submitter completed:", {
               callbackId,
@@ -206,6 +207,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       // Always deserialize the result since it's a string. The child context
       // counts as EXECUTING meanwhile, so the invocation cannot suspend before
       // the caller's next line runs.
+      // biome-ignore lint/style/noNonNullAssertion: the deserialized callback result is the caller T, as before.
       return (await completeAfter(
         checkpoint,
         stepId,

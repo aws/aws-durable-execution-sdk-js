@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../../types";
+import type { ExecutionContext } from "../../types";
 import { UnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 
 /**

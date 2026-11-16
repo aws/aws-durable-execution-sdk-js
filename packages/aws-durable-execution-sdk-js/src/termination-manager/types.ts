@@ -16,6 +16,10 @@ export enum TerminationReason {
   // further. See CheckpointManager.handleRevokedCheckpointToken.
   EXECUTION_SUSPENDED_BY_SERVICE = "EXECUTION_SUSPENDED_BY_SERVICE",
 
+  // The invocation's deadline passed. Lambda has already answered the invocation with a
+  // timeout, so the SDK stops its own work. See withDurableExecution.
+  INVOCATION_DEADLINE_PASSED = "INVOCATION_DEADLINE_PASSED",
+
   // Error-related reasons
   CHECKPOINT_FAILED = "CHECKPOINT_FAILED",
   SERDES_FAILED = "SERDES_FAILED",
@@ -68,6 +72,9 @@ export const TERMINATION_CLASS: Record<TerminationReason, TerminationClass> = {
   // retries, which is where a fault would have left it anyway. So the suspend is right when
   // it matters and costs nothing when it is not.
   [TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE]: "suspend",
+  // Handled before this map, like CHECKPOINT_FAILED: the invocation throws
+  // InvocationDeadlineError, so Lambda retries the invocation and the execution continues.
+  [TerminationReason.INVOCATION_DEADLINE_PASSED]: "fault",
   [TerminationReason.CHECKPOINT_FAILED]: "fault",
   [TerminationReason.SERDES_FAILED]: "fault",
   [TerminationReason.CONTEXT_VALIDATION_ERROR]: "fault",
@@ -98,16 +105,13 @@ export const classifyTermination = (
 export interface TerminationResponse {
   reason: TerminationReason;
   message: string;
-  error?: Error;
+  error?: Error | undefined;
 }
 
 export interface TerminationOptions {
   reason?: TerminationReason;
   message?: string;
   error?: Error;
-  cleanup?: () => Promise<void>;
 }
 
-export interface TerminationDetails extends TerminationResponse {
-  cleanup?: () => Promise<void>;
-}
+export type TerminationDetails = TerminationResponse;

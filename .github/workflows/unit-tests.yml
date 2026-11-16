@@ -30,7 +30,7 @@ jobs:
   # other and tests hit their 5s timeouts.
   #   examples: examples ~26s
   #   testing:  sdk ~7s, testing ~29s
-  #   extras:   extras ~26s, microvm-worker ~7s
+  #   extras:   extras ~26s, compute-worker ~7s
   #   rest:     everything else, otel ~31s the largest
   shard:
     name: test (${{ matrix.shard }})
@@ -70,7 +70,7 @@ jobs:
               ],
               extras: [
                 "aws-durable-execution-sdk-js-extras",
-                "aws-durable-execution-sdk-js-microvm-worker",
+                "aws-durable-execution-sdk-js-compute-worker",
               ],
             };
             const all = require("./package.json").scripts.test.split(" && ");

@@ -26,7 +26,9 @@ import {
 import * as shared from "../shared";
 import { MicrovmOperationSubType } from "../subtypes";
 import {
+  autoResumingEndpoint,
   baseConfig,
+  connectFailed,
   FakeEndpoint,
   FakeMicrovmsClient,
   throwing,
@@ -41,19 +43,14 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 const job = { path: "/job", timeout: { minutes: 10 } };
 
-/** Records each delivered job in the client's event list, in call order. */
-function recordingEndpoint(client: FakeMicrovmsClient): FakeEndpoint {
-  const endpoint = new FakeEndpoint();
-  const deliver = endpoint.fetch;
-  (endpoint as { fetch: typeof fetch }).fetch = (async (
-    url: string,
-    init: RequestInit,
-  ) => {
-    client.events.push(`request:${new URL(url).pathname}`);
-    return deliver(url, init);
-  }) as unknown as typeof fetch;
-  return endpoint;
-}
+const idlePolicy = {
+  autoResumeEnabled: true,
+  maxIdleDurationSeconds: 86_400,
+  suspendedDurationSeconds: 3_600,
+};
+
+const recordingEndpoint = (client: FakeMicrovmsClient): FakeEndpoint =>
+  autoResumingEndpoint(client);
 
 function runnerFor(
   client: FakeMicrovmsClient,
@@ -102,8 +99,28 @@ const twoJobsWithWait: MicrovmSessionHandler<unknown> = async (vm, ctx) => {
   return [first, second];
 };
 
+/**
+ * {@link twoJobsWithWait}, with a step that puts the fake MicroVM in `state`
+ * after the first job, as when the worker suspends it during the wait. The
+ * step runs once, so a replay does not change the state again.
+ */
+const suspendedDuringWait =
+  (client: FakeMicrovmsClient, state: string): MicrovmSessionHandler<unknown> =>
+  async (vm, ctx) => {
+    const first = await vm.invoke(ctx, "first", 1, { ...job, path: "/first" });
+    await ctx.step("worker suspends", async () => {
+      client.microvmState = state;
+    });
+    await ctx.wait("pause", { minutes: 30 });
+    const second = await vm.invoke(ctx, "second", 2, {
+      ...job,
+      path: "/second",
+    });
+    return [first, second];
+  };
+
 describe("microvmSession with a MicroVM that suspends itself", () => {
-  it("asks the worker to suspend after 60 seconds by default when suspending is on, and checks the state before each job", async () => {
+  it("asks the worker to suspend after 60 seconds by default when suspending is on, and makes no state call before a job", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
     const runner = runnerFor(client, endpoint, twoJobsWithWait);
@@ -120,95 +137,54 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
       region: expect.any(String),
       autoSuspendIdleSeconds: 60,
     });
-    // The durable function never suspends the MicroVM itself.
+    // The durable function never suspends or resumes the MicroVM itself.
     expect(client.events).toEqual([
-      "get:RUNNING",
       "request:/first",
-      "get:RUNNING",
       "request:/second",
       "terminate",
     ]);
   });
 
-  it("resumes a MicroVM that the worker suspended during the wait", async () => {
+  it.each(["SUSPENDED", "SUSPENDING"])(
+    "keeps sending the job to a MicroVM that is %s after the wait, and makes no ResumeMicrovm call",
+    async (state) => {
+      const client = new FakeMicrovmsClient();
+      // The endpoint answers the 502 twice, as it does for about 5 seconds
+      // after a suspend. The next request resumes the MicroVM.
+      const endpoint = autoResumingEndpoint(client, 2);
+      const runner = runnerFor(
+        client,
+        endpoint,
+        suspendedDuringWait(client, state),
+      );
+
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toEqual(["one", "two"]);
+      // The state check after the first 502 finds the MicroVM suspended, and
+      // the step keeps sending the job. The second 502 comes 250
+      // milliseconds later, so it gets no check of its own.
+      expect(client.events).toEqual([
+        "request:/first",
+        "request:/second",
+        `get:${state}`,
+        "request:/second",
+        "request:/second",
+        "auto-resume",
+        "terminate",
+      ]);
+    },
+  );
+
+  it("retries a 503 from a worker that suspends, and makes no state call", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
-    const runner = runnerFor(client, endpoint, twoJobsWithWait);
-    // The worker suspended the MicroVM during the wait.
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => {
-        client.microvmState = "SUSPENDED";
-        return { state: "SUSPENDED" };
-      },
-    ];
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "first", "one");
-    await complete(runner, "second", "two");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(client.events).toEqual([
-      "get:RUNNING",
-      "request:/first",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "request:/second",
-      "terminate",
-    ]);
-  });
-
-  it("checks the state again when the MicroVM suspends itself just before the request", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    // The state check sees RUNNING. The worker suspends the MicroVM before
-    // the request arrives, so the endpoint answers 502. The retry checks the
-    // state, resumes the MicroVM, and delivers the job.
-    endpoint.responses = [502, 202];
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => {
-        client.microvmState = "SUSPENDED";
-        return { state: "SUSPENDED" };
-      },
-    ];
-    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
-      vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
-    );
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "only", "done");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(client.events).toEqual([
-      "get:RUNNING",
-      "request:/only",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "request:/only",
-      "terminate",
-    ]);
-  });
-
-  it("resumes and delivers again when the worker refuses the job while it suspends", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    // The state check sees RUNNING. The worker has started to suspend, so it
-    // answers 503. The retry sees SUSPENDING, waits, resumes the MicroVM, and
-    // delivers the job.
+    // The worker has started to suspend, so it refuses the job.
     endpoint.responses = [503, 202];
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => ({ state: "SUSPENDING" }),
-      async () => {
-        client.microvmState = "SUSPENDED";
-        return { state: "SUSPENDED" };
-      },
-    ];
     const runner = runnerFor(client, endpoint, async (vm, ctx) =>
       vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
     );
@@ -219,87 +195,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
 
     expect(execution.getStatus()).toBe("SUCCEEDED");
     expect(client.events).toEqual([
-      "get:RUNNING",
       "request:/only",
-      "get:SUSPENDING",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "request:/only",
-      "terminate",
-    ]);
-  });
-
-  it("resumes again after a conflict in the state check before delivery", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    // The MicroVM stays SUSPENDED until a resume is accepted.
-    client.microvmState = "SUSPENDED";
-    client.resumeResponses = [
-      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
-    ];
-    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
-      vm.invoke(ctx, "only", 1, {
-        ...job,
-        path: "/only",
-        retryWindow: { seconds: 5 },
-      }),
-    );
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "only", "done");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(client.events).toEqual([
-      "get:SUSPENDED",
-      "resume",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
-      "request:/only",
-      "terminate",
-    ]);
-  });
-
-  it("resumes again after a conflict in the recheck after a 502", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    // The state check sees RUNNING. The worker suspends the MicroVM before
-    // the request arrives, so the endpoint answers 502. The MicroVM stays
-    // SUSPENDED until a resume is accepted.
-    endpoint.responses = [502, 202];
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => {
-        client.microvmState = "SUSPENDED";
-        return { state: "SUSPENDED" };
-      },
-    ];
-    client.resumeResponses = [
-      throwing(Object.assign(new Error("busy"), { name: "ConflictException" })),
-    ];
-    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
-      vm.invoke(ctx, "only", 1, {
-        ...job,
-        path: "/only",
-        retryWindow: { seconds: 5 },
-      }),
-    );
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "only", "done");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(client.events).toEqual([
-      "get:RUNNING",
-      "request:/only",
-      "get:SUSPENDED",
-      "resume",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
       "request:/only",
       "terminate",
     ]);
@@ -338,8 +234,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     ["by default", { autoSuspendOnIdle: undefined }],
     ["when autoSuspendOnIdle is false", { autoSuspendOnIdle: false }],
   ])("does nothing extra %s with no idle policy", async (_label, overrides) => {
-    // The function then needs no lambda:GetMicrovm or lambda:ResumeMicrovm,
-    // and the MicroVM needs no lambda:SuspendMicrovm.
+    // The MicroVM then needs no lambda:SuspendMicrovm.
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
     const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
@@ -358,22 +253,13 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     ]);
   });
 
-  it("still resumes before each job when an idle policy can suspend the MicroVM", async () => {
+  it("makes no state call before a job when an idle policy is set", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
     const runner = runnerFor(client, endpoint, twoJobsWithWait, {
       autoSuspendOnIdle: false,
-      idlePolicy: {
-        autoResumeEnabled: false,
-        maxIdleDurationSeconds: 60,
-        suspendedDurationSeconds: 3_600,
-      },
+      idlePolicy,
     });
-    // The idle policy suspended the MicroVM during the wait.
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => ({ state: "SUSPENDED" }),
-    ];
 
     const executionPromise = runner.run({ payload: {} });
     await complete(runner, "first", "one");
@@ -381,12 +267,9 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     const execution = await executionPromise;
 
     expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.runInputs[0].idlePolicy).toEqual(idlePolicy);
     expect(client.events).toEqual([
-      "get:RUNNING",
       "request:/first",
-      "get:SUSPENDED",
-      "resume",
-      "get:RUNNING",
       "request:/second",
       "terminate",
     ]);
@@ -431,88 +314,17 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
   it("fails the job at once when the MicroVM no longer exists", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
-    const runner = runnerFor(client, endpoint, twoJobsWithWait);
-    const notFound = Object.assign(new Error("MicroVM not found: mvm-1"), {
-      name: "ResourceNotFoundException",
-    });
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      throwing(notFound),
-    ];
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "first", "one");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("FAILED");
-    expect(execution.getError()).toMatchObject({
-      errorType: MicrovmNotRunningError.name,
-      errorMessage: expect.stringContaining("second"),
-    });
-    // One GetMicrovm for the second job: the error is not retried.
-    expect(client.events.filter((e) => e.startsWith("get"))).toHaveLength(1);
-    expect(client.events).not.toContain("request:/second");
-  });
-
-  it("fails the job at once when the MicroVM is removed before ResumeMicrovm", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    const runner = runnerFor(client, endpoint, twoJobsWithWait);
-    // The worker suspended the MicroVM during the wait. The MicroVM is then
-    // removed between the state check and the resume.
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => ({ state: "SUSPENDED" }),
-    ];
-    client.resumeResponses = [
-      throwing(
-        Object.assign(new Error("MicroVM not found: mvm-1"), {
-          name: "ResourceNotFoundException",
-        }),
-      ),
-    ];
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "first", "one");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("FAILED");
-    expect(execution.getError()).toMatchObject({
-      errorType: MicrovmNotRunningError.name,
-      errorMessage: expect.stringContaining("second"),
-    });
-    // One state check and one resume for the second job: the error is not
-    // retried.
-    expect(client.events).toEqual([
-      "get:RUNNING",
-      "request:/first",
-      "get:SUSPENDED",
-      "resume",
-      "terminate",
-    ]);
-  });
-
-  it("fails the job at once when the MicroVM is removed before the ResumeMicrovm of a recheck", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    // The state check sees RUNNING. The worker suspends the MicroVM before
-    // the request arrives, so the endpoint answers 502. The recheck sees
-    // SUSPENDED. The MicroVM is then removed before the resume.
-    endpoint.responses = [502];
-    client.getResponses = [
-      async () => ({ state: "RUNNING" }),
-      async () => ({ state: "SUSPENDED" }),
-    ];
-    client.resumeResponses = [
-      throwing(
-        Object.assign(new Error("MicroVM not found: mvm-1"), {
-          name: "ResourceNotFoundException",
-        }),
-      ),
-    ];
     const runner = runnerFor(client, endpoint, async (vm, ctx) =>
       vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
     );
+    endpoint.responses = [connectFailed()];
+    client.getResponses = [
+      throwing(
+        Object.assign(new Error("MicroVM not found: mvm-1"), {
+          name: "ResourceNotFoundException",
+        }),
+      ),
+    ];
 
     const execution = await runner.run({ payload: {} });
 
@@ -521,14 +333,9 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
       errorType: MicrovmNotRunningError.name,
       errorMessage: expect.stringContaining("only"),
     });
-    // One request, one recheck, and one resume: the error is not retried.
-    expect(client.events).toEqual([
-      "get:RUNNING",
-      "request:/only",
-      "get:SUSPENDED",
-      "resume",
-      "terminate",
-    ]);
+    // One request and one state check: the error is not retried.
+    expect(client.events).toEqual(["request:/only", "terminate"]);
+    expect(client.getResponses).toHaveLength(0);
   });
 
   it("lets the handler catch MicrovmNotRunningError, on the first run and on replay", async () => {
@@ -538,6 +345,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
       name: "ResourceNotFoundException",
     });
     client.getResponses = [throwing(notFound)];
+    endpoint.responses = [connectFailed()];
     const caught: { notRunning: boolean; delivery: boolean }[] = [];
     const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       try {
@@ -568,102 +376,64 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     expect(caught.every((c) => c.notRunning && c.delivery)).toBe(true);
   });
 
-  it.each<"GetMicrovm" | "ResumeMicrovm">(["GetMicrovm", "ResumeMicrovm"])(
-    "shows the handler the request ID of the %s call that reported the removed MicroVM, on the first run and on replay",
-    async (operation) => {
-      const client = new FakeMicrovmsClient();
-      const endpoint = recordingEndpoint(client);
-      const notFound = new ResourceNotFoundException({
-        message: "MicroVM not found: mvm-1",
-        $metadata: { httpStatusCode: 404, requestId: "req-123" },
-        resourceType: "MicroVM",
-        resourceId: "mvm-1",
-      });
-      if (operation === "GetMicrovm") {
-        client.getResponses = [throwing(notFound)];
-      } else {
-        client.getResponses = [async () => ({ state: "SUSPENDED" })];
-        client.resumeResponses = [throwing(notFound)];
+  it("shows the handler the request ID of the GetMicrovm call that reported the removed MicroVM, on the first run and on replay", async () => {
+    const operation = "GetMicrovm";
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const notFound = new ResourceNotFoundException({
+      message: "MicroVM not found: mvm-1",
+      $metadata: { httpStatusCode: 404, requestId: "req-123" },
+      resourceType: "MicroVM",
+      resourceId: "mvm-1",
+    });
+    client.getResponses = [throwing(notFound)];
+    endpoint.responses = [connectFailed()];
+    const caught: unknown[] = [];
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
+      try {
+        await vm.invoke(ctx, "gone", 1, job);
+        return "unexpected";
+      } catch (error) {
+        caught.push(error);
       }
-      const caught: unknown[] = [];
-      const runner = runnerFor(client, endpoint, async (vm, ctx) => {
-        try {
-          await vm.invoke(ctx, "gone", 1, job);
-          return "unexpected";
-        } catch (error) {
-          caught.push(error);
-        }
-        // A pending callback ends the invocation. The next invocation replays
-        // the failed job from its checkpoint and catches the error again.
-        const [resumed] = await ctx.createCallback("go");
-        await resumed;
-        return "caught";
-      });
+      // A pending callback ends the invocation. The next invocation replays
+      // the failed job from its checkpoint and catches the error again.
+      const [resumed] = await ctx.createCallback("go");
+      await resumed;
+      return "caught";
+    });
 
-      const executionPromise = runner.run({ payload: {} });
-      const go = runner.getOperation("go");
-      await go.waitForData(WaitingOperationStatus.STARTED);
-      await go.sendCallbackSuccess(JSON.stringify("go"));
-      const execution = await executionPromise;
+    const executionPromise = runner.run({ payload: {} });
+    const go = runner.getOperation("go");
+    await go.waitForData(WaitingOperationStatus.STARTED);
+    await go.sendCallbackSuccess(JSON.stringify("go"));
+    const execution = await executionPromise;
 
-      expect(execution.getStatus()).toBe("SUCCEEDED");
-      const expected = `MicroVM "gone": the job could not be delivered: MicroVM mvm-1 no longer exists. A MicroVM lives at most its \`timeout\` plus 5 minutes, and never longer than 8 hours. ${operation} request ID: req-123.`;
-      // The first entry is the first run. Each later entry is a replay.
-      expect(caught.length).toBeGreaterThanOrEqual(2);
-      for (const error of caught) {
-        expect(error).toBeInstanceOf(MicrovmNotRunningError);
-        expect((error as Error).message).toBe(expected);
-      }
-      // The execution history keeps the request ID too.
-      expect(
-        runner.getOperation("gone.request").getStepDetails()?.error,
-      ).toMatchObject({
-        errorType: "MicrovmStateError",
-        errorMessage: expect.stringContaining(
-          `${operation} request ID: req-123.`,
-        ),
-      });
-      expect(
-        runner.getOperation("gone").getContextDetails()?.error,
-      ).toMatchObject({
-        errorType: MicrovmNotRunningError.name,
-        errorMessage: expected,
-      });
-    },
-  );
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    const expected = `MicroVM "gone": the job could not be delivered: MicroVM mvm-1 no longer exists. A MicroVM lives at most its \`timeout\` plus 5 minutes, and never longer than 8 hours. ${operation} request ID: req-123.`;
+    // The first entry is the first run. Each later entry is a replay.
+    expect(caught.length).toBeGreaterThanOrEqual(2);
+    for (const error of caught) {
+      expect(error).toBeInstanceOf(MicrovmNotRunningError);
+      expect((error as Error).message).toBe(expected);
+    }
+    // The execution history keeps the request ID too.
+    expect(
+      runner.getOperation("gone.request").getStepDetails()?.error,
+    ).toMatchObject({
+      errorType: "MicrovmStateError",
+      errorMessage: expect.stringContaining(
+        `${operation} request ID: req-123.`,
+      ),
+    });
+    expect(
+      runner.getOperation("gone").getContextDetails()?.error,
+    ).toMatchObject({
+      errorType: MicrovmNotRunningError.name,
+      errorMessage: expected,
+    });
+  });
 });
-
-/**
- * A runner whose first invocation uses `first`, and every later invocation
- * uses `later`. So it behaves as a deploy between the launch and a replay.
- */
-function runnerAcrossDeploy(
-  client: FakeMicrovmsClient,
-  endpoint: FakeEndpoint,
-  first: Partial<MicrovmSessionConfig>,
-  later: Partial<MicrovmSessionConfig>,
-): { runner: Runner; invocations: () => number } {
-  let invocations = 0;
-  const runner = new LocalDurableTestRunner({
-    handlerFunction: withDurableExecution(
-      async (_event: unknown, context: DurableContext) => {
-        invocations++;
-        return microvmSession(
-          context,
-          "pipeline",
-          {
-            ...baseConfig(client),
-            timeout: { hours: 1 },
-            fetch: endpoint.fetch,
-            ...(invocations === 1 ? first : later),
-          },
-          twoJobsWithWait,
-        );
-      },
-    ),
-  }) as Runner;
-  return { runner, invocations: () => invocations };
-}
 
 /**
  * Replaces the launch with a step that checkpoints a fixed result. The result
@@ -686,32 +456,58 @@ function checkpointLaunchAs(fields: Record<string, unknown>): void {
   );
 }
 
-const idlePolicy = {
-  autoResumeEnabled: false,
-  maxIdleDurationSeconds: 60,
-  suspendedDurationSeconds: 3_600,
-};
-
-describe("microvmSession resume mode", () => {
+describe("microvmSession launch checkpoint", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each<[string, Partial<MicrovmSessionConfig>, boolean]>([
-    ["autoSuspendOnIdle is true", { autoSuspendOnIdle: true }, true],
-    ["an idle policy is set", { idlePolicy }, true],
-    ["the MicroVM cannot be suspended", {}, false],
+  it.each<[string, Partial<MicrovmSessionConfig>]>([
+    ["autoSuspendOnIdle is true", { autoSuspendOnIdle: true }],
+    ["an idle policy is set", { idlePolicy }],
+    ["the MicroVM cannot be suspended", {}],
+  ])("records no resume mode when %s", async (_label, overrides) => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const runner = runnerFor(client, endpoint, async () => "none", {
+      autoSuspendOnIdle: undefined,
+      ...overrides,
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(
+      runner.getOperation("pipeline.launch").getStepDetails()?.result,
+    ).toEqual({
+      microvmId: "mvm-1",
+      endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+      delivery: "http",
+    });
+  });
+
+  // An earlier version recorded `resumeBeforeDelivery` in the launch
+  // checkpoint of every session, and checked the state before each job when
+  // it was true. An execution in flight replays that checkpoint.
+  it.each<[string, unknown]>([
+    ["true", true],
+    ["false", false],
   ])(
-    "records the resume mode in the launch checkpoint when %s",
-    async (_label, overrides, resumeBeforeDelivery) => {
+    "replays a launch checkpoint of an earlier version with resumeBeforeDelivery %s, and makes no state call before a job",
+    async (_label, resumeBeforeDelivery) => {
+      checkpointLaunchAs({ resumeBeforeDelivery });
       const client = new FakeMicrovmsClient();
       const endpoint = recordingEndpoint(client);
-      const runner = runnerFor(client, endpoint, async () => "none", {
-        autoSuspendOnIdle: undefined,
-        ...overrides,
-      });
+      const runner = runnerFor(
+        client,
+        endpoint,
+        suspendedDuringWait(client, "SUSPENDED"),
+      );
 
-      const execution = await runner.run({ payload: {} });
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toEqual(["one", "two"]);
       expect(
         runner.getOperation("pipeline.launch").getStepDetails()?.result,
       ).toEqual({
@@ -720,112 +516,15 @@ describe("microvmSession resume mode", () => {
         delivery: "http",
         resumeBeforeDelivery,
       });
-    },
-  );
-
-  it.each<[string, Partial<MicrovmSessionConfig>]>([
-    ["autoSuspendOnIdle", { autoSuspendOnIdle: true }],
-    ["the idle policy", { idlePolicy }],
-  ])(
-    "still resumes before each job when a deploy after the launch removes %s",
-    async (_label, first) => {
-      const client = new FakeMicrovmsClient();
-      const endpoint = recordingEndpoint(client);
-      const { runner, invocations } = runnerAcrossDeploy(
-        client,
-        endpoint,
-        first,
-        {},
-      );
-      // The MicroVM was suspended during the wait. The worker and the idle
-      // policy keep the settings of the launch.
-      client.getResponses = [
-        async () => ({ state: "RUNNING" }),
-        async () => {
-          client.microvmState = "SUSPENDED";
-          return { state: "SUSPENDED" };
-        },
-      ];
-
-      const executionPromise = runner.run({ payload: {} });
-      await complete(runner, "first", "one");
-      await complete(runner, "second", "two");
-      const execution = await executionPromise;
-
-      expect(execution.getStatus()).toBe("SUCCEEDED");
-      expect(invocations()).toBeGreaterThan(1);
+      // The second job finds the MicroVM suspended. The service resumes it
+      // on the request after the 502. No call checks the state before a
+      // job, and no call resumes the MicroVM.
       expect(client.events).toEqual([
-        "get:RUNNING",
         "request:/first",
+        "request:/second",
         "get:SUSPENDED",
-        "resume",
-        "get:RUNNING",
         "request:/second",
-        "terminate",
-      ]);
-    },
-  );
-
-  it("makes no state check when a deploy after the launch turns suspending on", async () => {
-    // The launch asked the worker for no suspend and set no idle policy. So
-    // the MicroVM never suspends, and a state check would need
-    // lambda:GetMicrovm for nothing.
-    const client = new FakeMicrovmsClient();
-    const endpoint = recordingEndpoint(client);
-    const { runner, invocations } = runnerAcrossDeploy(
-      client,
-      endpoint,
-      {},
-      { autoSuspendOnIdle: true },
-    );
-
-    const executionPromise = runner.run({ payload: {} });
-    await complete(runner, "first", "one");
-    await complete(runner, "second", "two");
-    const execution = await executionPromise;
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(invocations()).toBeGreaterThan(1);
-    expect(client.payload()).not.toHaveProperty("autoSuspendIdleSeconds");
-    expect(client.events).toEqual([
-      "request:/first",
-      "request:/second",
-      "terminate",
-    ]);
-  });
-
-  it.each<[string, Record<string, unknown>]>([
-    ["no resume mode", {}],
-    ["a resume mode that is not a boolean", { resumeBeforeDelivery: "true" }],
-  ])(
-    "makes no state check for a launch checkpoint with %s",
-    async (_label, fields) => {
-      // The current config can suspend. The checkpoint decides the resume
-      // mode. Only `true` turns the state check on.
-      checkpointLaunchAs(fields);
-      const client = new FakeMicrovmsClient();
-      const endpoint = recordingEndpoint(client);
-      const runner = runnerFor(client, endpoint, twoJobsWithWait, {
-        autoSuspendOnIdle: true,
-      });
-
-      const executionPromise = runner.run({ payload: {} });
-      await complete(runner, "first", "one");
-      await complete(runner, "second", "two");
-      const execution = await executionPromise;
-
-      expect(execution.getStatus()).toBe("SUCCEEDED");
-      expect(
-        runner.getOperation("pipeline.launch").getStepDetails()?.result,
-      ).toEqual({
-        microvmId: "mvm-1",
-        endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
-        delivery: "http",
-        ...fields,
-      });
-      expect(client.events).toEqual([
-        "request:/first",
-        "request:/second",
+        "auto-resume",
         "terminate",
       ]);
     },

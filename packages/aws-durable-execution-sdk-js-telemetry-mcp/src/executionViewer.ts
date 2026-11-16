@@ -125,7 +125,7 @@ export class ExecutionViewer {
    * when it fails, in which case the next call tries again.
    */
   private start(): Promise<Started | undefined> {
-    if (this.starting) return this.starting;
+    if (this.starting !== undefined) return this.starting;
     const attempt: Promise<Started | undefined> = this.listen().catch(
       (err: unknown) => {
         // close() and a newer attempt may have replaced this one. Clearing

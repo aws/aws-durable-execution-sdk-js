@@ -147,9 +147,10 @@ function assertEventSignatures(
     const invocationCompletedDifference = Math.abs(
       actualInvocationCompleted - expectedInvocationsCompleted,
     );
-    expect(invocationCompletedDifference).toBeLessThanOrEqual(
-      eventSignatureConfig.invocationCompletedDifference,
-    );
+    expect(
+      invocationCompletedDifference,
+      `InvocationCompleted count: actual ${actualInvocationCompleted}, expected ${expectedInvocationsCompleted}`,
+    ).toBeLessThanOrEqual(eventSignatureConfig.invocationCompletedDifference);
   }
 
   expect(actualCounts).toEqual(expectedCounts);

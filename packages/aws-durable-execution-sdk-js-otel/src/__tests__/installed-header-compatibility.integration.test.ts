@@ -54,7 +54,7 @@ createInvocationOtelPluginFactory().createPlugin(info).onInvocationStart(info);
 `);
     expect(result.output).toBe("");
     expect(result.status).toBe(0);
-  });
+  }, 30000);
 
   it("accepts all authoritative carrier values with exact optional properties", () => {
     for (const fixture of [current]) {

@@ -7,7 +7,7 @@ import {
   type MicrovmJobHandler,
   type MicrovmWorkerLogger,
   startMicrovmWorker,
-} from "@aws/durable-execution-sdk-js-microvm-worker";
+} from "@aws/durable-execution-sdk-js-compute-worker/microvm";
 
 interface E2eJob {
   mode: "succeed" | "fail" | "crash";

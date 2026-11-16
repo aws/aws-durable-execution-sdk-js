@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { StepError } from "../../errors/durable-error/durable-error";
 import { safeStringify } from "./safe-stringify";
 
 describe("safeStringify", () => {
@@ -59,6 +60,22 @@ describe("safeStringify", () => {
     expect(result).toContain('"message": "hello world"');
     expect(result).toContain('"name": "Error"');
     expect(result).toContain('"stack"');
+  });
+
+  it("keeps the cause of a durable error", () => {
+    const error = new StepError("Step failed", new Error("card declined"));
+    const parsed = JSON.parse(safeStringify(error));
+    expect(parsed.message).toBe("Step failed");
+    expect(parsed.cause).toMatchObject({
+      name: "Error",
+      message: "card declined",
+    });
+  });
+
+  it("marks an error that is its own cause as circular", () => {
+    const error = new Error("loop", { cause: undefined });
+    error.cause = error;
+    expect(JSON.parse(safeStringify(error)).cause).toBe("[Circular]");
   });
 
   it("should handle nested Error objects", () => {

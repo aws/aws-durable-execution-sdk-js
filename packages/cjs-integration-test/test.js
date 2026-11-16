@@ -5,7 +5,8 @@
  * without errors like the fileURLToPath issue we fixed.
  */
 
-(async () => {
+// The body catches every error and exits with code 1, so it does not reject.
+void (async () => {
   console.log("Testing CJS import of AWS Durable Execution SDK...");
 
   try {

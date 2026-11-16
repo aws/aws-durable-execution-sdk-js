@@ -1,12 +1,4 @@
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  type MockedFunction,
-  type Mock,
-} from "vitest";
+import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
   DurableLogger,
@@ -19,19 +11,6 @@ import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-
-vi.mock("../../utils/logger/logger");
-vi.mock("../../errors/serdes-errors/serdes-errors");
-
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-
-const mockSafeSerialize = safeSerialize as MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as MockedFunction<
-  typeof safeDeserialize
->;
 
 describe("WaitForCondition Handler Timing Tests", () => {
   let mockContext: ExecutionContext;
@@ -47,6 +26,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       durableExecutionArn: "test-arn",
       terminationManager: {
         terminate: vi.fn(),
+        isTerminationRequested: vi.fn().mockReturnValue(false),
       },
     } as any;
 
@@ -58,13 +38,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
     } as any;
 
     createStepId = vi.fn().mockReturnValue("test-step-id");
-
-    mockSafeSerialize.mockImplementation(async (_serdes, value) =>
-      JSON.stringify(value),
-    );
-    mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
-      value ? JSON.parse(value) : undefined,
-    );
   });
 
   it("should handle retry with scheduled delay", async () => {

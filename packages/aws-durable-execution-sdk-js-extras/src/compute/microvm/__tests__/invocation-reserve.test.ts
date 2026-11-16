@@ -5,7 +5,7 @@
 // before the reserve, so each test takes about that long.
 import { vi, describe, it, expect } from "vitest";
 import { MicrovmEndpointUnavailableError } from "..";
-import { ensureRunning } from "../lifecycle";
+import { checkNotEnded } from "../lifecycle";
 import { INVOCATION_RESERVE_MS, sendJob } from "../request";
 import { FakeEndpoint, FakeMicrovmsClient, hangUntilAborted } from "./fakes";
 
@@ -151,40 +151,19 @@ describe("sendJob near the invocation reserve", () => {
   });
 });
 
-describe("ensureRunning near the invocation reserve", () => {
-  const ensureWith = (
-    client: FakeMicrovmsClient,
-    remainingTimeMs: () => number | undefined,
-  ) =>
-    ensureRunning({
-      client: client.asClient(),
-      microvmId: "mvm-1",
-      maxWaitMs: 60_000,
-      remainingTimeMs,
-      log: vi.fn(),
-    });
-
+describe("checkNotEnded near the invocation reserve", () => {
   it("stops a stalled GetMicrovm at the reserve", async () => {
     const reserveAt = Date.now() + BUDGET_MS;
     const client = new FakeMicrovmsClient();
     client.getResponses = [hangUntilAborted];
 
     await expect(
-      ensureWith(client, endingAt(reserveAt + INVOCATION_RESERVE_MS)),
+      checkNotEnded({
+        client: client.asClient(),
+        microvmId: "mvm-1",
+        remainingTimeMs: endingAt(reserveAt + INVOCATION_RESERVE_MS),
+      }),
     ).rejects.toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(Date.now()).toBeLessThan(reserveAt + SLACK_MS);
-  });
-
-  it("stops a stalled ResumeMicrovm at the reserve", async () => {
-    const reserveAt = Date.now() + BUDGET_MS;
-    const client = new FakeMicrovmsClient();
-    client.microvmState = "SUSPENDED";
-    client.resumeResponses = [hangUntilAborted];
-
-    await expect(
-      ensureWith(client, endingAt(reserveAt + INVOCATION_RESERVE_MS)),
-    ).rejects.toBeInstanceOf(MicrovmEndpointUnavailableError);
-    expect(client.events).toEqual(["get:SUSPENDED", "resume"]);
     expect(Date.now()).toBeLessThan(reserveAt + SLACK_MS);
   });
 });

@@ -44,11 +44,11 @@ const result = await context.invoke("arn:aws:lambda:::function:doSomething", {
 
 ### Waiting for a Period of Time
 
-Durably wait for a specified duration in seconds. The function invocation suspends so it doesn't pay for CPU while waiting.
+Durably wait for a specified duration. The function invocation suspends so it doesn't pay for CPU while waiting.
 
 ```typescript
 await context.step(async () => await ProcessTransaction());
-await context.wait(60 * 60 * 24 * 7); // Wait 7 days (in seconds)
+await context.wait({ days: 7 });
 await context.step(async () => await SendFollowupEmail());
 ```
 
@@ -59,7 +59,7 @@ Run a function to submit work to an external system, then suspend to wait for th
 ```typescript
 const result = await context.waitForCallback<StripeCallbackInfo>(
   async (callbackId) => await CallStripe(event, callbackId),
-  { timeout: 300 },
+  { timeout: { minutes: 5 } },
 );
 ```
 
@@ -264,15 +264,15 @@ await context.step(async () => {
 When running durable operations concurrently, use `runInChildContext` to ensure deterministic replay.
 
 ```typescript
-async function doWork(ctx, waitTime) {
-  const x = await ctx.step(async () => ...);
+async function doWork(ctx: DurableContext, waitTime: Duration) {
+  const x = await ctx.step(async () => computeX());
   await ctx.wait(waitTime);
-  const y = await ctx.step(async () => ...);
+  const y = await ctx.step(async () => computeY());
   return x + y;
 }
 
-const s1 = context.runInChildContext(async (ctx) => doWork(ctx, 1000));
-const s2 = context.runInChildContext(async (ctx) => doWork(ctx, 2000));
+const s1 = context.runInChildContext(async (ctx) => doWork(ctx, { seconds: 1 }));
+const s2 = context.runInChildContext(async (ctx) => doWork(ctx, { seconds: 2 }));
 const res1 = await s1;
 const res2 = await s2;
 ```

@@ -2,12 +2,15 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { validateReplayConsistency } from "./replay-validation";
 import { Operation, OperationType } from "../../types/wire";
 import { OperationSubType, ExecutionContext } from "../../types";
-import { terminateForUnrecoverableError } from "../termination-helper/termination-helper";
-
-vi.mock("../termination-helper/termination-helper");
+import { TerminationReason } from "../../termination-manager/types";
 
 describe("validateReplayConsistency", () => {
-  const mockContext = {} as ExecutionContext;
+  // The real termination helper calls terminate() on the context's termination manager.
+  // So a terminate spy shows whether validation terminated the execution.
+  const terminate = vi.fn();
+  const mockContext = {
+    terminationManager: { terminate },
+  } as unknown as ExecutionContext;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -25,7 +28,7 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).not.toHaveBeenCalled();
+    expect(terminate).not.toHaveBeenCalled();
   });
 
   it("should pass validation when all fields match", () => {
@@ -49,7 +52,7 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).not.toHaveBeenCalled();
+    expect(terminate).not.toHaveBeenCalled();
   });
 
   it("should pass validation when name is undefined in both", () => {
@@ -73,7 +76,7 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).not.toHaveBeenCalled();
+    expect(terminate).not.toHaveBeenCalled();
   });
 
   it("should terminate when operation type mismatches", () => {
@@ -97,13 +100,16 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).toHaveBeenCalledWith(
-      mockContext,
-      expect.objectContaining({
+    expect(terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.NON_DETERMINISM,
+      message: expect.stringMatching(
+        /^Unrecoverable error in step step1: .*Operation type mismatch/,
+      ),
+      error: expect.objectContaining({
+        name: "NonDeterministicExecutionError",
         message: expect.stringContaining("Operation type mismatch"),
       }),
-      "step1",
-    );
+    });
   });
 
   it("should terminate when operation name mismatches", () => {
@@ -127,13 +133,16 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).toHaveBeenCalledWith(
-      mockContext,
-      expect.objectContaining({
+    expect(terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.NON_DETERMINISM,
+      message: expect.stringMatching(
+        /^Unrecoverable error in step step1: .*Operation name mismatch/,
+      ),
+      error: expect.objectContaining({
+        name: "NonDeterministicExecutionError",
         message: expect.stringContaining("Operation name mismatch"),
       }),
-      "step1",
-    );
+    });
   });
 
   it("should terminate when name changes from defined to undefined", () => {
@@ -157,13 +166,16 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).toHaveBeenCalledWith(
-      mockContext,
-      expect.objectContaining({
+    expect(terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.NON_DETERMINISM,
+      message: expect.stringMatching(
+        /^Unrecoverable error in step step1: .*Operation name mismatch/,
+      ),
+      error: expect.objectContaining({
+        name: "NonDeterministicExecutionError",
         message: expect.stringContaining("Operation name mismatch"),
       }),
-      "step1",
-    );
+    });
   });
 
   it("should terminate when operation subtype mismatches", () => {
@@ -187,12 +199,15 @@ describe("validateReplayConsistency", () => {
       mockContext,
     );
 
-    expect(terminateForUnrecoverableError).toHaveBeenCalledWith(
-      mockContext,
-      expect.objectContaining({
+    expect(terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.NON_DETERMINISM,
+      message: expect.stringMatching(
+        /^Unrecoverable error in step step1: .*Operation subtype mismatch/,
+      ),
+      error: expect.objectContaining({
+        name: "NonDeterministicExecutionError",
         message: expect.stringContaining("Operation subtype mismatch"),
       }),
-      "step1",
-    );
+    });
   });
 });

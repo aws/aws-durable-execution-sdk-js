@@ -18,7 +18,21 @@ const packageJson = JSON.parse(
  * needs an entry here, so the test below knows which subpath needs it.
  */
 const CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
+  "@aws-sdk/client-bedrock-agentcore": "../compute/agentcore",
   "@aws-sdk/client-lambda-microvms": "../compute/microvm",
+};
+
+/**
+ * Each AWS SDK client that a subpath loads on first use, not when the
+ * subpath loads. Loading the subpath without the client must succeed. A
+ * client can also be in CLIENT_SUBPATHS, when another subpath imports it at
+ * load time.
+ */
+const LAZY_CLIENT_SUBPATHS: Readonly<Record<string, string>> = {
+  "@aws-sdk/client-bedrock-agentcore": "../ai",
+  "@aws-sdk/client-bedrock-runtime": "../ai",
+  "@aws-sdk/client-lambda": "../ai",
+  "@aws-sdk/client-sagemaker-runtime": "../ai",
 };
 
 describe("package dependencies", () => {
@@ -34,7 +48,14 @@ describe("package dependencies", () => {
 
   it("names the subpath of every AWS SDK client", () => {
     expect(clients.length).toBeGreaterThan(0);
-    expect(Object.keys(CLIENT_SUBPATHS).sort()).toEqual([...clients].sort());
+    expect(
+      [
+        ...new Set([
+          ...Object.keys(CLIENT_SUBPATHS),
+          ...Object.keys(LAZY_CLIENT_SUBPATHS),
+        ]),
+      ].sort(),
+    ).toEqual([...clients].sort());
   });
 
   it.each(clients)("declares %s as an optional peer dependency", (name) => {
@@ -67,6 +88,13 @@ describe("package dependencies", () => {
         await expect(load("..")).resolves.toHaveProperty("ComputeError");
       });
 
+      // A subpath must load without the client of another subpath.
+      it.each(
+        Object.values(CLIENT_SUBPATHS).filter((other) => other !== subpath),
+      )("loads %s", async (other) => {
+        await expect(load(other)).resolves.toHaveProperty("ComputeError");
+      });
+
       // The control: the mock does stop the subpath that imports this client.
       it(`fails to load ${subpath}`, async () => {
         // Vitest wraps an error that a mock factory throws, and keeps it
@@ -78,6 +106,25 @@ describe("package dependencies", () => {
         expect((error?.cause as Error | undefined)?.message).toBe(
           `Cannot find module '${client}'`,
         );
+      });
+    },
+  );
+
+  describe.each(Object.entries(LAZY_CLIENT_SUBPATHS))(
+    "without %s installed",
+    (client, subpath) => {
+      it(`loads the package root and ${subpath}`, async () => {
+        vi.resetModules();
+        vi.doMock(client, () => {
+          throw new Error(`Cannot find module '${client}'`);
+        });
+        try {
+          await expect(import("..")).resolves.toHaveProperty("ComputeError");
+          await expect(import(subpath)).resolves.toHaveProperty("decider");
+        } finally {
+          vi.doUnmock(client);
+          vi.resetModules();
+        }
       });
     },
   );

@@ -1,4 +1,4 @@
-import { Serdes } from "../utils/serdes/serdes";
+import type { Serdes } from "../utils/serdes/serdes";
 
 /**
  * Configuration options for invoke operations

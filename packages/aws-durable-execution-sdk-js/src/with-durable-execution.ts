@@ -1,16 +1,18 @@
 import { OperationType } from "./types/wire";
-import { Context } from "aws-lambda";
+import type { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
+import { InvocationDeadlineError } from "./errors/invocation-deadline-error/invocation-deadline-error";
+import { MAX_TIMER_DELAY_MS } from "./utils/constants/constants";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import {
   TerminationReason,
-  TerminationResponse,
+  type TerminationResponse,
   classifyTermination,
 } from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
@@ -24,18 +26,18 @@ import {
 } from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 import {
-  DurableLogger,
-  DurableExecutionInvocationInput,
-  DurableExecutionInvocationOutput,
+  type DurableLogger,
+  type DurableExecutionInvocationInput,
+  type DurableExecutionInvocationOutput,
   DurableExecutionMode,
-  ExecutionContext,
+  type ExecutionContext,
   InvocationStatus,
 } from "./types";
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { runWithRootContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
-import {
+import type {
   DurableExecutionConfig,
   DurableExecutionHandler,
   DurableLambdaHandler,
@@ -44,11 +46,11 @@ import { createInvocationPluginRunner } from "./utils/plugin/plugin-factory";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
-  DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
-  InvocationBaseInfo,
-  InvocationInfo,
-  OperationInfo,
+  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginFactory,
+  type InvocationBaseInfo,
+  type InvocationInfo,
+  type OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
 
@@ -70,8 +72,7 @@ async function runHandler<
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
-  const initialExecutionEvent =
-    executionContext._stepData[Object.keys(executionContext._stepData)[0]];
+  const initialExecutionEvent = Object.values(executionContext._stepData)[0];
   const customerHandlerEvent = JSON.parse(
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );
@@ -176,9 +177,15 @@ async function runHandler<
     };
   }
 
+  // Aborted when the invocation terminates. Every context links its signal to
+  // this one, so every running step sees the abort (StepContext.signal). It is
+  // aborted after setTerminating, so a step that stops on it cannot checkpoint.
+  const terminated = new AbortController();
+
   // Set the checkpoint terminating callback on the termination manager
   executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
     checkpointManager.setTerminating();
+    terminated.abort();
   });
 
   const durableExecution = {
@@ -206,6 +213,7 @@ async function runHandler<
     durableExecution,
     undefined,
     rootPreserveChildDepth,
+    terminated.signal,
   );
 
   const executeInvocation =
@@ -329,8 +337,8 @@ async function runHandler<
          *    invocation, and the next one replays.
          * 2. A checkpoint failure throws its classified error. That class decides whether
          *    Lambda retries the invocation or the execution fails.
-         * 3. A serdes failure throws SerdesFailedError, which is an invocation error, so
-         *    Lambda retries.
+         * 3. A serdes failure throws SerdesFailedError, and a passed deadline throws
+         *    InvocationDeadlineError. Both are invocation errors, so Lambda retries.
          * 4. Every other reason is decided by its class. A suspend answers PENDING. A fault
          *    answers FAILED and carries the error. See TERMINATION_CLASS.
          */
@@ -359,6 +367,20 @@ async function runHandler<
           if (termination.reason === TerminationReason.SERDES_FAILED) {
             log("🛑", "Serdes failed - terminating Lambda execution");
             throw new SerdesFailedError(termination.message);
+          }
+
+          // An invocation error, so Lambda retries the invocation. PENDING is wrong when the
+          // timer fires just before Lambda's own timeout: a running step is not a pending
+          // operation, and the service rejects PENDING without one. FAILED would fail the
+          // execution.
+          if (
+            termination.reason === TerminationReason.INVOCATION_DEADLINE_PASSED
+          ) {
+            log(
+              "🛑",
+              "Invocation deadline passed - terminating Lambda execution",
+            );
+            throw new InvocationDeadlineError();
           }
 
           if (classifyTermination(termination.reason) === "suspend") {
@@ -579,6 +601,37 @@ async function runHandler<
       }
     };
 
+  // Terminates the invocation when its deadline passes. On Lambda Managed Instances a timeout
+  // does not stop the code that runs, so without this the SDK keeps checkpointing and starting
+  // operations for an invocation that Lambda has already answered. Termination aborts the
+  // signal of every running step, stops checkpoints, and refuses new operations.
+  //
+  // The context decides whether the deadline passed, not the timer. So when the timer fires,
+  // the remaining time is read again, and the timer is set again while time is left. A timer
+  // can fire before the context's deadline: fake timers advance it, and the local test
+  // runner's context reports a constant remaining time. Each delay is capped at the
+  // setTimeout limit, because setTimeout turns a larger delay into 1 ms. A reading of
+  // Infinity means no deadline, so no timer is set.
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const watchDeadline = (): void => {
+    const remainingTimeMs = executionContext.getRemainingTimeMs();
+    if (!Number.isFinite(remainingTimeMs)) {
+      return;
+    }
+    if (remainingTimeMs > 0) {
+      deadlineTimer = setTimeout(
+        watchDeadline,
+        Math.min(remainingTimeMs, MAX_TIMER_DELAY_MS),
+      );
+      return;
+    }
+    executionContext.terminationManager.terminate({
+      reason: TerminationReason.INVOCATION_DEADLINE_PASSED,
+      message: "Invocation deadline passed",
+    });
+  };
+  watchDeadline();
+
   try {
     return await (plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
       executeInvocation());
@@ -586,7 +639,12 @@ async function runHandler<
     // Every exit from the invocation funnels through here, including the normal-completion
     // path that never terminates. Without this, poll timers stay armed after the handler
     // returns and can fire during a later invocation in a reused execution environment.
+    // Clear the deadline timer so it cannot terminate an invocation that already answered.
+    clearTimeout(deadlineTimer);
     checkpointManager.dispose();
+    // dispose closes admission without the termination callback. So abort the
+    // signal here too: a step that the handler did not await can then stop.
+    terminated.abort();
   }
 }
 

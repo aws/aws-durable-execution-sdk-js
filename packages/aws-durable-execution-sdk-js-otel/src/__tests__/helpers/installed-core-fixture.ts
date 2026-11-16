@@ -104,6 +104,9 @@ export class InstalledCoreFixture {
       [pluginRoot, pluginDependencies],
     ] as const) {
       for (const name of Object.keys(dependencies)) {
+        // A types-only package has no entry point to resolve. The whole
+        // node_modules/@types folder is linked below.
+        if (name.startsWith("@types/")) continue;
         const installed = join(root, "node_modules", name);
         if (!existsSync(installed)) {
           mkdirSync(dirname(installed), { recursive: true });
@@ -209,7 +212,12 @@ export class InstalledCoreFixture {
     const result = spawnSync(
       process.execPath,
       [
-        fromWorkspace.resolve("typescript/bin/tsc"),
+        // TypeScript 7 is installed as @typescript/native. Its exports map does
+        // not expose bin/tsc, so the path is built from its package.json.
+        join(
+          dirname(fromWorkspace.resolve("@typescript/native/package.json")),
+          "bin/tsc",
+        ),
         "--project",
         "tsconfig.json",
       ],

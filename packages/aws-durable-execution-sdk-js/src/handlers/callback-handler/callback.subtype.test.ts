@@ -6,8 +6,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-vi.mock("../../utils/logger/logger");
-
 // CreateCallbackConfig.subType replaces the default "Callback" subtype
 // everywhere the callback handler records one: the START checkpoint, replay
 // validation, lifecycle metadata, and plugin events.

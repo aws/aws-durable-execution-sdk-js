@@ -1,12 +1,13 @@
-import { WireOperation } from "../../types/wire";
-import { DurableExecutionClient } from "../../types/durable-execution";
-import { DurableExecutionInvocationInput } from "../../types";
+import type { WireOperation } from "../../types/wire";
+import type { DurableExecutionClient } from "../../types/durable-execution";
+import type { DurableExecutionInvocationInput } from "../../types";
 
 /**
  * Custom DurableExecutionInvocationInput which uses a custom durable
- * execution client instead of the API-based LambdaClient.
+ * execution client instead of the API-based LambdaClient. The testing
+ * library uses it to run handlers against its local checkpoint server.
  *
- * @internal
+ * @public
  */
 export class DurableExecutionInvocationInputWithClient
   implements DurableExecutionInvocationInput
@@ -17,7 +18,7 @@ export class DurableExecutionInvocationInputWithClient
   };
   public readonly DurableExecutionArn: string;
   public readonly CheckpointToken: string;
-  public readonly UpdatedOperationIds?: string[];
+  public readonly UpdatedOperationIds?: string[] | undefined;
   constructor(
     params: DurableExecutionInvocationInput,
     public readonly durableExecutionClient: DurableExecutionClient,

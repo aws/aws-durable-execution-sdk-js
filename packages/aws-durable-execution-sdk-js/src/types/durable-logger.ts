@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: deliberate -- the DurableLogger interface uses `...params: any` on its variadic log methods to match the shape of console-style loggers, so any customer logger (console, pino, winston, ...) satisfies it without casts.
-import { DurableLogData, DurableLogLevel } from "./logger";
+import { type DurableLogData, DurableLogLevel } from "./logger";
 
 /**
  * The durable logging context that can be used to provide durable execution metadata

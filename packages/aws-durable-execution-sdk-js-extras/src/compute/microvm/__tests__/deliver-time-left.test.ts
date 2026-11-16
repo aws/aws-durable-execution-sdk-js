@@ -1,7 +1,6 @@
 // The request step fails at once, with a message that names the function
-// timeout, when too little time is left. A session job calls GetMicrovm
-// before sendJob, so the step must check the time before that call too. The
-// local test runner always reports 900 seconds left. So these tests call
+// timeout, when too little time is left. The local test runner always
+// reports 900 seconds left. So these tests call
 // deliverJob directly with a stub context.
 import { vi, describe, it, expect } from "vitest";
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
@@ -22,7 +21,6 @@ function stubContext(remainingMs: number): DurableContext {
 
 const deliver = (
   remainingMs: number,
-  resume: boolean,
   client: FakeMicrovmsClient,
   endpoint: FakeEndpoint,
 ): Promise<void> => {
@@ -45,19 +43,15 @@ const deliver = (
     { microvmId: "mvm-1", endpoint: "mvm-1.example", delivery: "http" },
     { path: "/job" },
     { fields: { callbackId: "cb-1" }, inputJson: "{}" },
-    { resume },
   );
 };
 
 describe("the request step with too little time left", () => {
-  it.each([
-    ["a microvm job", false],
-    ["a session job that checks the state first", true],
-  ])("names the function timeout for %s", async (_label, resume) => {
+  it("names the function timeout, and makes no call", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
 
-    const error = await deliver(2_900, resume, client, endpoint).catch(
+    const error = await deliver(2_900, client, endpoint).catch(
       (e: unknown) => e,
     );
 
@@ -73,7 +67,6 @@ describe("the request step with too little time left", () => {
   it("rounds the time left down", async () => {
     const error = await deliver(
       10_960,
-      false,
       new FakeMicrovmsClient(),
       new FakeEndpoint(),
     ).catch((e: unknown) => e);

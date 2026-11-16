@@ -6,23 +6,7 @@ import {
   LoggingExecutionContext,
 } from "./default-logger";
 import { Console } from "node:console";
-
-// Mock the Console constructor
-vi.mock("node:console", () => {
-  const mockConsole = {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  };
-
-  return {
-    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
-    Console: vi.fn().mockImplementation(function () {
-      return mockConsole;
-    }),
-  };
-});
+import { StepError } from "../../errors/durable-error/durable-error";
 
 describe("Default Logger", () => {
   let mockConsole: any;
@@ -32,11 +16,18 @@ describe("Default Logger", () => {
     // Store original environment variable
     originalEnv = process.env["AWS_LAMBDA_LOG_LEVEL"];
 
-    // Get the mocked console instance
-    mockConsole = new (Console as any)();
-
     // Clear all mocks
     vi.clearAllMocks();
+
+    // Spy on the real Console methods. A Console instance binds the prototype methods when
+    // it is constructed. So each logger that a test creates after this point calls these
+    // spies. The spies print nothing, so the test output stays clean.
+    mockConsole = {
+      debug: vi.spyOn(Console.prototype, "debug").mockImplementation(() => {}),
+      info: vi.spyOn(Console.prototype, "info").mockImplementation(() => {}),
+      warn: vi.spyOn(Console.prototype, "warn").mockImplementation(() => {}),
+      error: vi.spyOn(Console.prototype, "error").mockImplementation(() => {}),
+    };
 
     // Mock Date.now to have consistent timestamps in tests
     vi.spyOn(Date.prototype, "toISOString").mockReturnValue(
@@ -363,6 +354,26 @@ describe("Default Logger", () => {
             errorType: "Error",
             errorMessage: "Test error",
             stackTrace: ["Error: Test error", "    at test.js:1:1"],
+          },
+        });
+      });
+
+      it("keeps the cause of a durable error that is logged alone", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+        const inner = new Error("card declined");
+        inner.stack = "Error: card declined\n    at pay.js:1:1";
+        const error = new StepError("Step failed", inner);
+
+        logger.log?.(DurableLogLevel.ERROR, error);
+
+        const parsedLog = JSON.parse(mockConsole.error.mock.calls[0][0]);
+        expect(parsedLog.message).toMatchObject({
+          errorType: "StepError",
+          errorMessage: "Step failed",
+          cause: {
+            errorType: "Error",
+            errorMessage: "card declined",
+            stackTrace: ["Error: card declined", "    at pay.js:1:1"],
           },
         });
       });

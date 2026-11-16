@@ -5,8 +5,6 @@ import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
-vi.mock("../../utils/logger/logger");
-
 describe("Wait Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;

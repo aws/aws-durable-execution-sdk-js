@@ -1,5 +1,9 @@
-import { DurableContext, DurablePromise, DurableLogger } from "../../types";
-import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
+import {
+  type DurableContext,
+  DurablePromise,
+  type DurableLogger,
+} from "../../types";
+import type { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 import { PromiseCombinatorError } from "../../errors/durable-error/durable-error";
 
 // Minimal error decoration for Promise.allSettled results
@@ -88,6 +92,7 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     maybePromises?: DurablePromise<T>[],
   ): { name: string | undefined; promises: DurablePromise<T>[] } => {
     if (typeof nameOrPromises === "string" || nameOrPromises === undefined) {
+      // biome-ignore lint/style/noNonNullAssertion: the (name, promises) overload requires the promises.
       return { name: nameOrPromises, promises: maybePromises! };
     }
     return { name: undefined, promises: nameOrPromises };

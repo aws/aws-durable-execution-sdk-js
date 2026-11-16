@@ -17,22 +17,33 @@
   "types": "./dist-types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist-types/index.d.ts",
-      "require": "./dist-cjs/index.js",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist-types/index.d.ts",
+        "default": "./dist-cjs/index.js"
+      }
     }
   },
   "files": [
+    "index.d.mts",
     "dist/",
     "dist-cjs/",
-    "dist-types/"
+    "dist-types/",
+    "!dist-types/**/*.test.d.ts",
+    "!dist-types/**/*.test-d.d.ts",
+    "!dist-types/**/*.d.ts.map"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
-    "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
-    "test": "vitest run",
+    "build:types": "rimraf dist-types tsconfig.build.tsbuildinfo && tsc -p tsconfig.build.json --emitDeclarationOnly --declaration --outDir dist-types",
+    "test": "npm run typecheck && vitest run --coverage",
+    "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:all": "vitest run",
@@ -40,21 +51,23 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "run-locally": "tsx ./src/run-durable.ts",
+    "check:package": "attw --pack . && publint --strict",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "2.5.15",
-    "@types/aws-lambda": "^8.10.164",
     "@vitest/coverage-v8": "^5.1.0",
-    "rimraf": "^6.1.3",
-    "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
+    "publint": "^0.3.25",
+    "rimraf": "^6.1.4",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1161.0"
+    "@aws-sdk/client-lambda": "^3.1164.0",
+    "@types/aws-lambda": "^8.10.164"
   },
   "private": false
 }

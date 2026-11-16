@@ -187,7 +187,7 @@ describe.each([
       };
       const lambdaContext: Context = {
         awsRequestId: "req",
-        getRemainingTimeInMillis: () => 0,
+        getRemainingTimeInMillis: () => 300_000,
         callbackWaitsForEmptyEventLoop: false,
         functionName: "parent",
         functionVersion: "1",

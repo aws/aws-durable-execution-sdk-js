@@ -7,7 +7,6 @@ import { MICROVM_STATE_ERROR_NAME } from "./errors";
 export type MicrovmApiOperation =
   | "RunMicrovm"
   | "GetMicrovm"
-  | "ResumeMicrovm"
   | "CreateMicrovmAuthToken"
   | "TerminateMicrovm"
   | "SuspendMicrovm";
@@ -263,9 +262,9 @@ export class MicrovmStateError extends Error {
  * Returns the {@link MicrovmStateError} for a call that answered
  * `ResourceNotFoundException`.
  *
- * GetMicrovm, ResumeMicrovm, and CreateMicrovmAuthToken each return
+ * GetMicrovm and CreateMicrovmAuthToken each return
  * `ResourceNotFoundException` for a removed MicroVM. The request step calls
- * all three. So each call reports a removed MicroVM with the same error. The
+ * both. So each call reports a removed MicroVM with the same error. The
  * AWS SDK error carries the request ID in `$metadata.requestId`. A support
  * case needs that ID. The SDK checkpoints only the message of a step
  * failure. So the message names the call and its request ID, and the AWS SDK
@@ -280,7 +279,7 @@ export class MicrovmStateError extends Error {
  */
 export function microvmNotFound(
   microvmId: string,
-  operation: "GetMicrovm" | "ResumeMicrovm" | "CreateMicrovmAuthToken",
+  operation: "GetMicrovm" | "CreateMicrovmAuthToken",
   error: unknown,
 ): MicrovmStateError {
   return new MicrovmStateError(

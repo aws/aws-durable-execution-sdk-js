@@ -1,6 +1,6 @@
-import { OperationUpdate } from "../../types/wire";
+import type { OperationUpdate } from "../../types/wire";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import {
+import type {
   OperationMetadata,
   OperationInfo,
 } from "../../types/operation-lifecycle";
@@ -27,8 +27,8 @@ export interface Checkpoint {
     stepId: string,
     state: OperationLifecycleState,
     options?: {
-      metadata?: OperationMetadata;
-      endTimestamp?: Date;
+      metadata?: OperationMetadata | undefined;
+      endTimestamp?: Date | undefined;
     },
   ): void;
 

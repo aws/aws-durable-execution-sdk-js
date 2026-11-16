@@ -1,4 +1,4 @@
-import { Duration } from "../../types";
+import type { Duration } from "../../types";
 
 /**
  * Converts a Duration object to total seconds

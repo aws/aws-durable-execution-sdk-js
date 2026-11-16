@@ -1,4 +1,4 @@
-import { WireTimestamp } from "../../types/wire";
+import type { WireTimestamp } from "../../types/wire";
 
 /**
  * Normalizes a timestamp from the durable execution wire protocol into a `Date`.

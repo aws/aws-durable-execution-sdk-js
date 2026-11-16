@@ -50,11 +50,12 @@
     "@vitest/coverage-v8": "^5.1.0",
     "semver": "^7.8.6",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1161.0",
+    "@aws-sdk/client-lambda": "^3.1164.0",
     "@sinonjs/fake-timers": "^15.4.0",
     "commander": "^14.0.3"
   },

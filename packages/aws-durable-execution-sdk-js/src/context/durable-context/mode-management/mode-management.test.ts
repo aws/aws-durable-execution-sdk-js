@@ -8,21 +8,18 @@ describe("ModeManagement", () => {
   let mockCaptureExecutionState: Mock;
   let mockCheckAndUpdateReplayMode: Mock;
   let mockCheckForNonResolvingPromise: Mock;
-  let mockGetDurableExecutionMode: Mock;
   let mockSetDurableExecutionMode: Mock;
 
   beforeEach(() => {
     mockCaptureExecutionState = vi.fn();
     mockCheckAndUpdateReplayMode = vi.fn();
     mockCheckForNonResolvingPromise = vi.fn();
-    mockGetDurableExecutionMode = vi.fn();
     mockSetDurableExecutionMode = vi.fn();
 
     modeManagement = new ModeManagement(
       mockCaptureExecutionState,
       mockCheckAndUpdateReplayMode,
       mockCheckForNonResolvingPromise,
-      mockGetDurableExecutionMode,
       mockSetDurableExecutionMode,
     );
   });

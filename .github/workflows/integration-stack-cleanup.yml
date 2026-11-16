@@ -1,0 +1,53 @@
+name: Integration Stack Cleanup
+
+# Each pull request deploys its integration test functions to its own stacks
+# (one per Node.js version). This deletes the stacks of closed pull requests.
+on:
+  pull_request:
+    types: [closed]
+    branches: ["main", "v1.x"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One cleanup at a time. Two runs would try to delete the same stacks.
+concurrency:
+  group: integration-stack-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete stacks of closed pull requests
+    # Forks and Dependabot have no access to secrets, and their pull requests
+    # get no stacks.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
+      pull-requests: read # Required to check which pull requests are closed
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/scripts/integration-test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.x
+
+      - name: Get AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
+          role-session-name: githubIntegrationStackCleanup
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Delete stacks of closed pull requests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/workflows/scripts/integration-test/cleanup-pr-stacks.mjs

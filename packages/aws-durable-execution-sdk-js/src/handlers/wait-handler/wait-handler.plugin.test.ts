@@ -14,8 +14,6 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
-vi.mock("../../utils/logger/logger");
-
 describe("Wait Handler - plugin hooks", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;

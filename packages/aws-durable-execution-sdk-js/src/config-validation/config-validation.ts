@@ -1,4 +1,4 @@
-import { DurableExecutionConfig } from "../types";
+import type { DurableExecutionConfig } from "../types";
 import { validateChildOperationsDepth } from "../utils/child-operations-depth/child-operations-depth";
 
 /**

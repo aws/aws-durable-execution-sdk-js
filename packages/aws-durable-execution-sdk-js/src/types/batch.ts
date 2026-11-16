@@ -1,7 +1,7 @@
-import { Serdes } from "../utils/serdes/serdes";
-import { DurableContext } from "./durable-context";
+import type { Serdes } from "../utils/serdes/serdes";
+import type { DurableContext } from "./durable-context";
 import { ChildContextError } from "../errors/durable-error/durable-error";
-import { DurableLogger } from "./durable-logger";
+import type { DurableLogger } from "./durable-logger";
 
 /**
  * Nesting type for batch operations (map and parallel)
@@ -74,7 +74,7 @@ export interface BatchItem<TResult> {
   /** The result value if the item succeeded */
   result?: TResult;
   /** The error if the item failed (always ChildContextError since batch items run in child contexts) */
-  error?: ChildContextError;
+  error?: ChildContextError | undefined;
   /** Index of the item in the original array */
   index: number;
   /** Status of the item execution */
@@ -310,14 +310,40 @@ export interface CustomCompletionConfig {
  * `toleratedFailureCount`, or `toleratedFailurePercentage` is a compile-time
  * error.
  *
+ * **Items that still run when the batch completes.** The batch can complete
+ * while some items still run. For example, `minSuccessful: 1` completes the
+ * batch when the first item succeeds. The SDK does not stop the other items:
+ *
+ * 1. Their results are dropped. They are not checkpointed and not in the
+ *    {@link BatchResult}.
+ * 2. Their code keeps running until it returns. A step that runs counts as
+ *    running work, so the invocation cannot suspend until the step returns.
+ *    For example, a `context.wait` after the batch waits for the slowest
+ *    running step, and Lambda bills that time.
+ * 3. If the invocation returns first, Lambda freezes the process with the code
+ *    still running. The code can continue in a later invocation of the same
+ *    Lambda environment.
+ *
+ * So pass `StepContext.signal` to every call in a step that can take
+ * long. The SDK aborts it when the batch completes without the step:
+ *
+ * ```ts
+ * await context.parallel(
+ *   "fastest-quote",
+ *   [
+ *     (ctx) => ctx.step("a", (s) => getQuote(urlA, { signal: s.signal })),
+ *     (ctx) => ctx.step("b", (s) => getQuote(urlB, { signal: s.signal })),
+ *   ],
+ *   { completionConfig: { minSuccessful: 1 } },
+ * );
+ * ```
+ *
  * @remarks
- * The mutual exclusivity is enforced only at the type level. There is no
- * runtime guard, so a plain-JavaScript caller (or TypeScript code that casts
- * around the union) that passes both is accepted: the handler checks
- * `shouldComplete` first in all three completion spots (`shouldContinue`,
- * `isComplete`, `getCompletionReason`), so the predicate wins and the threshold
- * fields (`minSuccessful`/`toleratedFailureCount`/`toleratedFailurePercentage`)
- * are silently ignored.
+ * The SDK also checks the mutual exclusivity at run time. A plain-JavaScript
+ * caller, or TypeScript code that casts around the union, can pass
+ * `shouldComplete` together with a threshold field. The `map` or `parallel`
+ * call then fails the execution with a configuration error. Lambda does not
+ * retry it.
  *
  * @public
  */
@@ -335,12 +361,12 @@ export interface CompletionItemStatus {
   /** Index of the item/branch in the original array (definition order) */
   index: number;
   /** Optional custom name of the item/branch, when one was provided */
-  name?: string;
+  name?: string | undefined;
   /**
    * Current status of the item/branch, or `undefined` if it has not started
    * yet (possible when `maxConcurrency` limits how many run at once).
    */
-  status?: BatchItemStatus;
+  status?: BatchItemStatus | undefined;
 }
 
 /**
@@ -395,14 +421,18 @@ export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
  */
 export interface MapConfig<TItem, TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Function to generate custom names for map items */
   itemNamer?: (item: TItem, index: number) => string;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each item */
-  itemSerdes?: Serdes<TResult>;
-  /** Configuration for completion behavior */
+  itemSerdes?: Serdes<TResult> | undefined;
+  /**
+   * Configuration for completion behavior. When the batch completes early,
+   * items that still run are not stopped. Pass `StepContext.signal` to
+   * long calls in their steps. See {@link CompletionConfig}.
+   */
   completionConfig?: CompletionConfig;
   /**
    * Function to generate a summary string from the batch result.
@@ -447,12 +477,16 @@ export interface NamedParallelBranch<TResult, Logger extends DurableLogger> {
  */
 export interface ParallelConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each branch */
-  itemSerdes?: Serdes<TResult>;
-  /** Configuration for completion behavior */
+  itemSerdes?: Serdes<TResult> | undefined;
+  /**
+   * Configuration for completion behavior. When the batch completes early,
+   * items that still run are not stopped. Pass `StepContext.signal` to
+   * long calls in their steps. See {@link CompletionConfig}.
+   */
   completionConfig?: CompletionConfig;
   /**
    * Function to generate a summary string from the batch result.
@@ -482,7 +516,7 @@ export interface ConcurrentExecutionItem<T> {
   /** Index of the item in the original array */
   index: number;
   /** Optional custom name for the item */
-  name?: string;
+  name?: string | undefined;
 }
 
 /**
@@ -500,19 +534,19 @@ export type ConcurrentExecutor<TItem, TResult, Logger extends DurableLogger> = (
  */
 export interface ConcurrencyConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
-  maxConcurrency?: number;
+  maxConcurrency?: number | undefined;
   /** Top-level operation subtype for tracking */
-  topLevelSubType?: string;
+  topLevelSubType?: string | undefined;
   /** Iteration-level operation subtype for tracking */
-  iterationSubType?: string;
+  iterationSubType?: string | undefined;
   /** Function to generate summary from batch result */
-  summaryGenerator?: (result: BatchResult<TResult>) => string;
+  summaryGenerator?: ((result: BatchResult<TResult>) => string) | undefined;
   /** Serialization/deserialization configuration for parent context */
-  serdes?: Serdes<BatchResult<TResult>>;
+  serdes?: Serdes<BatchResult<TResult>> | undefined;
   /** Serialization/deserialization configuration for each item */
-  itemSerdes?: Serdes<TResult>;
+  itemSerdes?: Serdes<TResult> | undefined;
   /** Configuration for completion behavior */
-  completionConfig?: CompletionConfig;
+  completionConfig?: CompletionConfig | undefined;
   /**
    * Nesting type for concurrent execution contexts (default: NestingType.NESTED)
    *
@@ -522,5 +556,5 @@ export interface ConcurrencyConfig<TResult> {
    * - **NESTED**: Create CONTEXT operations with full observability but higher cost
    * - **FLAT**: Use virtual contexts for ~30% cost reduction and higher scale
    */
-  nesting?: NestingType;
+  nesting?: NestingType | undefined;
 }

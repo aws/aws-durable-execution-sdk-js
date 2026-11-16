@@ -29,7 +29,8 @@
     "@types/aws-lambda": "^8.10.164",
     "aws-cdk": "^2.1145.0",
     "esbuild": "^0.28.2",
-    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.1.0"
   }
 }

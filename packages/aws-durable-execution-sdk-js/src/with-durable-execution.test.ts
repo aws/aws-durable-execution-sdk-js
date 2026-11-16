@@ -65,6 +65,7 @@ describe("withDurableExecution", () => {
     _stepData: {},
     terminationManager: mockTerminationManager,
     mutex: { lock: vi.fn((fn) => fn()) },
+    getRemainingTimeMs: (): number => Infinity,
   };
 
   const mockDurableContext = {

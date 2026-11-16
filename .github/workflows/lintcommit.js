@@ -35,8 +35,8 @@ const scopes = new Set([
   "otel",
   // Custom durable operations in packages/aws-durable-execution-sdk-js-extras.
   "extras",
-  // The MicroVM-side package in packages/aws-durable-execution-sdk-js-microvm-worker.
-  "microvm-worker",
+  // The worker package in packages/aws-durable-execution-sdk-js-compute-worker.
+  "compute-worker",
   // Durable Execution Telemetry: the VS Code extension, the desktop app, and the host-free
   // modules they share.
   "telemetry",

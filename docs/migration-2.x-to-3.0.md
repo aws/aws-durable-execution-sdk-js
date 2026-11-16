@@ -211,7 +211,7 @@ different lifetime. Replace imports of `DurableInstrumentationPluginProvider`,
 
 The `DURABLE_EXECUTION_PLUGINS` variable still selects package/module specifiers.
 Preserve the provider export name and rebuild the package or layer containing
-it. See [dynamic instrumentation plugins](../packages/aws-durable-execution-sdk-js/README.md#dynamic-instrumentation-plugins).
+it. See [dynamic instrumentation plugins](../packages/aws-durable-execution-sdk-js/src/documents/PLUGINS.md#dynamic-instrumentation-plugins).
 
 ### Migrate OpenTelemetry registrations
 

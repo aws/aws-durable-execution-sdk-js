@@ -31,6 +31,16 @@ export const handler = withDurableExecution(
         imageIdentifier: imageArn,
         executionRoleArn,
         timeout: { minutes: 10 },
+        // The SDK does not resume a MicroVM. The service resumes it on the
+        // next request, when the idle policy enables auto-resume. The idle
+        // timer counts only inbound requests. So it is longer than the
+        // MicroVM's maximum duration, the timeout plus 5 minutes, and never
+        // suspends a running job.
+        idlePolicy: {
+          autoResumeEnabled: true,
+          maxIdleDurationSeconds: 3_600,
+          suspendedDurationSeconds: 600,
+        },
       },
       async (vm, sessionContext) => {
         const written = await vm.invoke<{ microvmId: string }>(
@@ -52,9 +62,8 @@ export const handler = withDurableExecution(
         // the wait, and keeps its memory and files.
         await sessionContext.wait("pause", { seconds: 30 });
 
-        // The session checks the MicroVM state before this job and resumes
-        // the suspended MicroVM. So this job finds the file that the first
-        // job wrote.
+        // The service resumes the suspended MicroVM on this job's request.
+        // So this job finds the file that the first job wrote.
 
         const read = await vm.invoke<{ microvmId: string; value: string }>(
           sessionContext,
@@ -63,9 +72,10 @@ export const handler = withDurableExecution(
           {
             path: "/read",
             timeout: { minutes: 5 },
-            // The heartbeat timeout starts before the resume. After a
-            // resume, the worker can refuse the job for up to 30 seconds. So
-            // it is the default 60-second retryWindow plus 30 seconds.
+            // The heartbeat timeout starts before the resume. Without the
+            // image's resume hook, the worker can refuse the job for up to 30
+            // seconds after the suspend. So it is the default 60-second
+            // retryWindow plus 30 seconds.
             heartbeatTimeout: { seconds: 90 },
           },
         );

@@ -6,8 +6,9 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.ts", "src/**/*.{test,spec}.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", "src/scripts/**"],
     setupFiles: ["./vitest.setup.ts"],
-    // Off by default: coverage instrumentation adds real wall time to every
-    // local `npm test`. Use `npm run test:coverage` when coverage is wanted.
+    // `npm test` runs with --coverage, so CI checks the thresholds below.
+    // Coverage adds about 1s to a local run. Use `npx vitest run` for a run
+    // without coverage.
     coverage: {
       provider: "v8",
       reportsDirectory: "coverage/library",
@@ -17,13 +18,22 @@ export default defineConfig({
         "**/dist/**",
         "src/**/*.test.ts",
         "src/**/*.spec.ts",
+        "src/**/*.test-d.ts",
         "src/**/__tests__/**",
         "src/scripts/**",
         "src/demo/**",
         "src/testing/**",
         "src/index.ts", // barrel export file
-        "src/run-durable.ts", // temporary file
       ],
+      // A floor about 1 point below the measured coverage, so a change that
+      // drops coverage fails `npm run test:coverage`. Raise these when
+      // coverage goes up.
+      thresholds: {
+        statements: 95,
+        branches: 90,
+        functions: 93,
+        lines: 95,
+      },
     },
   },
 });

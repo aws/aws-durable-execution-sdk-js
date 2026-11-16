@@ -13,23 +13,17 @@ import {
   beforeEach,
   afterEach,
   type Mocked,
-  type Mock,
 } from "vitest";
+import type { LambdaClient } from "@aws-sdk/client-lambda";
 import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
-import { log } from "../../utils/logger/logger";
+import { refreshLogConfig } from "../../utils/logger/logger";
+import { safeStringify } from "../../utils/safe-stringify/safe-stringify";
 import { initializeExecutionContext } from "./execution-context";
-import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Context } from "aws-lambda";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
-
-// Mock dependencies
-vi.mock("../../durable-execution-api-client/durable-execution-api-client");
-vi.mock("../../utils/logger/logger");
-vi.mock("../../termination-manager/termination-manager");
-vi.mock("../../utils/logger/default-logger");
 
 describe("initializeExecutionContext", () => {
   // Matcher for Logger interface
@@ -109,32 +103,20 @@ describe("initializeExecutionContext", () => {
     getExecutionState: vi.fn(),
   };
 
+  // The pagination tests read further pages through this client. They pass it as the
+  // caller-supplied transport, so the tests control every page.
+  const withMockClient = { durableExecutionClient: mockDurableExecutionClient };
+
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Setup default mocks
-    // biome-ignore lint/complexity/useArrowFunction: invoked with `new`, so vitest needs a constructible implementation
-    (DurableExecutionApiClient as Mock).mockImplementation(function () {
-      return mockDurableExecutionClient;
-    });
-
-    // Mock default logger
-    (createDefaultLogger as Mock).mockReturnValue({
-      log: vi.fn(),
-      info: vi.fn(),
-      error: vi.fn(),
-      warn: vi.fn(),
-      debug: vi.fn(),
-      configureDurableLoggingContext: vi.fn(),
-    });
-
-    // Mock environment variables
-    process.env.DURABLE_VERBOSE_MODE = "false";
   });
 
   afterEach(() => {
-    // Reset environment variables
-    delete process.env.DURABLE_VERBOSE_MODE;
+    // vitest.setup.ts sets DURABLE_VERBOSE_MODE to "false". The logger caches the flag, so
+    // a test that changes it must restore it and refresh the cache.
+    process.env.DURABLE_VERBOSE_MODE = "false";
+    refreshLogConfig();
+    vi.restoreAllMocks();
   });
 
   it("should initialize execution context with basic event", async () => {
@@ -149,7 +131,7 @@ describe("initializeExecutionContext", () => {
       checkpointToken: mockCheckpointToken,
       durableExecutionMode: expect.any(String),
       executionContext: {
-        durableExecutionClient: mockDurableExecutionClient,
+        durableExecutionClient: expect.any(DurableExecutionApiClient),
         _stepData: {},
         terminationManager: expect.any(Object),
 
@@ -212,17 +194,21 @@ describe("initializeExecutionContext", () => {
   it("should initialize execution context in verbose mode", async () => {
     // Setup
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
     // Execute
     await initializeExecutionContext(mockEvent, mockLambdaContext);
 
     // Verify
-    expect(log).toHaveBeenCalledWith(
-      "🔵",
-      "Initializing durable function with event:",
-      mockEvent,
+    expect(debugSpy).toHaveBeenCalledWith(
+      "🔵 Initializing durable function with event:",
+      safeStringify(mockEvent),
     );
-    expect(log).toHaveBeenCalledWith("📍", "Function Input:", mockEvent);
+    expect(debugSpy).toHaveBeenCalledWith(
+      "📍 Function Input:",
+      safeStringify(mockEvent),
+    );
   });
 
   it("should load step data from event", async () => {
@@ -306,6 +292,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithNextMarker,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify
@@ -368,6 +355,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithNextMarker,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify
@@ -427,6 +415,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithNextMarkerButNoOperations,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify
@@ -475,6 +464,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithNextMarker,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify
@@ -517,6 +507,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithUndefinedOperations,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify - should handle undefined operations gracefully and get execution event from pagination
@@ -552,6 +543,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(
       eventWithNextMarker,
       mockLambdaContext,
+      withMockClient,
     );
 
     // Verify
@@ -641,9 +633,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-
-    // Verify that DurableExecutionApiClient was not instantiated
-    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
   });
 
   it("should use custom durableExecutionClient for pagination when event is DurableExecutionInvocationInputWithClient", async () => {
@@ -680,9 +669,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-    expect(result.executionContext.durableExecutionClient).not.toBe(
-      mockDurableExecutionClient,
-    );
 
     // Verify that the custom client was used for pagination
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
@@ -694,10 +680,6 @@ describe("initializeExecutionContext", () => {
       },
       expectLogger,
     );
-
-    // Verify that the default DurableExecutionApiClient was not used
-    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
-    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
 
     // Verify the result uses the custom client
     expect(result.executionContext.durableExecutionClient).toBe(
@@ -765,9 +747,6 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
-    expect(result.executionContext.durableExecutionClient).not.toBe(
-      mockDurableExecutionClient,
-    );
 
     // Verify that the custom client was called for both pagination requests
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
@@ -792,10 +771,6 @@ describe("initializeExecutionContext", () => {
 
     // Verify both calls were made to the custom client
     expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledTimes(2);
-
-    // Verify that the default client was not used
-    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
-    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
 
     // Verify the step data includes all operations from multiple pages
     expect(result.executionContext._stepData).toEqual({
@@ -934,23 +909,48 @@ describe("initializeExecutionContext", () => {
       );
 
       expect(executionContext.durableExecutionClient).toBe(injected);
-      expect(DurableExecutionApiClient).not.toHaveBeenCalled();
     });
 
     it("falls back to the Lambda transport when no transport is supplied", async () => {
-      await initializeExecutionContext(mockEvent, mockLambdaContext);
+      const { executionContext } = await initializeExecutionContext(
+        mockEvent,
+        mockLambdaContext,
+      );
 
-      expect(DurableExecutionApiClient).toHaveBeenCalled();
+      expect(executionContext.durableExecutionClient).toBeInstanceOf(
+        DurableExecutionApiClient,
+      );
     });
 
     it("passes the deprecated client through to the Lambda transport", async () => {
-      const lambdaClient = {} as never;
+      // A fake LambdaClient that records each command. The event has a second page, so
+      // initialization reads it through the Lambda transport and this client.
+      const send = vi.fn().mockResolvedValue({ Operations: [] });
+      const lambdaClient = { send } as unknown as LambdaClient;
+      const eventWithNextPage: DurableExecutionInvocationInput = {
+        ...mockEvent,
+        InitialExecutionState: {
+          Operations: [mockExecutionEvent],
+          NextMarker: "token1",
+        },
+      };
 
-      await initializeExecutionContext(mockEvent, mockLambdaContext, {
-        client: lambdaClient,
+      const { executionContext } = await initializeExecutionContext(
+        eventWithNextPage,
+        mockLambdaContext,
+        { client: lambdaClient },
+      );
+
+      expect(executionContext.durableExecutionClient).toBeInstanceOf(
+        DurableExecutionApiClient,
+      );
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0].input).toEqual({
+        DurableExecutionArn: mockDurableExecutionArn,
+        CheckpointToken: mockCheckpointToken,
+        Marker: "token1",
+        MaxItems: 1000,
       });
-
-      expect(DurableExecutionApiClient).toHaveBeenCalledWith(lambdaClient);
     });
 
     it("lets an event-injected transport win over configuration", async () => {
