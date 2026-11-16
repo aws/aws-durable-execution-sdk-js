@@ -328,11 +328,8 @@ export function validateScale(scale: unknown): readonly string[] {
  */
 export function matchOption(
   options: readonly string[],
-  reply: unknown,
+  reply: string,
 ): string | undefined {
-  if (typeof reply !== "string") {
-    return undefined;
-  }
   const key = normalize(reply);
   return options.find((option) => normalize(option) === key);
 }
