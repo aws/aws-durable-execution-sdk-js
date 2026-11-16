@@ -9,6 +9,7 @@ const config = {
     index: "./src/index.ts",
     "compute/microvm": "./src/compute/microvm/index.ts",
     "compute/agentcore": "./src/compute/agentcore/index.ts",
+    ai: "./src/ai/index.ts",
   }),
   plugins: [nodeExternals()],
 };
