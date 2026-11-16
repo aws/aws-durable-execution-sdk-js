@@ -56,7 +56,6 @@ it("fails ask with an AiError that names the missing package, and keeps decider(
     "needs the @aws-sdk/client-bedrock-runtime package",
   );
   expect(rootCause(error)).toBe(missing);
-  expect(ai.defaultAiRetryStrategy(error as Error, 1).shouldRetry).toBe(false);
 });
 
 it("says the package could not be loaded when it is there but fails", async () => {
@@ -108,9 +107,6 @@ it.each([
     expect(error).toBeInstanceOf(ai.AiError);
     expect(error?.message).toContain(`${name}() needs the ${pkg} package`);
     expect(rootCause(error)).toBe(missing);
-    expect(ai.defaultAiRetryStrategy(error as Error, 1).shouldRetry).toBe(
-      false,
-    );
   },
 );
 

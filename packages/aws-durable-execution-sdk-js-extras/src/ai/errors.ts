@@ -94,24 +94,9 @@ export class DeciderInvalidResponseError extends AiError {
 }
 
 /**
- * The request was cut off 10 seconds before the invocation runs out of time,
- * so the step can record the failure. A later attempt runs in a new
- * invocation, so the default retry strategy retries it.
- *
- * @public
- *
- * @experimental This class is experimental and may be changed or removed in future releases.
- */
-export class AiTimeoutError extends AiError {
-  override readonly errorType: string = "AiTimeoutError";
-}
-
-/**
  * The text model stopped for a reason other than the end of its reply, such
  * as a guardrail that intervened or a filtered reply. The reply is not
- * returned. The default retry strategy retries `malformed_model_output` and
- * `malformed_tool_use`, because a new reply can succeed. It does not retry
- * the other reasons, because the same input stops the same way.
+ * returned. Its `stopReason` says why.
  *
  * @public
  *
@@ -174,8 +159,6 @@ export function rebuildAiError(error: unknown): AiError | undefined {
       return new DeciderError(error.message, options);
     case "DeciderInvalidResponseError":
       return new DeciderInvalidResponseError(error.message, options);
-    case "AiTimeoutError":
-      return new AiTimeoutError(error.message, options);
     case "LlmMaxTokensError":
       return new LlmMaxTokensError(error.message, options);
     case "LlmStoppedError": {

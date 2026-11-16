@@ -45,8 +45,8 @@ interface InvokeOutput {
  * The function fails the invocation when it refuses a request, for example
  * when the input does not fit the model's window. The transport turns that
  * failure into a `DeciderError` with status 422, the status that the server
- * answers over HTTP. So it is not retried. Any other function error becomes a
- * `DeciderError` with no status, which is retried.
+ * answers over HTTP. Any other function error becomes a `DeciderError` with
+ * no status.
  *
  * A request waits while a new execution environment loads the model, up to
  * 30 seconds without SnapStart.

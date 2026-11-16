@@ -1,6 +1,5 @@
 import { once, sdkLoadError } from "./aws-sdk";
 import { LlmMaxTokensError, LlmStoppedError } from "./errors";
-import { deadlineError, type RequestSignals } from "./shared";
 import type { BedrockConfig, BedrockConverseClient } from "./types";
 
 /**
@@ -86,7 +85,7 @@ export class BedrockConverse {
     question: string,
     text: string | undefined,
     override: Partial<BedrockConfig> | undefined,
-    { signal, deadline }: RequestSignals,
+    signal: AbortSignal | undefined,
   ): Promise<string> {
     const { ConverseCommand } = await loadBedrockRuntime();
     const merged = { ...this.config, ...defined(override) };
@@ -117,20 +116,14 @@ export class BedrockConverse {
       }),
     });
     const client = await this.client();
-    let response: {
+    const response = (await client.send(command, {
+      abortSignal: signal,
+    })) as {
       output?: { message?: { content?: { text?: string }[] } };
       stopReason?: string;
     };
-    try {
-      response = (await client.send(command, {
-        abortSignal: signal,
-      })) as typeof response;
-    } catch (error) {
-      throw deadlineError(error, deadline);
-    }
     const { stopReason } = response;
     if (stopReason === "max_tokens") {
-      // A retry with the same limit stops at the same place.
       throw new LlmMaxTokensError(
         "The reply stopped at the token limit. Raise maxTokens.",
       );

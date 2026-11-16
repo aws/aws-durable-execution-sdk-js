@@ -1,25 +1,16 @@
-import {
-  type DurableContext,
+import type {
+  DurableContext,
   DurablePromise,
 } from "@aws/durable-execution-sdk-js";
 import { parseReply } from "./aws-sdk";
 import { DeciderError } from "./errors";
-import { defaultAiRetryStrategy } from "./retry";
 import {
-  causeChain,
   aiStep,
-  deadlineError,
-  type RequestSignals,
+  causeChain,
   invalid,
-  MAX_CLASSIFY_OPTIONS,
   matchOption,
-  rejected,
   serializeInput,
   toUnitScore,
-  validateOptions,
-  validateQuestion,
-  validateStepName,
-  validateScale,
 } from "./shared";
 import { AiOperationSubType } from "./subtypes";
 import type {
@@ -122,8 +113,7 @@ function httpTransport(
     }
     // The body is read first and parsed second. A read that fails, for
     // example when the connection drops after the headers, is a transport
-    // failure, which the default strategy retries. Only a body that is not
-    // JSON is an invalid reply.
+    // failure. Only a body that is not JSON is an invalid reply.
     let text: string;
     try {
       text = await response.text();
@@ -179,16 +169,6 @@ function probability(answer: Record<string, unknown> | undefined): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function threshold(value: number | undefined): number {
-  if (value === undefined) {
-    return 0.5;
-  }
-  if (typeof value !== "number" || !(value >= 0 && value <= 1)) {
-    throw new RangeError("threshold must be a number from 0 to 1.");
-  }
-  return value;
-}
-
 type Operation = "check" | "classify" | "label" | "score";
 
 const SUBTYPES: Record<Operation, AiOperationSubType> = {
@@ -201,8 +181,7 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
 /**
  * Creates the four decision operations: `check`, `classify`, `label`, and
  * `score`. Each call is one durable step that asks a decision model one
- * question and returns a typed answer. {@link Decider} lists each operation's
- * limits.
+ * question and returns a typed answer.
  *
  * @remarks
  * A decision model, such as Strands Decider, is not a large language model.
@@ -219,11 +198,17 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  *    model on AWS. They sign the call with the function's credentials. Write
  *    your own transport for any other host.
  *
+ * When both are set, `transport` is used, and `endpoint` and `headers` are
+ * ignored.
+ *
  * This package does not host or check the model. It assumes the model is
  * deployed and ready.
  *
  * The step result is the answer. A replay returns it from the checkpoint and
- * does not call the model.
+ * does not call the model. The operations do not check their arguments. A
+ * failed call rejects with the error of the step's last attempt. The step
+ * retries with the core SDK's default strategy, or with `retryStrategy` when
+ * it is set.
  *
  * ```typescript
  * const decide = decider();
@@ -236,35 +221,27 @@ const SUBTYPES: Record<Operation, AiOperationSubType> = {
  * ```
  *
  * @param config - The decision model. Every field has a default.
- * @throws \{TypeError\} When the config names both `endpoint` and
- * `transport`, or neither and `STRANDS_DECIDER_ENDPOINT` is not set, or when
- * the endpoint
- * is not an absolute `http:` or `https:` URL or contains a user name or
- * password. `decider()` usually
- * runs when the module loads, so the function then fails to initialize.
- * @throws \{RangeError\} When `threshold` is not between 0 and 1.
+ * @throws \{TypeError\} When the config names no `transport` or `endpoint`
+ * and `STRANDS_DECIDER_ENDPOINT` is not set, or when the endpoint is not an
+ * absolute `http:` or `https:` URL or contains a user name or password.
+ * `decider()` usually runs when the module loads, so the function then fails
+ * to initialize.
  *
  * @public
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function decider(config: DeciderConfig = {}): Decider {
-  if (config.transport !== undefined && config.endpoint !== undefined) {
-    throw new TypeError("decider() takes only one of transport and endpoint.");
-  }
-  if (config.transport !== undefined && config.headers !== undefined) {
-    // The headers are sent only on the endpoint path. Dropping them could
-    // send a request without the authorization header the caller expected.
-    throw new TypeError(
-      "decider() takes headers only with endpoint, not with transport.",
-    );
-  }
+  // A transport wins over an endpoint. The endpoint and headers are then not
+  // used.
   const endpoint = config.endpoint ?? process.env.STRANDS_DECIDER_ENDPOINT;
   const transport =
     config.transport ??
     (endpoint
       ? httpTransport(parseEndpoint(endpoint), config.headers)
       : undefined);
+  // Without a transport, no call can reach a model. So decider() fails here,
+  // when the module loads, and not at the first call.
   if (!transport) {
     throw new TypeError(
       "decider() needs a transport, an endpoint, or the STRANDS_DECIDER_ENDPOINT environment variable.",
@@ -272,69 +249,46 @@ export function decider(config: DeciderConfig = {}): Decider {
   }
   const send: DeciderTransport = transport;
   const model = config.model ?? DEFAULT_DECIDER_MODEL;
-  const yesAt = threshold(config.threshold);
-  const retryStrategy = config.retryStrategy ?? defaultAiRetryStrategy;
+  const yesAt = config.threshold ?? 0.5;
 
-  async function ask(
-    state: string,
-    questions: Record<string, unknown>,
-    { signal, deadline }: RequestSignals,
-  ): Promise<Answers> {
-    const request: DeciderRequest = { model, state, questions };
-    let response: unknown;
-    try {
-      response = await send(request, { abortSignal: signal });
-    } catch (error) {
-      throw deadlineError(error, deadline);
-    }
-    return answersOf(response);
-  }
-
+  /**
+   * Runs one operation in one step. The input is serialized inside the step,
+   * once per attempt.
+   */
   function run<T>(
     context: DurableContext,
     operation: Operation,
+    input: unknown,
     options: AiCallOptions | undefined,
-    body: (signals: RequestSignals) => Promise<T>,
+    questions: () => Record<string, unknown>,
+    answer: (answers: Answers) => T,
   ): DurablePromise<T> {
     return aiStep(
       context,
       options?.name ?? `decider.${operation}`,
-      { retryStrategy, subType: SUBTYPES[operation] },
-      body,
+      { retryStrategy: config.retryStrategy, subType: SUBTYPES[operation] },
+      async (signal) => {
+        const request: DeciderRequest = {
+          model,
+          state: serializeInput(input),
+          questions: questions(),
+        };
+        const response = await send(request, { abortSignal: signal });
+        return answer(answersOf(response));
+      },
     );
-  }
-
-  /**
-   * Checks the arguments that every operation shares, and serializes the
-   * input once. A `toJSON` hook then runs once, and the model gets the value
-   * that was checked.
-   */
-  function prepare(
-    question: unknown,
-    input: unknown,
-    options: AiCallOptions | undefined,
-  ): string {
-    validateQuestion(question);
-    validateStepName(options?.name);
-    return serializeInput(input);
   }
 
   return {
     check(context, question, input, options) {
-      let state: string;
-      try {
-        state = prepare(question, input, options);
-      } catch (error) {
-        return rejected(error);
-      }
-      return run(context, "check", options, async (signals) => {
-        const answers = await ask(
-          state,
-          { [ANSWER]: { type: "noul", instructions: question } },
-          signals,
-        );
-        return probability(answers[ANSWER]) >= yesAt;
-      });
+      return run(
+        context,
+        "check",
+        input,
+        options,
+        () => ({ [ANSWER]: { type: "noul", instructions: question } }),
+        (answers) => probability(answers[ANSWER]) >= yesAt,
+      );
     },
 
     classify<const T extends readonly string[]>(
@@ -344,36 +298,36 @@ export function decider(config: DeciderConfig = {}): Decider {
       input: unknown,
       options?: AiCallOptions,
     ) {
-      let state: string;
-      try {
-        validateOptions(choices, MAX_CLASSIFY_OPTIONS);
-        state = prepare(question, input, options);
-      } catch (error) {
-        return rejected<T[number]>(error);
-      }
-      return run<T[number]>(context, "classify", options, async (signals) => {
-        const criteria = Object.fromEntries(
-          choices.map((option) => [option, null]),
-        );
-        const answers = await ask(
-          state,
-          { [ANSWER]: { type: "choice", instructions: question, criteria } },
-          signals,
-        );
-        const answer = answers[ANSWER];
-        if (answer?.type !== "choice") {
-          return invalid("The decision model's answer is not a choice.");
-        }
-        // A choice that is not a string is never coerced to a string, because
-        // String() can throw on such a value.
-        if (typeof answer.choice !== "string") {
-          return invalid("The decision model's choice is not a string.");
-        }
-        return (matchOption(choices, answer.choice) ??
-          invalid(
-            `"${answer.choice}" is not one of the options.`,
-          )) as T[number];
-      });
+      return run<T[number]>(
+        context,
+        "classify",
+        input,
+        options,
+        () => ({
+          [ANSWER]: {
+            type: "choice",
+            instructions: question,
+            criteria: Object.fromEntries(
+              choices.map((option) => [option, null]),
+            ),
+          },
+        }),
+        (answers) => {
+          const answer = answers[ANSWER];
+          if (answer?.type !== "choice") {
+            return invalid("The decision model's answer is not a choice.");
+          }
+          // A choice that is not a string is never coerced to a string,
+          // because String() can throw on such a value.
+          if (typeof answer.choice !== "string") {
+            return invalid("The decision model's choice is not a string.");
+          }
+          return (matchOption(choices, answer.choice) ??
+            invalid(
+              `"${answer.choice}" is not one of the options.`,
+            )) as T[number];
+        },
+      );
     },
 
     label<const T extends readonly string[]>(
@@ -383,61 +337,54 @@ export function decider(config: DeciderConfig = {}): Decider {
       input: unknown,
       options?: AiCallOptions,
     ) {
-      let state: string;
-      try {
-        validateOptions(choices);
-        state = prepare(question, input, options);
-      } catch (error) {
-        return rejected<T[number][]>(error);
-      }
-      return run<T[number][]>(context, "label", options, async (signals) => {
+      return run<T[number][]>(
+        context,
+        "label",
+        input,
+        options,
         // One yes-or-no question per option. The model reads the input once.
-        const questions = Object.fromEntries(
-          choices.map((option, i) => [
-            `o${i}`,
-            {
-              type: "noul",
-              instructions: `${question}\nDoes this label apply: ${option}`,
-            },
-          ]),
-        );
-        const answers = await ask(state, questions, signals);
-        return choices.filter(
-          (_option, i) => probability(answers[`o${i}`]) >= yesAt,
-        );
-      });
+        () =>
+          Object.fromEntries(
+            choices.map((option, i) => [
+              `o${i}`,
+              {
+                type: "noul",
+                instructions: `${question}\nDoes this label apply: ${option}`,
+              },
+            ]),
+          ),
+        (answers) =>
+          choices.filter(
+            (_option, i) => probability(answers[`o${i}`]) >= yesAt,
+          ),
+      );
     },
 
     score(context, question, scale, input, options) {
-      let state: string;
-      try {
-        validateScale(scale);
-        state = prepare(question, input, options);
-      } catch (error) {
-        return rejected(error);
-      }
-      return run(context, "score", options, async (signals) => {
-        const answers = await ask(
-          state,
-          {
-            [ANSWER]: {
-              type: "score",
-              instructions: question,
-              criteria: scale,
-            },
-          },
-          signals,
-        );
-        // The model's score is the expected level index, from 0 to levels - 1.
-        const position = numberField(answers[ANSWER], "score", "score");
-        const last = scale.length - 1;
-        if (position < -SCORE_TOLERANCE || position > last + SCORE_TOLERANCE) {
-          return invalid(
-            `The decision model's score ${position} is outside 0 to ${last}.`,
-          );
-        }
-        return toUnitScore(position, scale.length);
-      });
+      return run(
+        context,
+        "score",
+        input,
+        options,
+        () => ({
+          [ANSWER]: { type: "score", instructions: question, criteria: scale },
+        }),
+        (answers) => {
+          // The model's score is the expected level index, from 0 to
+          // levels - 1.
+          const position = numberField(answers[ANSWER], "score", "score");
+          const last = scale.length - 1;
+          if (
+            position < -SCORE_TOLERANCE ||
+            position > last + SCORE_TOLERANCE
+          ) {
+            return invalid(
+              `The decision model's score ${position} is outside 0 to ${last}.`,
+            );
+          }
+          return toUnitScore(position, scale.length);
+        },
+      );
     },
   };
 }
