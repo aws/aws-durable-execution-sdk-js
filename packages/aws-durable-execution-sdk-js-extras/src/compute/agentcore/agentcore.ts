@@ -238,7 +238,14 @@ function isAccepted(answer: string): boolean {
   }
 }
 
-function validateConfig(name: string, config: AgentcoreConfig): void {
+/**
+ * Checks the name, the runtime ARN and the timeout. {@link agentcore} and
+ * `agentcoreSession` call it before any durable operation.
+ */
+export function validateConfig(
+  name: string,
+  config: Pick<AgentcoreConfig, "agentRuntimeArn" | "timeout">,
+): void {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("an AgentCore operation requires a non-empty name");
   }
