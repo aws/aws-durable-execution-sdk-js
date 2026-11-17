@@ -1,8 +1,13 @@
-// The session-ID and stop steps of an AgentCore operation.
+// The session-ID, job and stop steps of an AgentCore operation.
 import { randomUUID } from "node:crypto";
-import type { DurableContext } from "@aws/durable-execution-sdk-js";
+import {
+  type DurableContext,
+  type Duration,
+  defaultSerdes,
+} from "@aws/durable-execution-sdk-js";
 import {
   type BedrockAgentCoreClient,
+  InvokeAgentRuntimeCommand,
   StopRuntimeSessionCommand,
 } from "@aws-sdk/client-bedrock-agentcore";
 import {
@@ -12,8 +17,23 @@ import {
   reserveStartsAt,
   tooLittleTimeMessage,
 } from "../deadline";
+import { inStage } from "./errors";
 import { AgentcoreOperationSubType } from "./subtypes";
-import type { AgentcoreConfig } from "./types";
+import type {
+  AgentcoreConfig,
+  AgentcoreInvokeOptions,
+  AgentcoreJobDocument,
+} from "./types";
+
+/**
+ * The error name of an InvokeAgentRuntime answer without
+ * `{"accepted": true}`. The default retry strategy does not retry it,
+ * because the same agent gives the same answer.
+ */
+const NOT_ACCEPTED_ERROR_NAME = "AgentcoreNotAcceptedError";
+
+/** The longest part of a refused answer that the error message quotes. */
+const MAX_QUOTED_ANSWER_CHARS = 256;
 
 /** The runtime session that the InvokeAgentRuntime and stop calls target. */
 export interface SessionTarget {
@@ -33,6 +53,115 @@ export async function createSessionId(
   return (await child.step(`${name}.session`, async () => randomUUID(), {
     subType: AgentcoreOperationSubType.SESSION_ID,
   })) as string;
+}
+
+/**
+ * Runs one job in the session and returns the job's result.
+ *
+ * It creates the callback `<name>.callback`. The step `<name>.request`
+ * then sends the job document to the session with InvokeAgentRuntime, and
+ * the agent must answer `{"accepted": true}`. Then the function waits on the
+ * callback.
+ *
+ * @param inputJson - The input's JSON text, or `undefined` when the input
+ * encodes to no value. The job document holds this text as it is.
+ */
+export async function runJob<TOutput>(
+  child: DurableContext,
+  name: string,
+  options: AgentcoreInvokeOptions,
+  retryStrategy: NonNullable<AgentcoreConfig["retryStrategy"]>,
+  client: () => BedrockAgentCoreClient,
+  target: SessionTarget,
+  region: string,
+  inputJson: string | undefined,
+): Promise<TOutput> {
+  const [result, callbackId] = (await child.createCallback<TOutput>(
+    `${name}.callback`,
+    {
+      timeout: options.timeout,
+      heartbeatTimeout: options.heartbeatTimeout,
+      // The agent sends a JSON string, and the default callback
+      // deserializer returns the raw string. So the callback parses it.
+      serdes: defaultSerdes,
+      subType: AgentcoreOperationSubType.CALLBACK,
+    },
+  )) as unknown as [Promise<TOutput>, string];
+  const payload = jobDocumentJson(
+    {
+      version: 1,
+      region,
+      callbackId,
+      ...(options.heartbeatTimeout !== undefined && {
+        heartbeatTimeoutSeconds: durationToSeconds(options.heartbeatTimeout),
+      }),
+    },
+    inputJson,
+  );
+
+  await inStage(name, "delivery", () =>
+    child.step(
+      `${name}.request`,
+      async () => {
+        assertTimeToCall(child, name, "request", "send the job");
+        // The call and the read of the answer must end before the
+        // invocation reserve. The abort signal covers both.
+        await callBeforeDeadline(
+          async (sendOptions) => {
+            const response = await client().send(
+              new InvokeAgentRuntimeCommand({
+                ...target,
+                contentType: "application/json",
+                accept: "application/json",
+                payload: Buffer.from(payload, "utf8"),
+              }),
+              sendOptions,
+            );
+            // The response body is a stream. Reading it to the end
+            // releases the connection. The abort signal also ends the
+            // read.
+            const answer = (await response.response?.transformToString()) ?? "";
+            if (!isAccepted(answer)) {
+              throw Object.assign(
+                new Error(
+                  `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
+                ),
+                { name: NOT_ACCEPTED_ERROR_NAME },
+              );
+            }
+          },
+          reserveStartsAt(remainingTime(child)),
+          () => pastReserve(name, "InvokeAgentRuntime"),
+        );
+      },
+      { retryStrategy, subType: AgentcoreOperationSubType.REQUEST },
+    ),
+  );
+  return await inStage(name, "job", () => result);
+}
+
+/** Whether the agent's answer is the JSON object `{"accepted": true}`. */
+function isAccepted(answer: string): boolean {
+  try {
+    return (JSON.parse(answer) as { accepted?: unknown })?.accepted === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the job document as JSON text. The input's text is inserted as it
+ * is. So the document holds the text that the caller measured, and the
+ * input is encoded once per call.
+ */
+function jobDocumentJson(
+  fields: Omit<AgentcoreJobDocument, "input">,
+  inputJson: string | undefined,
+): string {
+  const json = JSON.stringify(fields);
+  return inputJson === undefined
+    ? json
+    : `${json.slice(0, -1)},"input":${inputJson}}`;
 }
 
 /**
@@ -125,5 +254,24 @@ export function pastReserve(name: string, call: string): Error {
       `AgentCore "${name}": ${call} did not end ${INVOCATION_RESERVE_MS / 1_000} seconds before the Lambda invocation times out, so the attempt stopped. A later attempt runs in a new invocation.`,
     ),
     { name: "TimeoutError" },
+  );
+}
+
+/** Converts a Duration to whole seconds, rounding up. */
+export function durationToSeconds(duration: Duration | undefined): number {
+  if (duration === undefined) {
+    return Number.NaN;
+  }
+  const parts = duration as {
+    days?: number;
+    hours?: number;
+    minutes?: number;
+    seconds?: number;
+  };
+  return Math.ceil(
+    (parts.days ?? 0) * 86_400 +
+      (parts.hours ?? 0) * 3_600 +
+      (parts.minutes ?? 0) * 60 +
+      (parts.seconds ?? 0),
   );
 }
