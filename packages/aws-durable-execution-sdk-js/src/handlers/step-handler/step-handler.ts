@@ -259,9 +259,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
       return await executeStepLogic();
 
       async function executeStepLogic(): Promise<T> {
-        // The START checkpoint of the at-least-once path, which is not awaited. See
-        // requestPause.
-        let startCheckpoint: Promise<void> | undefined;
         stepData = context.getStepData(stepId);
         if (stepData?.Status !== OperationStatus.STARTED) {
           if (semantics === StepSemantics.AtMostOncePerRetry) {
@@ -284,7 +281,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           } else {
             const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
             // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
-            startCheckpoint = checkpoint.checkpoint(stepId, {
+            void checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
@@ -448,13 +445,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const nextAttemptDelaySeconds = retryDecision.delay
             ? durationToSeconds(retryDecision.delay)
             : 1;
-          // Requested before the RETRY checkpoint, while the step is still EXECUTING. The
-          // service then answers that checkpoint without a token if the pause has taken
-          // effect, and the checkpoint manager suspends the invocation.
-          const paused =
-            options?.pauseEvery !== undefined &&
-            currentAttempt % options.pauseEvery === 0 &&
-            (await requestPause(currentAttempt, startCheckpoint));
+          // The RETRY checkpoint is awaited before the pause call. The queue sends START
+          // no later than RETRY, so both are saved before the pause can take effect. If
+          // the service answers RETRY without a token, or drops it for a finished
+          // ancestor, this await never resolves and no pause is requested.
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -478,6 +472,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          // Requested while the step is still EXECUTING, so the invocation cannot
+          // suspend during the call.
+          const paused =
+            options?.pauseEvery !== undefined &&
+            currentAttempt % options.pauseEvery === 0 &&
+            (await requestPause(currentAttempt));
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,
@@ -510,19 +510,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
          * Asks the service to pause the execution. Returns whether the request succeeded.
          * A missing client method or a failed request leaves the normal retry in place.
          */
-        async function requestPause(
-          attempt: number,
-          startCheckpoint: Promise<void> | undefined,
-        ): Promise<boolean> {
+        async function requestPause(attempt: number): Promise<boolean> {
           const client = context.durableExecutionClient;
           if (!client.pauseExecution) {
             return false;
           }
-          // Once the pause takes effect, the service saves one more checkpoint and then
-          // accepts no more. So the START checkpoint must be saved first. Otherwise the
-          // service can save START and drop RETRY, and after the resume this attempt runs
-          // and pauses again.
-          await startCheckpoint;
           const hashedId = hashId(stepId);
           try {
             await client.pauseExecution({
@@ -533,8 +525,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
             });
             return true;
           } catch (error) {
+            const errorName = (error as Error | undefined)?.name;
+            const cause =
+              errorName === "ResourceConflictException"
+                ? "The execution is already pausing or paused."
+                : "One possible cause is that the execution role does not allow lambda:PauseDurableExecution. Another is an @aws-sdk/client-lambda older than 3.1171.0 in the bundle.";
             logger.warn(
-              `Could not pause the execution after step "${name ?? hashedId}" failed attempt ${attempt}. The step retries as usual. Check that the execution role allows lambda:PauseDurableExecution.`,
+              `Could not pause the execution after step "${name ?? hashedId}" failed attempt ${attempt}: ${errorName}: ${(error as Error | undefined)?.message}. The step retries as usual. ${cause}`,
               error,
             );
             return false;

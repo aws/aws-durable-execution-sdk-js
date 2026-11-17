@@ -113,7 +113,7 @@ describe("Step Handler pauseEvery", () => {
         OperationLifecycleState.RETRY_WAITING,
         expect.anything(),
       );
-      expect(actions()).toEqual(["START"]);
+      expect(actions()).toEqual(["START", "RETRY"]);
     });
 
     void runFailingStep({ pauseEvery: 5 });
@@ -131,28 +131,53 @@ describe("Step Handler pauseEvery", () => {
     expect(mockCheckpoint.waitForRetryTimer).not.toHaveBeenCalled();
   });
 
-  it("waits for the START checkpoint before it asks to pause", async () => {
+  it("asks to pause only after the RETRY checkpoint is accepted", async () => {
     givenPriorAttempts(4);
-    let resolveStart!: () => void;
+    let acceptRetry!: () => void;
     (mockCheckpoint.checkpoint as Mock).mockImplementation(
       async (_id: string, update: { Action: string }) => {
-        if (update.Action === "START") {
+        if (update.Action === "RETRY") {
           await new Promise<void>((resolve) => {
-            resolveStart = resolve;
+            acceptRetry = resolve;
           });
         }
       },
     );
 
     void runFailingStep({ pauseEvery: 5 });
-    await vi.waitFor(() => expect(resolveStart).toBeDefined());
-    // Lets the step function throw and the handler reach the pause.
+    await vi.waitFor(() => expect(acceptRetry).toBeDefined());
+    // Gives a pause call that does not wait for RETRY the time to happen.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(pauseExecution).not.toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
 
-    resolveStart();
+    acceptRetry();
     await waitForRetryOrPause();
     expect(pauseExecution).toHaveBeenCalledTimes(1);
+    expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: TerminationReason.EXECUTION_PAUSED }),
+    );
+  });
+
+  it("does not ask to pause when the RETRY checkpoint never resolves", async () => {
+    // The checkpoint manager leaves RETRY unresolved when the service answers it without
+    // a token, or when it drops RETRY for a finished ancestor.
+    givenPriorAttempts(4);
+    (mockCheckpoint.checkpoint as Mock).mockImplementation(
+      async (_id: string, update: { Action: string }) => {
+        if (update.Action === "RETRY") {
+          await new Promise(() => {});
+        }
+      },
+    );
+
+    void runFailingStep({ pauseEvery: 5 });
+    await vi.waitFor(() => expect(actions()).toEqual(["START", "RETRY"]));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(pauseExecution).not.toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+    expect(mockCheckpoint.waitForRetryTimer).not.toHaveBeenCalled();
   });
 
   it("pauses again on later multiples of pauseEvery", async () => {
@@ -217,21 +242,49 @@ describe("Step Handler pauseEvery", () => {
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
   });
 
-  it("logs a warning and retries as usual when the pause call fails", async () => {
+  it("logs a warning with the error and retries as usual when the pause call fails", async () => {
     givenPriorAttempts(4);
-    const error = new Error("AccessDeniedException");
+    const error = Object.assign(new Error("User is not authorized"), {
+      name: "AccessDeniedException",
+    });
     pauseExecution.mockRejectedValue(error);
 
     void runFailingStep({ pauseEvery: 5 });
     await waitForRetryOrPause();
 
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("lambda:PauseDurableExecution"),
+      expect.stringContaining(
+        "failed attempt 5: AccessDeniedException: User is not authorized. The step retries as usual. One possible cause is that the execution role does not allow lambda:PauseDurableExecution. Another is an @aws-sdk/client-lambda older than 3.1171.0 in the bundle.",
+      ),
       error,
     );
     expect(actions()).toEqual(["START", "RETRY"]);
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+  });
+
+  it("does not blame permissions when the execution is already pausing or paused", async () => {
+    givenPriorAttempts(4);
+    const error = Object.assign(new Error("Execution is already paused"), {
+      name: "ResourceConflictException",
+    });
+    pauseExecution.mockRejectedValue(error);
+
+    void runFailingStep({ pauseEvery: 5 });
+    await waitForRetryOrPause();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "ResourceConflictException: Execution is already paused. The step retries as usual. The execution is already pausing or paused.",
+      ),
+      error,
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("lambda:PauseDurableExecution"),
+      error,
+    );
+    expect(actions()).toEqual(["START", "RETRY"]);
+    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
   });
 
   it("retries as usual when the client has no pauseExecution method", async () => {

@@ -133,8 +133,8 @@ export interface StepConfig<T> {
    *
    * For example, `pauseEvery: 5` pauses after attempts 5, 10, 15 and so on. A pause happens
    * only when the step function threw in this invocation and the retry strategy decided to
-   * retry. The SDK then calls the Lambda `PauseDurableExecution` API, saves the retry as
-   * usual and ends the invocation. An operator resumes the execution with the Lambda
+   * retry. The SDK then saves the retry as usual, calls the Lambda `PauseDurableExecution`
+   * API and ends the invocation. An operator resumes the execution with the Lambda
    * `ResumeDurableExecution` API. After the resume, the next attempt runs.
    *
    * The option never changes how many attempts run. When the retry strategy decides not to
@@ -148,8 +148,14 @@ export interface StepConfig<T> {
    * when the `DurableExecutionClient` has no `pauseExecution` method, for example a custom
    * transport.
    *
-   * A pause takes effect asynchronously. So when the retry delay is short, one more attempt
-   * can start before the execution pauses.
+   * Use `pauseEvery` with a retry strategy whose delay is much longer than the pause call,
+   * for example 30 seconds or more. Do not use it with short delays of a few seconds. Lambda
+   * saves the retry first, and then the SDK asks to pause. The pause takes effect a short
+   * time later. If the retry delay ends first, Lambda can run one more attempt before the
+   * execution pauses.
+   *
+   * For short waits between attempts, retry without `pauseEvery`. The SDK then waits for
+   * the retry delay inside the invocation.
    *
    * @experimental This option is experimental and may be changed or removed in future releases.
    */

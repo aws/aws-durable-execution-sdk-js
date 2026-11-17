@@ -31,9 +31,11 @@ export const handler = withDurableExecution(
         // downstream service before the step retries again. The execution role needs
         // lambda:PauseDurableExecution on this function's durable executions.
         pauseEvery: 2,
+        // A long retry delay, so the pause takes effect before the next attempt is due.
+        // With a short delay, one more attempt can run before the execution pauses.
         retryStrategy: (_error, attemptCount) => ({
           shouldRetry: attemptCount < 6,
-          delay: { seconds: 1 },
+          delay: { seconds: 30 },
         }),
       },
     );

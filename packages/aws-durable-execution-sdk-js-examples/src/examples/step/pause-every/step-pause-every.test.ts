@@ -6,14 +6,20 @@ import {
 import { handler } from "./step-pause-every";
 import { createTests } from "../../../utils/test-helper";
 
-/** Whether `promise` settles within a short window. */
+// Saved before the local runner installs fake timers. Under skipTime a fake timer ends at
+// once, so it cannot show that the execution stays paused.
+const realSetTimeout = setTimeout;
+
+/** Whether `promise` settles within a short window, measured in real time. */
 const settlesSoon = (promise: Promise<unknown>): Promise<boolean> =>
   Promise.race([
     promise.then(
       () => true,
       () => true,
     ),
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 200)),
+    new Promise<boolean>((resolve) =>
+      realSetTimeout(() => resolve(false), 200),
+    ),
   ]);
 
 createTests({
@@ -34,8 +40,10 @@ createTests({
         { timeout: 5000 },
       );
 
-      // The third attempt does not start, so the execution does not finish while paused.
+      // The retry delay is skipped, but the third attempt waits for the resume. So the
+      // execution does not finish and the step still has two attempts.
       expect(await settlesSoon(executionPromise)).toBe(false);
+      expect(step.getOperationData()?.StepDetails?.Attempt).toBe(2);
       expect(step.getStatus()).not.toBe(OperationStatus.SUCCEEDED);
 
       await runner.resumeExecution();
