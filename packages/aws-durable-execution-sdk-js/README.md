@@ -170,6 +170,24 @@ await context.step("call-api", async () => callApi(), {
 
 `retryStrategy` can also be a function `(error, attemptCount) => ({ shouldRetry, delay })`. `retryPresets` has ready-made strategies. A step that fails after its last attempt throws `StepError`.
 
+### Pause after repeated failures
+
+`pauseEvery` (experimental) pauses the execution after every `pauseEvery`-th failed attempt of a step. The retry strategy must decide to retry that attempt. An operator then checks the problem and resumes the execution with the Lambda `ResumeDurableExecution` API. After the resume, the next attempt runs.
+
+```typescript
+await context.step("call-api", async () => callApi(), {
+  pauseEvery: 5, // pause after attempts 5, 10, 15, ...
+  retryStrategy: createRetryStrategy({ maxAttempts: 20 }),
+});
+```
+
+- `pauseEvery` does not change how many attempts run. When the retry strategy stops, the step fails as usual.
+- The function's execution role needs `lambda:PauseDurableExecution` on the function's durable executions. You add that permission. If the function uses a customer managed AWS KMS key, the role also needs `kms:Decrypt` on the key. Without these permissions, the SDK logs a warning and the step retries as usual.
+- The pause applies only when the step function throws in the current invocation.
+- A custom `DurableExecutionClient` without a `pauseExecution` method retries as usual.
+
+See [Pausing and resuming durable executions](https://docs.aws.amazon.com/lambda/latest/dg/durable-pause-resume.html).
+
 ### Step semantics
 
 `semantics` sets what happens when an invocation ends while the step runs:

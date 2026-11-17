@@ -1,8 +1,8 @@
 # Custom transport
 
 By default the SDK talks to the Lambda durable execution APIs. You can replace that
-transport with your own by implementing `DurableExecutionClient`, which has two operations
-and names no AWS types:
+transport with your own by implementing `DurableExecutionClient`, which has two required
+operations and names no AWS types:
 
 ```typescript
 import {
@@ -91,6 +91,12 @@ Set a timeout on every `getExecutionState` and `checkpoint` request, as the exam
 [Lambda Managed Instances](LAMBDA_MANAGED_INSTANCES.md), the execution environment
 keeps running after the invocation ends. So a request without a timeout keeps its socket and
 timers open after the invocation's deadline.
+
+A transport can also implement the optional `pauseExecution` method (experimental). The SDK
+calls it for a step with `pauseEvery`. The request has the execution ARN, a `ClientToken` and
+a `Reason`. Pausing is asynchronous: the backend answers a later checkpoint without a
+`CheckpointToken` once the pause takes effect. A transport without the method has no pause
+support, so such a step retries as usual.
 
 To keep the Lambda transport but configure the underlying client yourself, pass it to
 `DurableExecutionApiClient` rather than using the deprecated `client` option:

@@ -128,6 +128,32 @@ export interface StepConfig<T> {
    * of an existing step is a breaking change for executions in flight.
    */
   subType?: string;
+  /**
+   * Pauses the durable execution after every `pauseEvery`-th failed attempt of this step.
+   *
+   * For example, `pauseEvery: 5` pauses after attempts 5, 10, 15 and so on. A pause happens
+   * only when the step function threw in this invocation and the retry strategy decided to
+   * retry. The SDK then calls the Lambda `PauseDurableExecution` API, saves the retry as
+   * usual and ends the invocation. An operator resumes the execution with the Lambda
+   * `ResumeDurableExecution` API. After the resume, the next attempt runs.
+   *
+   * The option never changes how many attempts run. When the retry strategy decides not to
+   * retry, the step fails as usual.
+   *
+   * Use a positive integer. The SDK does not check the value.
+   *
+   * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
+   * durable execution ARNs. You give it that permission. Without it, the pause call fails,
+   * the SDK logs a warning and the step retries as usual. The step also retries as usual
+   * when the `DurableExecutionClient` has no `pauseExecution` method, for example a custom
+   * transport.
+   *
+   * A pause takes effect asynchronously. So when the retry delay is short, one more attempt
+   * can start before the execution pauses.
+   *
+   * @experimental This option is experimental and may be changed or removed in future releases.
+   */
+  pauseEvery?: number;
 }
 
 /**

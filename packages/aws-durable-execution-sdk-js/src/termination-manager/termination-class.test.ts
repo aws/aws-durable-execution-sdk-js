@@ -26,6 +26,7 @@ describe("termination reason classification", () => {
     TerminationReason.RETRY_SCHEDULED,
     TerminationReason.RETRY_INTERRUPTED_STEP,
     TerminationReason.CALLBACK_PENDING,
+    TerminationReason.EXECUTION_PAUSED,
   ])("treats %s as a suspend", (reason) => {
     expect(classifyTermination(reason)).toBe("suspend");
   });

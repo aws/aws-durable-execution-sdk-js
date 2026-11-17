@@ -49,6 +49,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { TerminationReason } from "../../termination-manager/types";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -258,6 +259,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
       return await executeStepLogic();
 
       async function executeStepLogic(): Promise<T> {
+        // The START checkpoint of the at-least-once path, which is not awaited. See
+        // requestPause.
+        let startCheckpoint: Promise<void> | undefined;
         stepData = context.getStepData(stepId);
         if (stepData?.Status !== OperationStatus.STARTED) {
           if (semantics === StepSemantics.AtMostOncePerRetry) {
@@ -280,7 +284,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           } else {
             const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
             // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the invocation.
-            void checkpoint.checkpoint(stepId, {
+            startCheckpoint = checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
@@ -444,6 +448,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const nextAttemptDelaySeconds = retryDecision.delay
             ? durationToSeconds(retryDecision.delay)
             : 1;
+          // Requested before the RETRY checkpoint, while the step is still EXECUTING. The
+          // service then answers that checkpoint without a token if the pause has taken
+          // effect, and the checkpoint manager suspends the invocation.
+          const paused =
+            options?.pauseEvery !== undefined &&
+            currentAttempt % options.pauseEvery === 0 &&
+            (await requestPause(currentAttempt, startCheckpoint));
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -483,8 +494,51 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
+          if (paused) {
+            context.terminationManager.terminate({
+              reason: TerminationReason.EXECUTION_PAUSED,
+              message: `Execution paused after step ${name || stepId} failed attempt ${currentAttempt}`,
+            });
+            return new Promise<T>(() => {});
+          }
+
           await checkpoint.waitForRetryTimer(stepId);
           return await executeStepLogic();
+        }
+
+        /**
+         * Asks the service to pause the execution. Returns whether the request succeeded.
+         * A missing client method or a failed request leaves the normal retry in place.
+         */
+        async function requestPause(
+          attempt: number,
+          startCheckpoint: Promise<void> | undefined,
+        ): Promise<boolean> {
+          const client = context.durableExecutionClient;
+          if (!client.pauseExecution) {
+            return false;
+          }
+          // Once the pause takes effect, the service saves one more checkpoint and then
+          // accepts no more. So the START checkpoint must be saved first. Otherwise the
+          // service can save START and drop RETRY, and after the resume this attempt runs
+          // and pauses again.
+          await startCheckpoint;
+          const hashedId = hashId(stepId);
+          try {
+            await client.pauseExecution({
+              DurableExecutionArn: context.durableExecutionArn,
+              // Stable across a re-run of this attempt, so the service can drop a repeat.
+              ClientToken: `${hashedId}-${attempt}`,
+              Reason: `Step "${name ?? hashedId}" failed attempt ${attempt}`,
+            });
+            return true;
+          } catch (error) {
+            logger.warn(
+              `Could not pause the execution after step "${name ?? hashedId}" failed attempt ${attempt}. The step retries as usual. Check that the execution role allows lambda:PauseDurableExecution.`,
+              error,
+            );
+            return false;
+          }
         }
       }
     })();

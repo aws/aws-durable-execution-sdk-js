@@ -1,0 +1,151 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e624da5c-00f6-4430-b499-f1071ff27501",
+    "EventTimestamp": "2026-11-17T21:27:16.254Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:16.363Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:16.363Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Payment service unavailable (attempt 1)",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-11-17T21:27:16.367Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-17T21:27:16.254Z",
+      "EndTimestamp": "2026-11-17T21:27:16.367Z",
+      "Error": {},
+      "RequestId": "85091558-2e91-43cb-9e55-e4132746df39"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:17.367Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:17.369Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Payment service unavailable (attempt 2)",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-11-17T21:27:17.370Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-17T21:27:17.364Z",
+      "EndTimestamp": "2026-11-17T21:27:17.370Z",
+      "Error": {},
+      "RequestId": "47a4a3fb-0315-432e-a324-8fd4e94fc6a0"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2026-11-17T21:27:17.623Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-17T21:27:17.619Z",
+      "EndTimestamp": "2026-11-17T21:27:17.623Z",
+      "Error": {},
+      "RequestId": "91f27f5e-0912-451c-9487-564e9e3899db"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:18.372Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-payment-service",
+    "EventTimestamp": "2026-11-17T21:27:18.372Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"payment accepted\""
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-11-17T21:27:18.374Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-17T21:27:18.370Z",
+      "EndTimestamp": "2026-11-17T21:27:18.373Z",
+      "Error": {},
+      "RequestId": "f1d0bca8-c5c4-415b-a6d1-c993003e9044"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "e624da5c-00f6-4430-b499-f1071ff27501",
+    "EventTimestamp": "2026-11-17T21:27:18.374Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"payment accepted\""
+      }
+    }
+  }
+]

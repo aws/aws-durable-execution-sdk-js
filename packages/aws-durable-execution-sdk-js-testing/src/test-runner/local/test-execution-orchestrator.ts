@@ -125,7 +125,9 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
   ) {
     this.executionState = new TestExecutionState();
     this.invocationTracker = new InvocationTracker(checkpointApi);
-    this.invokeHandlerInstance = new InvokeHandler();
+    this.invokeHandlerInstance = new InvokeHandler(undefined, () =>
+      this.pauseFromInvocation(),
+    );
     this.scheduler = this.skipTimeProps.enabled
       ? new QueueScheduler()
       : new TimerScheduler();
@@ -153,20 +155,39 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
    */
   pause(): Promise<void> {
     this.pausing = this.pausing.then(async () => {
-      const executionId = await this.executionId;
-      if (this.settled) {
-        return;
+      if (await this.markPaused()) {
+        await this.waitUntilIdle();
       }
-
-      if (!this.paused) {
-        // Set before telling the server, so that no invocation can start in between.
-        this.paused = true;
-        await this.checkpointApi.pauseExecution(executionId);
-      }
-
-      await this.waitUntilIdle();
     });
     return this.pausing;
+  }
+
+  /**
+   * Pauses the execution from inside a running invocation, as the SDK does for
+   * `StepConfig.pauseEvery`. Unlike {@link pause}, it does not wait for the execution to go
+   * idle, because the invocation that calls it is still running. That invocation's next
+   * checkpoint is answered without a token, so it returns PENDING.
+   */
+  private async pauseFromInvocation(): Promise<void> {
+    await this.markPaused();
+  }
+
+  /**
+   * Marks the execution paused here and in the checkpoint server. Returns false if the
+   * execution has already finished.
+   */
+  private async markPaused(): Promise<boolean> {
+    const executionId = await this.executionId;
+    if (this.settled) {
+      return false;
+    }
+
+    if (!this.paused) {
+      // Set before telling the server, so that no invocation can start in between.
+      this.paused = true;
+      await this.checkpointApi.pauseExecution(executionId);
+    }
+    return true;
   }
 
   /**
@@ -228,7 +249,14 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     try {
       const result = await this.executionState.createExecutionPromise();
 
-      if (result.status === ExecutionStatus.RUNNING) {
+      // The local runner settles an execution only as SUCCEEDED or FAILED. RUNNING and the
+      // statuses below it are not operation statuses, so they are rejected.
+      if (
+        result.status === ExecutionStatus.RUNNING ||
+        result.status === ExecutionStatus.PAUSING ||
+        result.status === ExecutionStatus.PAUSED ||
+        result.status === ExecutionStatus.DELETING
+      ) {
         throw new Error(
           `Execution did not resolve with valid status. Status: ${result.status}`,
         );
