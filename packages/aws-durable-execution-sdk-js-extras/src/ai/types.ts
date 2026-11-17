@@ -6,9 +6,9 @@ import type {
 
 /**
  * The input of an operation: a string, or a JSON-serializable value. The
- * operation serializes a non-string input with `JSON.stringify`. A value that
- * `JSON.stringify` cannot encode, such as a `BigInt` or a circular object,
- * rejects the call with a `TypeError`.
+ * operation serializes a non-string input with `JSON.stringify`, inside the
+ * step. A value that `JSON.stringify` cannot encode, such as a `BigInt` or a
+ * circular object, fails the step.
  *
  * @public
  *
@@ -66,11 +66,10 @@ export interface DeciderRequest {
  * one. Write your own to reach a model another way.
  *
  * @remarks
- * A transport must stop and reject when `abortSignal` aborts. The signal
- * aborts 10 seconds before the invocation runs out of time, and when the SDK
- * cancels the step. The SDK cannot stop a promise that ignores the signal. So
- * a transport that ignores it can run past the 10-second reserve, and the
- * invocation can time out before the step records its outcome.
+ * `abortSignal` is the step's `signal`, when the core SDK provides one. The
+ * SDK aborts it when it no longer needs the result, for example when a `map`
+ * or `parallel` batch completes early. A transport should stop and reject
+ * when it aborts.
  *
  * @public
  *
@@ -157,22 +156,25 @@ export interface DeciderConfig {
    * user name or password: pass credentials in `headers`.
    */
   endpoint?: string;
-  /** Extra HTTP headers for `endpoint`, such as an authorization header. */
+  /**
+   * Extra HTTP headers for `endpoint`, such as an authorization header. They
+   * are not used with `transport`.
+   */
   headers?: Record<string, string>;
   /** The value of the request's `model` field. The default is `strands-decider-latest`. */
   model?: string;
   /**
    * The function that sends the request, such as one that
    * `agentCoreTransport`, `sageMakerTransport`, or `lambdaTransport` returns.
-   * Do not combine it with `endpoint`.
+   * When it is set, `endpoint` and `headers` are not used.
    */
   transport?: DeciderTransport;
   /**
-   * The probability at or above which `check` and `label` answer yes. From 0
-   * to 1. The default is 0.5.
+   * The probability at or above which `check` and `label` answer yes. The
+   * default is 0.5.
    */
   threshold?: number;
-  /** The step retry strategy. The default is {@link defaultAiRetryStrategy}. */
+  /** The step retry strategy. The default is the core SDK's step default. */
   retryStrategy?: AiRetryStrategy;
 }
 
@@ -181,22 +183,18 @@ export interface DeciderConfig {
  * step, and each one takes the context first.
  *
  * @remarks
- * Every operation has these limits:
- *
- * - `question` must be a non-empty string.
- * - `input` must be a string or a value that `JSON.stringify` can encode.
+ * - `input` is a string or a value that `JSON.stringify` can encode.
  * - The decision model reads the input and each question, with its choices,
  *   in one context window: 4,096 tokens for Strands Decider 2B. A request
- *   that does not fit fails with `DeciderError` and HTTP 422, which is not
- *   retried. Shorten the input before the call.
- * - An invalid argument creates no durable operation. The returned promise
- *   rejects with a `TypeError` or a `RangeError`.
- * - A decision model that cannot be reached, or answers with HTTP 408, 429,
- *   or 5xx, fails the attempt with `DeciderError`, and the step retries.
- *   Another 3xx or 4xx is not retried, and redirects are not followed.
- * - A request still running 10 seconds before the invocation runs out of
- *   time stops with `AiTimeoutError`, and the step retries in a new
- *   invocation.
+ *   that does not fit fails with `DeciderError` and HTTP 422. Shorten the
+ *   input before the call.
+ * - The operations do not check their arguments. The model or the transport
+ *   rejects a request it cannot answer.
+ * - A decision model that cannot be reached, or answers with an HTTP error,
+ *   fails the attempt with `DeciderError`. Redirects are not followed.
+ * - A failed call rejects with the error of the step's last attempt. The
+ *   step retries with the core SDK's default strategy, or with
+ *   `retryStrategy` when it is set.
  * - The answer is the step result, so a replay returns it without calling the
  *   model.
  *
@@ -234,9 +232,9 @@ export interface Decider {
    * @remarks
    * Limits:
    *
-   * - 2 to {@link MAX_CLASSIFY_OPTIONS} choices.
-   * - Every choice is a non-empty string.
-   * - The choices must differ after trimming whitespace and ignoring case.
+   * - Strands Decider takes 2 to 255 choices.
+   * - The answer matches a choice after trimming whitespace and ignoring
+   *   case. So use choices that differ in that form.
    * - The model always picks a choice. Add a choice such as `"other"` when
    *   none may fit.
    * - Every choice counts toward the model's context window.
@@ -262,9 +260,6 @@ export interface Decider {
    * @remarks
    * Limits:
    *
-   * - At least 2 choices.
-   * - Every choice is a non-empty string.
-   * - The choices must differ after trimming whitespace and ignoring case.
    * - Each choice is one yes-or-no question to the decision model. The model
    *   reads the input once, but each choice adds time. So keep the list
    *   short.
@@ -293,8 +288,7 @@ export interface Decider {
    * @remarks
    * Limits:
    *
-   * - 2 to {@link MAX_SCORE_LEVELS} entries.
-   * - Every entry is a non-empty string.
+   * - Strands Decider takes 2 to 10 entries.
    * - Order the entries from lowest to highest.
    *
    * @param context - The context to create the step in.
@@ -370,7 +364,7 @@ export interface LlmConfig {
    * `bedrock` only. The default is {@link DEFAULT_LLM_MODEL_ID} on Bedrock.
    */
   destination?: { bedrock: BedrockConfig };
-  /** The step retry strategy. The default is {@link defaultAiRetryStrategy}. */
+  /** The step retry strategy. The default is the core SDK's step default. */
   retryStrategy?: AiRetryStrategy;
 }
 
@@ -400,23 +394,20 @@ export interface Llm {
    * @remarks
    * Limits:
    *
-   * - `question` must be a non-empty string.
-   * - `input` is optional. It must be a string or a value that
-   *   `JSON.stringify` can encode.
+   * - `input` is optional. It is a string or a value that `JSON.stringify`
+   *   can encode.
    * - The function's role needs `bedrock:InvokeModel` on the model, and on
    *   the inference profile when the model ID names one.
    * - The reply is at most `maxTokens` tokens, 1024 by default. A reply that
-   *   reaches the limit fails the step with `LlmMaxTokensError` and is not
-   *   retried. Raise `maxTokens` instead.
+   *   reaches the limit fails the attempt with `LlmMaxTokensError`. Raise
+   *   `maxTokens`, because a retry with the same limit stops at the same
+   *   place.
    * - A reply that stops for another reason, such as a guardrail that
-   *   intervened, fails the step with `LlmStoppedError`. Only
-   *   `malformed_model_output` and `malformed_tool_use` are retried.
-   * - A request still running 10 seconds before the invocation runs out of
-   *   time stops with `AiTimeoutError`, and the step retries in a new
-   *   invocation.
+   *   intervened, fails the attempt with `LlmStoppedError`.
+   * - A failed call rejects with the error of the step's last attempt. The
+   *   step retries with the core SDK's default strategy, or with
+   *   `retryStrategy` when it is set.
    * - The reply is checkpointed, so it must fit the 256 KB checkpoint limit.
-   * - An invalid argument creates no durable operation. The returned promise
-   *   rejects with a `TypeError`.
    *
    * @param context - The context to create the step in.
    * @param question - The instruction to the model.

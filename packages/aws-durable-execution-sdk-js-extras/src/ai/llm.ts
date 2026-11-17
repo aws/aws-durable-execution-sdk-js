@@ -1,13 +1,6 @@
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
 import { BedrockConverse, DEFAULT_LLM_MODEL_ID } from "./bedrock";
-import { defaultAiRetryStrategy } from "./retry";
-import {
-  aiStep,
-  rejected,
-  serializeInput,
-  validateQuestion,
-  validateStepName,
-} from "./shared";
+import { aiStep, serializeInput } from "./shared";
 import { AiOperationSubType } from "./subtypes";
 import type { BedrockConfig, Llm, LlmConfig } from "./types";
 
@@ -25,7 +18,7 @@ function onlyKey(destination: unknown, key: string): unknown {
 /**
  * Creates the `ask` operation of a large language model. Each call is one
  * durable step that asks the model one question and returns its reply as
- * text. {@link Llm} lists the limits.
+ * text.
  *
  * @remarks
  * The model runs on Amazon Bedrock. The default is
@@ -34,7 +27,9 @@ function onlyKey(destination: unknown, key: string): unknown {
  * faster, and its answer is always one of the options.
  *
  * The step result is the reply. A replay returns it from the checkpoint and
- * does not call the model.
+ * does not call the model. `ask` does not check its arguments. A failed call
+ * rejects with the error of the step's last attempt. The step retries with
+ * the core SDK's default strategy, or with `retryStrategy` when it is set.
  *
  * ```typescript
  * const model = llm();
@@ -56,25 +51,23 @@ export function llm(config: LlmConfig = {}): Llm {
     ? (onlyKey(config.destination, "bedrock") as BedrockConfig)
     : { modelId: DEFAULT_LLM_MODEL_ID };
   const bedrock = new BedrockConverse(bedrockConfig);
-  const retryStrategy = config.retryStrategy ?? defaultAiRetryStrategy;
 
   return {
     ask(context: DurableContext, question, input, options) {
-      // The input is serialized once, here, so a toJSON hook runs once and
-      // the model gets the value that was checked.
-      let text: string | undefined;
-      try {
-        validateQuestion(question);
-        validateStepName(options?.name);
-        text = input === undefined ? undefined : serializeInput(input);
-      } catch (error) {
-        return rejected(error);
-      }
       return aiStep(
         context,
         options?.name ?? "llm.ask",
-        { retryStrategy, subType: AiOperationSubType.LLM_ASK },
-        (signals) => bedrock.ask(question, text, options?.bedrock, signals),
+        {
+          retryStrategy: config.retryStrategy,
+          subType: AiOperationSubType.LLM_ASK,
+        },
+        (signal) =>
+          bedrock.ask(
+            question,
+            input === undefined ? undefined : serializeInput(input),
+            options?.bedrock,
+            signal,
+          ),
       );
     },
   };

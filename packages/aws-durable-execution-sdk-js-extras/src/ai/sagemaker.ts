@@ -38,8 +38,8 @@ interface ModelError extends Error {
  * function's role needs `sagemaker:InvokeEndpoint` on the endpoint.
  *
  * When the server answers with an HTTP error, SageMaker throws `ModelError`.
- * The transport turns it into a `DeciderError` with the server's status. So
- * a 422 for an input that is too long is not retried.
+ * The transport turns it into a `DeciderError` with the server's status, such
+ * as 422 for an input that is too long.
  *
  * `@aws-sdk/client-sagemaker-runtime` is an optional peer dependency. Without
  * it, each call fails with an `AiError` that names the package.
