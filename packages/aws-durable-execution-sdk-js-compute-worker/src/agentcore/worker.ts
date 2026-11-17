@@ -152,6 +152,10 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    * Defaults to single-line JSON on stdout and stderr. The worker drops an
    * error that a logger method throws, and a rejection of a promise that it
    * returns.
+   *
+   * Each log line of a job has the fields `callbackId`, `runtimeSessionId`
+   * and `jobCount`. `jobCount` is the number of jobs this worker has
+   * started, this job included.
    */
   logger?: AgentcoreWorkerLogger;
 }
@@ -241,6 +245,10 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   // Every callback ID that the worker accepted, oldest first. A Set keeps
   // insertion order.
   const accepted = new Set<string>();
+  // The number of jobs this worker has started. A session can send several
+  // jobs to one process, so the log fields show where a job is in that
+  // sequence.
+  let jobCount = 0;
   // The Unix time, in seconds, of the last status change. A public report
   // states that the service ends a HealthyBusy session at its idle timeout
   // when the ping answer has no time_of_last_update. The documentation makes
@@ -301,9 +309,10 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
     if (accepted.size > MAX_REMEMBERED_JOBS) {
       accepted.delete(accepted.values().next().value as string);
     }
+    jobCount += 1;
     // runJob catches the failures of the job. The last catch is a guard: an
     // unhandled rejection would end the process.
-    const run: Promise<void> = runJob(options, logger, job, sessionId)
+    const run: Promise<void> = runJob(options, logger, job, sessionId, jobCount)
       .finally(() => updateRunning(() => running.delete(run)))
       .catch(() => undefined);
     updateRunning(() => running.add(run));
@@ -349,11 +358,13 @@ async function runJob<TInput, TOutput>(
   logger: AgentcoreWorkerLogger,
   job: AgentcoreJobDocument<TInput>,
   sessionId: string | undefined,
+  jobCount: number,
 ): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
   const { callbackId, region } = job;
-  // The fields of every log line of the job.
-  const fields = { callbackId, runtimeSessionId: sessionId };
+  // The fields of every log line of the job. `jobCount` counts this job
+  // too, so the first job of a process logs 1.
+  const fields = { callbackId, runtimeSessionId: sessionId, jobCount };
   let reporter: CallbackReporter;
   try {
     reporter = new CallbackReporter({
