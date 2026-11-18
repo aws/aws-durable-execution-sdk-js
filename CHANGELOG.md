@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking.** **eslint-plugin** (`2.0.0`): `recommended` and `flat/recommended` turn on the
   new rule `valid-operation-identifiers` as an error. It reports an operation name that is not 1 to 256
-  printable ASCII characters, and a `subType` that is not 1 to 32 characters from
+  printable ASCII characters, and a nonempty `subType` that is not 1 to 32 characters from
   `[a-zA-Z0-9-_]`. It checks only string and template literals. The service rejects these values
   at the first checkpoint and fails the execution. So the lint of an existing project can fail
   after the upgrade, but only on a call that already fails whenever it runs.
@@ -319,7 +319,7 @@ line; `1.x` users are unaffected.
 [Unreleased]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.1.0...HEAD
 [3.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...sdk-3.1.0
 [eslint-plugin 2.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-3.1.0
-[telemetry-mcp 1.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/otel-2.1.0
+[telemetry-mcp 1.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/blob/main/release-notes/telemetry-mcp-1.1.0.md
 [3.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...sdk-3.0.0
 [2.7.1]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...sdk-2.7.1
 [2.7.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.6.0%2Ftest-1.3.0...sdk-2.7.0
