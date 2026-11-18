@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { createStepHandler } from "./step-handler";
 import {
@@ -15,6 +16,10 @@ import type { DurableLogger } from "../../types/durable-logger";
 
 const STEP_ID = "step-1";
 const HASHED_ID = hashId(STEP_ID);
+const token = (attempt: number, arn = "test-arn"): string =>
+  createHash("sha256")
+    .update(`pause:${arn}:${HASHED_ID}:${attempt}`)
+    .digest("hex");
 
 describe("Step Handler pauseEvery", () => {
   let stepData: Operation;
@@ -124,7 +129,7 @@ describe("Step Handler pauseEvery", () => {
 
     expect(pauseExecution).toHaveBeenCalledWith({
       DurableExecutionArn: "test-arn",
-      ClientToken: `${HASHED_ID}-5`,
+      ClientToken: token(5),
       Reason: 'Step "my-step" failed attempt 5',
     });
     expect(actions()).toEqual(["START", "RETRY"]);
@@ -190,7 +195,7 @@ describe("Step Handler pauseEvery", () => {
     await waitForRetryOrPause();
 
     expect(pauseExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ ClientToken: `${HASHED_ID}-10` }),
+      expect.objectContaining({ ClientToken: token(10) }),
     );
     expect(mockContext.terminationManager.terminate).toHaveBeenCalled();
   });
@@ -205,7 +210,21 @@ describe("Step Handler pauseEvery", () => {
     await waitForRetryOrPause();
 
     expect(pauseExecution).toHaveBeenCalledTimes(1);
-    expect(pauseExecution.mock.calls[0][0].ClientToken).toBe(`${HASHED_ID}-5`);
+    expect(pauseExecution.mock.calls[0][0].ClientToken).toBe(token(5));
+  });
+
+  it("uses a different ClientToken for another execution", async () => {
+    givenPriorAttempts(4);
+    (mockContext as { durableExecutionArn: string }).durableExecutionArn =
+      "other-arn";
+
+    void runFailingStep({ pauseEvery: 5 });
+    await waitForRetryOrPause();
+
+    const clientToken = pauseExecution.mock.calls[0][0].ClientToken;
+    expect(clientToken).toBe(token(5, "other-arn"));
+    expect(clientToken).not.toBe(token(5));
+    expect(clientToken).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("does not pause on other attempts", async () => {

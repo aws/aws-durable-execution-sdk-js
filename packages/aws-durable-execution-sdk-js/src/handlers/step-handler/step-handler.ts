@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import {
   type ExecutionContext,
   type StepFunc,
@@ -519,8 +520,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
           try {
             await client.pauseExecution({
               DurableExecutionArn: context.durableExecutionArn,
-              // Stable across a re-run of this attempt, so the service can drop a repeat.
-              ClientToken: `${hashedId}-${attempt}`,
+              // Stable across a re-run of this attempt, so the service can drop a repeat. The
+              // execution ARN keeps it unique across executions. 64 hex characters.
+              ClientToken: createHash("sha256")
+                .update(
+                  `pause:${context.durableExecutionArn}:${hashedId}:${attempt}`,
+                )
+                .digest("hex"),
               Reason: `Step "${name ?? hashedId}" failed attempt ${attempt}`,
             });
             return true;
