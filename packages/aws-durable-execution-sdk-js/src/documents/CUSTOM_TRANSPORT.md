@@ -93,8 +93,8 @@ keeps running after the invocation ends. So a request without a timeout keeps it
 timers open after the invocation's deadline.
 
 A transport can also implement the optional `pauseExecution` method (experimental). The SDK
-calls it for a step with `pauseEvery`. The request has the execution ARN, a `ClientToken` and
-a `Reason`. Pausing is asynchronous: the backend answers a later checkpoint without a
+calls it when a step's retry decision has `pause: true`. The request has the execution ARN, a
+`ClientToken` and a `Reason`. Pausing is asynchronous: the backend answers a later checkpoint without a
 `CheckpointToken` once the pause takes effect. A transport without the method has no pause
 support, so such a step retries as usual.
 

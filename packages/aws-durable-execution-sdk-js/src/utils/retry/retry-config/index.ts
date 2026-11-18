@@ -113,9 +113,32 @@ interface RetryStrategyConfig {
    * ```
    */
   retryableErrorTypes?: (new () => Error)[];
+
+  /**
+   * Pauses the durable execution after every `pauseEvery`-th failed attempt that the
+   * strategy retries.
+   *
+   * @remarks
+   * For example, `pauseEvery: 5` returns `pause: true` for attempts 5, 10, 15 and so on, when
+   * the strategy decides to retry them. The step then pauses the execution. See
+   * {@link RetryDecision.pause}. The option never changes how many attempts run.
+   *
+   * The strategy does not apply jitter to the delay of a pausing attempt. So that delay is
+   * never close to zero, also with `JitterStrategy.FULL`. Other attempts get jitter as usual.
+   * Use a long delay, for example an `initialDelay` of 30 seconds or more. If the delay ends
+   * before the pause takes effect, Lambda can run one more attempt.
+   *
+   * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
+   * durable execution ARNs. You give it that permission.
+   *
+   * Use a positive integer. The SDK does not check the value.
+   *
+   * @experimental This option is experimental and may be changed or removed in future releases.
+   */
+  pauseEvery?: number;
 }
 
-const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
+const DEFAULT_CONFIG: Required<Omit<RetryStrategyConfig, "pauseEvery">> = {
   maxAttempts: 3,
   initialDelay: { seconds: 5 },
   maxDelay: { minutes: 5 },
@@ -138,7 +161,7 @@ const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
  * **Delay Calculation:**
  * - Base delay = `initialDelay × backoffRate^(attemptsMade - 1)`
  * - Capped at `maxDelay`
- * - Jitter applied based on `jitter` strategy
+ * - Jitter applied based on `jitter` strategy, except on a pausing attempt (see `pauseEvery`)
  * - Final delay rounded to nearest second, minimum 1 second
  *
  * **Error Filtering:**
@@ -195,7 +218,7 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     config.retryableErrorTypes,
   );
 
-  const finalConfig: Required<RetryStrategyConfig> = {
+  const finalConfig: Required<Omit<RetryStrategyConfig, "pauseEvery">> = {
     ...DEFAULT_CONFIG,
     ...config,
     retryableErrors,
@@ -228,10 +251,19 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
       maxDelaySeconds,
     );
 
-    // Apply jitter and normalize to an integer >= 1 second
-    const finalDelay = finalizeDelaySeconds(baseDelay, finalConfig.jitter);
+    const pause =
+      config.pauseEvery !== undefined && attemptsMade % config.pauseEvery === 0;
 
-    return { shouldRetry: true, delay: { seconds: finalDelay } };
+    // Apply jitter and normalize to an integer >= 1 second. A pausing attempt gets no
+    // jitter, so its delay is not close to zero.
+    const finalDelay = finalizeDelaySeconds(
+      baseDelay,
+      pause ? JitterStrategy.NONE : finalConfig.jitter,
+    );
+
+    return pause
+      ? { shouldRetry: true, delay: { seconds: finalDelay }, pause: true }
+      : { shouldRetry: true, delay: { seconds: finalDelay } };
   };
 };
 

@@ -13,6 +13,7 @@ import type { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { TerminationReason } from "../../termination-manager/types";
 import type { DurableLogger } from "../../types/durable-logger";
+import { createRetryStrategy } from "../../utils/retry/retry-config";
 
 const STEP_ID = "step-1";
 const HASHED_ID = hashId(STEP_ID);
@@ -21,7 +22,7 @@ const token = (attempt: number, arn = "test-arn"): string =>
     .update(`pause:${arn}:${HASHED_ID}:${attempt}`)
     .digest("hex");
 
-describe("Step Handler pauseEvery", () => {
+describe("Step Handler pause from the retry decision", () => {
   let stepData: Operation;
   let pauseExecution: Mock;
   let mockContext: ExecutionContext;
@@ -91,7 +92,7 @@ describe("Step Handler pauseEvery", () => {
       async () => {
         throw new Error("boom");
       },
-      { retryStrategy: () => ({ shouldRetry: true }), ...config },
+      { retryStrategy: () => ({ shouldRetry: true, pause: true }), ...config },
     );
     // Starts the step. A pause or a normal retry never settles the promise.
     promise.catch(() => {});
@@ -112,7 +113,7 @@ describe("Step Handler pauseEvery", () => {
       ([, update]) => update.Action,
     );
 
-  it("pauses after an attempt that is a multiple of pauseEvery", async () => {
+  it("pauses when the retry decision has pause: true", async () => {
     givenPriorAttempts(4);
     // The step must still be EXECUTING while the SDK awaits the pause call.
     pauseExecution.mockImplementation(async () => {
@@ -124,7 +125,7 @@ describe("Step Handler pauseEvery", () => {
       expect(actions()).toEqual(["START", "RETRY"]);
     });
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(pauseExecution).toHaveBeenCalledWith({
@@ -152,7 +153,7 @@ describe("Step Handler pauseEvery", () => {
       },
     );
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await vi.waitFor(() => expect(acceptRetry).toBeDefined());
     // Gives a pause call that does not wait for RETRY the time to happen.
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -179,7 +180,7 @@ describe("Step Handler pauseEvery", () => {
       },
     );
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await vi.waitFor(() => expect(actions()).toEqual(["START", "RETRY"]));
     await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -188,25 +189,13 @@ describe("Step Handler pauseEvery", () => {
     expect(mockCheckpoint.waitForRetryTimer).not.toHaveBeenCalled();
   });
 
-  it("pauses again on later multiples of pauseEvery", async () => {
-    givenPriorAttempts(9);
-
-    void runFailingStep({ pauseEvery: 5 });
-    await waitForRetryOrPause();
-
-    expect(pauseExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ ClientToken: token(10) }),
-    );
-    expect(mockContext.terminationManager.terminate).toHaveBeenCalled();
-  });
-
   it("uses the same ClientToken when the same attempt runs again", async () => {
     givenPriorAttempts(4);
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     vi.clearAllMocks();
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(pauseExecution).toHaveBeenCalledTimes(1);
@@ -218,7 +207,7 @@ describe("Step Handler pauseEvery", () => {
     (mockContext as { durableExecutionArn: string }).durableExecutionArn =
       "other-arn";
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     const clientToken = pauseExecution.mock.calls[0][0].ClientToken;
@@ -227,34 +216,10 @@ describe("Step Handler pauseEvery", () => {
     expect(clientToken).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("does not pause on other attempts", async () => {
-    givenPriorAttempts(3);
-
-    void runFailingStep({ pauseEvery: 5 });
-    await waitForRetryOrPause();
-
-    expect(pauseExecution).not.toHaveBeenCalled();
-    expect(actions()).toEqual(["START", "RETRY"]);
-    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
-    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
-  });
-
-  it("does not pause on the attempt after a multiple", async () => {
-    givenPriorAttempts(5);
-
-    void runFailingStep({ pauseEvery: 5 });
-    await waitForRetryOrPause();
-
-    expect(pauseExecution).not.toHaveBeenCalled();
-    expect(actions()).toEqual(["START", "RETRY"]);
-    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
-    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
-  });
-
   it("uses the hashed id for a step without a name", async () => {
     givenPriorAttempts(4);
 
-    void runFailingStep({ pauseEvery: 5 }, null);
+    void runFailingStep({}, null);
     await waitForRetryOrPause();
 
     expect(pauseExecution).toHaveBeenCalledWith(
@@ -269,29 +234,99 @@ describe("Step Handler pauseEvery", () => {
     );
   });
 
-  it("does not pause without pauseEvery", async () => {
+  it("pauses on the attempt where a custom strategy returns pause: true", async () => {
+    class PaymentError extends Error {}
+    const retryStrategy = (error: Error, attempt: number) => ({
+      shouldRetry: true,
+      delay: { seconds: 30 },
+      pause: attempt === 5 && error instanceof PaymentError,
+    });
+    const runPaymentStep = () => {
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        {} as Context,
+        () => STEP_ID,
+        logger,
+      );
+      stepHandler(
+        "my-step",
+        async () => {
+          throw new PaymentError("declined");
+        },
+        { retryStrategy },
+      ).catch(() => {});
+    };
+
+    givenPriorAttempts(4);
+    runPaymentStep();
+    await waitForRetryOrPause();
+    expect(pauseExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ ClientToken: token(5) }),
+    );
+    expect(mockContext.terminationManager.terminate).toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    givenPriorAttempts(5);
+    runPaymentStep();
+    await waitForRetryOrPause();
+    expect(pauseExecution).not.toHaveBeenCalled();
+    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+  });
+
+  it("does not pause when the decision has pause: false", async () => {
     givenPriorAttempts(4);
 
-    void runFailingStep({});
+    void runFailingStep({
+      retryStrategy: () => ({ shouldRetry: true, pause: false }),
+    });
     await waitForRetryOrPause();
 
     expect(pauseExecution).not.toHaveBeenCalled();
+    expect(actions()).toEqual(["START", "RETRY"]);
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
   });
 
-  it("fails as usual when the retry strategy stops", async () => {
+  it("retries as usual with a strategy that returns no pause field", async () => {
     givenPriorAttempts(4);
 
-    await expect(
-      runFailingStep({
-        pauseEvery: 5,
-        retryStrategy: () => ({ shouldRetry: false }),
-      }),
-    ).rejects.toThrow("boom");
+    void runFailingStep({
+      retryStrategy: () => ({ shouldRetry: true, delay: { seconds: 30 } }),
+    });
+    await waitForRetryOrPause();
 
     expect(pauseExecution).not.toHaveBeenCalled();
-    expect(actions()).toEqual(["START", "FAIL"]);
+    expect(
+      (mockCheckpoint.checkpoint as Mock).mock.calls[1][1].StepOptions,
+    ).toEqual({ NextAttemptDelaySeconds: 30 });
+    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+  });
+
+  it("pauses on multiples of pauseEvery with createRetryStrategy", async () => {
+    const retryStrategy = createRetryStrategy({
+      maxAttempts: 20,
+      initialDelay: { seconds: 30 },
+      pauseEvery: 5,
+    });
+
+    for (const [attempt, pauses] of [
+      [5, true],
+      [6, false],
+      [10, true],
+    ] as const) {
+      vi.clearAllMocks();
+      givenPriorAttempts(attempt - 1);
+      void runFailingStep({ retryStrategy });
+      await waitForRetryOrPause();
+
+      expect(pauseExecution).toHaveBeenCalledTimes(pauses ? 1 : 0);
+      expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalledTimes(
+        pauses ? 0 : 1,
+      );
+    }
   });
 
   it("logs a warning with the error and retries as usual when the pause call fails", async () => {
@@ -301,7 +336,7 @@ describe("Step Handler pauseEvery", () => {
     });
     pauseExecution.mockRejectedValue(error);
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(logger.warn).toHaveBeenCalledWith(
@@ -322,7 +357,7 @@ describe("Step Handler pauseEvery", () => {
     });
     pauseExecution.mockRejectedValue(error);
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(logger.warn).toHaveBeenCalledWith(
@@ -343,7 +378,7 @@ describe("Step Handler pauseEvery", () => {
     givenPriorAttempts(4);
     pauseExecution.mockRejectedValue("throttled by custom backend");
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(logger.warn).toHaveBeenCalledWith(
@@ -360,7 +395,7 @@ describe("Step Handler pauseEvery", () => {
     delete (mockContext.durableExecutionClient as { pauseExecution?: unknown })
       .pauseExecution;
 
-    void runFailingStep({ pauseEvery: 5 });
+    void runFailingStep({});
     await waitForRetryOrPause();
 
     expect(pauseExecution).not.toHaveBeenCalled();
@@ -375,12 +410,15 @@ describe("Step Handler pauseEvery", () => {
     // while the step was STARTED.
     givenPriorAttempts(4, OperationStatus.STARTED);
 
+    const retryStrategy = vi.fn(() => ({ shouldRetry: true, pause: true }));
+
     void runFailingStep({
-      pauseEvery: 5,
+      retryStrategy,
       semantics: StepSemantics.AtMostOncePerRetry,
     });
     await waitForRetryOrPause();
 
+    expect(retryStrategy).toHaveBeenCalledTimes(1);
     expect(pauseExecution).not.toHaveBeenCalled();
     expect(actions()).toEqual(["RETRY"]);
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createRetryStrategy, JitterStrategy } from ".";
 
 describe("RetryStrategy", () => {
@@ -357,6 +357,63 @@ describe("RetryStrategy", () => {
           expect(decision.delay!.seconds).toBeGreaterThanOrEqual(1);
         }
       }
+    });
+  });
+
+  describe("pauseEvery", () => {
+    const error = new Error("Test error");
+    const pausing = () =>
+      createRetryStrategy({
+        maxAttempts: 20,
+        initialDelay: { seconds: 30 },
+        backoffRate: 1,
+        jitter: JitterStrategy.FULL,
+        pauseEvery: 5,
+      });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("pauses only on multiples of pauseEvery", () => {
+      const strategy = pausing();
+
+      expect(strategy(error, 4).pause).toBeUndefined();
+      expect(strategy(error, 5).pause).toBe(true);
+      expect(strategy(error, 6).pause).toBeUndefined();
+      expect(strategy(error, 10).pause).toBe(true);
+    });
+
+    it("does not apply jitter to the delay of a pausing attempt", () => {
+      // FULL jitter with Math.random() = 0 gives the minimum delay of 1 second.
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      expect(pausing()(error, 5)).toEqual({
+        shouldRetry: true,
+        delay: { seconds: 30 },
+        pause: true,
+      });
+    });
+
+    it("applies jitter as usual to the other attempts", () => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+
+      expect(pausing()(error, 6)).toEqual({
+        shouldRetry: true,
+        delay: { seconds: 1 },
+      });
+    });
+
+    it("does not pause when the strategy stops retrying", () => {
+      const strategy = createRetryStrategy({ maxAttempts: 5, pauseEvery: 5 });
+
+      expect(strategy(error, 5)).toEqual({ shouldRetry: false });
+    });
+
+    it("does not pause without pauseEvery", () => {
+      const strategy = createRetryStrategy({ maxAttempts: 20 });
+
+      expect(strategy(error, 5).pause).toBeUndefined();
     });
   });
 });

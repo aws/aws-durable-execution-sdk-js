@@ -164,7 +164,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
 
   /**
    * Pauses the execution from inside a running invocation, as the SDK does for
-   * `StepConfig.pauseEvery`. Unlike {@link pause}, it does not wait for the execution to go
+   * a retry decision with `pause: true`. Unlike {@link pause}, it does not wait for the execution to go
    * idle, because the invocation that calls it is still running. That invocation's next
    * checkpoint is answered without a token, so it returns PENDING.
    */

@@ -15,7 +15,7 @@ import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
 export class LocalRunnerClient implements DurableExecutionClient {
   /**
    * @param pauseExecution - Pauses the execution this client belongs to, as the SDK does
-   * for `StepConfig.pauseEvery`. It acts like `LocalDurableTestRunner.pauseExecution()`,
+   * for a retry decision with `pause: true`. It acts like `LocalDurableTestRunner.pauseExecution()`,
    * but does not wait for the calling invocation to end. The ClientToken and Reason of the
    * request are not used locally. Without it, the client has no pause support.
    */

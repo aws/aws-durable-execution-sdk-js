@@ -16,7 +16,7 @@ export enum TerminationReason {
   // further. See CheckpointManager.handleRevokedCheckpointToken.
   EXECUTION_SUSPENDED_BY_SERVICE = "EXECUTION_SUSPENDED_BY_SERVICE",
 
-  // A step with StepConfig.pauseEvery asked the service to pause the execution. See the
+  // A step whose retry decision had pause: true asked the service to pause the execution. See the
   // step handler.
   EXECUTION_PAUSED = "EXECUTION_PAUSED",
 

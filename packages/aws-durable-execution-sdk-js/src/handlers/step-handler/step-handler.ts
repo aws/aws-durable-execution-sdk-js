@@ -476,8 +476,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           // Requested while the step is still EXECUTING, so the invocation cannot
           // suspend during the call.
           const paused =
-            options?.pauseEvery !== undefined &&
-            currentAttempt % options.pauseEvery === 0 &&
+            retryDecision.pause === true &&
             (await requestPause(currentAttempt));
           checkpoint.markOperationState(
             stepId,

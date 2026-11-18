@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createRetryStrategy,
   DurableContext,
+  JitterStrategy,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
@@ -8,8 +10,8 @@ import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { realSetTimeout } from "../../real-timers/real-timers";
 
 /**
- * A step with StepConfig.pauseEvery pauses its own execution through the local runner's
- * client. The runner then starts no invocation until the test resumes the execution.
+ * A step whose retry decision has `pause: true` pauses its own execution through the local
+ * runner's client. The runner then starts no invocation until the test resumes the execution.
  */
 beforeAll(() =>
   LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
@@ -28,7 +30,7 @@ const settlesSoon = (promise: Promise<unknown>): Promise<boolean> =>
     ),
   ]);
 
-describe("StepConfig.pauseEvery with the local runner", () => {
+describe("A retry decision with pause: true with the local runner", () => {
   it("pauses after every second failed attempt and continues after resume", async () => {
     const attempts: number[] = [];
 
@@ -45,10 +47,11 @@ describe("StepConfig.pauseEvery with the local runner", () => {
               return "done";
             },
             {
-              pauseEvery: 2,
-              retryStrategy: () => ({
-                shouldRetry: true,
-                delay: { seconds: 1 },
+              retryStrategy: createRetryStrategy({
+                maxAttempts: 6,
+                initialDelay: { seconds: 1 },
+                jitter: JitterStrategy.NONE,
+                pauseEvery: 2,
               }),
             },
           ),

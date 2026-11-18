@@ -33,6 +33,39 @@ export interface RetryDecision {
    * @remarks Only used when `shouldRetry` is true. If not specified, defaults to 1 second.
    */
   delay?: Duration;
+  /**
+   * Pauses the durable execution after this failed attempt.
+   *
+   * @remarks
+   * When `pause` is true and `shouldRetry` is true, the SDK saves the retry as usual, calls
+   * the Lambda `PauseDurableExecution` API and ends the invocation. An operator resumes the
+   * execution with the Lambda `ResumeDurableExecution` API. After the resume, the next attempt
+   * runs. When `shouldRetry` is false, the SDK ignores `pause` and the step fails as usual. So
+   * `pause` never changes how many attempts run.
+   *
+   * A pause happens only when the step function threw in this invocation. A step that was
+   * interrupted in an earlier invocation does not pause. Steps and the submitter step of
+   * `waitForCallback` use `pause`. {@link withRetry} ignores it.
+   *
+   * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
+   * durable execution ARNs. You give it that permission. Without it, the pause call fails, the
+   * SDK logs a warning and the step retries as usual. The step also retries as usual when the
+   * `DurableExecutionClient` has no `pauseExecution` method, for example a custom transport.
+   *
+   * Use a long `delay` with `pause`, for example 30 seconds or more. Lambda saves the retry
+   * first, and then the SDK asks to pause. The pause takes effect a short time later. If the
+   * delay ends first, Lambda can run one more attempt before the execution pauses. So a custom
+   * strategy should not use jitter that can reach zero on the pausing attempt.
+   * {@link createRetryStrategy} with `pauseEvery` already skips jitter on that attempt.
+   *
+   * The pause ends the invocation at once. A step that is still running in another `parallel`
+   * or `map` branch is stopped. After the resume, an at-least-once step runs again, and an
+   * `AtMostOncePerRetry` step counts it as an interrupted attempt.
+   *
+   * @defaultValue false
+   * @experimental This option is experimental and may be changed or removed in future releases.
+   */
+  pause?: boolean;
 }
 
 /**
@@ -128,42 +161,6 @@ export interface StepConfig<T> {
    * of an existing step is a breaking change for executions in flight.
    */
   subType?: string;
-  /**
-   * Pauses the durable execution after every `pauseEvery`-th failed attempt of this step.
-   *
-   * For example, `pauseEvery: 5` pauses after attempts 5, 10, 15 and so on. A pause happens
-   * only when the step function threw in this invocation and the retry strategy decided to
-   * retry. The SDK then saves the retry as usual, calls the Lambda `PauseDurableExecution`
-   * API and ends the invocation. An operator resumes the execution with the Lambda
-   * `ResumeDurableExecution` API. After the resume, the next attempt runs.
-   *
-   * The option never changes how many attempts run. When the retry strategy decides not to
-   * retry, the step fails as usual.
-   *
-   * Use a positive integer. The SDK does not check the value.
-   *
-   * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
-   * durable execution ARNs. You give it that permission. Without it, the pause call fails,
-   * the SDK logs a warning and the step retries as usual. The step also retries as usual
-   * when the `DurableExecutionClient` has no `pauseExecution` method, for example a custom
-   * transport.
-   *
-   * Use `pauseEvery` with a retry strategy whose delay is much longer than the pause call,
-   * for example 30 seconds or more. Do not use it with short delays of a few seconds. Use
-   * `JitterStrategy.HALF` or `JitterStrategy.NONE`. The default `JitterStrategy.FULL` can
-   * pick a delay close to zero. Lambda saves the retry first, and then the SDK asks to
-   * pause. The pause takes effect a short time later. If the retry delay ends first,
-   * Lambda can run one more attempt before the execution pauses.
-   *
-   * For short waits between attempts, retry without `pauseEvery`.
-   *
-   * The pause ends the invocation at once. A step that is still running in another
-   * `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs
-   * again, and an `AtMostOncePerRetry` step counts it as an interrupted attempt.
-   *
-   * @experimental This option is experimental and may be changed or removed in future releases.
-   */
-  pauseEvery?: number;
 }
 
 /**

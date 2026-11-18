@@ -27,7 +27,7 @@ export class InvokeHandler {
   /**
    * @param defaultContextValues - Overrides for the Lambda context of every invocation
    * @param pauseExecution - Pauses the execution from inside an invocation. Passed to the
-   * SDK's client, which calls it for `StepConfig.pauseEvery`. Without it, such a step
+   * SDK's client, which calls it for a retry decision with `pause: true`. Without it, such a step
    * retries as usual.
    */
   constructor(

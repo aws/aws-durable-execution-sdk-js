@@ -336,8 +336,8 @@ export interface DurableExecutionClient {
   /**
    * Asks the backend to pause the durable execution.
    *
-   * The SDK calls this for a step with `StepConfig.pauseEvery`.
-   * The method is optional. Without it, such a step retries as if `pauseEvery` were not set.
+   * The SDK calls this when a step's retry decision has `pause: true`.
+   * The method is optional. Without it, such a step retries as if `pause` were not set.
    *
    * A pause is asynchronous. The backend answers a later checkpoint without a
    * `CheckpointToken` once the pause takes effect.
