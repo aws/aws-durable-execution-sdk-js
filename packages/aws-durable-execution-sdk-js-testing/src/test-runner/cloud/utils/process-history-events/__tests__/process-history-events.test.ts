@@ -53,6 +53,30 @@ describe("historyEventsToOperationEvents", () => {
     expect(historyEventsToOperationEvents(events)).toEqual([]);
   });
 
+  it("should map ExecutionPaused and ExecutionResumed events to no operation", () => {
+    const events: Event[] = [
+      {
+        Id: "execution-id",
+        EventType: EventType.ExecutionPaused,
+        EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        ExecutionPausedDetails: {
+          PauseRequestTimestamp: new Date("2023-01-01T12:00:00Z"),
+          ExecutionTimeoutPaused: true,
+        },
+      },
+      {
+        Id: "execution-id",
+        EventType: EventType.ExecutionResumed,
+        EventTimestamp: new Date("2023-01-01T12:01:00Z"),
+        ExecutionResumedDetails: {
+          ResumeRequestTimestamp: new Date("2023-01-01T12:01:00Z"),
+        },
+      },
+    ];
+
+    expect(historyEventsToOperationEvents(events)).toEqual([]);
+  });
+
   it("should handle EXECUTION operation types", () => {
     const events: Event[] = [
       {

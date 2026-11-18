@@ -7,6 +7,7 @@ import type {
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
+  PauseDurableExecutionRequest,
 } from "./wire";
 import type { DurableContext } from "./durable-context";
 import type { DurableLogger } from "./durable-logger";
@@ -331,6 +332,24 @@ export interface DurableExecutionClient {
     params: CheckpointDurableExecutionRequest,
     logger?: DurableLogger,
   ): Promise<CheckpointDurableExecutionResponse>;
+
+  /**
+   * Asks the backend to pause the durable execution.
+   *
+   * The SDK calls this when a step's retry decision has `pause: true`.
+   * The method is optional. Without it, such a step retries as if `pause` were not set.
+   *
+   * A pause is asynchronous. The backend answers a later checkpoint without a
+   * `CheckpointToken` once the pause takes effect.
+   *
+   * @param params - Request parameters including the execution ARN and an idempotency token
+   *
+   * @throws Will throw an error if the backend rejects the request, for example because the
+   *         caller lacks permission to pause the execution
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  pauseExecution?(params: PauseDurableExecutionRequest): Promise<void>;
 }
 
 /**
