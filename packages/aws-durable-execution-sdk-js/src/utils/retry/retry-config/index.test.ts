@@ -384,13 +384,13 @@ describe("RetryStrategy", () => {
       expect(strategy(error, 10).pause).toBe(true);
     });
 
-    it("does not apply jitter to the delay of a pausing attempt", () => {
+    it("applies the configured jitter to the delay of a pausing attempt", () => {
       // FULL jitter with Math.random() = 0 gives the minimum delay of 1 second.
       vi.spyOn(Math, "random").mockReturnValue(0);
 
       expect(pausing()(error, 5)).toEqual({
         shouldRetry: true,
-        delay: { seconds: 30 },
+        delay: { seconds: 1 },
         pause: true,
       });
     });

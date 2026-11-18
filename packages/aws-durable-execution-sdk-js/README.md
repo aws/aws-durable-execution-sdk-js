@@ -198,8 +198,6 @@ await context.step("call-api", async () => callApi(), {
 });
 ```
 
-Use a retry delay that is much longer than the pause call, for example 30 seconds or more. Lambda saves the retry first, and then the SDK asks to pause. The pause takes effect a short time later. If the retry delay ends first, Lambda can run one more attempt before the execution pauses. So a custom strategy should not use jitter that can reach zero on the pausing attempt. `createRetryStrategy` does not apply jitter to the delay of a pausing attempt. For short waits between attempts, retry without `pause`.
-
 The pause ends the invocation at once. A step that is still running in another `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs again, and an `AtMostOncePerRetry` step counts it as an interrupted attempt.
 
 - `pause` does not change how many attempts run. When `shouldRetry` is false, the SDK ignores `pause` and the step fails as usual.

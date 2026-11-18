@@ -31,8 +31,6 @@ export const handler = withDurableExecution(
       {
         retryStrategy: createRetryStrategy({
           maxAttempts: 6,
-          // A long retry delay, so the pause takes effect before the next attempt is due.
-          // With a short delay, one more attempt can run before the execution pauses.
           initialDelay: { seconds: 30 },
           backoffRate: 1,
           jitter: JitterStrategy.NONE,

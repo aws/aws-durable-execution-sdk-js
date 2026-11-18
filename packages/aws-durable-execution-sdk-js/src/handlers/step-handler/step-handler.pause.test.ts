@@ -14,6 +14,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { TerminationReason } from "../../termination-manager/types";
 import type { DurableLogger } from "../../types/durable-logger";
 import { createRetryStrategy } from "../../utils/retry/retry-config";
+import { StepError } from "../../errors/durable-error/durable-error";
 
 const STEP_ID = "step-1";
 const HASHED_ID = hashId(STEP_ID);
@@ -287,6 +288,20 @@ describe("Step Handler pause from the retry decision", () => {
     expect(actions()).toEqual(["START", "RETRY"]);
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+  });
+
+  it("fails as usual and does not pause when the decision has shouldRetry: false", async () => {
+    givenPriorAttempts(4);
+
+    const result = runFailingStep({
+      retryStrategy: () => ({ shouldRetry: false, pause: true }),
+    });
+
+    await expect(result).rejects.toBeInstanceOf(StepError);
+    expect(actions()).toEqual(["START", "FAIL"]);
+    expect(pauseExecution).not.toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+    expect(mockCheckpoint.waitForRetryTimer).not.toHaveBeenCalled();
   });
 
   it("retries as usual with a strategy that returns no pause field", async () => {

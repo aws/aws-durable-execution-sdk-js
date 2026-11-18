@@ -123,13 +123,9 @@ interface RetryStrategyConfig {
    * the strategy decides to retry them. The step then pauses the execution. See
    * {@link RetryDecision.pause}. The option never changes how many attempts run.
    *
-   * The strategy does not apply jitter to the delay of a pausing attempt. So that delay is
-   * never close to zero, also with `JitterStrategy.FULL`. Other attempts get jitter as usual.
-   * Use a long delay, for example an `initialDelay` of 30 seconds or more. If the delay ends
-   * before the pause takes effect, Lambda can run one more attempt.
-   *
    * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
-   * durable execution ARNs. You give it that permission.
+   * durable execution ARNs. You give it that permission. If the function uses a customer
+   * managed AWS KMS key, the role also needs `kms:Decrypt` on that key.
    *
    * Use a positive integer. The SDK does not check the value.
    *
@@ -161,7 +157,7 @@ const DEFAULT_CONFIG: Required<Omit<RetryStrategyConfig, "pauseEvery">> = {
  * **Delay Calculation:**
  * - Base delay = `initialDelay × backoffRate^(attemptsMade - 1)`
  * - Capped at `maxDelay`
- * - Jitter applied based on `jitter` strategy, except on a pausing attempt (see `pauseEvery`)
+ * - Jitter applied based on `jitter` strategy
  * - Final delay rounded to nearest second, minimum 1 second
  *
  * **Error Filtering:**
@@ -251,15 +247,11 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
       maxDelaySeconds,
     );
 
+    // Apply jitter and normalize to an integer >= 1 second
+    const finalDelay = finalizeDelaySeconds(baseDelay, finalConfig.jitter);
+
     const pause =
       config.pauseEvery !== undefined && attemptsMade % config.pauseEvery === 0;
-
-    // Apply jitter and normalize to an integer >= 1 second. A pausing attempt gets no
-    // jitter, so its delay is not close to zero.
-    const finalDelay = finalizeDelaySeconds(
-      baseDelay,
-      pause ? JitterStrategy.NONE : finalConfig.jitter,
-    );
 
     return pause
       ? { shouldRetry: true, delay: { seconds: finalDelay }, pause: true }

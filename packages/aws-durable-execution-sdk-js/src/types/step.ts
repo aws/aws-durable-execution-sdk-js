@@ -48,15 +48,11 @@ export interface RetryDecision {
    * `waitForCallback` use `pause`. {@link withRetry} ignores it.
    *
    * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
-   * durable execution ARNs. You give it that permission. Without it, the pause call fails, the
-   * SDK logs a warning and the step retries as usual. The step also retries as usual when the
-   * `DurableExecutionClient` has no `pauseExecution` method, for example a custom transport.
-   *
-   * Use a long `delay` with `pause`, for example 30 seconds or more. Lambda saves the retry
-   * first, and then the SDK asks to pause. The pause takes effect a short time later. If the
-   * delay ends first, Lambda can run one more attempt before the execution pauses. So a custom
-   * strategy should not use jitter that can reach zero on the pausing attempt.
-   * {@link createRetryStrategy} with `pauseEvery` already skips jitter on that attempt.
+   * durable execution ARNs. You give it that permission. If the function uses a customer
+   * managed AWS KMS key, the role also needs `kms:Decrypt` on that key. Without these
+   * permissions, the pause call fails, the SDK logs a warning and the step retries as usual.
+   * The step also retries as usual when the `DurableExecutionClient` has no `pauseExecution`
+   * method, for example a custom transport.
    *
    * The pause ends the invocation at once. A step that is still running in another `parallel`
    * or `map` branch is stopped. After the resume, an at-least-once step runs again, and an
