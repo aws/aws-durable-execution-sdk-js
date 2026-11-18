@@ -61,10 +61,14 @@ export async function createSessionId(
  * It creates the callback `<name>.callback`. The step `<name>.request`
  * then sends the job document to the session with InvokeAgentRuntime, and
  * the agent must answer `{"accepted": true}`. Then the function waits on the
- * callback.
+ * callback. Then `stop` runs. It runs after success, failure and timeout
+ * alike, and also after a failed request. A failed callback creation does
+ * not run `stop`, because no job was sent.
  *
  * @param inputJson - The input's JSON text, or `undefined` when the input
  * encodes to no value. The job document holds this text as it is.
+ * @param stop - Stops the session. It runs after the request step and the
+ * wait, whatever their outcome.
  */
 export async function runJob<TOutput>(
   child: DurableContext,
@@ -75,6 +79,7 @@ export async function runJob<TOutput>(
   target: SessionTarget,
   region: string,
   inputJson: string | undefined,
+  stop: () => Promise<void>,
 ): Promise<TOutput> {
   const [result, callbackId] = (await child.createCallback<TOutput>(
     `${name}.callback`,
@@ -99,45 +104,50 @@ export async function runJob<TOutput>(
     inputJson,
   );
 
-  await inStage(name, "delivery", () =>
-    child.step(
-      `${name}.request`,
-      async () => {
-        assertTimeToCall(child, name, "request", "send the job");
-        // The call and the read of the answer must end before the
-        // invocation reserve. The abort signal covers both.
-        await callBeforeDeadline(
-          async (sendOptions) => {
-            const response = await client().send(
-              new InvokeAgentRuntimeCommand({
-                ...target,
-                contentType: "application/json",
-                accept: "application/json",
-                payload: Buffer.from(payload, "utf8"),
-              }),
-              sendOptions,
-            );
-            // The response body is a stream. Reading it to the end
-            // releases the connection. The abort signal also ends the
-            // read.
-            const answer = (await response.response?.transformToString()) ?? "";
-            if (!isAccepted(answer)) {
-              throw Object.assign(
-                new Error(
-                  `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
-                ),
-                { name: NOT_ACCEPTED_ERROR_NAME },
+  try {
+    await inStage(name, "delivery", () =>
+      child.step(
+        `${name}.request`,
+        async () => {
+          assertTimeToCall(child, name, "request", "send the job");
+          // The call and the read of the answer must end before the
+          // invocation reserve. The abort signal covers both.
+          await callBeforeDeadline(
+            async (sendOptions) => {
+              const response = await client().send(
+                new InvokeAgentRuntimeCommand({
+                  ...target,
+                  contentType: "application/json",
+                  accept: "application/json",
+                  payload: Buffer.from(payload, "utf8"),
+                }),
+                sendOptions,
               );
-            }
-          },
-          reserveStartsAt(remainingTime(child)),
-          () => pastReserve(name, "InvokeAgentRuntime"),
-        );
-      },
-      { retryStrategy, subType: AgentcoreOperationSubType.REQUEST },
-    ),
-  );
-  return await inStage(name, "job", () => result);
+              // The response body is a stream. Reading it to the end
+              // releases the connection. The abort signal also ends the
+              // read.
+              const answer =
+                (await response.response?.transformToString()) ?? "";
+              if (!isAccepted(answer)) {
+                throw Object.assign(
+                  new Error(
+                    `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
+                  ),
+                  { name: NOT_ACCEPTED_ERROR_NAME },
+                );
+              }
+            },
+            reserveStartsAt(remainingTime(child)),
+            () => pastReserve(name, "InvokeAgentRuntime"),
+          );
+        },
+        { retryStrategy, subType: AgentcoreOperationSubType.REQUEST },
+      ),
+    );
+    return await inStage(name, "job", () => result);
+  } finally {
+    await stop();
+  }
 }
 
 /** Whether the agent's answer is the JSON object `{"accepted": true}`. */

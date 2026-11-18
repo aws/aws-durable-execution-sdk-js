@@ -134,20 +134,17 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
         runtimeSessionId,
         ...(config.qualifier !== undefined && { qualifier: config.qualifier }),
       };
-      try {
-        return await runJob<TOutput>(
-          child,
-          name,
-          config,
-          retryStrategy,
-          client,
-          target,
-          region,
-          inputJson,
-        );
-      } finally {
-        await stopSession(child, name, retryStrategy, client, target);
-      }
+      return await runJob<TOutput>(
+        child,
+        name,
+        config,
+        retryStrategy,
+        client,
+        target,
+        region,
+        inputJson,
+        () => stopSession(child, name, retryStrategy, client, target),
+      );
     },
     {
       subType: AgentcoreOperationSubType.AGENTCORE,
