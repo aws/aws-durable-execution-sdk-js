@@ -180,11 +180,12 @@ await context.step("call-api", async () => callApi(), {
   retryStrategy: createRetryStrategy({
     maxAttempts: 20,
     initialDelay: { seconds: 30 },
+    jitter: JitterStrategy.HALF,
   }),
 });
 ```
 
-Use `pauseEvery` with a retry strategy whose delay is much longer than the pause call, for example 30 seconds or more. Do not use it with short delays of a few seconds. Lambda saves the retry first, and then the SDK asks to pause. The pause takes effect a short time later. If the retry delay ends first, Lambda can run one more attempt before the execution pauses. For short waits between attempts, retry without `pauseEvery`. The SDK then waits for the retry delay inside the invocation.
+Use `pauseEvery` with a retry strategy whose delay is much longer than the pause call, for example 30 seconds or more. Do not use it with short delays of a few seconds. Use `JitterStrategy.HALF` or `JitterStrategy.NONE`. The default `JitterStrategy.FULL` can pick a delay close to zero. Lambda saves the retry first, and then the SDK asks to pause. The pause takes effect a short time later. If the retry delay ends first, Lambda can run one more attempt before the execution pauses. For short waits between attempts, retry without `pauseEvery`. The SDK then waits for the retry delay inside the invocation.
 
 - `pauseEvery` does not change how many attempts run. When the retry strategy stops, the step fails as usual.
 - The function's execution role needs `lambda:PauseDurableExecution` on the function's durable executions. You add that permission. If the function uses a customer managed AWS KMS key, the role also needs `kms:Decrypt` on the key. Without these permissions, the SDK logs a warning and the step retries as usual.

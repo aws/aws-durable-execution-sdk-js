@@ -149,10 +149,11 @@ export interface StepConfig<T> {
    * transport.
    *
    * Use `pauseEvery` with a retry strategy whose delay is much longer than the pause call,
-   * for example 30 seconds or more. Do not use it with short delays of a few seconds. Lambda
-   * saves the retry first, and then the SDK asks to pause. The pause takes effect a short
-   * time later. If the retry delay ends first, Lambda can run one more attempt before the
-   * execution pauses.
+   * for example 30 seconds or more. Do not use it with short delays of a few seconds. Use
+   * `JitterStrategy.HALF` or `JitterStrategy.NONE`. The default `JitterStrategy.FULL` can
+   * pick a delay close to zero. Lambda saves the retry first, and then the SDK asks to
+   * pause. The pause takes effect a short time later. If the retry delay ends first,
+   * Lambda can run one more attempt before the execution pauses.
    *
    * For short waits between attempts, retry without `pauseEvery`. The SDK then waits for
    * the retry delay inside the invocation.
