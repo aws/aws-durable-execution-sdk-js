@@ -497,7 +497,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           if (paused) {
             context.terminationManager.terminate({
               reason: TerminationReason.EXECUTION_PAUSED,
-              message: `Execution paused after step ${name || stepId} failed attempt ${currentAttempt}`,
+              message: `Execution paused after step ${name ?? hashId(stepId)} failed attempt ${currentAttempt}`,
             });
             return new Promise<T>(() => {});
           }
@@ -532,7 +532,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 : String(error);
             const cause =
               errorName === "ResourceConflictException"
-                ? "The execution is already pausing or paused."
+                ? "The execution has closed (for example, stopped) or is already paused."
                 : "One possible cause is that the execution role does not allow lambda:PauseDurableExecution. Another is an @aws-sdk/client-lambda older than 3.1171.0 in the bundle.";
             logger.warn(
               `Could not pause the execution after step "${name ?? hashedId}" failed attempt ${attempt}: ${errorText}. The step retries as usual. ${cause}`,

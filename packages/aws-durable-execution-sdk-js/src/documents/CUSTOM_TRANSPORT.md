@@ -87,7 +87,7 @@ until the execution times out. Note that a stated scope is believed ahead of the
 error inspection, so a transport that wraps another one takes over responsibility for
 classifying the errors it wraps.
 
-Set a timeout on every `getExecutionState` and `checkpoint` request, as the example does. On
+Set a timeout on every `getExecutionState`, `checkpoint` and `pauseExecution` request, as the example does. On
 [Lambda Managed Instances](LAMBDA_MANAGED_INSTANCES.md), the execution environment
 keeps running after the invocation ends. So a request without a timeout keeps its socket and
 timers open after the invocation's deadline.

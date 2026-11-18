@@ -157,6 +157,10 @@ export interface StepConfig<T> {
    *
    * For short waits between attempts, retry without `pauseEvery`.
    *
+   * The pause ends the invocation at once. A step that is still running in another
+   * `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs
+   * again, and an `AtMostOncePerRetry` step counts it as an interrupted attempt.
+   *
    * @experimental This option is experimental and may be changed or removed in future releases.
    */
   pauseEvery?: number;

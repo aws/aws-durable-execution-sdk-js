@@ -70,7 +70,10 @@ describe("Step Handler pauseEvery", () => {
     } as unknown as DurableLogger;
   });
 
-  const runFailingStep = (config: StepConfig<unknown>): Promise<unknown> => {
+  const runFailingStep = (
+    config: StepConfig<unknown>,
+    name: string | null = "my-step",
+  ): Promise<unknown> => {
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -79,7 +82,7 @@ describe("Step Handler pauseEvery", () => {
       logger,
     );
     const promise = stepHandler(
-      "my-step",
+      name ?? undefined,
       async () => {
         throw new Error("boom");
       },
@@ -217,6 +220,36 @@ describe("Step Handler pauseEvery", () => {
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
   });
 
+  it("does not pause on the attempt after a multiple", async () => {
+    givenPriorAttempts(5);
+
+    void runFailingStep({ pauseEvery: 5 });
+    await waitForRetryOrPause();
+
+    expect(pauseExecution).not.toHaveBeenCalled();
+    expect(actions()).toEqual(["START", "RETRY"]);
+    expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
+    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
+  });
+
+  it("uses the hashed id for a step without a name", async () => {
+    givenPriorAttempts(4);
+
+    void runFailingStep({ pauseEvery: 5 }, null);
+    await waitForRetryOrPause();
+
+    expect(pauseExecution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Reason: `Step "${HASHED_ID}" failed attempt 5`,
+      }),
+    );
+    expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: `Execution paused after step ${HASHED_ID} failed attempt 5`,
+      }),
+    );
+  });
+
   it("does not pause without pauseEvery", async () => {
     givenPriorAttempts(4);
 
@@ -263,7 +296,7 @@ describe("Step Handler pauseEvery", () => {
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
   });
 
-  it("does not blame permissions when the execution is already pausing or paused", async () => {
+  it("does not blame permissions when the execution is closed or already paused", async () => {
     givenPriorAttempts(4);
     const error = Object.assign(new Error("Execution is already paused"), {
       name: "ResourceConflictException",
@@ -275,7 +308,7 @@ describe("Step Handler pauseEvery", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining(
-        "ResourceConflictException: Execution is already paused. The step retries as usual. The execution is already pausing or paused.",
+        "ResourceConflictException: Execution is already paused. The step retries as usual. The execution has closed (for example, stopped) or is already paused.",
       ),
       error,
     );
