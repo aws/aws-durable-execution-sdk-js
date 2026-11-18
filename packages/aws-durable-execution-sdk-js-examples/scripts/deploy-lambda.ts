@@ -887,13 +887,15 @@ export async function main(): Promise<void> {
             LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
           ) {
             console.log("Setting function scaling config");
+            // Minimum 0 lets Lambda scale the function to zero when it is idle.
+            // So an idle PR function holds no capacity on the shared provider.
             await retryOnConflict(() =>
               lambdaClient.send(
                 new PutFunctionScalingConfigCommand({
                   FunctionName: functionName,
                   Qualifier: qualifier,
                   FunctionScalingConfig: {
-                    MinExecutionEnvironments: 1,
+                    MinExecutionEnvironments: 0,
                     MaxExecutionEnvironments: 1,
                   },
                 }),
