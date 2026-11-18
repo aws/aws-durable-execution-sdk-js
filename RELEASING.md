@@ -34,48 +34,25 @@ Each package maintains its own version in the `version` field of its `package.js
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
 
-### Prepared Core 3 / OTel 2 release
+### Prepared SDK 3.1.0 release
 
-The next coordinated release publishes these versions:
+The next release publishes these versions:
 
 | Package | Version | Publisher decision |
 | --- | --- | --- |
-| SDK | `3.0.0` | New stable version, `latest` |
-| OTel | `2.0.0` | New stable version, `latest` |
-| Testing SDK | `1.3.2` | Compatible patch with the widened Core 3 peer range, `latest` |
-| ESLint plugin | `1.2.0` | New minor version with the child-context rule, `latest` |
-| Telemetry Exporter | `0.1.0-alpha.1` | Prerelease above the published `0.1.0-alpha.0`, `beta` |
-| Telemetry MCP | `0.1.0-alpha.1` | Prerelease above the published `0.1.0-alpha.0`, `beta` |
+| SDK | `3.1.0` | New minor version, `latest` |
+| Testing SDK | `1.4.0` | New minor version with local `pauseEvery` support, `latest` |
+| ESLint plugin | `1.3.0` | New minor version with `valid-operation-identifiers`, `latest` |
 
-Use the tag `sdk-3.0.0` and the title `sdk-3.0.0 / otel-2.0.0 / test-1.3.2`.
-Paste [the release notes](release-notes/sdk-3.0.0.md) into the GitHub Release.
-Refresh them against the selected release commit before publishing.
+OTel `2.1.0`, Telemetry Exporter `1.0.0` and Telemetry MCP `1.1.0` keep their
+versions. They have no change for users since their last release. The publisher
+skips a version that npm already has.
 
-The published minor pairs remain Core 2.7.0 / OTel 1.2.0 and Core 2.7.1 /
-OTel 1.2.1, with Testing SDK 1.3.1. They include registration exclusivity and
-the patch telemetry corrections. They do not include the invocation-local LMI
-carrier or the factory migration. Released OTel 1.x keeps its optional
-`>=2.4.0 <3.0.0` Core peer and provider API v1. Core 3 requires matching factory
-packages and layers. Installed-package tests keep the released-pair controls and
-verify that legacy providers are rejected.
-
-The two Telemetry packages were published on 2026-10-22 outside this workflow,
-from the #924 merge commit 6597e075. The publisher skips a version that npm
-already has. So this release bumps both packages to `0.1.0-alpha.1`. That bump
-publishes the 3 exporter fixes and the 3 MCP fixes merged after 6597e075. It
-does not take the `1.0.0` bump from #1030. The ESLint plugin is bumped to
-`1.2.0` for the same reason.
-
-The manual publication left `latest` on `0.1.0-alpha.0` for both Telemetry
-packages. The publisher puts `0.1.0-alpha.1` on `beta` and does not move
-`latest`. So after the release, a maintainer must move `latest` by hand:
-
-```bash
-npm dist-tag add @aws/durable-execution-sdk-js-telemetry-exporter@0.1.0-alpha.1 latest
-npm dist-tag add @aws/durable-execution-sdk-js-telemetry-mcp@0.1.0-alpha.1 latest
-```
-
-The automatic package list and the Extras and MicroVM deferrals are unchanged.
+Use the tag `sdk-3.1.0` and the title `sdk-3.1.0 / test-1.4.0 / eslint-1.3.0`.
+The tag stays `sdk-<version>`, because the Lambda managed runtime rollout reads
+only that format. Paste [the release notes](release-notes/sdk-3.1.0.md) into the
+GitHub Release. Refresh them against the selected release commit before
+publishing.
 
 ## Cutting a Release
 

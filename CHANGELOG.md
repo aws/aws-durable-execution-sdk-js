@@ -16,11 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Telemetry MCP 1.1.0.** `test_destination` and blocked data-tool results no longer return a
-  `writeAccess` field. The server no longer checks the credentials. It asks you to confirm, once
-  per session, that giving it read-only credentials is your responsibility. See the
-  [release notes](release-notes/telemetry-mcp-1.1.0.md).
-
 - **Breaking (experimental).** `@aws/durable-execution-sdk-js-microvm-worker` is renamed to
   `@aws/durable-execution-sdk-js-compute-worker`. The MicroVM worker is in the `./microvm`
   subpath. Change `from "@aws/durable-execution-sdk-js-microvm-worker"` to
@@ -67,11 +62,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
   such a job logged a warning and succeeded.
 
+## [3.1.0] - 2026-11-18
+
 ### Deprecated
 
 - `WaitStrategyConfig.timeoutSeconds` in `@aws/durable-execution-sdk-js`. The wait
   strategy never read it. Limit the total wait with `maxAttempts`, `initialDelay`,
   `maxDelay` and `backoffRate`.
+
+## [eslint-plugin 1.3.0] - 2026-11-18
+
+### Changed
+
+- **eslint-plugin** (`1.3.0`): `flat/recommended` turns on the new rule
+  `valid-operation-identifiers` as an error. It reports an operation name that is not 1 to 256
+  printable ASCII characters, and a `subType` that is not 1 to 32 characters from
+  `[a-zA-Z0-9-_]`. It checks only string and template literals. The service rejects these values
+  at the first checkpoint and fails the execution. So the lint of an existing project can fail
+  after the upgrade, but only on a call that already fails whenever it runs.
+
+## [telemetry-mcp 1.1.0] - 2026-11-04
+
+### Changed
+
+- **Telemetry MCP 1.1.0.** `test_destination` and blocked data-tool results no longer return a
+  `writeAccess` field. The server no longer checks the credentials. It asks you to confirm, once
+  per session, that giving it read-only credentials is your responsibility. See the
+  [release notes](release-notes/telemetry-mcp-1.1.0.md).
 
 ## [3.0.0] - 2026-10-26
 
@@ -299,7 +316,10 @@ if you use a serdes whose `deserialize(serialize(x))` differs from `x`.
 Only relevant if you adopted `createFileSystemSerdes` during the `2.0.0-alpha`
 line; `1.x` users are unaffected.
 
-[Unreleased]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...HEAD
+[Unreleased]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.1.0...HEAD
+[3.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...sdk-3.1.0
+[eslint-plugin 1.3.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-3.1.0
+[telemetry-mcp 1.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/otel-2.1.0
 [3.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...sdk-3.0.0
 [2.7.1]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...sdk-2.7.1
 [2.7.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.6.0%2Ftest-1.3.0...sdk-2.7.0
