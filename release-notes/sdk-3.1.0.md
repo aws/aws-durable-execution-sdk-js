@@ -1,6 +1,6 @@
-# SDK 3.1.0 / Testing SDK 1.4.0 / ESLint plugin 1.3.0
+# SDK 3.1.0 / Testing SDK 1.4.0 / ESLint plugin 2.0.0
 
-This release contains Core 3.1.0, Testing SDK 1.4.0 and ESLint plugin 1.3.0.
+This release contains Core 3.1.0, Testing SDK 1.4.0 and ESLint plugin 2.0.0.
 The other packages have no change for users, so they keep their versions.
 
 # @aws/durable-execution-sdk-js 3.1.0
@@ -58,7 +58,7 @@ The other packages have no change for users, so they keep their versions.
 
 **Full Changelog**: [sdk-3.0.0...sdk-3.1.0](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...sdk-3.1.0)
 
-# @aws/durable-execution-sdk-js-eslint-plugin 1.3.0
+# @aws/durable-execution-sdk-js-eslint-plugin 2.0.0
 
 ## What's Changed
 
@@ -68,7 +68,7 @@ The other packages have no change for users, so they keep their versions.
 
 ### Breaking Changes
 
-- `flat/recommended` turns the new rule on as an error. So the lint of an
+- `recommended` and `flat/recommended` turn the new rule on as an error. So the lint of an
   existing project can fail after the upgrade. It fails only on a call that
   already fails the execution whenever it runs.
 

@@ -70,12 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strategy never read it. Limit the total wait with `maxAttempts`, `initialDelay`,
   `maxDelay` and `backoffRate`.
 
-## [eslint-plugin 1.3.0] - 2026-11-18
+## [eslint-plugin 2.0.0] - 2026-11-18
 
 ### Changed
 
-- **eslint-plugin** (`1.3.0`): `flat/recommended` turns on the new rule
-  `valid-operation-identifiers` as an error. It reports an operation name that is not 1 to 256
+- **Breaking.** **eslint-plugin** (`2.0.0`): `recommended` and `flat/recommended` turn on the
+  new rule `valid-operation-identifiers` as an error. It reports an operation name that is not 1 to 256
   printable ASCII characters, and a `subType` that is not 1 to 32 characters from
   `[a-zA-Z0-9-_]`. It checks only string and template literals. The service rejects these values
   at the first checkpoint and fails the execution. So the lint of an existing project can fail
@@ -318,7 +318,7 @@ line; `1.x` users are unaffected.
 
 [Unreleased]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.1.0...HEAD
 [3.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-3.0.0...sdk-3.1.0
-[eslint-plugin 1.3.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-3.1.0
+[eslint-plugin 2.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/sdk-3.1.0
 [telemetry-mcp 1.1.0]: https://github.com/aws/aws-durable-execution-sdk-js/releases/tag/otel-2.1.0
 [3.0.0]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...sdk-3.0.0
 [2.7.1]: https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...sdk-2.7.1

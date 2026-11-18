@@ -42,13 +42,13 @@ The next release publishes these versions:
 | --- | --- | --- |
 | SDK | `3.1.0` | New minor version, `latest` |
 | Testing SDK | `1.4.0` | New minor version with local `pauseEvery` support, `latest` |
-| ESLint plugin | `1.3.0` | New minor version with `valid-operation-identifiers`, `latest` |
+| ESLint plugin | `2.0.0` | New major version, because the recommended configs turn on `valid-operation-identifiers`, `latest` |
 
 OTel `2.1.0`, Telemetry Exporter `1.0.0` and Telemetry MCP `1.1.0` keep their
 versions. They have no change for users since their last release. The publisher
 skips a version that npm already has.
 
-Use the tag `sdk-3.1.0` and the title `sdk-3.1.0 / test-1.4.0 / eslint-1.3.0`.
+Use the tag `sdk-3.1.0` and the title `sdk-3.1.0 / test-1.4.0 / eslint-2.0.0`.
 The tag stays `sdk-<version>`, because the Lambda managed runtime rollout reads
 only that format. Paste [the release notes](release-notes/sdk-3.1.0.md) into the
 GitHub Release. Refresh them against the selected release commit before
