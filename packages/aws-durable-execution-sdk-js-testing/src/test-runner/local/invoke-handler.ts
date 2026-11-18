@@ -24,7 +24,16 @@ export interface HandlerParameters {
 export class InvokeHandler {
   private readonly defaultContextValues: Context;
 
-  constructor(defaultContextValues?: Partial<Context>) {
+  /**
+   * @param defaultContextValues - Overrides for the Lambda context of every invocation
+   * @param pauseExecution - Pauses the execution from inside an invocation. Passed to the
+   * SDK's client, which calls it for a retry decision with `pause: true`. Without it, such a step
+   * retries as usual.
+   */
+  constructor(
+    defaultContextValues?: Partial<Context>,
+    private readonly pauseExecution?: () => Promise<void>,
+  ) {
     this.defaultContextValues = {
       callbackWaitsForEmptyEventLoop: false,
       functionName: "my-function-name",
@@ -97,7 +106,7 @@ export class InvokeHandler {
     };
     return new DurableExecutionInvocationInputWithClient(
       invocationInput,
-      new LocalRunnerClient(),
+      new LocalRunnerClient(this.pauseExecution),
     );
   }
 

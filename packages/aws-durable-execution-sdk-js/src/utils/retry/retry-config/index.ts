@@ -113,9 +113,28 @@ interface RetryStrategyConfig {
    * ```
    */
   retryableErrorTypes?: (new () => Error)[];
+
+  /**
+   * Pauses the durable execution after every `pauseEvery`-th failed attempt that the
+   * strategy retries.
+   *
+   * @remarks
+   * For example, `pauseEvery: 5` returns `pause: true` for attempts 5, 10, 15 and so on, when
+   * the strategy decides to retry them. The step then pauses the execution. See
+   * {@link RetryDecision.pause}. The option never changes how many attempts run.
+   *
+   * The function's execution role needs `lambda:PauseDurableExecution` on the function's own
+   * durable execution ARNs. You give it that permission. If the function uses a customer
+   * managed AWS KMS key, the role also needs `kms:Decrypt` on that key.
+   *
+   * Use a positive integer. The SDK does not check the value.
+   *
+   * @experimental This option is experimental and may be changed or removed in future releases.
+   */
+  pauseEvery?: number;
 }
 
-const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
+const DEFAULT_CONFIG: Required<Omit<RetryStrategyConfig, "pauseEvery">> = {
   maxAttempts: 3,
   initialDelay: { seconds: 5 },
   maxDelay: { minutes: 5 },
@@ -195,7 +214,7 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     config.retryableErrorTypes,
   );
 
-  const finalConfig: Required<RetryStrategyConfig> = {
+  const finalConfig: Required<Omit<RetryStrategyConfig, "pauseEvery">> = {
     ...DEFAULT_CONFIG,
     ...config,
     retryableErrors,
@@ -231,7 +250,12 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     // Apply jitter and normalize to an integer >= 1 second
     const finalDelay = finalizeDelaySeconds(baseDelay, finalConfig.jitter);
 
-    return { shouldRetry: true, delay: { seconds: finalDelay } };
+    const pause =
+      config.pauseEvery !== undefined && attemptsMade % config.pauseEvery === 0;
+
+    return pause
+      ? { shouldRetry: true, delay: { seconds: finalDelay }, pause: true }
+      : { shouldRetry: true, delay: { seconds: finalDelay } };
   };
 };
 
