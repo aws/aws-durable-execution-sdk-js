@@ -155,8 +155,7 @@ export interface StepConfig<T> {
    * pause. The pause takes effect a short time later. If the retry delay ends first,
    * Lambda can run one more attempt before the execution pauses.
    *
-   * For short waits between attempts, retry without `pauseEvery`. The SDK then waits for
-   * the retry delay inside the invocation.
+   * For short waits between attempts, retry without `pauseEvery`.
    *
    * @experimental This option is experimental and may be changed or removed in future releases.
    */

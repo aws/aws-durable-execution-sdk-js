@@ -287,6 +287,22 @@ describe("Step Handler pauseEvery", () => {
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalled();
   });
 
+  it("names a rejection that is not an Error in the warning", async () => {
+    givenPriorAttempts(4);
+    pauseExecution.mockRejectedValue("throttled by custom backend");
+
+    void runFailingStep({ pauseEvery: 5 });
+    await waitForRetryOrPause();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "failed attempt 5: throttled by custom backend. The step retries as usual.",
+      ),
+      "throttled by custom backend",
+    );
+    expect(actions()).toEqual(["START", "RETRY"]);
+  });
+
   it("retries as usual when the client has no pauseExecution method", async () => {
     givenPriorAttempts(4);
     delete (mockContext.durableExecutionClient as { pauseExecution?: unknown })
