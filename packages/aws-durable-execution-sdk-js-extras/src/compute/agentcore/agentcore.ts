@@ -235,9 +235,12 @@ function functionRegion(name: string): string {
 /**
  * Returns the configured client, or one default client per Region. The
  * Region is the agent runtime's, from its ARN, in the form
- * `arn:<partition>:bedrock-agentcore:<region>:...`.
+ * `arn:<partition>:bedrock-agentcore:<region>:...`. {@link agentcore} and
+ * `agentcoreSession` share the default clients.
  */
-function getClient(config: AgentcoreConfig): BedrockAgentCoreClient {
+export function getClient(
+  config: Pick<AgentcoreConfig, "agentRuntimeArn" | "client">,
+): BedrockAgentCoreClient {
   if (config.client) {
     return config.client;
   }
