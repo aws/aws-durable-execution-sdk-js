@@ -130,6 +130,61 @@ describe("agentcoreSession", () => {
     expect(client.stopInputs).toHaveLength(1);
   });
 
+  it("runs the handler's operations in the child context named `name`", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (_session, child) => {
+          await child.wait("pause", { seconds: 1 });
+          return "ok";
+        },
+      ),
+    );
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(
+      execution.getOperations().map((operation) => operation.getName()),
+    ).toEqual(["review", "review.session", "pause", "review.stop"]);
+    expect(
+      runner
+        .getOperation("review")
+        .getChildOperations()
+        ?.map((operation) => operation.getName()),
+    ).toEqual(["review.session", "pause", "review.stop"]);
+  });
+
+  it("uses the config's retryStrategy for the stop step", async () => {
+    const client = new FakeAgentcoreClient();
+    // The default strategy does not retry AccessDeniedException.
+    client.stopResponses = [denied()];
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client, {
+          retryStrategy: (_error, attemptCount) => ({
+            shouldRetry: attemptCount < 2,
+            delay: { seconds: 1 },
+          }),
+        }),
+        async () => "ok",
+      ),
+    );
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(client.stopInputs).toHaveLength(2);
+    expect(
+      runner.getOperation("review.stop").getStepDetails()?.error,
+    ).toBeUndefined();
+  });
+
   it("rejects an invalid config with a TypeError before any durable operation", async () => {
     const client = new FakeAgentcoreClient();
     const runner = runnerFor((context) =>
