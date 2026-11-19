@@ -1,29 +1,19 @@
 import {
   type DurableContext,
   DurablePromise,
-  type Duration,
-  defaultSerdes,
 } from "@aws/durable-execution-sdk-js";
-import {
-  BedrockAgentCoreClient,
-  InvokeAgentRuntimeCommand,
-} from "@aws-sdk/client-bedrock-agentcore";
-import {
-  callBeforeDeadline,
-  remainingTime,
-  reserveStartsAt,
-} from "../deadline";
+import { BedrockAgentCoreClient } from "@aws-sdk/client-bedrock-agentcore";
 import { defaultMicrovmRetryStrategy } from "../microvm/retry";
-import { agentcoreErrorMapper, inStage } from "./errors";
+import { agentcoreErrorMapper } from "./errors";
 import {
-  assertTimeToCall,
   createSessionId,
-  pastReserve,
+  durationToSeconds,
+  runJob,
   type SessionTarget,
   stopSession,
 } from "./steps";
 import { AgentcoreOperationSubType } from "./subtypes";
-import type { AgentcoreConfig, AgentcoreJobDocument } from "./types";
+import type { AgentcoreConfig } from "./types";
 
 /**
  * The largest job input that {@link agentcore} accepts, in UTF-8 bytes of its
@@ -36,16 +26,6 @@ import type { AgentcoreConfig, AgentcoreJobDocument } from "./types";
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */
 export const MAX_AGENTCORE_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
-
-/**
- * The error name of an InvokeAgentRuntime answer without
- * `{"accepted": true}`. The default retry strategy does not retry it,
- * because the same agent gives the same answer.
- */
-const NOT_ACCEPTED_ERROR_NAME = "AgentcoreNotAcceptedError";
-
-/** The longest part of a refused answer that the error message quotes. */
-const MAX_QUOTED_ANSWER_CHARS = 256;
 
 const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
 
@@ -149,93 +129,28 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
     name,
     async (child) => {
       const runtimeSessionId = await createSessionId(child, name);
-      const [result, callbackId] = (await child.createCallback<TOutput>(
-        `${name}.callback`,
-        {
-          timeout: config.timeout,
-          heartbeatTimeout: config.heartbeatTimeout,
-          // The agent sends a JSON string, and the default callback
-          // deserializer returns the raw string. So the callback parses it.
-          serdes: defaultSerdes,
-          subType: AgentcoreOperationSubType.CALLBACK,
-        },
-      )) as unknown as [Promise<TOutput>, string];
       const target: SessionTarget = {
         agentRuntimeArn: config.agentRuntimeArn,
         runtimeSessionId,
         ...(config.qualifier !== undefined && { qualifier: config.qualifier }),
       };
-      const payload = jobDocumentJson(
-        {
-          version: 1,
-          region,
-          callbackId,
-          ...(config.heartbeatTimeout !== undefined && {
-            heartbeatTimeoutSeconds: durationToSeconds(config.heartbeatTimeout),
-          }),
-        },
+      return await runJob<TOutput>(
+        child,
+        name,
+        config,
+        retryStrategy,
+        client,
+        target,
+        region,
         inputJson,
+        () => stopSession(child, name, retryStrategy, client, target),
       );
-
-      try {
-        await inStage(name, "delivery", () =>
-          child.step(
-            `${name}.request`,
-            async () => {
-              assertTimeToCall(child, name, "request", "send the job");
-              // The call and the read of the answer must end before the
-              // invocation reserve. The abort signal covers both.
-              await callBeforeDeadline(
-                async (sendOptions) => {
-                  const response = await client().send(
-                    new InvokeAgentRuntimeCommand({
-                      ...target,
-                      contentType: "application/json",
-                      accept: "application/json",
-                      payload: Buffer.from(payload, "utf8"),
-                    }),
-                    sendOptions,
-                  );
-                  // The response body is a stream. Reading it to the end
-                  // releases the connection. The abort signal also ends the
-                  // read.
-                  const answer =
-                    (await response.response?.transformToString()) ?? "";
-                  if (!isAccepted(answer)) {
-                    throw Object.assign(
-                      new Error(
-                        `the agent did not accept the job. It must answer {"accepted": true}. Status ${response.statusCode}, answer: ${answer.slice(0, MAX_QUOTED_ANSWER_CHARS)}`,
-                      ),
-                      { name: NOT_ACCEPTED_ERROR_NAME },
-                    );
-                  }
-                },
-                reserveStartsAt(remainingTime(child)),
-                () => pastReserve(name, "InvokeAgentRuntime"),
-              );
-            },
-            { retryStrategy, subType: AgentcoreOperationSubType.REQUEST },
-          ),
-        );
-        return await inStage(name, "job", () => result);
-      } finally {
-        await stopSession(child, name, retryStrategy, client, target);
-      }
     },
     {
       subType: AgentcoreOperationSubType.AGENTCORE,
       errorMapper: agentcoreErrorMapper(name),
     },
   );
-}
-
-/** Whether the agent's answer is the JSON object `{"accepted": true}`. */
-function isAccepted(answer: string): boolean {
-  try {
-    return (JSON.parse(answer) as { accepted?: unknown })?.accepted === true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -300,21 +215,6 @@ function encodeInput(name: string, input: unknown): string | undefined {
 }
 
 /**
- * Returns the job document as JSON text. The input's text is inserted as it
- * is. So the document holds the text that {@link encodeInput} measured, and
- * the input is encoded once per call.
- */
-function jobDocumentJson(
-  fields: Omit<AgentcoreJobDocument, "input">,
-  inputJson: string | undefined,
-): string {
-  const json = JSON.stringify(fields);
-  return inputJson === undefined
-    ? json
-    : `${json.slice(0, -1)},"input":${inputJson}}`;
-}
-
-/**
  * Returns the Region of the durable function. The agent sends the job's
  * callbacks there. Lambda sets `AWS_REGION` to the function's Region.
  *
@@ -348,23 +248,4 @@ function getClient(config: AgentcoreConfig): BedrockAgentCoreClient {
     defaultClients.set(region, client);
   }
   return client;
-}
-
-/** Converts a Duration to whole seconds, rounding up. */
-function durationToSeconds(duration: Duration | undefined): number {
-  if (duration === undefined) {
-    return Number.NaN;
-  }
-  const parts = duration as {
-    days?: number;
-    hours?: number;
-    minutes?: number;
-    seconds?: number;
-  };
-  return Math.ceil(
-    (parts.days ?? 0) * 86_400 +
-      (parts.hours ?? 0) * 3_600 +
-      (parts.minutes ?? 0) * 60 +
-      (parts.seconds ?? 0),
-  );
 }
