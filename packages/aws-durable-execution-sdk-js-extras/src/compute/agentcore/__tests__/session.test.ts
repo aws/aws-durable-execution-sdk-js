@@ -187,9 +187,19 @@ describe("agentcoreSession", () => {
 
   it("rejects an invalid config with a TypeError before any durable operation", async () => {
     const client = new FakeAgentcoreClient();
-    const runner = runnerFor((context) =>
-      agentcoreSession(context, "", sessionConfig(client), async () => "ok"),
-    );
+    const runner = runnerFor((context) => {
+      let promise: Promise<string> | undefined;
+      // The config error rejects the returned promise. It is not thrown.
+      expect(() => {
+        promise = agentcoreSession(
+          context,
+          "",
+          sessionConfig(client),
+          async () => "ok",
+        );
+      }).not.toThrow();
+      return promise as Promise<string>;
+    });
 
     const execution = await runner.run({ payload: {} });
 
