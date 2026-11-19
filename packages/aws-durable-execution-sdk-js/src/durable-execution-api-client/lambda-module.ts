@@ -11,10 +11,12 @@ import type {
   CheckpointDurableExecutionCommand as CheckpointDurableExecutionCommandType,
   GetDurableExecutionStateCommand as GetDurableExecutionStateCommandType,
   LambdaClient,
+  PauseDurableExecutionCommand as PauseDurableExecutionCommandType,
 } from "@aws-sdk/client-lambda";
 import type {
   CheckpointDurableExecutionRequest,
   GetDurableExecutionStateRequest,
+  PauseDurableExecutionRequest,
 } from "../types/wire";
 import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
@@ -31,6 +33,9 @@ export interface LambdaModule {
   GetDurableExecutionStateCommand: new (
     input: GetDurableExecutionStateRequest,
   ) => GetDurableExecutionStateCommandType;
+  PauseDurableExecutionCommand: new (
+    input: PauseDurableExecutionRequest,
+  ) => PauseDurableExecutionCommandType;
 }
 
 let lambdaModulePromise: Promise<LambdaModule> | undefined;
