@@ -16,6 +16,10 @@ export enum TerminationReason {
   // further. See CheckpointManager.handleRevokedCheckpointToken.
   EXECUTION_SUSPENDED_BY_SERVICE = "EXECUTION_SUSPENDED_BY_SERVICE",
 
+  // A step whose retry decision had pause: true asked the service to pause the execution. See the
+  // step handler.
+  EXECUTION_PAUSED = "EXECUTION_PAUSED",
+
   // The invocation's deadline passed. Lambda has already answered the invocation with a
   // timeout, so the SDK stops its own work. See withDurableExecution.
   INVOCATION_DEADLINE_PASSED = "INVOCATION_DEADLINE_PASSED",
@@ -72,6 +76,9 @@ export const TERMINATION_CLASS: Record<TerminationReason, TerminationClass> = {
   // retries, which is where a fault would have left it anyway. So the suspend is right when
   // it matters and costs nothing when it is not.
   [TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE]: "suspend",
+  // The step's RETRY checkpoint is saved, so the invocation answers PENDING. After a resume,
+  // the service invokes again and the next attempt runs.
+  [TerminationReason.EXECUTION_PAUSED]: "suspend",
   // Handled before this map, like CHECKPOINT_FAILED: the invocation throws
   // InvocationDeadlineError, so Lambda retries the invocation and the execution continues.
   [TerminationReason.INVOCATION_DEADLINE_PASSED]: "fault",

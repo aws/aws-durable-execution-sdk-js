@@ -30,6 +30,14 @@ export function historyEventsToOperationEvents(
       continue;
     }
 
+    // A pause or a resume belongs to no operation.
+    if (
+      event.EventType === EventType.ExecutionPaused ||
+      event.EventType === EventType.ExecutionResumed
+    ) {
+      continue;
+    }
+
     if (!event.Id) {
       throw new Error("Missing required 'Id' field in event");
     }

@@ -145,6 +145,7 @@ See the [run-durable CLI guide](./RUN_DURABLE_CLI.md).
 
 - **Reuse a runner.** Call `runner.reset()` between tests that share one runner instance. It clears the data of the previous execution.
 - **Pause and resume.** `runner.pauseExecution()` ends the current invocation of a running local execution. No invocation starts until `runner.resumeExecution()`. Use them to test what replays after an interruption. Both methods are experimental.
+- **Steps that pause from the retry decision.** A step whose retry decision has `pause: true` pauses a local execution the same way. Call `runner.resumeExecution()` to run the next attempt.
 - **Mocks.** The handler runs in the test process. So `vi.mock` and other module mocks apply inside steps.
 - **Fake timers.** `skipTime: true` installs fake timers. Setup throws when fake timers are already installed, for example by `vi.useFakeTimers()`.
 - **Cloud runner options.** `CloudDurableTestRunner` accepts a `client` (a `LambdaClient`) and `config: { pollInterval, invocationType }`. `pollInterval` defaults to 1000 ms. `invocationType` defaults to `InvocationType.RequestResponse`. `waitForData` on a cloud operation needs `InvocationType.Event`.
