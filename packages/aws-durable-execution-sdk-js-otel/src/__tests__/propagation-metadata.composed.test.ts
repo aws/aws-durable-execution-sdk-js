@@ -19,6 +19,7 @@ import type { Context } from "aws-lambda";
 import { context, trace, ROOT_CONTEXT, TraceFlags } from "@opentelemetry/api";
 import {
   AlwaysOnSampler,
+  ParentBasedSampler,
   InMemorySpanExporter,
   NodeTracerProvider,
   SimpleSpanProcessor,
@@ -81,7 +82,7 @@ describe.each([
       tracerProviderFactory: (ids) =>
         (provider = new NodeTracerProvider({
           idGenerator: ids(),
-          sampler: new AlwaysOnSampler(),
+          sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
           spanProcessors: [new SimpleSpanProcessor(exporter)],
         })),
     });

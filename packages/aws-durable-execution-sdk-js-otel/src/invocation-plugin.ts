@@ -39,7 +39,7 @@ import {
 import {
   canonicalTraceId,
   resolveExecutionTraceContext,
-  rootSamplingDecision,
+  configuredSamplingDecision,
 } from "./execution-trace-context";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { flushTracerProvider } from "./otel-plugin-provider";
@@ -190,14 +190,15 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       extractedContext,
       canonical,
       this.executionArn,
-      () =>
-        rootSamplingDecision(
+      (parentContext) =>
+        configuredSamplingDecision(
           this.environment.tracer,
           canonical,
           this.environment.workflowSpanName,
           {
             "durable.execution.arn": this.executionArn,
           },
+          parentContext,
         ),
     );
     this.executionTraceId = canonical;
