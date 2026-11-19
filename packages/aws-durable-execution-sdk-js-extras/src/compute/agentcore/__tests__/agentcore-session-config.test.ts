@@ -19,6 +19,12 @@ describe("validateConfig with an AgentcoreSessionConfig", () => {
     );
   });
 
+  it("rejects a name that is not a string", () => {
+    expect(() => validateConfig(1 as unknown as string, config)).toThrow(
+      new TypeError("an AgentCore operation requires a non-empty name"),
+    );
+  });
+
   it("rejects a config without a runtime ARN", () => {
     const noArn = { ...config, agentRuntimeArn: undefined };
     expect(() =>
