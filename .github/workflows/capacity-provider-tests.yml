@@ -22,6 +22,8 @@ env:
   # binary locally gets it from a normal `npm install`, or `npm rebuild electron`.
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
+permissions: {}
+
 jobs:
   # One job for deploy, test and cleanup. As three jobs, each waited for a new
   # runner and repeated Node setup, credentials and npm ci (~60s per job), for a

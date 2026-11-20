@@ -35,6 +35,8 @@ concurrency:
 env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
+permissions: {}
+
 jobs:
   llrt-container:
     runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
