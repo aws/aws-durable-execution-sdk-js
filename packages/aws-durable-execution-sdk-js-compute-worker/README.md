@@ -181,6 +181,16 @@ Permissions:
 - The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
 
+### State in a session
+
+AgentCore runs every request with the same runtime session ID in the same microVM and the same worker process. So a job can read the files and the memory, such as a module-level cache, that an earlier job of the session left. `context.sessionId` names the session of a job.
+
+The session keeps this state until the agent runtime's idle timeout (`idleRuntimeSessionTimeout`) passes with no running job, until the durable function stops the session, or until the runtime's `maxLifetime` ends it. After the idle timeout, the same session ID gets a new microVM with no files or memory from the earlier jobs. So the idle timeout must be longer than any wait between two jobs of one session.
+
+The worker starts each job when it arrives, also while another job of the session runs. The jobs then share the files and the memory. So keep shared state safe for parallel jobs, or send the jobs one at a time.
+
+See [Run a job in AgentCore Runtime](../aws-durable-execution-sdk-js-extras#run-a-job-in-agentcore-runtime) for the durable function side.
+
 ### Rules for AgentCore jobs
 
 - Set `heartbeatTimeout`. It ends the job when the worker crashes or stops reporting. The first heartbeat period starts before the job is delivered. So it must cover the request retries and a cold session start, which took 1.4 to 3.1 seconds in a live test. Use 30 seconds or more.
