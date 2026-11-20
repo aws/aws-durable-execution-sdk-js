@@ -9,7 +9,8 @@
  * examples/javascript (tests/test_javascript_examples.py), but it asserts against paths in
  * that repo, so it cannot cover this copy. These tests replace it: they check that every
  * function the templates deploy resolves to a handler that exists, that the requirement
- * coverage is complete, and that the workflow still aims the shared orchestrator here.
+ * coverage is complete, that an unset OTLP endpoint is left out of the environment, and
+ * that the workflow still aims the shared orchestrator here.
  */
 import { describe, it, expect } from "vitest";
 
@@ -112,6 +113,20 @@ describe("requirement coverage", () => {
     expect(requirementIds(longRunningTemplate).sort()).toEqual(
       range("otel-long-running", 4).sort(),
     );
+  });
+});
+
+describe("template exporter environment", () => {
+  // ADOT treats any OTEL_EXPORTER_OTLP_ENDPOINT, even an empty one, as a custom endpoint
+  // and then skips its Lambda X-Ray exporter, so the ADOT profile must not receive one.
+  it("omits an unset OTLP endpoint", () => {
+    expect(template).toContain(
+      'HasOtelExporterEndpoint: !Not [!Equals [!Ref OtelExporterEndpoint, ""]]',
+    );
+    expect(template).toMatch(
+      /^ {8}OTEL_EXPORTER_OTLP_ENDPOINT: !If\n {10}- HasOtelExporterEndpoint\n {10}- !Ref OtelExporterEndpoint\n {10}- !Ref "AWS::NoValue"\n/m,
+    );
+    expect(template.match(/OTEL_EXPORTER_OTLP_ENDPOINT:/g)).toHaveLength(1);
   });
 });
 
