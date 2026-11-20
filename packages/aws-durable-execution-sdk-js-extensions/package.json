@@ -1,14 +1,14 @@
 {
-  "name": "@aws/durable-execution-sdk-js-extras",
+  "name": "@aws/durable-execution-sdk-js-extensions",
   "description": "Custom durable operations for the AWS Durable Execution SDK, such as running a job in an AWS Lambda MicroVM or in Amazon Bedrock AgentCore Runtime",
   "version": "0.1.0-alpha.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
-    "directory": "packages/aws-durable-execution-sdk-js-extras"
+    "directory": "packages/aws-durable-execution-sdk-js-extensions"
   },
-  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-extras",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-extensions",
   "engines": {
     "node": ">=22"
   },

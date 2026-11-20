@@ -1,6 +1,6 @@
 # MicroVM operations reference
 
-Detailed behavior of `microvm` and `microvmSession` from `@aws/durable-execution-sdk-js-extras/compute/microvm`. For a quick start, see the [package README](../README.md).
+Detailed behavior of `microvm` and `microvmSession` from `@aws/durable-execution-sdk-js-extensions/compute/microvm`. For a quick start, see the [package README](../README.md).
 
 ## `microvm`: run a job in an AWS Lambda MicroVM
 
@@ -8,7 +8,7 @@ Detailed behavior of `microvm` and `microvmSession` from `@aws/durable-execution
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvm } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvm } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 export const handler = withDurableExecution(async (event, context) =>
   microvm<{ passed: boolean }>(
@@ -144,7 +144,7 @@ A failed AWS call keeps its request ID in the error message, in the form `<Opera
 import {
   MicrovmError,
   MicrovmTimeoutError,
-} from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+} from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 try {
   await microvm(context, "build", input, config);
@@ -240,7 +240,7 @@ The code in the MicroVM must:
 `microvmSession` launches one MicroVM and runs a handler that sends it jobs over HTTP. The jobs share the MicroVM's files and processes, so a later job can use what an earlier job wrote. The session terminates the MicroVM when the handler returns or throws, and returns the handler's value.
 
 ```typescript
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 const result = await microvmSession(
   context,
