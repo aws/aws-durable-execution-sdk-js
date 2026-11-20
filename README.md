@@ -65,7 +65,7 @@ These packages are in alpha. Their APIs may change without a major version bump.
 
 | Package                                                                                                | Description                                                                                  |
 | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| [@aws/durable-execution-sdk-js-extras](./packages/aws-durable-execution-sdk-js-extras)                 | Ready-made custom operations. `microvm` runs a job in an AWS Lambda MicroVM                  |
+| [@aws/durable-execution-sdk-js-extensions](./packages/aws-durable-execution-sdk-js-extensions)         | Ready-made custom operations. `microvm` runs a job in an AWS Lambda MicroVM                  |
 | [@aws/durable-execution-sdk-js-compute-worker](./packages/aws-durable-execution-sdk-js-compute-worker) | Runs jobs on external compute. The `microvm` subpath runs inside the MicroVM: receives jobs from `microvm`, sends heartbeats, and reports results |
 
 ### Internal packages

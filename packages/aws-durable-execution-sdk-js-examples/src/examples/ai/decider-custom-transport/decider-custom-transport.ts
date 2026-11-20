@@ -5,7 +5,7 @@ import {
 import {
   type DeciderTransport,
   decider,
-} from "@aws/durable-execution-sdk-js-extras/ai";
+} from "@aws/durable-execution-sdk-js-extensions/ai";
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {

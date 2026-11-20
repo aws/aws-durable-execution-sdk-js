@@ -2,7 +2,7 @@
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
-Run job handlers inside an AWS Lambda MicroVM for the [`microvm` and `microvmSession` operations](../aws-durable-execution-sdk-js-extras). The worker receives each job, sends heartbeats while it runs, and reports its result to the durable function.
+Run job handlers inside an AWS Lambda MicroVM for the [`microvm` and `microvmSession` operations](../aws-durable-execution-sdk-js-extensions). The worker receives each job, sends heartbeats while it runs, and reports its result to the durable function.
 
 The package root exports the code that every compute type shares, such as `CallbackReporter`. The MicroVM worker is in the `@aws/durable-execution-sdk-js-compute-worker/microvm` subpath. The AgentCore Runtime worker is in the `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath. Both subpaths also export the shared code.
 
@@ -122,7 +122,7 @@ createServer(listener).listen(8080);
 
 ### Suspend when idle
 
-A session with `autoSuspendOnIdle: true` makes the worker suspend its own MicroVM after the idle time without a job. The worker never suspends during a job. The SDK never calls `ResumeMicrovm`. The service resumes the MicroVM on the next job request only when the session sets `idlePolicy.autoResumeEnabled`. See [Suspend a MicroVM between jobs](../aws-durable-execution-sdk-js-extras#suspend-a-microvm-between-jobs).
+A session with `autoSuspendOnIdle: true` makes the worker suspend its own MicroVM after the idle time without a job. The worker never suspends during a job. The SDK never calls `ResumeMicrovm`. The service resumes the MicroVM on the next job request only when the session sets `idlePolicy.autoResumeEnabled`. See [Suspend a MicroVM between jobs](../aws-durable-execution-sdk-js-extensions#suspend-a-microvm-between-jobs).
 
 ### Permissions
 
@@ -134,12 +134,12 @@ A session with `autoSuspendOnIdle: true` also needs `lambda:SuspendMicrovm` on t
 
 > **Experimental.** The `agentcore` subpath is experimental, like `microvm`.
 
-The `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath runs the jobs of the [`agentcore` operation](../aws-durable-execution-sdk-js-extras#run-a-job-in-agentcore-runtime) inside an Amazon Bedrock AgentCore Runtime agent. It implements the AgentCore HTTP contract itself and adds no dependency.
+The `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath runs the jobs of the [`agentcore` operation](../aws-durable-execution-sdk-js-extensions#run-a-job-in-agentcore-runtime) inside an Amazon Bedrock AgentCore Runtime agent. It implements the AgentCore HTTP contract itself and adds no dependency.
 
 The durable function:
 
 ```typescript
-import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+import { agentcore } from "@aws/durable-execution-sdk-js-extensions/compute/agentcore";
 
 const review = await agentcore<{ approved: boolean }>(context, "review", { pr: 7 }, {
   agentRuntimeArn: process.env.AGENT_RUNTIME_ARN!,
@@ -193,7 +193,7 @@ Permissions:
 ## Reference
 
 - [MicroVM worker reference](docs/worker.md): hook handling, heartbeats, result reporting, duplicate jobs, idle suspend, suspend and terminate hooks, and best practices.
-- [MicroVM operations reference](../aws-durable-execution-sdk-js-extras/docs/microvm.md): the contract between the operations and the worker.
+- [MicroVM operations reference](../aws-durable-execution-sdk-js-extensions/docs/microvm.md): the contract between the operations and the worker.
 - Lower-level exports: `parseRunHookRequest`, `parseJobRequest`, and `CallbackReporter`.
 - Source: [`src/microvm/worker.ts`](src/microvm/worker.ts), [`src/callback-reporter.ts`](src/callback-reporter.ts), and [`src/microvm/payload.ts`](src/microvm/payload.ts).
 - AgentCore worker source: [`src/agentcore/worker.ts`](src/agentcore/worker.ts).

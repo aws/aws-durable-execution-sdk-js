@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (experimental).** `@aws/durable-execution-sdk-js-extras` is renamed to
+  `@aws/durable-execution-sdk-js-extensions`. Change `from "@aws/durable-execution-sdk-js-extras/..."`
+  to `from "@aws/durable-execution-sdk-js-extensions/..."`. The subpaths and the exported names do
+  not change.
+
 - **Breaking (experimental).** `@aws/durable-execution-sdk-js-microvm-worker` is renamed to
   `@aws/durable-execution-sdk-js-compute-worker`. The MicroVM worker is in the `./microvm`
   subpath. Change `from "@aws/durable-execution-sdk-js-microvm-worker"` to
@@ -23,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The package root exports only `CallbackReporter` and the other names that every compute type
   shares.
 
-- **Breaking (experimental).** The MicroVM operations in `@aws/durable-execution-sdk-js-extras`
+- **Breaking (experimental).** The MicroVM operations in `@aws/durable-execution-sdk-js-extensions`
   no longer resume a suspended MicroVM. To suspend a MicroVM, set `idlePolicy` with
   `autoResumeEnabled: true`. The SDK does not resume a MicroVM; the service resumes it on the
   next request. This applies to `autoSuspendOnIdle` and to `suspendAfter`.
@@ -56,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The warning after a failed GetMicrovm now reads: `GetMicrovm failed, so the operation could
     not check whether the MicroVM has ended. The request step keeps sending the job.`
 
-- `microvm` in `@aws/durable-execution-sdk-js-extras` now requires `lambda:GetMicrovm` for HTTP
+- `microvm` in `@aws/durable-execution-sdk-js-extensions` now requires `lambda:GetMicrovm` for HTTP
   delivery.
   A role without `lambda:GetMicrovm` now fails a job whose request gets no answer, even when
   the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
