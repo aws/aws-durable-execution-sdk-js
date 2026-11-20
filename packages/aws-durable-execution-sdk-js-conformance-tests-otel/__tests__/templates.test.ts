@@ -119,7 +119,11 @@ describe("requirement coverage", () => {
 describe("template exporter environment", () => {
   // ADOT treats any OTEL_EXPORTER_OTLP_ENDPOINT, even an empty one, as a custom endpoint
   // and then skips its Lambda X-Ray exporter, so the ADOT profile must not receive one.
+  // The runner passes no endpoint for that profile, so the default must stay empty.
   it("omits an unset OTLP endpoint", () => {
+    expect(template).toMatch(
+      /^ {2}OtelExporterEndpoint:\n(?: {4}.+\n)* {4}Default: ""\n/m,
+    );
     expect(template).toContain(
       'HasOtelExporterEndpoint: !Not [!Equals [!Ref OtelExporterEndpoint, ""]]',
     );
