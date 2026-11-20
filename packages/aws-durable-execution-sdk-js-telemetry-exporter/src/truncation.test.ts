@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { truncateRecord } from "./truncation";
+import { describe, it, expect, vi } from "vitest";
+import {
+  truncateRecord,
+  truncateRecordWithOperationsFormat,
+} from "./truncation";
+import { applyOperationsFormat } from "./operations-index";
+import { getTruncationFormat } from "./truncation-internal";
+import { OTelExporter } from "./exporters/otel-exporter";
 import type { OperationRecord, DurableExecutionTelemetryRecord } from "./types";
 
 function op(
@@ -86,6 +92,313 @@ describe("truncateRecord", () => {
     expect(o2?.result).toBe("B".repeat(500));
     expect(o2?.truncated).toBeUndefined();
     expect(bytes(out)).toBeLessThanOrEqual(limit);
+  });
+
+  it("keeps opted-in results when dropping error causes already makes it fit", () => {
+    const r = record({
+      error: {
+        name: "Error",
+        message: "failed",
+        cause: { name: "Error", message: "C".repeat(800) },
+      },
+      operations: [
+        op({
+          id: "op",
+          name: "charge",
+          result: "R".repeat(200),
+        }),
+      ],
+    });
+    const afterCauseDrop = {
+      ...r,
+      error: { name: "Error", message: "failed" },
+      droppedCauses: true,
+      truncated: true,
+    };
+    const limit = bytes(afterCauseDrop);
+
+    expect(bytes(r)).toBeGreaterThan(limit);
+    const out = truncateRecord(r, limit);
+
+    expect(out.droppedCauses).toBe(true);
+    expect(out.operations[0].result).toBe("R".repeat(200));
+    expect(out.operations[0].truncated).toBeUndefined();
+    expect(out.droppedOperations).toBeUndefined();
+    expect(bytes(out)).toBeLessThanOrEqual(limit);
+  });
+
+  it("measures the rendered record a bounded number of times for array exporters", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+      }),
+    );
+    const r = record({ operations: ops });
+    let renders = 0;
+    const render = (value: DurableExecutionTelemetryRecord) => {
+      renders++;
+      return value;
+    };
+
+    const out = truncateRecordWithOperationsFormat(
+      r,
+      Math.floor(bytes(r) / 2),
+      render,
+      { operations: "array" },
+    );
+
+    expect(out.truncated).toBe(true);
+    expect(renders).toBeLessThan(100);
+  });
+
+  it("measures many result removals with bounded renders for array exporters", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+        result: "R".repeat(200),
+      }),
+    );
+    const r = record({ operations: ops });
+    const limit = Math.floor(bytes(r) / 2);
+    let renders = 0;
+    const render = (value: DurableExecutionTelemetryRecord) => {
+      renders++;
+      return value;
+    };
+
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "array",
+    });
+
+    expect(out.truncated).toBe(true);
+    expect(out.droppedOperations).toBeUndefined();
+    expect(bytes(out)).toBeLessThanOrEqual(limit);
+    expect(renders).toBeLessThan(100);
+  });
+
+  it("drops the same number of operations as a one-at-a-time first fit", () => {
+    const ops = Array.from({ length: 300 }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: `s${i}`,
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+      }),
+    );
+    const r = record({ operations: ops });
+    // Reference: drop the oldest operation one at a time until the record fits.
+    const linearDrops = (limit: number): number => {
+      for (let n = 1; n <= ops.length; n++) {
+        const candidate = {
+          ...r,
+          operations: ops.slice(n),
+          truncated: true,
+          droppedOperations: n,
+        };
+        if (bytes(candidate) <= limit) return n;
+      }
+      throw new Error("no prefix fits");
+    };
+
+    for (const fraction of [0.9, 0.5, 0.1]) {
+      const limit = Math.floor(bytes(r) * fraction);
+      expect(truncateRecord(r, limit).droppedOperations).toBe(
+        linearDrops(limit),
+      );
+    }
+  });
+
+  it("keeps the first fitting removal when operationsByName size is non-monotonic", () => {
+    const longError = { name: "Error", message: "E".repeat(600) };
+    const ops = [
+      op({
+        id: "a".repeat(7000),
+        name: "charge",
+        startTime: "2026-07-02T00:00:01.000Z",
+      }),
+      op({
+        id: "b",
+        name: "tax",
+        startTime: "2026-07-02T00:00:02.000Z",
+      }),
+      op({
+        id: "c",
+        name: "charge",
+        startTime: "2026-07-02T00:00:03.000Z",
+        error: longError,
+      }),
+      op({
+        id: "d",
+        name: "tax",
+        startTime: "2026-07-02T00:00:04.000Z",
+        error: longError,
+      }),
+    ];
+    const r = record({ operations: ops });
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const oneDrop = {
+      ...r,
+      operations: ops.slice(1),
+      truncated: true,
+      droppedOperations: 1,
+    };
+    const twoDrops = {
+      ...r,
+      operations: ops.slice(2),
+      truncated: true,
+      droppedOperations: 2,
+    };
+    const threeDrops = {
+      ...r,
+      operations: ops.slice(3),
+      truncated: true,
+      droppedOperations: 3,
+    };
+    const limit = bytes(render(oneDrop));
+
+    // Removing the first charge restores its remaining occurrence's error,
+    // so one removal fits while two do not. Removing the third operation
+    // drops that charge summary again and fits. A binary search sees n=2
+    // first and skips the earlier fitting n=1 candidate.
+    expect(bytes(render(r))).toBeGreaterThan(limit);
+    expect(bytes(render(twoDrops))).toBeGreaterThan(limit);
+    expect(bytes(render(threeDrops))).toBeLessThanOrEqual(limit);
+
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "both",
+    });
+    expect(out.droppedOperations).toBe(1);
+    expect(out.operations.map((operation) => operation.id)).toEqual(
+      ops.slice(1).map((operation) => operation.id),
+    );
+    expect(bytes(render(out))).toBeLessThanOrEqual(limit);
+
+    let customRenders = 0;
+    const customRender = (value: DurableExecutionTelemetryRecord) => {
+      customRenders++;
+      return render(value);
+    };
+    const customOut = truncateRecord(r, limit, customRender);
+    expect(customOut.droppedOperations).toBe(1);
+    expect(customRenders).toBeGreaterThan(3);
+  });
+
+  it("updates large repeated-name summaries as operations are removed", () => {
+    const ops = Array.from({ length: 2000 }, (_, i) =>
+      op({
+        id: `op-${i}`,
+        name: "repeated",
+        status: i % 7 === 0 ? "FAILED" : "SUCCEEDED",
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+        durationMs: i,
+        attempt: i % 5,
+      }),
+    );
+    const r = record({ operations: ops });
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const firstRetained = 1000;
+    const expected = {
+      ...r,
+      operations: ops.slice(firstRetained),
+      truncated: true,
+      droppedOperations: firstRetained,
+    };
+
+    const out = truncateRecordWithOperationsFormat(
+      r,
+      bytes(render(expected)),
+      render,
+      { operations: "both" },
+    );
+
+    expect(out.droppedOperations).toBe(firstRetained);
+    expect(out.operations.map((operation) => operation.id)).toEqual(
+      ops.slice(firstRetained).map((operation) => operation.id),
+    );
+    const summary = render(out) as {
+      operationsByName: Record<string, { count: number; failedCount: number }>;
+    };
+    expect(summary.operationsByName.repeated.count).toBe(1000);
+    expect(summary.operationsByName.repeated.failedCount).toBe(
+      ops
+        .slice(firstRetained)
+        .filter((operation) => operation.status === "FAILED").length,
+    );
+  });
+
+  it("does not drop a later operation when the __proto__ summary disappears", () => {
+    const ops = [
+      op({
+        id: "old",
+        name: "__proto__",
+        startTime: "2026-07-02T00:00:01.000Z",
+      }),
+      op({
+        id: "new",
+        name: "__proto__",
+        startTime: "2026-07-02T00:00:02.000Z",
+        error: { name: "Error", message: "E".repeat(400) },
+      }),
+      op({
+        id: "keep",
+        name: "keep",
+        startTime: "2026-07-02T00:00:03.000Z",
+      }),
+    ];
+    const r = record({ operations: ops });
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const afterTwoDrops = {
+      ...r,
+      operations: [ops[2]],
+      truncated: true,
+      droppedOperations: 2,
+    };
+    const limit = bytes(render(afterTwoDrops));
+
+    expect(bytes(render(r))).toBeGreaterThan(limit);
+    const out = truncateRecordWithOperationsFormat(r, limit, render, {
+      operations: "both",
+    });
+
+    expect(out.droppedOperations).toBe(2);
+    expect(out.operations.map((operation) => operation.id)).toEqual(["keep"]);
+    expect(bytes(render(out))).toBeLessThanOrEqual(limit);
+  });
+
+  it("keeps OTel payload sizing exact without rendering the envelope per drop", () => {
+    for (const operationsFormat of ["array", "by-name", "both"] as const) {
+      const exporter = new OTelExporter({
+        endpoint: "https://otel.example/v1/logs",
+        operationsFormat,
+      });
+      const render = vi.fn((value: DurableExecutionTelemetryRecord) =>
+        exporter.render(value),
+      );
+      const ops = Array.from({ length: 1000 }, (_, i) =>
+        op({
+          id: `op-${i}`,
+          name: `step-${i}`,
+          startTime: new Date(Date.UTC(2026, 6, 2) + i * 10).toISOString(),
+          result: "R".repeat(100),
+        }),
+      );
+      const r = record({ operations: ops });
+      const limit = Math.floor(bytes(exporter.render(r)) / 2);
+      const format = getTruncationFormat(exporter);
+      expect(format).toBeDefined();
+
+      const out = truncateRecordWithOperationsFormat(r, limit, render, format!);
+
+      expect(out.truncated).toBe(true);
+      expect(bytes(exporter.render(out))).toBeLessThanOrEqual(limit);
+      expect(render.mock.calls.length).toBeLessThan(100);
+    }
   });
 
   it("drops whole operations oldest-first after results are exhausted", () => {

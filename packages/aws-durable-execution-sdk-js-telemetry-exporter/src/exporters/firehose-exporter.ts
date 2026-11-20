@@ -5,6 +5,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the Kinesis Firehose exporter.
@@ -49,6 +50,7 @@ export class FirehoseExporter implements TelemetryExporter {
   constructor(config: FirehoseExporterConfig) {
     this.deliveryStreamName = config.deliveryStreamName;
     this.operationsFormat = config.operationsFormat ?? "array";
+    registerTruncationFormat(this, { operations: this.operationsFormat });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
     this.client = new FirehoseClient(
       config.region ? { region: config.region } : {},

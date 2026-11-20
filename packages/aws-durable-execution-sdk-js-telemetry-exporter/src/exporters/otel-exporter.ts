@@ -4,6 +4,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { applyOperationsFormat } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the OpenTelemetry log exporter.
@@ -68,6 +69,10 @@ export class OTelExporter implements TelemetryExporter {
     this.endpoint = config.endpoint;
     this.headers = config.headers ?? {};
     this.operationsFormat = config.operationsFormat ?? "array";
+    registerTruncationFormat(this, {
+      operations: this.operationsFormat,
+      envelope: "otel",
+    });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
   }
 

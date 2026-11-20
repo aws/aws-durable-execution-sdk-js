@@ -18,7 +18,14 @@ import type {
   TelemetryExporter,
 } from "./types";
 import { withOperationsByName } from "./operations-index";
-import { truncateRecord } from "./truncation";
+import {
+  truncateRecord,
+  truncateRecordWithOperationsFormat,
+} from "./truncation";
+import {
+  getTruncationFormat,
+  registerTruncationFormat,
+} from "./truncation-internal";
 
 export type {
   TelemetryExporter,
@@ -532,6 +539,7 @@ export class LambdaLogExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: { maxRecordSizeBytes?: number } = {}) {
+    registerTruncationFormat(this, { operations: "by-name" });
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
   }
 
@@ -830,13 +838,17 @@ class ExportScheduler {
         await Promise.allSettled(
           this.exporters.map((exporter) => {
             try {
-              return exporter.export(
-                truncateRecord(
-                  record,
-                  exporter.maxRecordSizeBytes,
-                  exporter.render?.bind(exporter),
-                ),
-              );
+              const render = exporter.render?.bind(exporter);
+              const truncationFormat = getTruncationFormat(exporter);
+              const truncated = truncationFormat
+                ? truncateRecordWithOperationsFormat(
+                    record,
+                    exporter.maxRecordSizeBytes,
+                    render ?? ((value) => value),
+                    truncationFormat,
+                  )
+                : truncateRecord(record, exporter.maxRecordSizeBytes, render);
+              return exporter.export(truncated);
             } catch (error) {
               return Promise.reject(error);
             }

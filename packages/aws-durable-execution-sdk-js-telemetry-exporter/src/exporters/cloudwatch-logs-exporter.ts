@@ -9,6 +9,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { withOperationsByName } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the CloudWatch Logs exporter.
@@ -53,6 +54,7 @@ export class CloudWatchLogsExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: CloudWatchLogsExporterConfig) {
+    registerTruncationFormat(this, { operations: "by-name" });
     this.logGroupName = config.logGroupName;
     this.logStreamPrefix =
       config.logStreamPrefix ?? "durable-execution-telemetry/";

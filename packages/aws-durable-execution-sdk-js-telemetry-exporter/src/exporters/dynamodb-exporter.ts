@@ -5,6 +5,7 @@ import type {
   DurableExecutionTelemetryRecord,
 } from "../types";
 import { withOperationsByName } from "../operations-index";
+import { registerTruncationFormat } from "../truncation-internal";
 
 /**
  * Configuration for the DynamoDB exporter.
@@ -52,6 +53,7 @@ export class DynamoDBExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: DynamoDBExporterConfig) {
+    registerTruncationFormat(this, { operations: "by-name" });
     this.tableName = config.tableName;
     this.partitionKey = config.partitionKey ?? "pk";
     this.sortKey = config.sortKey ?? "sk";
