@@ -136,6 +136,10 @@ function invokeJob<TOutput>(
   let region: string;
   let inputJson: string | undefined;
   try {
+    validateConfig(jobName, {
+      agentRuntimeArn: target.agentRuntimeArn,
+      timeout: options.timeout,
+    });
     region = functionRegion(jobName);
     inputJson = encodeInput(jobName, input);
   } catch (error) {

@@ -8,8 +8,8 @@ import {
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { AccessDeniedException } from "@aws-sdk/client-bedrock-agentcore";
-import { agentcoreSession } from "..";
-import type { AgentcoreSessionConfig } from "../types";
+import { agentcore, agentcoreSession } from "..";
+import type { AgentcoreInvokeOptions, AgentcoreSessionConfig } from "../types";
 import {
   answer,
   FakeAgentcoreClient,
@@ -486,5 +486,93 @@ describe("AgentcoreSession.invoke", () => {
       execution.getOperations().map((operation) => operation.getName()),
     ).toEqual(["review", "review.session", "review.stop"]);
     expect(client.invokeInputs).toHaveLength(0);
+  });
+
+  it.each<[string, string, AgentcoreInvokeOptions]>([
+    ["an empty job name", "", job],
+    ["a timeout of 0 seconds", "first", { timeout: { seconds: 0 } }],
+    ["a negative timeout", "first", { timeout: { seconds: -1 } }],
+    ["a NaN timeout", "first", { timeout: { seconds: Number.NaN } }],
+  ])(
+    "rejects %s like agentcore, before any durable operation of the job",
+    async (_label, jobName, options) => {
+      const client = new FakeAgentcoreClient();
+      const runner = runnerFor((context) =>
+        agentcoreSession(
+          context,
+          "review",
+          sessionConfig(client),
+          async (session, child) => {
+            let promise: Promise<unknown> | undefined;
+            // The error rejects the returned promise. It is not thrown.
+            expect(() => {
+              promise = session.invoke(child, jobName, {}, options);
+            }).not.toThrow();
+            const invoked = await (promise as Promise<unknown>).then(
+              () => undefined,
+              seen,
+            );
+            const direct = await agentcore(
+              child,
+              jobName,
+              {},
+              {
+                agentRuntimeArn: RUNTIME_ARN,
+                client: client.asClient(),
+                ...options,
+              },
+            ).then(() => undefined, seen);
+            return { invoked, direct };
+          },
+        ),
+      );
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      const { invoked, direct } = execution.getResult() as {
+        invoked: ReturnType<typeof seen>;
+        direct: ReturnType<typeof seen>;
+      };
+      expect(invoked).toBeDefined();
+      expect(invoked).toEqual(direct);
+      expect(invoked.className).toBe(jobName ? "RangeError" : "TypeError");
+      expect(
+        execution.getOperations().map((operation) => operation.getName()),
+      ).toEqual(["review", "review.session", "review.stop"]);
+      expect(client.invokeInputs).toHaveLength(0);
+    },
+  );
+
+  it("rejects the job before any durable operation when the Region cannot be determined", async () => {
+    const client = new FakeAgentcoreClient();
+    const saved = process.env.AWS_REGION;
+    delete process.env.AWS_REGION;
+    try {
+      const runner = runnerFor((context) =>
+        agentcoreSession(
+          context,
+          "review",
+          sessionConfig(client),
+          async (session, child) =>
+            session.invoke(child, "first", {}, job).then(() => undefined, seen),
+        ),
+      );
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getResult()).toEqual({
+        className: "TypeError",
+        errorType: undefined,
+        message:
+          'AgentCore "first": cannot determine the AWS Region of the function, because AWS_REGION is not set.',
+      });
+      expect(
+        execution.getOperations().map((operation) => operation.getName()),
+      ).toEqual(["review", "review.session", "review.stop"]);
+      expect(client.invokeInputs).toHaveLength(0);
+    } finally {
+      process.env.AWS_REGION = saved;
+    }
   });
 });
