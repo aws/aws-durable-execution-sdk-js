@@ -335,6 +335,8 @@ export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ChildContextError",
   "WaitForConditionError",
   "PromiseCombinatorError",
+  "DistributedMapError",
+  "DistributedMapItemError",
 ]);
 
 /**
