@@ -1,4 +1,4 @@
-# AWS Durable Execution SDK Extras
+# AWS Durable Execution SDK Extensions
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
@@ -7,7 +7,7 @@ Ready-made durable operations for the [AWS Durable Execution SDK](../aws-durable
 ## Install
 
 ```bash
-npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras @aws-sdk/client-lambda-microvms
+npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extensions @aws-sdk/client-lambda-microvms
 ```
 
 `@aws-sdk/client-lambda-microvms` is an optional peer dependency. So npm does not install it for you. The `compute/microvm` subpath needs it. The package needs `@aws/durable-execution-sdk-js` 2.6.0 or later.
@@ -18,7 +18,7 @@ npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras @
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvm } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvm } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 export const handler = withDurableExecution(
   async (event: { repo: string; commit: string }, context) => {
@@ -50,7 +50,7 @@ The code in the MicroVM runs [`@aws/durable-execution-sdk-js-compute-worker`](..
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 export const handler = withDurableExecution(
   async (event: { repo: string }, context) =>
@@ -113,7 +113,7 @@ import {
   MicrovmJobFailedError,
   MicrovmTimeoutError,
   microvm,
-} from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+} from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 try {
   await microvm(context, "build", input, config);
@@ -215,7 +215,7 @@ The durable function:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+import { agentcore } from "@aws/durable-execution-sdk-js-extensions/compute/agentcore";
 
 export const handler = withDurableExecution(
   async (event: { pr: number }, context) => {

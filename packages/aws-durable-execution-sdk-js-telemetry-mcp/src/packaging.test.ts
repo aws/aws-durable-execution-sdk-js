@@ -97,7 +97,7 @@ describe("release pipeline actually publishes what claims to be published", () =
   // These initial publications failed in sdk-2.7.0 and need a separate release.
   // Remove each exception when its first publication is ready.
   const deferredFirstPublication = new Set([
-    "aws-durable-execution-sdk-js-extras",
+    "aws-durable-execution-sdk-js-extensions",
     "aws-durable-execution-sdk-js-compute-worker",
   ]);
 

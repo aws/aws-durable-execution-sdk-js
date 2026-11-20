@@ -8,7 +8,7 @@ import {
   type MicrovmConfig,
   microvm,
   microvmSession,
-} from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+} from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 import {
   GetMicrovmCommand,
   LambdaMicrovmsClient,

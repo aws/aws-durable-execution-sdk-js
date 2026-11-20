@@ -6,9 +6,9 @@
 // was terminated.
 //
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
-// workspace (npm run build in the SDK, extras, and compute-worker packages).
+// workspace (npm run build in the SDK, extensions, and compute-worker packages).
 //
-// Usage: node e2e/run-e2e.mjs            (from the extras package)
+// Usage: node e2e/run-e2e.mjs            (from the extensions package)
 //        AWS_REGION=us-east-1 node e2e/run-e2e.mjs
 
 import { execFileSync } from "node:child_process";
