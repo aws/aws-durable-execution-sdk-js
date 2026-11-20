@@ -30,7 +30,7 @@ jobs:
   lint:
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The async-safety step below uses `biome lint --changed`, which diffs
           # against the base branch and therefore needs real history. This also
@@ -40,7 +40,7 @@ jobs:
           # benefit.
           fetch-depth: 0
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.x
       - name: Install dependencies
