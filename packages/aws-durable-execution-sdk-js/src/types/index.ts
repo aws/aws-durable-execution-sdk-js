@@ -8,6 +8,7 @@ export * from "./callback";
 export * from "./invoke";
 export * from "./wait-condition";
 export * from "./batch";
+export * from "./distributed-map";
 export * from "./durable-context";
 export * from "./durable-promise";
 export * from "./durable-execution";

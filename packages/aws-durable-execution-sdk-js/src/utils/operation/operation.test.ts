@@ -4,7 +4,11 @@ import {
   GetDurableExecutionStateCommand,
 } from "@aws-sdk/client-lambda";
 import type { Operation, ErrorObject } from "../../types/wire";
-import { DurableOperationError } from "../../errors/durable-error/durable-error";
+import {
+  DistributedMapError,
+  DurableOperationError,
+  StepError,
+} from "../../errors/durable-error/durable-error";
 import { toOperationInfo } from "./operation";
 
 const callback = (error?: ErrorObject): Operation => ({
@@ -109,5 +113,59 @@ describe("operation plugin error metadata", () => {
     } finally {
       client.destroy();
     }
+  });
+});
+
+describe("toOperationInfo", () => {
+  it("gives a FAILED distributed map operation a DistributedMapError built from the run Error", () => {
+    const operation: Operation = {
+      Id: "op-1",
+      StartTimestamp: new Date(0),
+      Type: "DISTRIBUTED_MAP",
+      Status: "FAILED",
+      DistributedMapDetails: {
+        Error: {
+          ErrorType: "SourceReadError",
+          ErrorMessage: "object not found",
+          ErrorData: '{"key":"k"}',
+        },
+      },
+    };
+
+    const error = toOperationInfo(operation).error as DistributedMapError;
+
+    expect(error).toBeInstanceOf(DistributedMapError);
+    expect(error.message).toBe("Map run ended FAILED: object not found");
+    expect(error.cause?.name).toBe("SourceReadError");
+    expect(error.errorData).toBe('{"key":"k"}');
+  });
+
+  it("does not invent an error from an empty distributed map run Error", () => {
+    expect(
+      toOperationInfo({
+        Id: "op-1",
+        StartTimestamp: new Date(0),
+        Type: "DISTRIBUTED_MAP",
+        Status: "FAILED",
+        DistributedMapDetails: { Error: {} },
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it("still restores the SDK error type for other operations", () => {
+    const operation: Operation = {
+      Id: "op-2",
+      StartTimestamp: new Date(0),
+      Type: "STEP",
+      Status: "FAILED",
+      StepDetails: {
+        Error: { ErrorType: "StepError", ErrorMessage: "step failed" },
+      },
+    };
+
+    const { error } = toOperationInfo(operation);
+
+    expect(error).toBeInstanceOf(StepError);
+    expect(error?.message).toBe("step failed");
   });
 });

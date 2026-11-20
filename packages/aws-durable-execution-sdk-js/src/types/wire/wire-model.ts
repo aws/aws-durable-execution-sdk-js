@@ -139,6 +139,46 @@ export interface ChainedInvokeDetails {
 }
 
 /**
+ * One item outcome in a distributed map run's completion details.
+ *
+ * @public
+ */
+export interface DistributedMapResultItemDetails {
+  /** Service-assigned item identifier. */
+  ItemId?: string | undefined;
+  /** Terminal status of the item. */
+  Status?: string | undefined;
+  /** Item output as a serialized string, when it succeeded and results are collected. */
+  Output?: string | undefined;
+  /** Recorded error, when the item failed. */
+  Error?: ErrorObject | undefined;
+}
+
+/**
+ * Details specific to a distributed map operation, recorded when the run terminates.
+ *
+ * @public
+ */
+export interface DistributedMapDetails {
+  /** ARN of the managed distributed map run. */
+  DistributedMapRunArn?: string | undefined;
+  /** True only when the service read the complete source. Absent before the run is created. */
+  SourceExhausted?: boolean | undefined;
+  /** Why the run did not succeed, when error details are available. Absent for SUCCEEDED. */
+  Error?: ErrorObject | undefined;
+  /** Total items read from the source, when known. */
+  TotalCount?: number | undefined;
+  /** Number of items that succeeded. */
+  SuccessCount?: number | undefined;
+  /** Number of items that permanently failed. */
+  FailureCount?: number | undefined;
+  /** Number of items read from the source. */
+  ReadCount?: number | undefined;
+  /** Per-item outcomes, when result collection is enabled. */
+  Results?: DistributedMapResultItemDetails[] | undefined;
+}
+
+/**
  * A single entry in a durable execution's operation history, with timestamps normalized
  * to `Date`.
  *
@@ -180,6 +220,8 @@ export interface Operation {
   CallbackDetails?: CallbackDetails | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeDetails?: ChainedInvokeDetails | undefined;
+  /** Populated when `Type` is `DISTRIBUTED_MAP`. */
+  DistributedMapDetails?: DistributedMapDetails | undefined;
 }
 
 /**
@@ -261,6 +303,139 @@ export interface ChainedInvokeOptions {
   XAmznTraceId?: string | undefined;
 }
 
+/** CSV parsing options for an S3 distributed map source. @public */
+export interface DistributedMapCsvFormatOptions {
+  HeaderLocation?: "FIRST_ROW" | "GIVEN";
+  Headers?: string[];
+  Delimiter?: string;
+}
+
+/** How the content of an S3 object is split into items. @public */
+export type DistributedMapS3Format = "JSON_LINES" | "JSON_ARRAY" | "CSV";
+
+/** What an S3 source reads. @public */
+export type DistributedMapS3SourceType =
+  | "OBJECT"
+  | "LISTED_OBJECT_METADATA"
+  | "LISTED_OBJECTS";
+
+/** An S3 source that reads one object. @public */
+export interface DistributedMapS3ObjectOptions {
+  Key: string;
+  Format: DistributedMapS3Format;
+  CsvFormatOptions?: DistributedMapCsvFormatOptions;
+}
+
+/** An S3 source that lists the objects under a prefix without reading them. @public */
+export interface DistributedMapS3ListedObjectMetadataOptions {
+  KeyPrefix: string;
+}
+
+/** An S3 source that lists the objects under a prefix and reads every listed object. @public */
+export interface DistributedMapS3ListedObjectsOptions {
+  KeyPrefix: string;
+  Format: DistributedMapS3Format;
+  CsvFormatOptions?: DistributedMapCsvFormatOptions;
+}
+
+/**
+ * S3 source configuration for a distributed map. Set the one config block that matches Type.
+ *
+ * @public
+ */
+export interface DistributedMapS3SourceOptions {
+  Type: DistributedMapS3SourceType;
+  Bucket: string;
+  ExpectedBucketOwner?: string;
+  ObjectConfig?: DistributedMapS3ObjectOptions;
+  ListedObjectMetadataConfig?: DistributedMapS3ListedObjectMetadataOptions;
+  ListedObjectsConfig?: DistributedMapS3ListedObjectsOptions;
+}
+
+/** Inline source configuration for a distributed map. @public */
+export interface DistributedMapInlineSourceOptions {
+  /** Items as serialized strings, exactly as the item serdes produced them. */
+  Items: string[];
+}
+
+/** Reader-function source configuration for a distributed map. @public */
+export interface DistributedMapReaderFunctionSourceOptions {
+  FunctionName: string;
+  InitialState?: string;
+}
+
+/** Source configuration for a distributed map. @public */
+export interface DistributedMapSourceOptions {
+  Type: "INLINE" | "S3" | "READER_FUNCTION";
+  MaxItemsToRead?: number | undefined;
+  InlineSourceConfig?: DistributedMapInlineSourceOptions;
+  S3SourceConfig?: DistributedMapS3SourceOptions;
+  ReaderFunctionSourceConfig?: DistributedMapReaderFunctionSourceOptions;
+}
+
+/** Processor mode values sent on the wire. @public */
+export type DistributedMapFunctionResponseType = "REPORT_BATCH_ITEM_OUTCOMES";
+
+/** Destination record fields sent on the wire. @public */
+export type DistributedMapDestinationInclude = "INPUT" | "OUTPUT" | "ERROR";
+
+/** Processor configuration for a distributed map. @public */
+export interface DistributedMapProcessorOptions {
+  FunctionName: string;
+  FunctionResponseTypes?: DistributedMapFunctionResponseType[];
+  BatchSize?: number;
+  MaxRetryAttempts?: number;
+  MaxRetryDurationSeconds?: number;
+  DurableExecutionNamePrefix?: string;
+}
+
+/** Failure-tolerance configuration for a distributed map. @public */
+export interface DistributedMapCompletionOptions {
+  ToleratedFailureCount?: number;
+  ToleratedFailurePercentage?: number;
+  MinimumSampleSize?: number;
+}
+
+/** S3 destination configuration for a distributed map. @public */
+export interface DistributedMapS3DestinationOptions {
+  Bucket: string;
+  KeyPrefix: string;
+  ExpectedBucketOwner?: string;
+}
+
+/** One destination entry for a distributed map. @public */
+export interface DistributedMapDestinationEntryOptions {
+  Type: "S3";
+  Include: DistributedMapDestinationInclude[];
+  S3DestinationConfig: DistributedMapS3DestinationOptions;
+}
+
+/** Destination routing for a distributed map. @public */
+export interface DistributedMapDestinationOptions {
+  OnSuccess?: DistributedMapDestinationEntryOptions;
+  OnFailure?: DistributedMapDestinationEntryOptions;
+}
+
+/** Result-collection mode for a distributed map. @public */
+export interface DistributedMapResultCollectionOptions {
+  Mode: "NONE" | "INLINE";
+}
+
+/**
+ * Checkpoint options specific to a distributed map operation.
+ *
+ * @public
+ */
+export interface DistributedMapOptions {
+  MaxConcurrency: number;
+  Source: DistributedMapSourceOptions;
+  Processor: DistributedMapProcessorOptions;
+  Destination?: DistributedMapDestinationOptions;
+  CompletionConfig?: DistributedMapCompletionOptions;
+  ResultCollection?: DistributedMapResultCollectionOptions;
+  TimeoutSeconds?: number;
+}
+
 /**
  * A requested state transition for a single operation within a checkpoint.
  *
@@ -296,6 +471,8 @@ export interface OperationUpdate {
   CallbackOptions?: CallbackOptions | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeOptions?: ChainedInvokeOptions | undefined;
+  /** Populated when `Type` is `DISTRIBUTED_MAP`. */
+  DistributedMapOptions?: DistributedMapOptions | undefined;
 }
 
 /**

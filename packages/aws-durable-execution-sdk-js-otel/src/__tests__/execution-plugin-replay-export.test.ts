@@ -96,7 +96,7 @@ describe("execution view external completion exports", () => {
     expect(completed()).toHaveLength(1);
   });
 
-  it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
+  it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK", "DISTRIBUTED_MAP"])(
     "exports %s first completion but not later stored successes or failures",
     async (type) => {
       for (const status of ["SUCCEEDED", "FAILED"] as const) {
