@@ -6,7 +6,10 @@ import {
   type AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
-import { DurableOperationError } from "../../errors/durable-error/durable-error";
+import {
+  DistributedMapError,
+  DurableOperationError,
+} from "../../errors/durable-error/durable-error";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -19,6 +22,17 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     operation?.CallbackDetails?.Error ??
     operation?.ContextDetails?.Error ??
     operation?.ChainedInvokeDetails?.Error;
+  const distributedMapRunError = operation?.DistributedMapDetails?.Error;
+
+  // A distributed map run gets its ErrorType from the durable execution service, which does not use SDK error types.
+  const distributedMapError =
+    distributedMapRunError &&
+    Object.values(distributedMapRunError).some((value) => value !== undefined)
+      ? DistributedMapError.fromRunErrorObject(
+          operation?.Status,
+          distributedMapRunError,
+        )
+      : undefined;
 
   return {
     id: operation?.Id ?? "",
@@ -38,10 +52,11 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     // Defined values retain the existing converter behavior; this does not
     // add support for exposing arbitrary unknown fields on the resulting Error.
     error:
-      errorObject &&
+      distributedMapError ??
+      (errorObject &&
       Object.values(errorObject).some((value) => value !== undefined)
         ? DurableOperationError.fromErrorObject(errorObject)
-        : undefined,
+        : undefined),
     attempt: operation?.StepDetails?.Attempt,
     isReplay: false,
   };

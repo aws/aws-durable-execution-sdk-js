@@ -139,6 +139,46 @@ export interface ChainedInvokeDetails {
 }
 
 /**
+ * One item outcome in a distributed map run's completion details.
+ *
+ * @public
+ */
+export interface DistributedMapResultItemDetails {
+  /** Service-assigned item identifier. */
+  ItemId?: string | undefined;
+  /** Terminal status of the item. */
+  Status?: string | undefined;
+  /** Item output as a serialized string, when it succeeded and results are collected. */
+  Output?: string | undefined;
+  /** Recorded error, when the item failed. */
+  Error?: ErrorObject | undefined;
+}
+
+/**
+ * Details specific to a distributed map operation, recorded when the run terminates.
+ *
+ * @public
+ */
+export interface DistributedMapDetails {
+  /** ARN of the managed distributed map run. */
+  DistributedMapRunArn?: string | undefined;
+  /** True only when the service read the complete source. Absent before the run is created. */
+  SourceExhausted?: boolean | undefined;
+  /** Why the run did not succeed, when error details are available. Absent for SUCCEEDED. */
+  Error?: ErrorObject | undefined;
+  /** Total items read from the source, when known. */
+  TotalCount?: number | undefined;
+  /** Number of items that succeeded. */
+  SuccessCount?: number | undefined;
+  /** Number of items that permanently failed. */
+  FailureCount?: number | undefined;
+  /** Number of items read from the source. */
+  ReadCount?: number | undefined;
+  /** Per-item outcomes, when result collection is enabled. */
+  Results?: DistributedMapResultItemDetails[] | undefined;
+}
+
+/**
  * A single entry in a durable execution's operation history, with timestamps normalized
  * to `Date`.
  *
@@ -180,6 +220,8 @@ export interface Operation {
   CallbackDetails?: CallbackDetails | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeDetails?: ChainedInvokeDetails | undefined;
+  /** Populated when `Type` is `DISTRIBUTED_MAP`. */
+  DistributedMapDetails?: DistributedMapDetails | undefined;
 }
 
 /**
@@ -429,6 +471,8 @@ export interface OperationUpdate {
   CallbackOptions?: CallbackOptions | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeOptions?: ChainedInvokeOptions | undefined;
+  /** Populated when `Type` is `DISTRIBUTED_MAP`. */
+  DistributedMapOptions?: DistributedMapOptions | undefined;
 }
 
 /**
