@@ -98,6 +98,8 @@ export type {
   WireWaitDetails,
   CallbackDetails,
   ChainedInvokeDetails,
+  DistributedMapDetails,
+  DistributedMapResultItemDetails,
   ContextOptions,
   StepOptions,
   WaitOptions,

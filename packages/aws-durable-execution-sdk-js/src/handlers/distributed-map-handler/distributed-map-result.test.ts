@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { buildSummary } from "./distributed-map-handler";
 import {
   DistributedMapResultImpl,
   DistributedMapSummaryFields,
@@ -9,10 +10,16 @@ import {
   DistributedMapResultItem,
   DistributedMapStatus,
 } from "../../types";
+import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
   DistributedMapError,
   DistributedMapItemError,
 } from "../../errors/durable-error/durable-error";
+
+const fakeContext = {
+  terminationManager: {} as any,
+  durableExecutionArn: "arn:test",
+} as any;
 
 /** Summary fields for a run, with the counts every terminal state carries. */
 const fieldsWith = (
@@ -45,6 +52,33 @@ const failedItem = (
 });
 
 describe("Distributed map result construction", () => {
+  it("builds a summary without collection and a result with collection", async () => {
+    const details = {
+      SuccessCount: 0,
+      FailureCount: 0,
+      ReadCount: 0,
+      TotalCount: 0,
+    };
+    const args = [
+      "step-0",
+      undefined,
+      fakeContext,
+      defaultSerdes,
+      "SUCCEEDED",
+    ] as const;
+
+    const summary = await buildSummary(details, {}, ...args);
+    const result = await buildSummary(
+      details,
+      { collectResults: true },
+      ...args,
+    );
+
+    expect(summary).toBeInstanceOf(DistributedMapSummaryImpl);
+    expect(summary).not.toBeInstanceOf(DistributedMapResultImpl);
+    expect(result).toBeInstanceOf(DistributedMapResultImpl);
+  });
+
   it("derives hasFailure from the failure count", () => {
     expect(new DistributedMapSummaryImpl(fieldsWith()).hasFailure).toBe(false);
     expect(
