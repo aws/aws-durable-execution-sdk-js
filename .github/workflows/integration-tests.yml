@@ -24,6 +24,8 @@ env:
   # binary locally gets it from a normal `npm install`, or `npm rebuild electron`.
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
+permissions: {}
+
 jobs:
   deploy:
     name: Deploy and test
