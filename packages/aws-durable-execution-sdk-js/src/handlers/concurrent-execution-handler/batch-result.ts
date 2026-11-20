@@ -26,6 +26,8 @@ const KNOWN_DURABLE_ERROR_TYPES = new Set([
   "ChildContextError",
   "PromiseCombinatorError",
   "WaitForConditionError",
+  "DistributedMapError",
+  "DistributedMapItemError",
 ]);
 
 /**
