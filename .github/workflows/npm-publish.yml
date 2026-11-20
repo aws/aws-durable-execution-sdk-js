@@ -4,7 +4,6 @@
 name: npm publish
 
 permissions:
-  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -21,6 +20,13 @@ env:
 jobs:
   npm-publish:
     runs-on: ubuntu-latest
+    # A repository admin sets the required reviewers of this environment. The
+    # job then waits for one of them to approve before it can publish. The
+    # reviewer checks that the release tag is on main or v1.x.
+    environment: npm-publish
+    permissions:
+      id-token: write # Required for OIDC
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,9 +35,18 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-      - run: npm ci
+      # Skip the install scripts of dependencies. This job can publish to npm, so
+      # it must not run third-party code that the build does not need. The
+      # build and the tests pass without those scripts.
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm run test
+      # The same package checks that run on every pull request. They catch a
+      # tarball that misses a declared file or has wrong type resolution.
+      - name: Verify every package ships the files its package.json declares
+        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
+      - name: Check the core package with attw and publint
+        run: npm run check:package -w packages/aws-durable-execution-sdk-js
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish

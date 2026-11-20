@@ -80,6 +80,10 @@ jobs:
       actions: write
       contents: read
       id-token: write
+    # This reusable workflow stays on main, not a SHA. It loads the conformance
+    # tests from conformance_test_ref, which also defaults to main. A SHA pin
+    # here would run an old orchestrator against new tests. The workflow is in
+    # the aws org and owned by the same team.
     uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@main
     with:
       runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
