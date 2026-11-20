@@ -35,6 +35,12 @@ function prng(seed: number): () => number {
 const NAMES: (string | undefined)[] = [
   "charge",
   "tax",
+  'quoted"name',
+  "back\\slash",
+  "line\nbreak",
+  "emoji😀",
+  "CJK漢字",
+  "lone-surrogate-\ud800",
   "__proto__",
   "constructor",
   "toString",
@@ -50,7 +56,12 @@ function randomRecord(
 ): DurableExecutionTelemetryRecord {
   const pick = <T>(values: readonly T[]): T =>
     values[Math.floor(rnd() * values.length)];
-  const text = (max: number) => "x".repeat(Math.floor(rnd() * max));
+  const text = (max: number) => {
+    const characters = ["x", '"', "\\", "\n", "😀", "漢", "\ud800"];
+    return Array.from({ length: Math.floor(rnd() * max) }, () =>
+      pick(characters),
+    ).join("");
+  };
   const error = (depth: number): ErrorRecord => {
     const e: ErrorRecord = {
       name: pick(["Error", "TypeError"]),
@@ -161,6 +172,39 @@ describe("truncateRecordWithOperationsFormat matches the full-render reference",
             mismatches.push(`seed=${seed} format=${label} limit=${limit}`);
           }
         }
+      }
+    }
+    expect(mismatches).toEqual([]);
+  }, 60_000);
+
+  it("matches full rendering when repeated-name durations are fractional", () => {
+    const durations = [1, 0.1, 0.2, 0.3, 0.7, 0.11, 0.13];
+    const record = randomRecord(prng(818), 818);
+    record.operations = durations.map((durationMs, index) => ({
+      id: `fractional-${index}`,
+      type: "STEP",
+      status: "SUCCEEDED",
+      startTime: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      name: "repeated-name",
+      durationMs,
+      result: "x".repeat(30),
+    })) as OperationRecord[];
+    record.input = "x".repeat(200);
+
+    const render = (value: DurableExecutionTelemetryRecord) =>
+      applyOperationsFormat(value, "both");
+    const fullSize = bytes(render(record));
+    const mismatches: number[] = [];
+    for (let maxBytes = 1; maxBytes < fullSize; maxBytes++) {
+      const incremental = truncateRecordWithOperationsFormat(
+        record,
+        maxBytes,
+        render,
+        { operations: "both" },
+      );
+      const reference = truncateRecord(record, maxBytes, render);
+      if (JSON.stringify(incremental) !== JSON.stringify(reference)) {
+        mismatches.push(maxBytes);
       }
     }
     expect(mismatches).toEqual([]);

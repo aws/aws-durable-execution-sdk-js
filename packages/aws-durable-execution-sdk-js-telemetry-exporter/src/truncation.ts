@@ -212,10 +212,8 @@ class IncrementalSizeTracker {
   private constructor(
     initialSize: number,
     private readonly operations: OperationRecord[],
-    private readonly kept: boolean[],
     private readonly hasArray: boolean,
     private readonly hasMap: boolean,
-    private readonly format: TruncationFormat,
     private readonly originalMap: Record<string, OperationSummary> | undefined,
     nestedMetrics?: JsonMetrics,
   ) {
@@ -223,19 +221,21 @@ class IncrementalSizeTracker {
     this.arrayCount = hasArray ? operations.length : 0;
     this.mapCount = originalMap ? Object.keys(originalMap).length : 0;
     this.nestedMetrics = nestedMetrics;
-    const groupIndices = new Map<string, number[]>();
-    operations.forEach((op, index) => {
-      if (!op.name) return;
-      const indices = groupIndices.get(op.name) ?? [];
-      indices.push(index);
-      groupIndices.set(op.name, indices);
-    });
-    for (const [name, indices] of groupIndices) {
-      const tree = new OperationGroupTree(name, indices, operations);
-      this.groups.set(name, tree);
-      indices.forEach((index, position) => {
-        this.positions.set(index, { name, position });
+    if (hasMap) {
+      const groupIndices = new Map<string, number[]>();
+      operations.forEach((op, index) => {
+        if (!op.name) return;
+        const indices = groupIndices.get(op.name) ?? [];
+        indices.push(index);
+        groupIndices.set(op.name, indices);
       });
+      for (const [name, indices] of groupIndices) {
+        const tree = new OperationGroupTree(name, indices, operations);
+        this.groups.set(name, tree);
+        indices.forEach((index, position) => {
+          this.positions.set(index, { name, position });
+        });
+      }
     }
     if (hasMap && originalMap) {
       for (const [name, summary] of Object.entries(originalMap)) {
@@ -248,9 +248,22 @@ class IncrementalSizeTracker {
     render: (r: DurableExecutionTelemetryRecord) => unknown,
     candidate: () => DurableExecutionTelemetryRecord,
     operations: OperationRecord[],
-    kept: boolean[],
     format: TruncationFormat,
   ): IncrementalSizeTracker | undefined {
+    // Segment-tree grouping differs from the canonical array reduction. Keep
+    // its sums exact by using the renderer for fractional or unsafe totals.
+    if (format.operations !== "array") {
+      const durationTotals = new Map<string, number>();
+      for (const operation of operations) {
+        const duration = operation.durationMs;
+        if (!operation.name || duration === undefined) continue;
+        if (!Number.isSafeInteger(duration) || duration < 0) return undefined;
+        const total = (durationTotals.get(operation.name) ?? 0) + duration;
+        if (!Number.isSafeInteger(total)) return undefined;
+        durationTotals.set(operation.name, total);
+      }
+    }
+
     const initialCandidate = candidate();
     const initialRendered = render(initialCandidate);
     const initialSize = jsonByteSize(initialRendered);
@@ -270,10 +283,13 @@ class IncrementalSizeTracker {
       if (!body) return undefined;
       const bodyText = body.stringValue;
       let expected: string;
+      let expectedRecord: ReturnType<typeof applyOperationsFormat>;
       try {
-        expected = JSON.stringify(
-          applyOperationsFormat(initialCandidate, format.operations),
+        expectedRecord = applyOperationsFormat(
+          initialCandidate,
+          format.operations,
         );
+        expected = JSON.stringify(expectedRecord);
       } catch {
         return undefined;
       }
@@ -293,10 +309,6 @@ class IncrementalSizeTracker {
         return undefined;
       }
       nestedMetrics = bodyMetrics;
-      const expectedRecord = applyOperationsFormat(
-        initialCandidate,
-        format.operations,
-      );
       if (format.operations === "by-name" || format.operations === "both") {
         initialMap = (
           expectedRecord as {
@@ -305,29 +317,26 @@ class IncrementalSizeTracker {
         ).operationsByName;
       }
     } else {
-      const expected = applyOperationsFormat(
+      const expectedRecord = applyOperationsFormat(
         initialCandidate,
         format.operations,
       );
       try {
-        if (JSON.stringify(initialRendered) !== JSON.stringify(expected)) {
+        if (
+          JSON.stringify(initialRendered) !== JSON.stringify(expectedRecord)
+        ) {
           return undefined;
         }
       } catch {
         return undefined;
       }
-      if (initialRendered === null || typeof initialRendered !== "object") {
-        return undefined;
-      }
-      const rendered = initialRendered as Record<string, unknown>;
-      if (format.operations === "array" || format.operations === "both") {
-        if (!Array.isArray(rendered.operations)) return undefined;
-      }
       initialMap =
         format.operations === "by-name" || format.operations === "both"
-          ? (rendered.operationsByName as
-              | Record<string, OperationSummary>
-              | undefined)
+          ? (
+              expectedRecord as {
+                operationsByName?: Record<string, OperationSummary>;
+              }
+            ).operationsByName
           : undefined;
     }
 
@@ -335,27 +344,17 @@ class IncrementalSizeTracker {
       format.operations === "array" || format.operations === "both";
     const hasMap =
       format.operations === "by-name" || format.operations === "both";
-    const map = initialMap;
-    if (
-      hasMap &&
-      (map === null || typeof map !== "object" || Array.isArray(map))
-    ) {
-      return undefined;
-    }
 
-    // Ensure the candidate is currently over the limit; `truncateRecord` only
-    // initializes this after its original-record size check has failed.
-    if (initialSize <= 0 || initialCandidate.droppedOperations !== undefined) {
+    // Existing drop markers are not part of this call's local operation count.
+    if (initialCandidate.droppedOperations !== undefined) {
       return undefined;
     }
     return new IncrementalSizeTracker(
       initialSize,
       operations,
-      kept,
       hasArray,
       hasMap,
-      format,
-      map as Record<string, OperationSummary> | undefined,
+      initialMap,
       nestedMetrics,
     );
   }
@@ -431,8 +430,7 @@ class IncrementalSizeTracker {
         ? { bytes: 0, quotes: 0, backslashes: 0 }
         : propertyMetrics(name, oldSummary);
     if (oldBytes === undefined) return false;
-    const tree = this.groups.get(name);
-    if (!tree) return false;
+    const tree = this.groups.get(name)!;
     const nextSummary = tree.update(position.position, operation);
     const nextBytes =
       nextSummary === undefined
@@ -440,16 +438,7 @@ class IncrementalSizeTracker {
         : propertyMetrics(name, nextSummary);
     if (nextBytes === undefined) return false;
 
-    if (oldSummary === undefined && nextSummary !== undefined) {
-      const delta = addMetrics(nextBytes, {
-        bytes: this.mapCount > 0 ? 1 : 0,
-        quotes: 0,
-        backslashes: 0,
-      });
-      this.adjust(delta);
-      this.mapCount++;
-      this.summaries.set(name, nextSummary);
-    } else if (oldSummary !== undefined && nextSummary === undefined) {
+    if (oldSummary !== undefined && nextSummary === undefined) {
       const delta = addMetrics(oldBytes, {
         bytes: this.mapCount > 1 ? 1 : 0,
         quotes: 0,
@@ -616,7 +605,6 @@ function truncateRecordInternal(
         render,
         candidate,
         ops,
-        kept,
         operationsFormat,
       );
     }
@@ -639,9 +627,6 @@ function truncateRecordInternal(
         incrementalTracker = undefined;
       }
       anyResultDropped = true;
-      // Preserve the documented first-fit behavior. A rendered format such as
-      // `operationsByName` can grow when removing an occurrence restores the
-      // surviving operation's result/error, so size is not monotonic.
       if (fits()) break;
     }
   }
@@ -649,6 +634,9 @@ function truncateRecordInternal(
   // Phase 3: drop whole operations, oldest first.
   if (!fits()) {
     for (const idx of order) {
+      // Preserve the documented first-fit behavior. A rendered format such as
+      // `operationsByName` can grow when removing an occurrence restores the
+      // surviving operation's result/error, so size is not monotonic.
       const previousDroppedOperations = droppedOperations;
       const operation = ops[idx];
       kept[idx] = false;
