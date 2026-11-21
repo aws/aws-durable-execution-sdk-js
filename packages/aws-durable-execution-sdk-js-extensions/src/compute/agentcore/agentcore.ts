@@ -7,6 +7,7 @@ import { defaultMicrovmRetryStrategy } from "../microvm/retry";
 import { agentcoreErrorMapper } from "./errors";
 import {
   createSessionId,
+  exactSeconds,
   runJob,
   type SessionTarget,
   stopSession,
@@ -187,30 +188,6 @@ export function validateConfig(
       );
     }
   }
-}
-
-/**
- * Returns a duration in seconds without rounding, or `NaN` when it is
- * missing. The checks compare this value with 1, so 0.5 seconds fails.
- */
-function exactSeconds(
-  duration: AgentcoreConfig["timeout"] | undefined,
-): number {
-  if (duration === undefined) {
-    return Number.NaN;
-  }
-  const parts = duration as {
-    days?: number;
-    hours?: number;
-    minutes?: number;
-    seconds?: number;
-  };
-  return (
-    (parts.days ?? 0) * 86_400 +
-    (parts.hours ?? 0) * 3_600 +
-    (parts.minutes ?? 0) * 60 +
-    (parts.seconds ?? 0)
-  );
 }
 
 /** The text before the input's JSON in `JSON.stringify({ input })`. */

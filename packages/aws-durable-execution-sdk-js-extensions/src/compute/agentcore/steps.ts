@@ -267,8 +267,12 @@ export function pastReserve(name: string, call: string): Error {
   );
 }
 
-/** Converts a Duration to whole seconds, rounding up. */
-export function durationToSeconds(duration: Duration | undefined): number {
+/**
+ * Converts a Duration to seconds without rounding, or `NaN` when it is
+ * missing. The config checks compare this value with 1, so 0.5 seconds
+ * fails.
+ */
+export function exactSeconds(duration: Duration | undefined): number {
   if (duration === undefined) {
     return Number.NaN;
   }
@@ -278,10 +282,18 @@ export function durationToSeconds(duration: Duration | undefined): number {
     minutes?: number;
     seconds?: number;
   };
-  return Math.ceil(
+  return (
     (parts.days ?? 0) * 86_400 +
-      (parts.hours ?? 0) * 3_600 +
-      (parts.minutes ?? 0) * 60 +
-      (parts.seconds ?? 0),
+    (parts.hours ?? 0) * 3_600 +
+    (parts.minutes ?? 0) * 60 +
+    (parts.seconds ?? 0)
   );
+}
+
+/**
+ * Converts a Duration to whole seconds, rounding up. The job document
+ * sends this value.
+ */
+export function durationToSeconds(duration: Duration | undefined): number {
+  return Math.ceil(exactSeconds(duration));
 }
