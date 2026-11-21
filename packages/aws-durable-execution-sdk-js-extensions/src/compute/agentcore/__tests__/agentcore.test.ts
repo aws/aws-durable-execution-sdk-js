@@ -479,7 +479,28 @@ describe("agentcore", () => {
 
   it.each<[string, Partial<AgentcoreConfig>, string]>([
     ["a timeout below 1 second", { timeout: { seconds: 0 } }, "RangeError"],
+    ["a timeout of 0.5 seconds", { timeout: { seconds: 0.5 } }, "RangeError"],
     ["a missing timeout", { timeout: undefined as never }, "RangeError"],
+    [
+      "a heartbeat timeout of 0 seconds",
+      { heartbeatTimeout: { seconds: 0 } },
+      "RangeError",
+    ],
+    [
+      "a negative heartbeat timeout",
+      { heartbeatTimeout: { seconds: -1 } },
+      "RangeError",
+    ],
+    [
+      "a NaN heartbeat timeout",
+      { heartbeatTimeout: { seconds: Number.NaN } },
+      "RangeError",
+    ],
+    [
+      "a heartbeat timeout of 0.5 seconds",
+      { heartbeatTimeout: { seconds: 0.5 } },
+      "RangeError",
+    ],
     [
       "a missing agentRuntimeArn",
       { agentRuntimeArn: undefined as never },
@@ -501,6 +522,24 @@ describe("agentcore", () => {
       expect(client.invokeInputs).toHaveLength(0);
     },
   );
+
+  it("accepts a heartbeat timeout of 1 second", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcore(
+        context,
+        "review",
+        {},
+        baseConfig(client, { heartbeatTimeout: { seconds: 1 } }),
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "ok");
+
+    expect((await executionPromise).getResult()).toBe("ok");
+    expect(client.document().heartbeatTimeoutSeconds).toBe(1);
+  });
 
   it("accepts a timeout of 14 days", async () => {
     // A runtime on Instances can set maxLifetime up to 14 days. The ARN does

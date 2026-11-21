@@ -493,6 +493,11 @@ describe("AgentcoreSession.invoke", () => {
     ["a timeout of 0 seconds", "first", { timeout: { seconds: 0 } }],
     ["a negative timeout", "first", { timeout: { seconds: -1 } }],
     ["a NaN timeout", "first", { timeout: { seconds: Number.NaN } }],
+    [
+      "a heartbeat timeout of 0 seconds",
+      "first",
+      { ...job, heartbeatTimeout: { seconds: 0 } },
+    ],
   ])(
     "rejects %s like agentcore, before any durable operation of the job",
     async (_label, jobName, options) => {

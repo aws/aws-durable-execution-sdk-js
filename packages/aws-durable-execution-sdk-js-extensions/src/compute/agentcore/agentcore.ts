@@ -7,7 +7,6 @@ import { defaultMicrovmRetryStrategy } from "../microvm/retry";
 import { agentcoreErrorMapper } from "./errors";
 import {
   createSessionId,
-  durationToSeconds,
   runJob,
   type SessionTarget,
   stopSession,
@@ -159,7 +158,10 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
  */
 export function validateConfig(
   name: string,
-  config: Pick<AgentcoreConfig, "agentRuntimeArn" | "timeout">,
+  config: Pick<
+    AgentcoreConfig,
+    "agentRuntimeArn" | "timeout" | "heartbeatTimeout"
+  >,
 ): void {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("an AgentCore operation requires a non-empty name");
@@ -170,12 +172,45 @@ export function validateConfig(
   // The agent runtime's maxLifetime limits the session: 8 hours for a
   // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
   // not say which one the runtime uses. So only the lower limit is checked.
-  const seconds = durationToSeconds(config.timeout);
+  const seconds = exactSeconds(config.timeout);
   if (!Number.isFinite(seconds) || seconds < 1) {
     throw new RangeError(
       `AgentCore "${name}": timeout must be at least 1 second. Got ${seconds} seconds.`,
     );
   }
+  // The worker refuses a heartbeat timeout under 1 second.
+  if (config.heartbeatTimeout !== undefined) {
+    const heartbeatSeconds = exactSeconds(config.heartbeatTimeout);
+    if (!Number.isFinite(heartbeatSeconds) || heartbeatSeconds < 1) {
+      throw new RangeError(
+        `AgentCore "${name}": heartbeatTimeout must be at least 1 second. Got ${heartbeatSeconds} seconds.`,
+      );
+    }
+  }
+}
+
+/**
+ * Returns a duration in seconds without rounding, or `NaN` when it is
+ * missing. The checks compare this value with 1, so 0.5 seconds fails.
+ */
+function exactSeconds(
+  duration: AgentcoreConfig["timeout"] | undefined,
+): number {
+  if (duration === undefined) {
+    return Number.NaN;
+  }
+  const parts = duration as {
+    days?: number;
+    hours?: number;
+    minutes?: number;
+    seconds?: number;
+  };
+  return (
+    (parts.days ?? 0) * 86_400 +
+    (parts.hours ?? 0) * 3_600 +
+    (parts.minutes ?? 0) * 60 +
+    (parts.seconds ?? 0)
+  );
 }
 
 /** The text before the input's JSON in `JSON.stringify({ input })`. */
