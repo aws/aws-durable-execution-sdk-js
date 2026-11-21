@@ -191,7 +191,7 @@ const INPUT_MEMBER_PREFIX = '{"input":';
  * @returns The input's JSON text, or `undefined` when the input encodes to
  * no value, such as `undefined`. The document then has no `input` field.
  */
-function encodeInput(name: string, input: unknown): string | undefined {
+export function encodeInput(name: string, input: unknown): string | undefined {
   let json: string;
   try {
     json = JSON.stringify({ input });
@@ -222,7 +222,7 @@ function encodeInput(name: string, input: unknown): string | undefined {
  * test without it. The worker rejects a job document without a Region. So
  * the operation fails before any durable operation instead.
  */
-function functionRegion(name: string): string {
+export function functionRegion(name: string): string {
   const region = process.env.AWS_REGION;
   if (!region) {
     throw new TypeError(

@@ -6,6 +6,7 @@ export {
   AgentcoreJobFailedError,
   AgentcoreTimeoutError,
 } from "./errors";
+export { agentcoreSession } from "./session";
 export { AgentcoreOperationSubType } from "./subtypes";
 export type {
   AgentcoreConfig,
