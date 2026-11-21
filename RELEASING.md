@@ -14,10 +14,19 @@ The automated npm publishing workflow covers the following packages:
 | `@aws/durable-execution-sdk-js-testing`        | `packages/aws-durable-execution-sdk-js-testing`       | `test`     |
 | `@aws/durable-execution-sdk-js-eslint-plugin`. | `packages/aws-durable-execution-sdk-js-eslint-plugin` | `eslint`   |
 | `@aws/durable-execution-sdk-js-otel`           | `packages/aws-durable-execution-sdk-js-otel`          | `otel`     |
+| `@aws/durable-execution-sdk-js-extensions`     | `packages/aws-durable-execution-sdk-js-extensions`    | `extensions` |
+| `@aws/durable-execution-sdk-js-compute-worker` | `packages/aws-durable-execution-sdk-js-compute-worker` | `compute-worker` |
 | `@aws/durable-execution-sdk-js-telemetry-exporter`        | `packages/aws-durable-execution-sdk-js-telemetry-exporter`       | `telemetry-exporter` |
 | `@aws/durable-execution-sdk-js-telemetry-mcp`    | `packages/aws-durable-execution-sdk-js-telemetry-mcp`   | `telemetry-mcp` |
 
-Extensions and Compute Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
+### First npm publication
+
+npm trusted publishing can only be set up on a package that already exists on npm. So a new package needs one manual step before its first automatic release:
+
+1. An owner of the `@aws` npm organization publishes the package once by hand. A `0.0.0-stage` placeholder version is enough.
+2. On npm, that owner adds a trusted publisher to the package: repository `aws/aws-durable-execution-sdk-js`, workflow `npm-publish.yml`, no environment.
+
+After that, the workflow publishes the package like the others.
 
 The `packages/aws-durable-execution-sdk-js-telemetry-vscode` package is intentionally excluded from this table. Release it with the [Durable Execution Telemetry VSCode Extension](#durable-execution-telemetry-vscode-extension-publishing) process instead.
 
@@ -29,6 +38,8 @@ Each package maintains its own version in the `version` field of its `package.js
 - Testing: `packages/aws-durable-execution-sdk-js-testing/package.json`
 - ESLint plugin: `packages/aws-durable-execution-sdk-js-eslint-plugin/package.json`
 - OTel: `packages/aws-durable-execution-sdk-js-otel/package.json`
+- Extensions: `packages/aws-durable-execution-sdk-js-extensions/package.json`
+- Compute Worker: `packages/aws-durable-execution-sdk-js-compute-worker/package.json`
 - Telemetry Exporter: `packages/aws-durable-execution-sdk-js-telemetry-exporter/package.json`
 - Telemetry MCP: `packages/aws-durable-execution-sdk-js-telemetry-mcp/package.json`
 
@@ -63,6 +74,8 @@ The tag should be the version of the package(s) being bumped, prepended with a d
 - Testing only: `test-<version>` (e.g., `test-1.1.3`)
 - ESLint plugin only: `eslint-<version>` (e.g., `eslint-1.0.0`)
 - OTel only: `otel-<version>` (e.g., `otel-0.1.1`)
+- Extensions only: `extensions-<version>` (e.g., `extensions-0.1.0-alpha.0`)
+- Compute Worker only: `compute-worker-<version>` (e.g., `compute-worker-0.1.0-alpha.1`)
 - Telemetry Exporter only: `telemetry-exporter-<version>` (e.g., `telemetry-exporter-0.1.0`)
 - Telemetry MCP only: `telemetry-mcp-<version>` (e.g., `telemetry-mcp-0.1.0`)
 - Multiple packages in a single release: join the sub-tags with `/` (e.g., `sdk-2.1.0/test-1.1.3/otel-0.1.1`)
@@ -76,6 +89,7 @@ test-1.1.3
 sdk-2.1.0/test-1.1.3/otel-0.1.1
 sdk-2.2.0/telemetry-exporter-0.1.0
 telemetry-mcp-0.1.0
+extensions-0.1.0-alpha.0/compute-worker-0.1.0-alpha.1
 ```
 
 If additional packages are added to the monorepo in the future, follow the same pattern: choose a short descriptive prefix for the package and use `<prefix>-<version>`.
@@ -214,7 +228,7 @@ Before publishing a release:
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
-- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
+- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `extensions-X.Y.Z`, `compute-worker-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
 
 After publishing a release:
 
