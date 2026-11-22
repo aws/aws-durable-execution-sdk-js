@@ -181,9 +181,11 @@ function mapRuntimeToEnum(runtimeString?: string): Runtime {
       return Runtime.nodejs22x;
     case "24.x":
       return "nodejs24.x" as Runtime;
+    case "26.x":
+      return "nodejs26.x" as Runtime;
     default:
       console.error(`Invalid runtime: ${runtimeString}`);
-      console.error("Available runtimes: 20x, 22x, 24x");
+      console.error("Available runtimes: 20x, 22x, 24x, 26x");
       process.exit(1);
   }
 }
