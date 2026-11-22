@@ -45,7 +45,7 @@ export const HOOK_PATH_PREFIX = "/aws/lambda-microvms/runtime/v1/";
  * `microvm` sends a job here when the job is too large for the `run` hook.
  * `vm.invoke` sends a job here when it has no `path`. So `handler` receives
  * every job that names no route, whatever its size. The value must equal
- * `DEFAULT_MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-extras`.
+ * `DEFAULT_MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-extensions`.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */
@@ -1827,7 +1827,15 @@ export function heartbeatDelayMs(
   return Math.round(intervalMs - jitterMs);
 }
 
-async function readJson(
+/**
+ * Reads a request body of at most `maxBytes` and parses it as JSON.
+ *
+ * @throws \{InvalidRunHookPayloadError\} When the body is too large or is
+ * not valid JSON.
+ *
+ * @internal
+ */
+export async function readJson(
   request: IncomingMessage,
   maxBytes: number,
 ): Promise<unknown> {
@@ -1989,8 +1997,10 @@ function describe(value: unknown): unknown {
 /**
  * Wraps a logger so that an error it throws, or a promise it returns that
  * rejects, is dropped.
+ *
+ * @internal
  */
-function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
+export function safeLogger(inner: MicrovmWorkerLogger): MicrovmWorkerLogger {
   const guard =
     (write: MicrovmWorkerLogger["info"]): MicrovmWorkerLogger["info"] =>
     (message, data) => {

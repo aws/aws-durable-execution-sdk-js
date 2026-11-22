@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-compute-worker",
-  "description": "Runs jobs from durable functions on compute defined outside the function. The microvm subpath runs inside an AWS Lambda MicroVM: it receives a job from a durable function's microvm operation, sends heartbeats, and reports the result",
+  "description": "Runs jobs from durable functions on compute defined outside the function. The microvm subpath runs inside an AWS Lambda MicroVM, and the agentcore subpath inside an Amazon Bedrock AgentCore Runtime agent: each receives a job from a durable function's operation, sends heartbeats, and reports the result",
   "version": "0.1.0-alpha.0",
   "license": "Apache-2.0",
   "repository": {
@@ -37,6 +37,11 @@
       "types": "./dist-types/microvm/index.d.ts",
       "import": "./dist/microvm.mjs",
       "require": "./dist-cjs/microvm.js"
+    },
+    "./agentcore": {
+      "types": "./dist-types/agentcore/index.d.ts",
+      "import": "./dist/agentcore.mjs",
+      "require": "./dist-cjs/agentcore.js"
     }
   },
   "files": [

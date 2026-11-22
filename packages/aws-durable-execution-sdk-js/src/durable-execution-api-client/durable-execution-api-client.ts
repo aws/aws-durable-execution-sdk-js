@@ -6,6 +6,7 @@ import type {
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
+  PauseDurableExecutionRequest,
 } from "../types/wire";
 import type { DurableExecutionClient } from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
@@ -151,5 +152,22 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
 
       throw error;
     }
+  }
+
+  /**
+   * Asks Lambda to pause the durable execution
+   * @param params - The PauseDurableExecution request
+   */
+  async pauseExecution(params: PauseDurableExecutionRequest): Promise<void> {
+    const { client, module } = await this.resolveClient();
+
+    // The caller logs a failure, so a rejection is passed on as is.
+    await client.send(
+      new module.PauseDurableExecutionCommand({
+        DurableExecutionArn: params.DurableExecutionArn,
+        ClientToken: params.ClientToken,
+        Reason: params.Reason,
+      }),
+    );
   }
 }

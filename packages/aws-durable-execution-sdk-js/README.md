@@ -170,6 +170,44 @@ await context.step("call-api", async () => callApi(), {
 
 `retryStrategy` can also be a function `(error, attemptCount) => ({ shouldRetry, delay })`. `retryPresets` has ready-made strategies. A step that fails after its last attempt throws `StepError`.
 
+### Pause after repeated failures
+
+A retry decision can ask to pause the execution (experimental). When the retry strategy returns `pause: true` together with `shouldRetry: true`, the SDK saves the retry and pauses the execution. An operator then checks the problem and resumes the execution with the Lambda `ResumeDurableExecution` API. After the resume, the next attempt runs.
+
+`createRetryStrategy` has a `pauseEvery` option. It returns `pause: true` on every `pauseEvery`-th failed attempt that it retries:
+
+```typescript
+await context.step("call-api", async () => callApi(), {
+  retryStrategy: createRetryStrategy({
+    maxAttempts: 20,
+    initialDelay: { seconds: 30 },
+    pauseEvery: 5, // pause after attempts 5, 10, 15, ...
+  }),
+});
+```
+
+A custom strategy sets `pause` itself:
+
+```typescript
+await context.step("call-api", async () => callApi(), {
+  retryStrategy: (error, attempt) => ({
+    shouldRetry: attempt < 20,
+    delay: { seconds: 30 },
+    pause: attempt === 5 && error instanceof PaymentServiceError,
+  }),
+});
+```
+
+The pause ends the invocation at once. A step that is still running in another `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs again, and an `AtMostOncePerRetry` step counts it as an interrupted attempt.
+
+- `pause` does not change how many attempts run. When `shouldRetry` is false, the SDK ignores `pause` and the step fails as usual.
+- The function's execution role needs `lambda:PauseDurableExecution` on the function's durable executions. You add that permission. If the function uses a customer managed AWS KMS key, the role also needs `kms:Decrypt` on the key. Without these permissions, the SDK logs a warning and the step retries as usual.
+- The pause applies only when the step function throws in the current invocation.
+- `withRetry` ignores `pause`.
+- A custom `DurableExecutionClient` without a `pauseExecution` method retries as usual.
+
+See [Pausing and resuming durable executions](https://docs.aws.amazon.com/lambda/latest/dg/durable-pause-resume.html).
+
 ### Step semantics
 
 `semantics` sets what happens when an invocation ends while the step runs:

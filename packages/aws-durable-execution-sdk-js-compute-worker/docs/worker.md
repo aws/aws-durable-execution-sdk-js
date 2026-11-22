@@ -70,7 +70,7 @@ The worker counts only jobs. It cannot see background processes, or inbound traf
 
 ### Suspend after a job
 
-The worker does not suspend the MicroVM after a job. A session job with `suspendAfter: true` makes the durable function call `SuspendMicrovm` itself, with the session's MicroVM ID, after the job's result arrives. So the MicroVM's role needs no permission for it. See [Suspending after a job](../../aws-durable-execution-sdk-js-extras/docs/microvm.md#suspending-after-a-job) in the extras package.
+The worker does not suspend the MicroVM after a job. A session job with `suspendAfter: true` makes the durable function call `SuspendMicrovm` itself, with the session's MicroVM ID, after the job's result arrives. So the MicroVM's role needs no permission for it. See [Suspending after a job](../../aws-durable-execution-sdk-js-extensions/docs/microvm.md#suspending-after-a-job) in the extensions package.
 
 Enable the `resume` hook in the image. The worker refuses jobs from the moment the `suspend` hook arrives until the `resume` hook arrives. Without the hook, the next job waits up to 30 seconds of 503 answers.
 
@@ -90,7 +90,7 @@ A document that does not match the contract gets HTTP 400. If the document named
 
 ## Suspend and terminate hooks
 
-Lambda waits for the answer to a `suspend` or `terminate` hook, up to the hook's timeout. The network and the execution role's credentials work while the hook runs. These facts come from probes in us-east-1 (`e2e/probe-lifecycle.mjs` in the extras package).
+Lambda waits for the answer to a `suspend` or `terminate` hook, up to the hook's timeout. The network and the execution role's credentials work while the hook runs. These facts come from probes in us-east-1 (`e2e/probe-lifecycle.mjs` in the extensions package).
 
 On the `suspend` hook the worker:
 
@@ -115,7 +115,7 @@ The MicroVM endpoint forwards a request to a hook path from any caller that hold
 
 ## Best practices for job handlers
 
-Each rule states what happens if a handler breaks it. The rules for the durable function and its deploy are in the extras package's [best practices for MicroVM operations](../../aws-durable-execution-sdk-js-extras/docs/microvm.md#best-practices-for-microvm-operations).
+Each rule states what happens if a handler breaks it. The rules for the durable function and its deploy are in the extensions package's [best practices for MicroVM operations](../../aws-durable-execution-sdk-js-extensions/docs/microvm.md#best-practices-for-microvm-operations).
 
 1. Return a JSON-serializable value of at most 256 KB (262,144 bytes) as UTF-8 JSON. Store a larger result elsewhere, for example in S3, and return a reference.
    - The worker reports a larger result, or one that `JSON.stringify` cannot serialize, as a failure. See [What the worker does](#what-the-worker-does).

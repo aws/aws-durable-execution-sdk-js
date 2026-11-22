@@ -19,7 +19,7 @@ createTests({
   // The local runner cannot launch a MicroVM.
   cloudOnly: true,
   tests: (runner, { assertEventSignatures }) => {
-    // The launch, the suspend, the 30-second wait, the auto-resume and the
+    // The launch, the suspend, the 10-second wait, the auto-resume and the
     // terminate can take longer than the 120-second default timeout. So the
     // test sets its own timeout of 240 seconds.
     it("suspends the MicroVM between the jobs, and resumes it with the file of the first job", async () => {
@@ -27,8 +27,10 @@ createTests({
 
       const executionPromise = runner.run({ payload: { key } });
       // The write job's child context completes after the SuspendMicrovm
-      // call. The 30-second wait follows. So the state is read during the
-      // wait, for at most 25 seconds.
+      // call. The 10-second wait follows. So the state is read during the
+      // wait, for at most 8 seconds. The state is read every 2 seconds, and
+      // the MicroVM reached SUSPENDED about 1 second after the suspend in
+      // the recorded run of the session-suspend-after example.
       const write = runner.getOperation("write");
       await write.waitForData(WaitingOperationStatus.COMPLETED);
       const microvmId = (
@@ -38,7 +40,7 @@ createTests({
       const states = await observeMicrovmStates(
         microvmId as string,
         "SUSPENDED",
-        25_000,
+        8_000,
       );
       const execution = await executionPromise;
 
