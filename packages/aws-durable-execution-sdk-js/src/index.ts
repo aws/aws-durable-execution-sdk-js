@@ -81,6 +81,7 @@ export type {
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
+  PauseDurableExecutionRequest,
 } from "./types/wire";
 /**
  * The package version, suffixed with `-bundled` when the SDK is running from inside the

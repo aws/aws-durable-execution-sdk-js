@@ -1,6 +1,7 @@
 /**
- * Subtypes that `agentcore` records on its durable operations. Execution
- * history and plugins can filter on them without parsing operation names.
+ * Subtypes that `agentcore` and `agentcoreSession` record on their durable
+ * operations. Execution history and plugins can filter on them without
+ * parsing operation names.
  *
  * Replay compares each subtype with the checkpoint. So a changed value is a
  * breaking change for executions in flight, and these values must stay fixed.
@@ -12,6 +13,10 @@
 export const AgentcoreOperationSubType = {
   /** The child context of an `agentcore` call. */
   AGENTCORE: "Agentcore",
+  /** The child context of an `agentcoreSession` call. */
+  SESSION: "AgentcoreSession",
+  /** The child context of one `invoke` call in a session. */
+  SESSION_JOB: "AgentcoreSessionJob",
   /** The step that generates and checkpoints the runtime session ID. */
   SESSION_ID: "AgentcoreSessionId",
   /** The callback that the agent completes with the job result. */

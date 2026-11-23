@@ -1,4 +1,4 @@
-# AWS Durable Execution SDK Extras
+# AWS Durable Execution SDK Extensions
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
@@ -7,7 +7,7 @@ Ready-made durable operations for the [AWS Durable Execution SDK](../aws-durable
 ## Install
 
 ```bash
-npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras @aws-sdk/client-lambda-microvms
+npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extensions @aws-sdk/client-lambda-microvms
 ```
 
 `@aws-sdk/client-lambda-microvms` is an optional peer dependency. So npm does not install it for you. The `compute/microvm` subpath needs it. The package needs `@aws/durable-execution-sdk-js` 2.6.0 or later.
@@ -18,7 +18,7 @@ npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras @
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvm } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvm } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 export const handler = withDurableExecution(
   async (event: { repo: string; commit: string }, context) => {
@@ -50,7 +50,7 @@ The code in the MicroVM runs [`@aws/durable-execution-sdk-js-compute-worker`](..
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 export const handler = withDurableExecution(
   async (event: { repo: string }, context) =>
@@ -113,7 +113,7 @@ import {
   MicrovmJobFailedError,
   MicrovmTimeoutError,
   microvm,
-} from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+} from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 
 try {
   await microvm(context, "build", input, config);
@@ -215,7 +215,7 @@ The durable function:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+import { agentcore } from "@aws/durable-execution-sdk-js-extensions/compute/agentcore";
 
 export const handler = withDurableExecution(
   async (event: { pr: number }, context) => {
@@ -273,6 +273,42 @@ Permissions:
 - A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
 - Your logger must not throw.
 - The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
+
+## Ask a model in a step
+
+> **Experimental.** The `ai` subpath is experimental, like `compute/microvm`.
+
+The `ai` subpath has two factories. Each call is one durable step. A replay returns the checkpointed answer and does not call the model again.
+
+| Factory | Operations | Model |
+|---|---|---|
+| `decider()` | `check` (yes or no), `classify` (one choice), `label` (every choice that applies), `score` (0 to 1) | A decision model that you deploy, such as [Strands Decider](https://github.com/strands-labs/strands-decider) |
+| `llm()` | `ask` (text) | A large language model on Amazon Bedrock |
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { decider, llm, sageMakerTransport } from "@aws/durable-execution-sdk-js-extensions/ai";
+
+const decide = decider({
+  transport: sageMakerTransport({ endpointName: "strands-decider-2b-qwen3-5-v1-2610" }),
+});
+const model = llm();
+
+export const handler = withDurableExecution(async (ticket, context) => {
+  if (await decide.check(context, "Is the customer asking for a human?", ticket.body)) {
+    return { escalate: true };
+  }
+  const team = await decide.classify(context, "Which team?", ["returns", "billing"], ticket.body);
+  const summary = await model.ask(context, "Summarize in one sentence.", ticket.body);
+  return { team, summary };
+});
+```
+
+- The decision model can run on any server (`endpoint`), or on SageMaker, Lambda, or AgentCore Runtime (`sageMakerTransport`, `lambdaTransport`, `agentCoreTransport`). Each AWS transport needs its own optional AWS SDK client.
+- `llm()` needs the optional peer dependency `@aws-sdk/client-bedrock-runtime`, and `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. The default model ID names a global inference profile.
+- A reply that is not usable fails the step with an `AiError` subclass, such as `DeciderInvalidResponseError`. The step uses the core SDK's default retry strategy. Pass `retryStrategy` to choose which errors to retry.
+
+The [AI operations reference](docs/ai.md) covers every host, the errors, and the permissions.
 
 ## Reference
 

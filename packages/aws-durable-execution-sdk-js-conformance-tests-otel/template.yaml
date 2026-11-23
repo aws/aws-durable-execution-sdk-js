@@ -62,6 +62,9 @@ Parameters:
 Conditions:
   HasOtelCollectorLayer: !Not [!Equals [!Ref OtelCollectorLayerArn, ""]]
   HasOtelMetricsExporter: !Not [!Equals [!Ref OtelMetricsExporter, ""]]
+  # ADOT treats any OTEL_EXPORTER_OTLP_ENDPOINT, even an empty one, as a custom
+  # endpoint and then skips its Lambda X-Ray exporter, so omit an unset one.
+  HasOtelExporterEndpoint: !Not [!Equals [!Ref OtelExporterEndpoint, ""]]
   DeployInvocationView: !Or
     - !Equals [!Ref OtelSuite, all]
     - !Equals [!Ref OtelSuite, otel-invocation]
@@ -89,7 +92,10 @@ Globals:
         AWS_LAMBDA_EXEC_WRAPPER: !Ref OtelExecWrapper
         OTEL_SERVICE_NAME: !Ref OtelServiceName
         OTEL_TRACES_EXPORTER: !Ref OtelTracesExporter
-        OTEL_EXPORTER_OTLP_ENDPOINT: !Ref OtelExporterEndpoint
+        OTEL_EXPORTER_OTLP_ENDPOINT: !If
+          - HasOtelExporterEndpoint
+          - !Ref OtelExporterEndpoint
+          - !Ref "AWS::NoValue"
         OTEL_EXPORTER_OTLP_HEADERS: !Ref OtelExporterHeaders
         OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
         OTEL_METRICS_EXPORTER: !If

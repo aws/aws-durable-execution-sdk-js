@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import {
   type ExecutionContext,
   type StepFunc,
@@ -49,6 +50,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { TerminationReason } from "../../termination-manager/types";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -444,6 +446,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const nextAttemptDelaySeconds = retryDecision.delay
             ? durationToSeconds(retryDecision.delay)
             : 1;
+          // The RETRY checkpoint is awaited before the pause call. The queue sends START
+          // no later than RETRY, so both are saved before the pause can take effect. If
+          // the service answers RETRY without a token, or drops it for a finished
+          // ancestor, this await never resolves and no pause is requested.
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -467,6 +473,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          // Requested while the step is still EXECUTING, so the invocation cannot
+          // suspend during the call.
+          const paused =
+            retryDecision.pause === true &&
+            (await requestPause(currentAttempt));
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,
@@ -483,8 +494,57 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
+          if (paused) {
+            context.terminationManager.terminate({
+              reason: TerminationReason.EXECUTION_PAUSED,
+              message: `Execution paused after step ${name ?? hashId(stepId)} failed attempt ${currentAttempt}`,
+            });
+            return new Promise<T>(() => {});
+          }
+
           await checkpoint.waitForRetryTimer(stepId);
           return await executeStepLogic();
+        }
+
+        /**
+         * Asks the service to pause the execution. Returns whether the request succeeded.
+         * A missing client method or a failed request leaves the normal retry in place.
+         */
+        async function requestPause(attempt: number): Promise<boolean> {
+          const client = context.durableExecutionClient;
+          if (!client.pauseExecution) {
+            return false;
+          }
+          const hashedId = hashId(stepId);
+          try {
+            await client.pauseExecution({
+              DurableExecutionArn: context.durableExecutionArn,
+              // Stable across a re-run of this attempt, so the service can drop a repeat. The
+              // execution ARN keeps it unique across executions. 64 hex characters.
+              ClientToken: createHash("sha256")
+                .update(
+                  `pause:${context.durableExecutionArn}:${hashedId}:${attempt}`,
+                )
+                .digest("hex"),
+              Reason: `Step "${name ?? hashedId}" failed attempt ${attempt}`,
+            });
+            return true;
+          } catch (error) {
+            const errorName = error instanceof Error ? error.name : undefined;
+            const errorText =
+              error instanceof Error
+                ? `${error.name}: ${error.message}`
+                : String(error);
+            const cause =
+              errorName === "ResourceConflictException"
+                ? "The execution has closed (for example, stopped) or is already paused."
+                : "One possible cause is that the execution role does not allow lambda:PauseDurableExecution. Another is an @aws-sdk/client-lambda older than 3.1171.0 in the bundle.";
+            logger.warn(
+              `Could not pause the execution after step "${name ?? hashedId}" failed attempt ${attempt}: ${errorText}. The step retries as usual. ${cause}`,
+              error,
+            );
+            return false;
+          }
         }
       }
     })();
