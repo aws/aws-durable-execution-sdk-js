@@ -9,6 +9,7 @@ import {
   functionRegion,
   getClient,
   validateConfig,
+  validateTarget,
 } from "./agentcore";
 import { agentcoreErrorMapper, agentcoreSessionErrorMapper } from "./errors";
 import {
@@ -47,6 +48,11 @@ import type {
  * request keep the `agentcore` subtypes. The operations that the handler
  * creates keep their own subtypes.
  *
+ * The session ends at the agent runtime's `maxLifetime`, and a job that
+ * still runs then ends with it. The operation cannot read the runtime's
+ * setting. So keep the handler's work, including durable waits between
+ * jobs, within the configured `maxLifetime`.
+ *
  * A stop failure does not fail the operation. The operation logs an error
  * and returns the handler's value or error.
  *
@@ -64,7 +70,6 @@ import type {
  * @returns The handler's return value.
  * @throws \{TypeError\} When `name` is empty, or `agentRuntimeArn` is not a
  * string.
- * @throws \{RangeError\} When `timeout` is shorter than 1 second.
  *
  * @public
  *
@@ -80,7 +85,7 @@ export function agentcoreSession<TOutput = unknown>(
   ) => Promise<TOutput>,
 ): DurablePromise<TOutput> {
   try {
-    validateConfig(name, config);
+    validateTarget(name, config);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }

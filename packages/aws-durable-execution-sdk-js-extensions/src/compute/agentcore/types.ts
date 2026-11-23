@@ -116,6 +116,11 @@ export interface AgentcoreJobDocument<TInput = unknown> {
  * one are lost. So set the idle timeout longer than any wait between two
  * jobs, such as a durable wait or a callback.
  *
+ * The session ends at the agent runtime's `maxLifetime`, and a job that
+ * still runs then ends with it. The operation cannot read the runtime's
+ * setting. So keep the session, including durable waits between jobs,
+ * within the configured `maxLifetime`.
+ *
  * @public
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -124,17 +129,7 @@ export interface AgentcoreSessionConfig
   extends Pick<
     AgentcoreConfig,
     "agentRuntimeArn" | "qualifier" | "retryStrategy" | "client"
-  > {
-  /**
-   * The lifetime of the session, including durable waits between jobs. It
-   * must be at least 1 second.
-   *
-   * The session ends at the agent runtime's `maxLifetime`, and a job that
-   * still runs then ends with it. The operation cannot read the runtime's
-   * setting. So set a timeout that fits the configured `maxLifetime`.
-   */
-  timeout: Duration;
-}
+  > {}
 
 /**
  * Options for one {@link AgentcoreSession.invoke} call.
@@ -148,9 +143,8 @@ export interface AgentcoreInvokeOptions {
    * The maximum time to wait for the agent to report this job's result. It
    * must be at least 1 second.
    *
-   * The session's `timeout` does not shorten it. A job that still runs at
-   * the runtime's `maxLifetime` fails only at its heartbeat timeout or at
-   * this timeout.
+   * A job that still runs at the runtime's `maxLifetime` fails only at its
+   * heartbeat timeout or at this timeout.
    */
   timeout: Duration;
 
