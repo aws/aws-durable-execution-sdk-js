@@ -3,7 +3,7 @@
 /**
  * Cloud test for a durable function running on LLRT, deployed as a container image.
  *
- * The managed-runtime integration tests cover nodejs22.x and nodejs24.x. This covers the other
+ * The managed-runtime integration tests cover nodejs22.x, nodejs24.x and nodejs26.x. This covers the other
  * supported packaging: an OCI image, which is what makes it possible to bring a runtime that
  * Lambda does not manage. The handler is bundled for LLRT, baked into an image alongside the
  * LLRT binary, deployed with durable execution enabled, and then driven with

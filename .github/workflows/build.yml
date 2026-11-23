@@ -199,7 +199,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["22.x", "24.x"]
+        node-version: ["22.x", "24.x", "26.x"]
     uses: "./.github/workflows/unit-tests.yml"
     with:
       node-version: ${{ matrix.node-version }}
@@ -218,7 +218,7 @@ jobs:
       fail-fast: false
       matrix:
         # Keep in sync with NODE_VERSIONS in integration-timings-comment.
-        node-version: ["22.x", "24.x"]
+        node-version: ["22.x", "24.x", "26.x"]
     uses: "./.github/workflows/integration-tests.yml"
     with:
       node-version: ${{ matrix.node-version }}
@@ -258,7 +258,7 @@ jobs:
           # A job can pass without uploading timings, so a warning is cleared
           # only when every version below has a report. Same list as the
           # integration-tests matrix.
-          NODE_VERSIONS: "22.x,24.x"
+          NODE_VERSIONS: "22.x,24.x,26.x"
         run: node .github/workflows/scripts/integration-test/timing-report.mjs --comment timings
 
   capacity-provider-tests:
