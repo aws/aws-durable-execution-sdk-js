@@ -274,6 +274,42 @@ Permissions:
 - Your logger must not throw.
 - The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
 
+## Ask a model in a step
+
+> **Experimental.** The `ai` subpath is experimental, like `compute/microvm`.
+
+The `ai` subpath has two factories. Each call is one durable step. A replay returns the checkpointed answer and does not call the model again.
+
+| Factory | Operations | Model |
+|---|---|---|
+| `decider()` | `check` (yes or no), `classify` (one choice), `label` (every choice that applies), `score` (0 to 1) | A decision model that you deploy, such as [Strands Decider](https://github.com/strands-labs/strands-decider) |
+| `llm()` | `ask` (text) | A large language model on Amazon Bedrock |
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { decider, llm, sageMakerTransport } from "@aws/durable-execution-sdk-js-extensions/ai";
+
+const decide = decider({
+  transport: sageMakerTransport({ endpointName: "strands-decider-2b-qwen3-5-v1-2610" }),
+});
+const model = llm();
+
+export const handler = withDurableExecution(async (ticket, context) => {
+  if (await decide.check(context, "Is the customer asking for a human?", ticket.body)) {
+    return { escalate: true };
+  }
+  const team = await decide.classify(context, "Which team?", ["returns", "billing"], ticket.body);
+  const summary = await model.ask(context, "Summarize in one sentence.", ticket.body);
+  return { team, summary };
+});
+```
+
+- The decision model can run on any server (`endpoint`), or on SageMaker, Lambda, or AgentCore Runtime (`sageMakerTransport`, `lambdaTransport`, `agentCoreTransport`). Each AWS transport needs its own optional AWS SDK client.
+- `llm()` needs the optional peer dependency `@aws-sdk/client-bedrock-runtime`, and `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. The default model ID names a global inference profile.
+- A reply that is not usable fails the step with an `AiError` subclass, such as `DeciderInvalidResponseError`. The step uses the core SDK's default retry strategy. Pass `retryStrategy` to choose which errors to retry.
+
+The [AI operations reference](docs/ai.md) covers every host, the errors, and the permissions.
+
 ## Reference
 
 - [MicroVM operations reference](docs/microvm.md): delivery, the operation tree, subtypes, retries, the error tree, limits, permissions, suspend details, the worker contract, and best practices.
