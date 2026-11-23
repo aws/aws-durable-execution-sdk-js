@@ -1,3 +1,4 @@
+import type { TestResult } from "@aws/durable-execution-sdk-js-testing";
 import {
   type BedrockAgentCoreClient,
   InvokeAgentRuntimeCommand,
@@ -96,3 +97,13 @@ export const throwing =
   };
 
 export const metadata = { $metadata: {} };
+
+/** Lists every operation as [name, type, subtype], in history order. */
+export const history = (result: TestResult): [string?, string?, string?][] =>
+  result
+    .getOperations()
+    .map((operation) => [
+      operation.getName(),
+      operation.getType(),
+      operation.getSubType(),
+    ]);
