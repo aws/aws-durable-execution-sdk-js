@@ -5,6 +5,7 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
+  type TestResult,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { AccessDeniedException } from "@aws-sdk/client-bedrock-agentcore";
@@ -24,6 +25,16 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 type Runner = LocalDurableTestRunner<unknown>;
+
+/** Lists every operation as [name, type, subtype], in history order. */
+const history = (result: TestResult): [string?, string?, string?][] =>
+  result
+    .getOperations()
+    .map((operation) => [
+      operation.getName(),
+      operation.getType(),
+      operation.getSubType(),
+    ]);
 
 function runnerFor(
   operation: (context: DurableContext) => Promise<unknown>,
@@ -340,6 +351,39 @@ describe("AgentcoreSession.invoke", () => {
     ).toEqual(["first.callback", "first.request"]);
   });
 
+  it("labels every operation with its subtype", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (session, child) => {
+          await session.invoke(child, "first", {}, job);
+          await session.invoke(child, "second", {}, job);
+        },
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "first", "ok");
+    await completeJob(runner, "second", "ok");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(history(execution)).toEqual([
+      ["review", "CONTEXT", "AgentcoreSession"],
+      ["review.session", "STEP", "AgentcoreSessionId"],
+      ["first", "CONTEXT", "AgentcoreSessionJob"],
+      ["first.callback", "CALLBACK", "AgentcoreCallback"],
+      ["first.request", "STEP", "AgentcoreRequest"],
+      ["second", "CONTEXT", "AgentcoreSessionJob"],
+      ["second.callback", "CALLBACK", "AgentcoreCallback"],
+      ["second.request", "STEP", "AgentcoreRequest"],
+      ["review.stop", "STEP", "AgentcoreStop"],
+    ]);
+  });
+
   it("creates the job in the context passed to invoke", async () => {
     const client = new FakeAgentcoreClient();
     const runner = runnerFor((context) =>
@@ -493,6 +537,11 @@ describe("AgentcoreSession.invoke", () => {
     ["a timeout of 0 seconds", "first", { timeout: { seconds: 0 } }],
     ["a negative timeout", "first", { timeout: { seconds: -1 } }],
     ["a NaN timeout", "first", { timeout: { seconds: Number.NaN } }],
+    [
+      "a heartbeat timeout of 0 seconds",
+      "first",
+      { ...job, heartbeatTimeout: { seconds: 0 } },
+    ],
   ])(
     "rejects %s like agentcore, before any durable operation of the job",
     async (_label, jobName, options) => {

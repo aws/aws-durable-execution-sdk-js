@@ -7,7 +7,7 @@ import { defaultMicrovmRetryStrategy } from "../microvm/retry";
 import { agentcoreErrorMapper } from "./errors";
 import {
   createSessionId,
-  durationToSeconds,
+  exactSeconds,
   runJob,
   type SessionTarget,
   stopSession,
@@ -159,7 +159,10 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
  */
 export function validateConfig(
   name: string,
-  config: Pick<AgentcoreConfig, "agentRuntimeArn" | "timeout">,
+  config: Pick<
+    AgentcoreConfig,
+    "agentRuntimeArn" | "timeout" | "heartbeatTimeout"
+  >,
 ): void {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("an AgentCore operation requires a non-empty name");
@@ -170,11 +173,20 @@ export function validateConfig(
   // The agent runtime's maxLifetime limits the session: 8 hours for a
   // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
   // not say which one the runtime uses. So only the lower limit is checked.
-  const seconds = durationToSeconds(config.timeout);
+  const seconds = exactSeconds(config.timeout);
   if (!Number.isFinite(seconds) || seconds < 1) {
     throw new RangeError(
       `AgentCore "${name}": timeout must be at least 1 second. Got ${seconds} seconds.`,
     );
+  }
+  // The worker refuses a heartbeat timeout under 1 second.
+  if (config.heartbeatTimeout !== undefined) {
+    const heartbeatSeconds = exactSeconds(config.heartbeatTimeout);
+    if (!Number.isFinite(heartbeatSeconds) || heartbeatSeconds < 1) {
+      throw new RangeError(
+        `AgentCore "${name}": heartbeatTimeout must be at least 1 second. Got ${heartbeatSeconds} seconds.`,
+      );
+    }
   }
 }
 

@@ -17,6 +17,7 @@ import {
   type SessionTarget,
   stopSession,
 } from "./steps";
+import { AgentcoreOperationSubType } from "./subtypes";
 import type {
   AgentcoreConfig,
   AgentcoreInvokeOptions,
@@ -38,6 +39,13 @@ import type {
  *    for its result.
  * 3. `<name>.stop` calls StopRuntimeSession after the handler returns or
  *    throws.
+ *
+ * Each durable operation records a subtype from
+ * {@link AgentcoreOperationSubType}: `AgentcoreSession` on the child
+ * context, `AgentcoreSessionId` and `AgentcoreStop` on its steps, and
+ * `AgentcoreSessionJob` on each job's child context. A job's callback and
+ * request keep the `agentcore` subtypes. The operations that the handler
+ * creates keep their own subtypes.
  *
  * A stop failure does not fail the operation. The operation logs an error
  * and returns the handler's value or error.
@@ -112,7 +120,10 @@ export function agentcoreSession<TOutput = unknown>(
         await stopSession(child, name, retryStrategy, client, target);
       }
     },
-    { errorMapper: agentcoreSessionErrorMapper },
+    {
+      subType: AgentcoreOperationSubType.SESSION,
+      errorMapper: agentcoreSessionErrorMapper,
+    },
   );
 }
 
@@ -139,6 +150,7 @@ function invokeJob<TOutput>(
     validateConfig(jobName, {
       agentRuntimeArn: target.agentRuntimeArn,
       timeout: options.timeout,
+      heartbeatTimeout: options.heartbeatTimeout,
     });
     region = functionRegion(jobName);
     inputJson = encodeInput(jobName, input);
@@ -160,6 +172,9 @@ function invokeJob<TOutput>(
         inputJson,
         async () => {},
       ),
-    { errorMapper: agentcoreErrorMapper(jobName) },
+    {
+      subType: AgentcoreOperationSubType.SESSION_JOB,
+      errorMapper: agentcoreErrorMapper(jobName),
+    },
   );
 }
