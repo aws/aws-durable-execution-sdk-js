@@ -150,6 +150,7 @@ function invokeJob<TOutput>(
     validateConfig(jobName, {
       agentRuntimeArn: target.agentRuntimeArn,
       timeout: options.timeout,
+      heartbeatTimeout: options.heartbeatTimeout,
     });
     region = functionRegion(jobName);
     inputJson = encodeInput(jobName, input);

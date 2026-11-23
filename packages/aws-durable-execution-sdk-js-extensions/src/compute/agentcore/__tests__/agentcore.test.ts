@@ -479,7 +479,46 @@ describe("agentcore", () => {
 
   it.each<[string, Partial<AgentcoreConfig>, string]>([
     ["a timeout below 1 second", { timeout: { seconds: 0 } }, "RangeError"],
+    ["a timeout of 0.5 seconds", { timeout: { seconds: 0.5 } }, "RangeError"],
     ["a missing timeout", { timeout: undefined as never }, "RangeError"],
+    [
+      "a heartbeat timeout of 0 seconds",
+      { heartbeatTimeout: { seconds: 0 } },
+      "RangeError",
+    ],
+    [
+      "a negative heartbeat timeout",
+      { heartbeatTimeout: { seconds: -1 } },
+      "RangeError",
+    ],
+    [
+      "a NaN heartbeat timeout",
+      { heartbeatTimeout: { seconds: Number.NaN } },
+      "RangeError",
+    ],
+    [
+      "a heartbeat timeout of 0.5 seconds",
+      { heartbeatTimeout: { seconds: 0.5 } },
+      "RangeError",
+    ],
+    [
+      "an infinite heartbeat timeout",
+      { heartbeatTimeout: { seconds: Number.POSITIVE_INFINITY } },
+      "RangeError",
+    ],
+    [
+      "an infinite timeout",
+      { timeout: { seconds: Number.POSITIVE_INFINITY } },
+      "RangeError",
+    ],
+    // 0.72 seconds. Every unit adds to the exact value before the check.
+    [
+      "a heartbeat timeout of 0.0002 hours",
+      { heartbeatTimeout: { hours: 0.0002 } },
+      "RangeError",
+    ],
+    // 0.6 seconds.
+    ["a timeout of 0.01 minutes", { timeout: { minutes: 0.01 } }, "RangeError"],
     [
       "a missing agentRuntimeArn",
       { agentRuntimeArn: undefined as never },
@@ -499,6 +538,50 @@ describe("agentcore", () => {
       expect(execution.getError()?.errorType).toBe(errorType);
       expect(execution.getOperations()).toHaveLength(0);
       expect(client.invokeInputs).toHaveLength(0);
+    },
+  );
+
+  it("accepts a heartbeat timeout of 1 second", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcore(
+        context,
+        "review",
+        {},
+        baseConfig(client, { heartbeatTimeout: { seconds: 1 } }),
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "ok");
+
+    expect((await executionPromise).getResult()).toBe("ok");
+    expect(client.document().heartbeatTimeoutSeconds).toBe(1);
+  });
+
+  it.each<[string, AgentcoreConfig["timeout"], number]>([
+    ["1 minute and 0.5 seconds", { minutes: 1, seconds: 0.5 }, 61],
+    ["0.0003 hours", { hours: 0.0003 }, 2],
+    ["0.02 minutes", { minutes: 0.02 }, 2],
+    ["0.00002 days", { days: 0.00002 }, 2],
+  ])(
+    "accepts a heartbeat timeout of %s and sends it rounded up",
+    async (_label, heartbeatTimeout, sentSeconds) => {
+      const client = new FakeAgentcoreClient();
+      const runner = runnerFor((context) =>
+        agentcore(
+          context,
+          "review",
+          {},
+          baseConfig(client, { heartbeatTimeout }),
+        ),
+      );
+
+      const executionPromise = runner.run({ payload: {} });
+      await completeJob(runner, "ok");
+
+      expect((await executionPromise).getResult()).toBe("ok");
+      expect(client.document().heartbeatTimeoutSeconds).toBe(sentSeconds);
     },
   );
 
