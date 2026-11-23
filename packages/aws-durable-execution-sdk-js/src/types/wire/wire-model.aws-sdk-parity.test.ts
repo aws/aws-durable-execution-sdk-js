@@ -119,6 +119,13 @@ assert<
   >
 >();
 
+// Our value is passed to the AWS SDK. The service model has one more optional field,
+// `ExecutionTimeoutPaused`, which the SDK leaves to the service default. So only this
+// direction holds.
+assert<
+  Extends<Wire.PauseDurableExecutionRequest, Sdk.PauseDurableExecutionRequest>
+>();
+
 // ---------------------------------------------------------------------------
 // Normalized shapes. Timestamps are `Date` here, matching the service model
 // exactly, so these must agree in both directions.

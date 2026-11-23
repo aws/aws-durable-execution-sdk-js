@@ -33,8 +33,8 @@ const scopes = new Set([
   "deps",
   "deps-dev",
   "otel",
-  // Custom durable operations in packages/aws-durable-execution-sdk-js-extras.
-  "extras",
+  // Custom durable operations in packages/aws-durable-execution-sdk-js-extensions.
+  "extensions",
   // The worker package in packages/aws-durable-execution-sdk-js-compute-worker.
   "compute-worker",
   // Durable Execution Telemetry: the VS Code extension, the desktop app, and the host-free

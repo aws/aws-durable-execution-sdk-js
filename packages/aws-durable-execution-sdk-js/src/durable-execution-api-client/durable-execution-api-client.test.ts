@@ -13,6 +13,7 @@ import {
   GetDurableExecutionStateCommand,
   OperationAction,
   OperationType,
+  PauseDurableExecutionCommand,
 } from "@aws-sdk/client-lambda";
 import { OperationSubType } from "../types";
 import { log } from "../utils/logger/logger";
@@ -114,6 +115,36 @@ describe("ApiStorage", () => {
 
       // Verify the result
       expect(result).toBe(mockResponse);
+    });
+
+    test("should call pauseExecution with correct parameters", async () => {
+      mockClient.send.mockResolvedValue({});
+
+      await apiStorage.pauseExecution?.({
+        DurableExecutionArn: "durable-execution-arn",
+        ClientToken: "client-token",
+        Reason: "reason",
+      });
+
+      expect(mockClient.send).toHaveBeenCalledTimes(1);
+      const [command] = mockClient.send.mock.calls[0];
+      expect(command).toBeInstanceOf(PauseDurableExecutionCommand);
+      expect(command.input).toEqual({
+        DurableExecutionArn: "durable-execution-arn",
+        ClientToken: "client-token",
+        Reason: "reason",
+      });
+    });
+
+    test("should pass on a pauseExecution failure", async () => {
+      const mockError = new Error("AccessDeniedException");
+      mockClient.send.mockRejectedValue(mockError);
+
+      await expect(
+        apiStorage.pauseExecution?.({
+          DurableExecutionArn: "durable-execution-arn",
+        }),
+      ).rejects.toBe(mockError);
     });
 
     test("should call checkpoint with correct parameters", async () => {

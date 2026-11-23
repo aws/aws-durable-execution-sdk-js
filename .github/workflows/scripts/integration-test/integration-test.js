@@ -1183,7 +1183,7 @@ async function main() {
 
   // Add runtime argument
   parser.add_argument("--runtime", {
-    help: "Node runtime version (e.g., 20.x, 22.x, 24.x)",
+    help: "Node runtime version (e.g., 22.x, 24.x, 26.x)",
     default: "22.x",
     required: true,
   });

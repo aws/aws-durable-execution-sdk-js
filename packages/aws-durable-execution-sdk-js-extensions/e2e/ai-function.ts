@@ -6,7 +6,7 @@ import {
   type DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { decider, llm } from "@aws/durable-execution-sdk-js-extras/ai";
+import { decider, llm } from "@aws/durable-execution-sdk-js-extensions/ai";
 
 const model = llm();
 

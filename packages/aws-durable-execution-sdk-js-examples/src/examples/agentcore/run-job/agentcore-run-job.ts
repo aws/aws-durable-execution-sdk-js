@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { agentcore } from "@aws/durable-execution-sdk-js-extras/compute/agentcore";
+import { agentcore } from "@aws/durable-execution-sdk-js-extensions/compute/agentcore";
 import { ExampleConfig } from "../../../types";
 import { requireAgentcoreEnv } from "../../shared/agentcore-env";
 

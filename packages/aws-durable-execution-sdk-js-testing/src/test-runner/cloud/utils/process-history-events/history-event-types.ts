@@ -231,6 +231,26 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
+  // A pause and a resume change the execution's status, not an operation. So, like
+  // InvocationCompleted, they map to no operation.
+  ExecutionPaused: {
+    operationType: undefined,
+    operationStatus: undefined,
+    detailPlace: "ExecutionPausedDetails",
+    isStartEvent: false,
+    isEndEvent: false,
+    operationDetailPlace: undefined,
+    hasResult: false,
+  },
+  ExecutionResumed: {
+    operationType: undefined,
+    operationStatus: undefined,
+    detailPlace: "ExecutionResumedDetails",
+    isStartEvent: false,
+    isEndEvent: false,
+    operationDetailPlace: undefined,
+    hasResult: false,
+  },
 } as const satisfies Record<EventType, HistoryEventType>;
 
 /**
