@@ -181,7 +181,7 @@ export function validateConfig(
   >,
 ): void {
   validateTarget(name, config);
-  // The agent runtime's maxLifetime limits the session: 8 hours for a
+  // The agent runtime's maxLifetime limits the instance: 8 hours for a
   // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
   // not say which one the runtime uses. So only the lower limit is checked.
   const seconds = exactSeconds(config.timeout);

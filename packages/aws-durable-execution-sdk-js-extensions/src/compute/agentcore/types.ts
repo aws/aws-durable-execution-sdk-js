@@ -34,12 +34,12 @@ export interface AgentcoreConfig {
    * The maximum time to wait for the agent to report a result. It must be
    * at least 1 second.
    *
-   * The session ends at the agent runtime's `maxLifetime`, and the job ends
-   * with it. `maxLifetime` is at most 8 hours for a microVM runtime, and up
-   * to 14 days for a runtime on Instances. The operation cannot read the
-   * runtime's setting. So set a timeout that fits the configured
-   * `maxLifetime`. With a longer timeout, a job that ends with its session
-   * fails only at its heartbeat timeout or its timeout.
+   * The agent runtime's `maxLifetime` ends the session's instance, and the
+   * job ends with it. `maxLifetime` is at most 8 hours for a microVM
+   * runtime, and up to 14 days for a runtime on Instances. The operation
+   * cannot read the runtime's setting. So set a timeout that fits the
+   * configured `maxLifetime`. With a longer timeout, a job that ends with
+   * its instance fails only at its heartbeat timeout or its timeout.
    */
   timeout: Duration;
 
@@ -116,10 +116,11 @@ export interface AgentcoreJobDocument<TInput = unknown> {
  * one are lost. So set the idle timeout longer than any wait between two
  * jobs, such as a durable wait or a callback.
  *
- * The session ends at the agent runtime's `maxLifetime`, and a job that
- * still runs then ends with it. The operation cannot read the runtime's
- * setting. So keep the session, including durable waits between jobs,
- * within the configured `maxLifetime`.
+ * The agent runtime's `maxLifetime` ends the current instance, not the
+ * session. The same session ID then gets a new instance for the next job.
+ * The memory and files outside configured session storage are lost. A job
+ * that runs when the instance stops fails at its heartbeat timeout or its
+ * job timeout.
  *
  * @public
  *
@@ -143,8 +144,9 @@ export interface AgentcoreInvokeOptions {
    * The maximum time to wait for the agent to report this job's result. It
    * must be at least 1 second.
    *
-   * A job that still runs at the runtime's `maxLifetime` fails only at its
-   * heartbeat timeout or at this timeout.
+   * The agent runtime's `maxLifetime` ends the session's current instance.
+   * A job that runs when the instance stops fails at its heartbeat timeout
+   * or at this timeout. The next job gets a new instance.
    */
   timeout: Duration;
 

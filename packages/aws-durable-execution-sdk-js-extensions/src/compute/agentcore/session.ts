@@ -48,10 +48,11 @@ import type {
  * request keep the `agentcore` subtypes. The operations that the handler
  * creates keep their own subtypes.
  *
- * The session ends at the agent runtime's `maxLifetime`, and a job that
- * still runs then ends with it. The operation cannot read the runtime's
- * setting. So keep the handler's work, including durable waits between
- * jobs, within the configured `maxLifetime`.
+ * The agent runtime's `maxLifetime` ends the current instance, not the
+ * session. The same session ID then gets a new instance for the next job.
+ * The memory and files outside configured session storage are lost. A job
+ * that runs when the instance stops fails at its heartbeat timeout or its
+ * job timeout.
  *
  * A stop failure does not fail the operation. The operation logs an error
  * and returns the handler's value or error.

@@ -218,11 +218,12 @@ export async function stopSession(
   } catch (error) {
     // The job's outcome is already recorded, so the operation still returns
     // it. The worker reports HealthyBusy while its handler runs, and the
-    // service keeps such a session alive. So a session whose handler still
-    // runs ends only at the runtime's maxLifetime. An idle session ends at
-    // the idle timeout. A missing permission fails every stop, and this log
-    // is the only sign of it. So it is an error, not a warning, and it names
-    // the permission only for AccessDeniedException.
+    // service keeps such a session alive. So the instance of a session whose
+    // handler still runs ends only at the runtime's maxLifetime. An idle
+    // session's instance ends at the idle timeout. A missing permission
+    // fails every stop, and this log is the only sign of it. So it is an
+    // error, not a warning, and it names the permission only for
+    // AccessDeniedException.
     const causeName = (error as { cause?: { name?: unknown } }).cause?.name;
     const hint =
       causeName === "AccessDeniedException"
