@@ -344,24 +344,35 @@ export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
  * The rule:
  *
  * 1. A MicroVM error is restored to its class.
- * 2. An SDK error type that `fromErrorObject` knows passes through. The SDK
+ * 2. Any other error follows {@link callerErrorMapper}.
+ */
+export function sessionErrorMapper(
+  error: DurableOperationError,
+): DurableOperationError {
+  return rebuildMicrovmError(error) ?? callerErrorMapper(error);
+}
+
+/**
+ * Maps the failure of a child context that runs caller code, after the
+ * compute errors are restored. A session of each compute type uses it.
+ *
+ * The rule:
+ *
+ * 1. An SDK error type that `fromErrorObject` knows passes through. The SDK
  *    rebuilds such an error with `cause.name` set to its type.
- * 3. Any other error is wrapped in `ChildContextError`, as `runInChildContext`
+ * 2. Any other error is wrapped in `ChildContextError`, as `runInChildContext`
  *    does without an error mapper.
  *
  * The SDK rebuilds an error type that it does not know, such as a plain
  * `Error` thrown by the handler, as `StepError`, and keeps the original type
  * as `cause.name`. So `errorType` alone cannot tell a failed step from a
- * failed handler. So rule 2 also requires `cause.name` to match the type.
+ * failed handler. So rule 1 also requires `cause.name` to match the type.
  */
-export function sessionErrorMapper(
+export function callerErrorMapper(
   error: DurableOperationError,
 ): DurableOperationError {
-  return (
-    rebuildMicrovmError(error) ??
-    (SDK_ERROR_TYPES.has(error.errorType) &&
+  return SDK_ERROR_TYPES.has(error.errorType) &&
     error.cause?.name === error.errorType
-      ? error
-      : new ChildContextError(error.message, error))
-  );
+    ? error
+    : new ChildContextError(error.message, error);
 }

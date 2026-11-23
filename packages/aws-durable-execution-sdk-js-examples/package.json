@@ -57,7 +57,7 @@
     "@aws/durable-execution-sdk-js": "*",
     "@aws/durable-execution-sdk-js-testing": "*",
     "@aws/durable-execution-sdk-js-otel": "*",
-    "@aws/durable-execution-sdk-js-extras": "0.1.0-alpha.0"
+    "@aws/durable-execution-sdk-js-extensions": "0.1.0-alpha.0"
   },
   "devDependencies": {
     "@aws-sdk/client-bedrock-agentcore": "^3.1164.0",

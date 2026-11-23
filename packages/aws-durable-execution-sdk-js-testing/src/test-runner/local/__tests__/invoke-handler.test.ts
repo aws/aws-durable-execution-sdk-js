@@ -81,6 +81,42 @@ describe("invoke-handler", () => {
       });
     });
 
+    it("should give the client the pause function", async () => {
+      const pauseExecution = vi.fn().mockResolvedValue(undefined);
+      const mockHandler = vi.fn().mockResolvedValue({
+        Status: InvocationStatus.PENDING,
+      });
+
+      await new InvokeHandler(undefined, pauseExecution).invoke(mockHandler, {
+        durableExecutionArn: "test-arn",
+        operations: [],
+        checkpointToken: "test-token",
+      });
+
+      const event = mockHandler.mock
+        .calls[0][0] as DurableExecutionInvocationInputWithClient;
+      await event.durableExecutionClient.pauseExecution?.({
+        DurableExecutionArn: "test-arn",
+      });
+      expect(pauseExecution).toHaveBeenCalledTimes(1);
+    });
+
+    it("should give the client no pause support without a pause function", async () => {
+      const mockHandler = vi.fn().mockResolvedValue({
+        Status: InvocationStatus.PENDING,
+      });
+
+      await invokeHandlerInstance.invoke(mockHandler, {
+        durableExecutionArn: "test-arn",
+        operations: [],
+        checkpointToken: "test-token",
+      });
+
+      const event = mockHandler.mock
+        .calls[0][0] as DurableExecutionInvocationInputWithClient;
+      expect(event.durableExecutionClient.pauseExecution).toBeUndefined();
+    });
+
     it("should merge custom context values with default context", async () => {
       const mockHandler = vi.fn().mockResolvedValue({
         Status: InvocationStatus.SUCCEEDED,

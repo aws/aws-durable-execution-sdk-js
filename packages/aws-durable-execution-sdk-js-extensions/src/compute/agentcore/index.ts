@@ -6,5 +6,12 @@ export {
   AgentcoreJobFailedError,
   AgentcoreTimeoutError,
 } from "./errors";
+export { agentcoreSession } from "./session";
 export { AgentcoreOperationSubType } from "./subtypes";
-export type { AgentcoreConfig, AgentcoreJobDocument } from "./types";
+export type {
+  AgentcoreConfig,
+  AgentcoreInvokeOptions,
+  AgentcoreJobDocument,
+  AgentcoreSession,
+  AgentcoreSessionConfig,
+} from "./types";

@@ -3,6 +3,7 @@ import {
   DurableOperationError,
 } from "@aws/durable-execution-sdk-js";
 import { ComputeError } from "../errors";
+import { callerErrorMapper } from "../microvm/errors";
 
 /**
  * The base class of every error that {@link agentcore} reports for a failed
@@ -158,14 +159,33 @@ export async function inStage<T>(
 export function agentcoreErrorMapper(
   name: string,
 ): (error: DurableOperationError) => DurableOperationError {
-  return (error) => {
-    const Class = CLASSES[error.cause?.name ?? ""];
-    return Class
-      ? new Class(error.message, error.cause, error.errorData)
-      : new AgentcoreError(
-          `AgentCore "${name}": ${error.message}`,
-          error.cause,
-          error.errorData,
-        );
-  };
+  return (error) =>
+    rebuildAgentcoreError(error) ??
+    new AgentcoreError(
+      `AgentCore "${name}": ${error.message}`,
+      error.cause,
+      error.errorData,
+    );
+}
+
+/**
+ * The error mapper of `agentcoreSession`. The session handler is caller
+ * code. So an AgentCore error, such as a failed job that the handler does
+ * not catch, is restored to its class, and any other error follows
+ * {@link callerErrorMapper}, as in `microvmSession`.
+ */
+export function agentcoreSessionErrorMapper(
+  error: DurableOperationError,
+): DurableOperationError {
+  return rebuildAgentcoreError(error) ?? callerErrorMapper(error);
+}
+
+/** Restores an AgentCore error from its checkpointed type, `cause.name`. */
+function rebuildAgentcoreError(
+  error: DurableOperationError,
+): AgentcoreError | undefined {
+  const Class = CLASSES[error.cause?.name ?? ""];
+  return Class
+    ? new Class(error.message, error.cause, error.errorData)
+    : undefined;
 }
