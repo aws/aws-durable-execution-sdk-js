@@ -77,7 +77,6 @@ jobs:
     # 2. For PRs, run only same-repo branches from non-Dependabot actors; forked PRs or Dependabot should not access secrets.
     if: github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
-      actions: write
       contents: read
       id-token: write
     uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@main
