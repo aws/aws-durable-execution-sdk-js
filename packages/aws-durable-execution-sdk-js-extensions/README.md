@@ -305,7 +305,7 @@ export const handler = withDurableExecution(async (ticket, context) => {
 ```
 
 - The decision model can run on any server (`endpoint`), or on SageMaker, Lambda, or AgentCore Runtime (`sageMakerTransport`, `lambdaTransport`, `agentCoreTransport`). Each AWS transport needs its own optional AWS SDK client.
-- `llm()` needs the optional peer dependency `@aws-sdk/client-bedrock-runtime`, and `bedrock:InvokeModel` on the model.
+- `llm()` needs the optional peer dependency `@aws-sdk/client-bedrock-runtime`, and `bedrock:InvokeModel` on the model, and on the inference profile when the model ID names one. The default model ID names a global inference profile.
 - A reply that is not usable fails the step with an `AiError` subclass, such as `DeciderInvalidResponseError`. The step uses the core SDK's default retry strategy. Pass `retryStrategy` to choose which errors to retry.
 
 The [AI operations reference](docs/ai.md) covers every host, the errors, and the permissions.
