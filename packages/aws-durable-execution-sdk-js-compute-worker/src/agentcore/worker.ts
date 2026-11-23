@@ -47,7 +47,7 @@ const MAX_REMEMBERED_JOBS = 1_000;
  *
  * @remarks
  * The same type is declared in
- * `@aws/durable-execution-sdk-js-extras/compute/agentcore`. The two
+ * `@aws/durable-execution-sdk-js-extensions/compute/agentcore`. The two
  * packages do not depend on each other, because one runs in the function
  * and the other in the agent runtime. So a change to one declaration must be
  * made in the other too.

@@ -355,6 +355,23 @@ export interface GetDurableExecutionStateRequest {
 }
 
 /**
+ * Request shape for the PauseDurableExecution API.
+ *
+ * The service model also has `ExecutionTimeoutPaused`. The SDK does not send it, so the
+ * service default applies.
+ *
+ * @public
+ */
+export interface PauseDurableExecutionRequest {
+  /** ARN identifying the durable execution to pause. */
+  DurableExecutionArn: string | undefined;
+  /** Idempotency token for the pause request. */
+  ClientToken?: string | undefined;
+  /** Why the execution is paused. The service records it in the execution history. */
+  Reason?: string | undefined;
+}
+
+/**
  * Response shape for the GetDurableExecutionState API.
  *
  * @public

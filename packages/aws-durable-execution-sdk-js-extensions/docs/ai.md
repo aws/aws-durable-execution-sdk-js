@@ -19,7 +19,7 @@ The `ai` subpath has two factories. Each returns operations that ask a model one
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { decider, llm } from "@aws/durable-execution-sdk-js-extras/ai";
+import { decider, llm } from "@aws/durable-execution-sdk-js-extensions/ai";
 
 const decide = decider();
 const model = llm();

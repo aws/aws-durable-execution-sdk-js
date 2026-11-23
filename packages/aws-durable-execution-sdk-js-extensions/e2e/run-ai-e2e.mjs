@@ -14,7 +14,7 @@
 //
 // Every resource is named with the "dex-ai-e2e" prefix.
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
-// workspace (npm run build in the SDK and extras packages).
+// workspace (npm run build in the SDK and extensions packages).
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";

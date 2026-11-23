@@ -181,9 +181,11 @@ function mapRuntimeToEnum(runtimeString?: string): Runtime {
       return Runtime.nodejs22x;
     case "24.x":
       return "nodejs24.x" as Runtime;
+    case "26.x":
+      return "nodejs26.x" as Runtime;
     default:
       console.error(`Invalid runtime: ${runtimeString}`);
-      console.error("Available runtimes: 20x, 22x, 24x");
+      console.error("Available runtimes: 20x, 22x, 24x, 26x");
       process.exit(1);
   }
 }
@@ -887,13 +889,15 @@ export async function main(): Promise<void> {
             LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
           ) {
             console.log("Setting function scaling config");
+            // Minimum 0 lets Lambda scale the function to zero when it is idle.
+            // So an idle PR function holds no capacity on the shared provider.
             await retryOnConflict(() =>
               lambdaClient.send(
                 new PutFunctionScalingConfigCommand({
                   FunctionName: functionName,
                   Qualifier: qualifier,
                   FunctionScalingConfig: {
-                    MinExecutionEnvironments: 1,
+                    MinExecutionEnvironments: 0,
                     MaxExecutionEnvironments: 1,
                   },
                 }),

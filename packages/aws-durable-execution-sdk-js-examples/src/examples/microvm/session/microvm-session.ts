@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { microvmSession } from "@aws/durable-execution-sdk-js-extras/compute/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extensions/compute/microvm";
 import { ExampleConfig } from "../../../types";
 import { requireMicrovmEnv } from "../../shared/microvm-env";
 
@@ -60,7 +60,7 @@ export const handler = withDurableExecution(
 
         // The wait ends this invocation. The MicroVM stays suspended during
         // the wait, and keeps its memory and files.
-        await sessionContext.wait("pause", { seconds: 30 });
+        await sessionContext.wait("pause", { seconds: 10 });
 
         // The service resumes the suspended MicroVM on this job's request.
         // So this job finds the file that the first job wrote.
