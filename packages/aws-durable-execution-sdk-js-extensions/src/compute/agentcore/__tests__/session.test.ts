@@ -51,7 +51,6 @@ const sessionConfig = (
   overrides: Partial<AgentcoreSessionConfig> = {},
 ): AgentcoreSessionConfig => ({
   agentRuntimeArn: RUNTIME_ARN,
-  timeout: { minutes: 30 },
   client: client.asClient(),
   ...overrides,
 });
@@ -208,27 +207,44 @@ describe("agentcoreSession", () => {
     ).toBeUndefined();
   });
 
-  it("rejects an invalid config with a TypeError before any durable operation", async () => {
-    const client = new FakeAgentcoreClient();
-    const runner = runnerFor((context) => {
-      let promise: Promise<string> | undefined;
-      // The config error rejects the returned promise. It is not thrown.
-      expect(() => {
-        promise = agentcoreSession(
-          context,
-          "",
-          sessionConfig(client),
-          async () => "ok",
-        );
-      }).not.toThrow();
-      return promise as Promise<string>;
-    });
+  it.each<[string, string, Partial<AgentcoreSessionConfig>, string]>([
+    [
+      "an empty name",
+      "",
+      {},
+      "an AgentCore operation requires a non-empty name",
+    ],
+    [
+      "a missing runtime ARN",
+      "review",
+      { agentRuntimeArn: undefined as unknown as string },
+      'AgentCore "review": agentRuntimeArn is required',
+    ],
+  ])(
+    "rejects %s with a TypeError before any durable operation",
+    async (_label, name, overrides, message) => {
+      const client = new FakeAgentcoreClient();
+      const runner = runnerFor((context) => {
+        let promise: Promise<string> | undefined;
+        // The config error rejects the returned promise. It is not thrown.
+        expect(() => {
+          promise = agentcoreSession(
+            context,
+            name,
+            sessionConfig(client, overrides),
+            async () => "ok",
+          );
+        }).not.toThrow();
+        return promise as Promise<string>;
+      });
 
-    const execution = await runner.run({ payload: {} });
+      const execution = await runner.run({ payload: {} });
 
-    expect(execution.getError()?.errorType).toBe("TypeError");
-    expect(execution.getOperations()).toHaveLength(0);
-  });
+      expect(execution.getError()?.errorType).toBe("TypeError");
+      expect(execution.getError()?.errorMessage).toBe(message);
+      expect(execution.getOperations()).toHaveLength(0);
+    },
+  );
 });
 
 /** Waits for the request step of `job`, then completes its callback. */

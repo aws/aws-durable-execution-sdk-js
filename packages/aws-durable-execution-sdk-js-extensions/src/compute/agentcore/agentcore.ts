@@ -154,8 +154,24 @@ export function agentcore<TOutput = unknown, TInput = unknown>(
 }
 
 /**
+ * Checks the name and the runtime ARN. `agentcoreSession` calls it before
+ * any durable operation.
+ */
+export function validateTarget(
+  name: string,
+  config: Pick<AgentcoreConfig, "agentRuntimeArn">,
+): void {
+  if (typeof name !== "string" || name.length === 0) {
+    throw new TypeError("an AgentCore operation requires a non-empty name");
+  }
+  if (typeof config?.agentRuntimeArn !== "string") {
+    throw new TypeError(`AgentCore "${name}": agentRuntimeArn is required`);
+  }
+}
+
+/**
  * Checks the name, the runtime ARN and the timeout. {@link agentcore} and
- * `agentcoreSession` call it before any durable operation.
+ * each session job call it before any durable operation.
  */
 export function validateConfig(
   name: string,
@@ -164,12 +180,7 @@ export function validateConfig(
     "agentRuntimeArn" | "timeout" | "heartbeatTimeout"
   >,
 ): void {
-  if (typeof name !== "string" || name.length === 0) {
-    throw new TypeError("an AgentCore operation requires a non-empty name");
-  }
-  if (typeof config?.agentRuntimeArn !== "string") {
-    throw new TypeError(`AgentCore "${name}": agentRuntimeArn is required`);
-  }
+  validateTarget(name, config);
   // The agent runtime's maxLifetime limits the session: 8 hours for a
   // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
   // not say which one the runtime uses. So only the lower limit is checked.
