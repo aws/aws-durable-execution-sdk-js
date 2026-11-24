@@ -639,6 +639,7 @@ describe("startAgentcoreWorker", () => {
         level: "INFO",
         message: "job started",
         callbackId: "cb-1",
+        jobCount: 1,
       });
       expect(JSON.parse(warn.mock.calls[0][0] as string)).toMatchObject({
         level: "WARN",
@@ -809,18 +810,41 @@ describe("startAgentcoreWorker session ID", () => {
       await worker?.idle();
 
       expect(seen).toEqual(["session-1"]);
-      for (const message of [
-        "job started",
-        "job succeeded",
-        "job already accepted",
-      ]) {
+      for (const message of ["job started", "job succeeded"]) {
         expect(lines.find((line) => line.message === message)?.data).toEqual({
           callbackId: "cb-1",
           runtimeSessionId: "session-1",
+          jobCount: 1,
         });
       }
+      expect(
+        lines.find((line) => line.message === "job already accepted")?.data,
+      ).toEqual({ callbackId: "cb-1", runtimeSessionId: "session-1" });
     },
   );
+
+  it("logs the session ID and the job count on each job started line", async () => {
+    const { logger, lines } = dataLogger();
+    await start(
+      async () => "ok",
+      new FakeLambdaClient(),
+      logger as RecordingLogger,
+    );
+
+    await invokeWith({ [SESSION_HEADER]: "session-1" }, job("cb-1"));
+    await invokeWith({ [SESSION_HEADER]: "session-1" }, job("cb-1"));
+    await invokeWith({ [SESSION_HEADER]: "session-1" }, job("cb-2"));
+    await worker?.idle();
+
+    expect(
+      lines
+        .filter((line) => line.message === "job started")
+        .map((line) => line.data),
+    ).toEqual([
+      { callbackId: "cb-1", runtimeSessionId: "session-1", jobCount: 1 },
+      { callbackId: "cb-2", runtimeSessionId: "session-1", jobCount: 2 },
+    ]);
+  });
 
   it("leaves the session ID undefined without the header", async () => {
     const seen: unknown[] = [];
