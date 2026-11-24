@@ -21,8 +21,15 @@ process.env.GITHUB_REPOSITORY = "aws/repo";
 process.env.GITHUB_RUN_ID = "99";
 process.env.GITHUB_TOKEN = "token";
 process.env.PR_NUMBER = "5";
-const { commentBody, findOutliers, loadReports, updatePrComment } =
-  await import("./timing-report.mjs");
+const {
+  commentBody,
+  findFlaky,
+  findOutliers,
+  loadReports,
+  newest,
+  summarize,
+  updatePrComment,
+} = await import("./timing-report.mjs");
 
 const SCRIPT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -32,12 +39,18 @@ const MARKER = "<!-- integration-test-timings -->";
 const BOT = "github-actions[bot]";
 const VERSIONS = ["22.x", "24.x"];
 const slowA = { name: "a.test.ts", seconds: 30, median: 10 };
+const flakyB = { name: "b.test.ts > works", runs: 2 };
 
-/** @param {string} version @param {import("./timing-report.mjs").Outlier[]} outliers */
-const report = (version, outliers, baselineRuns = 3) => ({
+/**
+ * @param {string} version
+ * @param {import("./timing-report.mjs").Outlier[]} outliers
+ * @param {import("./timing-report.mjs").Flaky[]} flaky
+ */
+const report = (version, outliers, baselineRuns = 3, flaky = []) => ({
   version,
   baselineRuns,
   outliers,
+  flaky,
 });
 
 /**
@@ -80,6 +93,62 @@ describe("findOutliers", () => {
   });
 });
 
+describe("newest", () => {
+  test("picks the artifact of the last attempt", () => {
+    const first = { id: 1, created_at: "2026-11-23T20:47:23Z" };
+    const rerun = { id: 2, created_at: "2026-11-23T21:07:56Z" };
+    assert.equal(newest([first, rerun]), rerun);
+    assert.equal(newest([rerun, first]), rerun);
+  });
+
+  test("returns undefined when there is no artifact", () => {
+    assert.equal(newest([]), undefined);
+  });
+});
+
+describe("summarize", () => {
+  test("lists only the tests with status failed", () => {
+    const { failedTests } = summarize({
+      testResults: [
+        {
+          name: "/x/src/examples/a/a.test.ts",
+          startTime: 0,
+          endTime: 1000,
+          assertionResults: [
+            { title: "fails", status: "failed", duration: 900 },
+            { title: "works", status: "passed", duration: 100 },
+          ],
+        },
+        // After a failure, bail fails the files that did not run and skips
+        // their tests.
+        {
+          name: "/x/src/examples/b/b.test.ts",
+          startTime: 0,
+          endTime: 0,
+          status: "failed",
+          assertionResults: [{ title: "never ran", status: "skipped" }],
+        },
+      ],
+    });
+    assert.deepEqual(failedTests, ["a/a.test.ts > fails"]);
+  });
+});
+
+describe("findFlaky", () => {
+  test("flags a test that failed before a rerun in 2 runs", () => {
+    assert.deepEqual(findFlaky({ "a > t": 2, "b > t": 1 }), [
+      { name: "a > t", runs: 2 },
+    ]);
+  });
+
+  test("puts the test with the most runs first", () => {
+    assert.deepEqual(
+      findFlaky({ "a > t": 2, "b > t": 4 }).map((f) => f.name),
+      ["b > t", "a > t"],
+    );
+  });
+});
+
 describe("commentBody", () => {
   test("lists a file slow on both versions once, with a cell per version", () => {
     const body = commentBody(
@@ -119,10 +188,28 @@ describe("commentBody", () => {
     assert.ok(body.indexOf("a.test.ts") < body.indexOf("small.test.ts"));
   });
 
-  test("says so when no file is slow", () => {
+  test("says so when no file is slow and no test is flaky", () => {
     const body = commentBody([report("22.x", [])], true);
     assert.match(body, /No test file is slower than usual/);
-    assert.doesNotMatch(body, /\| Test file/);
+    assert.match(body, /No test is flaky in recent runs/);
+    assert.doesNotMatch(body, /\| Test/);
+  });
+
+  test("lists a flaky test once, with its runs per version", () => {
+    const body = commentBody(
+      [
+        report("22.x", [], 10, [flakyB]),
+        report("24.x", [], 9, [{ ...flakyB, runs: 3 }]),
+        report("26.x", [], 10),
+      ],
+      true,
+    );
+    assert.match(body, /### Flaky integration tests/);
+    assert.match(
+      body,
+      /\| b\.test\.ts > works \| 2 of 10 runs \| 3 of 9 runs \| - \|/,
+    );
+    assert.equal(body.match(/b\.test\.ts > works/g)?.length, 1);
   });
 
   test("says when the tests did not all pass", () => {
@@ -141,10 +228,14 @@ describe("loadReports", () => {
   test("reads each version's baseline size and outliers, sorted by version", () => {
     const dir = artifactFolder({
       "integration-test-timings-24.x": { baselineRuns: 0, outliers: [] },
-      "integration-test-timings-22.x": { baselineRuns: 3, outliers: [slowA] },
+      "integration-test-timings-22.x": {
+        baselineRuns: 3,
+        outliers: [slowA],
+        flaky: [flakyB],
+      },
     });
     assert.deepEqual(loadReports(dir), [
-      report("22.x", [slowA], 3),
+      report("22.x", [slowA], 3, [flakyB]),
       report("24.x", [], 0),
     ]);
   });
@@ -200,6 +291,15 @@ describe("updatePrComment", () => {
   test("posts nothing when no file is slow and none exists", async () => {
     await updatePrComment(notSlow, true, VERSIONS);
     assert.deepEqual(writes(), []);
+  });
+
+  test("posts a new comment when only a test is flaky", async () => {
+    await updatePrComment([report("22.x", [], 3, [flakyB])], true, VERSIONS);
+    assert.deepEqual(
+      writes().map((c) => c.method),
+      ["POST"],
+    );
+    assert.match(writes()[0].body ?? "", /b\.test\.ts > works/);
   });
 
   test("updates its own comment after a full check finds no slow file", async () => {
@@ -317,11 +417,18 @@ describe("command line", () => {
         console.log("CALL " + method + " " + new URL(url).pathname + note);
       }
       const path = new URL(url).pathname;
+      if (path.startsWith("/zip/")) {
+        const { readFileSync } = await import("node:fs");
+        return new Response(readFileSync(process.env.FAKE_ZIP_DIR + path.slice(4)));
+      }
+      const runArtifacts = path.match(/\\/runs\\/(\\d+)\\/artifacts$/);
       const body = path.endsWith("/runs")
-        ? { workflow_runs: [] }
-        : path.endsWith("/5/comments") && method === "GET"
-          ? JSON.parse(process.env.FAKE_COMMENTS ?? "[]")
-          : {};
+        ? { workflow_runs: JSON.parse(process.env.FAKE_RUNS ?? "[]") }
+        : runArtifacts
+          ? { artifacts: JSON.parse(process.env.FAKE_ARTIFACTS ?? "{}")[runArtifacts[1]] ?? [] }
+          : path.endsWith("/5/comments") && method === "GET"
+            ? JSON.parse(process.env.FAKE_COMMENTS ?? "[]")
+            : {};
       return new Response(JSON.stringify(body), { status });
     };`,
   );
@@ -456,5 +563,106 @@ describe("command line", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /Could not load the baseline/);
     assert.ok(existsSync(join(cwd, "integration-timings.json")));
+  });
+
+  // Three earlier runs. Runs 1 and 2 passed after a rerun, so each has the
+  // artifact of a failed attempt. Run 3 passed at once.
+  test("the report mode flags a test that failed before a rerun in 2 runs", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "job-"));
+    const zips = mkdtempSync(join(tmpdir(), "zips-"));
+    /** @param {string} name @param {object} saved */
+    const zip = (name, saved) => {
+      const folder = mkdtempSync(join(tmpdir(), "artifact-"));
+      writeFileSync(
+        join(folder, "integration-timings.json"),
+        JSON.stringify(saved),
+      );
+      spawnSync("zip", [
+        "-q",
+        "-j",
+        join(zips, name),
+        join(folder, "integration-timings.json"),
+      ]);
+      return `https://api.github.com/zip/${name}`;
+    };
+    const passed = { files: { "a.test.ts": 10 }, failedTests: [] };
+    /** @param {string[]} failedTests */
+    const failed = (failedTests) => ({
+      files: { "a.test.ts": 0 },
+      failedTests,
+    });
+    /** @type {Record<string, object[]>} */
+    const artifacts = {
+      1: [
+        {
+          id: 11,
+          expired: false,
+          created_at: "2026-11-01T01:00:00Z",
+          archive_download_url: zip("11.zip", failed(["b > t", "c > t"])),
+        },
+        {
+          id: 12,
+          expired: false,
+          created_at: "2026-11-01T02:00:00Z",
+          archive_download_url: zip("12.zip", passed),
+        },
+      ],
+      2: [
+        {
+          id: 22,
+          expired: false,
+          created_at: "2026-11-02T02:00:00Z",
+          archive_download_url: zip("22.zip", passed),
+        },
+        {
+          id: 21,
+          expired: false,
+          created_at: "2026-11-02T01:00:00Z",
+          archive_download_url: zip("21.zip", failed(["b > t"])),
+        },
+      ],
+      3: [
+        {
+          id: 31,
+          expired: false,
+          created_at: "2026-11-03T01:00:00Z",
+          archive_download_url: zip("31.zip", passed),
+        },
+      ],
+    };
+    const results = join(cwd, "results.json");
+    writeFileSync(
+      results,
+      JSON.stringify({
+        testResults: [
+          { name: "/x/src/examples/a.test.ts", startTime: 0, endTime: 10000 },
+        ],
+      }),
+    );
+    const summary = join(cwd, "summary.md");
+    const result = run(
+      [results, "integration-test-timings-22.x"],
+      {
+        GITHUB_STEP_SUMMARY: summary,
+        FAKE_RUNS: JSON.stringify([{ id: 1 }, { id: 2 }, { id: 3 }]),
+        FAKE_ARTIFACTS: JSON.stringify(artifacts),
+        FAKE_ZIP_DIR: zips,
+      },
+      cwd,
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const saved = JSON.parse(
+      readFileSync(join(cwd, "integration-timings.json"), "utf8"),
+    );
+    assert.equal(saved.baselineRuns, 3);
+    assert.deepEqual(saved.flaky, [{ name: "b > t", runs: 2 }]);
+    // The failed attempts' 0s timings are not in the baseline, so a.test.ts
+    // at its usual 10s is not slow.
+    assert.deepEqual(saved.outliers, []);
+    assert.match(
+      result.stdout,
+      /::warning title=Flaky integration test::b > t/,
+    );
+    assert.match(readFileSync(summary, "utf8"), /\| b > t \| 2 of 3 \|/);
   });
 });
