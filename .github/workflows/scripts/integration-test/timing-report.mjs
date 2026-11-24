@@ -137,6 +137,18 @@ async function github(path, { method = "GET", body } = {}) {
 }
 
 /**
+ * The artifact created last, or undefined for an empty list.
+ * @template {{ created_at: string }} T
+ * @param {T[]} artifacts
+ * @returns {T | undefined}
+ */
+export function newest(artifacts) {
+  return [...artifacts].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  )[0];
+}
+
+/**
  * Timings saved by recent successful Build runs, per file.
  * @returns {Promise<{ runs: number, files: Record<string, number[]> }>}
  */
@@ -158,7 +170,10 @@ async function loadBaseline() {
         `/repos/${GITHUB_REPOSITORY}/actions/runs/${run.id}/artifacts?name=${encodeURIComponent(artifactName)}`,
       )
     ).json();
-    const artifact = artifacts.find((a) => !a.expired);
+    // A rerun keeps the artifact of each earlier attempt. An earlier attempt
+    // failed, and bail stopped most of its files at about 0s. So the timings
+    // come from the newest artifact, which the passing attempt uploaded.
+    const artifact = newest(artifacts.filter((a) => !a.expired));
     if (!artifact) continue;
     const zip = join(dir, `${run.id}.zip`);
     writeFileSync(

@@ -21,7 +21,7 @@ process.env.GITHUB_REPOSITORY = "aws/repo";
 process.env.GITHUB_RUN_ID = "99";
 process.env.GITHUB_TOKEN = "token";
 process.env.PR_NUMBER = "5";
-const { commentBody, findOutliers, loadReports, updatePrComment } =
+const { commentBody, findOutliers, loadReports, newest, updatePrComment } =
   await import("./timing-report.mjs");
 
 const SCRIPT = join(
@@ -77,6 +77,19 @@ describe("findOutliers", () => {
 
   test("files without a baseline are skipped", () => {
     assert.deepEqual(findOutliers({ f: 100 }, {}), []);
+  });
+});
+
+describe("newest", () => {
+  test("picks the artifact of the last attempt", () => {
+    const first = { id: 1, created_at: "2026-11-23T20:47:23Z" };
+    const rerun = { id: 2, created_at: "2026-11-23T21:07:56Z" };
+    assert.equal(newest([first, rerun]), rerun);
+    assert.equal(newest([rerun, first]), rerun);
+  });
+
+  test("returns undefined when there is no artifact", () => {
+    assert.equal(newest([]), undefined);
   });
 });
 
