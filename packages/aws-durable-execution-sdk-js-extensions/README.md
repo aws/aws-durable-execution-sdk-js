@@ -250,7 +250,7 @@ await startAgentcoreWorker<{ pr: number }, { approved: boolean }>({
 
 The operation creates the steps `<name>.session` (the runtime session ID), `<name>.request` (InvokeAgentRuntime), and `<name>.stop` (StopRuntimeSession), and the callback `<name>.callback`. The function invocation ends while the agent works. A failure is an `AgentcoreError`: `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. `AgentcoreError` extends `ComputeError`.
 
-After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. This operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session's instance alive.
 
 InvokeAgentRuntime and StopRuntimeSession each stop 10 seconds before the Lambda invocation times out, and the step retries in a later invocation.
 
