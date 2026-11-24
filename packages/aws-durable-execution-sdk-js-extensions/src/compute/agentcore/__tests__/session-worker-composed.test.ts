@@ -54,23 +54,15 @@ type LambdaClient = ReturnType<
 
 /**
  * Completes the callback of the job whose callback ID the worker reports.
- * The success command has `Result`, and the failure command has `Error`. A
- * heartbeat has neither.
+ * Both jobs of this test succeed. So the fake handles the success command,
+ * which has `Result`, and ignores a heartbeat, which has none.
  */
 function callbackClient(runner: () => Runner): LambdaClient {
   return {
     send: async (command: {
-      input: {
-        CallbackId: string;
-        Result?: Uint8Array;
-        Error?: Record<string, string>;
-      };
+      input: { CallbackId: string; Result?: Uint8Array };
     }) => {
-      const {
-        CallbackId: callbackId,
-        Result: result,
-        Error: error,
-      } = command.input;
+      const { CallbackId: callbackId, Result: result } = command.input;
       const callback = JOBS.map((job) =>
         runner().getOperation(`${job}.callback`),
       ).find((op) => op.getCallbackDetails()?.callbackId === callbackId);
@@ -81,8 +73,6 @@ function callbackClient(runner: () => Runner): LambdaClient {
         await callback.sendCallbackSuccess(
           Buffer.from(result).toString("utf8"),
         );
-      } else if (error !== undefined) {
-        await callback.sendCallbackFailure(error);
       }
       return {};
     },
