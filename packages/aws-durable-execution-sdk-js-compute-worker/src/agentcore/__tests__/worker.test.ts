@@ -136,6 +136,38 @@ describe("startAgentcoreWorker", () => {
     expect(await ping()).toMatchObject({ status: "Healthy" });
   });
 
+  it("answers ping with HealthyBusy until the last of two parallel jobs ends", async () => {
+    const gates = new Map([
+      ["cb-1", gate()],
+      ["cb-2", gate()],
+    ]);
+    const started: string[] = [];
+    const { client } = await start(async (_input, { callbackId }) => {
+      started.push(callbackId);
+      await gates.get(callbackId)?.promise;
+    });
+
+    await invoke(job("cb-1"));
+    await invoke(job("cb-2"));
+    // Both handlers run at the same time.
+    await expect.poll(() => started).toEqual(["cb-1", "cb-2"]);
+    expect(await ping()).toMatchObject({ status: "HealthyBusy" });
+
+    // The job that started last ends first. The other job still runs, so
+    // the worker stays busy. The job promise settles a few microtasks after
+    // the report, so the short wait lets it settle.
+    gates.get("cb-2")?.open();
+    await expect.poll(() => client.named(SUCCESS)).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await ping()).toMatchObject({ status: "HealthyBusy" });
+
+    // The last job ends.
+    gates.get("cb-1")?.open();
+    await worker?.idle();
+    expect(client.named(SUCCESS)).toHaveLength(2);
+    expect(await ping()).toMatchObject({ status: "Healthy" });
+  });
+
   it("sets time_of_last_update at start and at each status change only", async () => {
     // Only Date is faked, so the server and the requests still run.
     vi.useFakeTimers({ toFake: ["Date"], now: 1_000_000_000_000 });
