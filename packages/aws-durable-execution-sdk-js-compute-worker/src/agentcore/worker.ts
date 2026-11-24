@@ -181,7 +181,8 @@ export interface AgentcoreWorker {
  *
  * - `GET /ping` answers `{"status": "HealthyBusy", "time_of_last_update":
  *   <seconds>}` while a job runs, and `"Healthy"` otherwise. AgentCore
- *   Runtime keeps a busy session alive past its idle timeout.
+ *   Runtime keeps the instance of a busy session alive past its idle
+ *   timeout.
  *   `time_of_last_update` is the Unix time, in seconds, of the last status
  *   change. The worker sets it when it starts and when the status changes
  *   between `Healthy` and `HealthyBusy`. It does not set it to the current
@@ -242,10 +243,11 @@ export async function startAgentcoreWorker<TInput = unknown, TOutput = unknown>(
   // insertion order.
   const accepted = new Set<string>();
   // The Unix time, in seconds, of the last status change. A public report
-  // states that the service ends a HealthyBusy session at its idle timeout
-  // when the ping answer has no time_of_last_update. The documentation makes
-  // the field optional and asks to set it only when the status changes. So
-  // the worker sets it at start, and when the status flips.
+  // states that the service ends the instance of a HealthyBusy session at
+  // its idle timeout when the ping answer has no time_of_last_update. The
+  // documentation makes the field optional and asks to set it only when the
+  // status changes. So the worker sets it at start, and when the status
+  // flips.
   let lastStatusChange = nowSeconds();
   const status = (): "Healthy" | "HealthyBusy" =>
     running.size > 0 ? "HealthyBusy" : "Healthy";

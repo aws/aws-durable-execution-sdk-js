@@ -230,7 +230,7 @@ export async function stopSession(
         ? " The function's execution role needs bedrock-agentcore:StopRuntimeSession on the agent runtime ARN and on <runtime ARN>/runtime-endpoint/*."
         : "";
     child.logger.error(
-      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session keeps running until the agent runtime's idle timeout ends it, or, while the handler still runs, until the runtime's maxLifetime.${hint}`,
+      `AgentCore "${name}": StopRuntimeSession failed for session ${target.runtimeSessionId}. The session's instance keeps running until the agent runtime's idle timeout ends it, or, while the handler still runs, until the runtime's maxLifetime.${hint}`,
       { error },
     );
   }

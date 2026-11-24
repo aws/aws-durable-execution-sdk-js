@@ -72,7 +72,8 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * microVM, and the memory and files of the old one are lost. One job per
  * session keeps that safe: no later job can reach the new microVM. The idle
  * timeout matters only while the job runs. The worker then reports
- * `HealthyBusy`, and the service keeps such a session alive.
+ * `HealthyBusy`, and the service keeps the instance of such a session
+ * alive.
  *
  * The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime`
  * and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN

@@ -174,7 +174,7 @@ The worker sends heartbeats while the job runs, when the job has a `heartbeatTim
 
 The handler runs on the event loop that also answers `/ping` and sends heartbeats. Synchronous CPU work blocks both while it runs. So run CPU-bound work in a worker thread or a child process.
 
-After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. The `agentcore` operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session alive.
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. The `agentcore` operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session's instance alive.
 
 Permissions:
 
