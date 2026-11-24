@@ -5,7 +5,6 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
-  type TestResult,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { AccessDeniedException } from "@aws-sdk/client-bedrock-agentcore";
@@ -14,6 +13,7 @@ import type { AgentcoreInvokeOptions, AgentcoreSessionConfig } from "../types";
 import {
   answer,
   FakeAgentcoreClient,
+  history,
   metadata,
   RUNTIME_ARN,
   throwing,
@@ -25,16 +25,6 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 type Runner = LocalDurableTestRunner<unknown>;
-
-/** Lists every operation as [name, type, subtype], in history order. */
-const history = (result: TestResult): [string?, string?, string?][] =>
-  result
-    .getOperations()
-    .map((operation) => [
-      operation.getName(),
-      operation.getType(),
-      operation.getSubType(),
-    ]);
 
 function runnerFor(
   operation: (context: DurableContext) => Promise<unknown>,
@@ -639,5 +629,170 @@ describe("AgentcoreSession.invoke", () => {
     } finally {
       process.env.AWS_REGION = saved;
     }
+  });
+});
+
+describe("agentcoreSession replay", () => {
+  it("uses the checkpointed session ID in every invocation", async () => {
+    const client = new FakeAgentcoreClient();
+    const seenIds: string[] = [];
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (session, child) => {
+          // This line runs once in each invocation.
+          seenIds.push(session.runtimeSessionId);
+          await session.invoke(child, "first", {}, job);
+          await session.invoke(child, "second", {}, job);
+        },
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "first", "one");
+    await completeJob(runner, "second", "two");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    // Each callback suspends the invocation. So the handler runs 3 times.
+    expect(execution.getInvocations()).toHaveLength(3);
+    const sessionId = runner
+      .getOperation("review.session")
+      .getStepDetails()?.result;
+    expect(seenIds).toEqual([sessionId, sessionId, sessionId]);
+    expect(client.invokeInputs.map((input) => input.runtimeSessionId)).toEqual([
+      sessionId,
+      sessionId,
+    ]);
+    expect(client.stopInputs).toEqual([
+      { agentRuntimeArn: RUNTIME_ARN, runtimeSessionId: sessionId },
+    ]);
+  });
+
+  it("does not send a completed job again on replay", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (session, child) => {
+          const first = await session.invoke(child, "first", 1, job);
+          await child.wait("pause", { minutes: 30 });
+          const second = await session.invoke(child, "second", 2, job);
+          return [first, second];
+        },
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "first", "one");
+    await completeJob(runner, "second", "two");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toEqual(["one", "two"]);
+    // Two callbacks and one wait suspend the invocation. So the handler
+    // replays the first job 3 times and the second job once.
+    expect(execution.getInvocations()).toHaveLength(4);
+    expect(client.invokeInputs).toHaveLength(2);
+    expect(client.document(0)).toMatchObject({
+      input: 1,
+      callbackId: runner.getOperation("first.callback").getCallbackDetails()
+        ?.callbackId,
+    });
+    expect(client.document(1)).toMatchObject({
+      input: 2,
+      callbackId: runner.getOperation("second.callback").getCallbackDetails()
+        ?.callbackId,
+    });
+  });
+
+  it("stops the session once after a failed job, across replays", async () => {
+    const client = new FakeAgentcoreClient();
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (session, child) => {
+          await session.invoke(child, "first", {}, job);
+          await session.invoke(child, "second", {}, job);
+        },
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "first", "one");
+    await runner
+      .getOperation("second.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await runner.getOperation("second.callback").sendCallbackFailure({
+      ErrorType: "ReviewFailed",
+      ErrorMessage: "3 comments",
+    });
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("FAILED");
+    expect(execution.getError()?.errorType).toBe("AgentcoreJobFailedError");
+    expect(execution.getInvocations()).toHaveLength(3);
+    expect(client.invokeInputs).toHaveLength(2);
+    expect(client.stopInputs).toHaveLength(1);
+    expect(
+      history(execution).filter(([, , subType]) => subType === "AgentcoreStop"),
+    ).toEqual([["review.stop", "STEP", "AgentcoreStop"]]);
+  });
+
+  it("reads job results and errors from the checkpoints on replay", async () => {
+    const client = new FakeAgentcoreClient();
+    const views: unknown[] = [];
+    const runner = runnerFor((context) =>
+      agentcoreSession(
+        context,
+        "review",
+        sessionConfig(client),
+        async (session, child) => {
+          const first = await session.invoke(child, "first", {}, job);
+          const failure = await session
+            .invoke(child, "second", first, job)
+            .then(() => undefined, seen);
+          // This line runs in the invocation that sees the second outcome,
+          // and again in the invocation after the wait.
+          views.push({ first, failure });
+          await child.wait("pause", { seconds: 1 });
+          return { first, failure };
+        },
+      ),
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await completeJob(runner, "first", { step: 2 });
+    await runner
+      .getOperation("second.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await runner.getOperation("second.callback").sendCallbackFailure({
+      ErrorType: "ReviewFailed",
+      ErrorMessage: "3 comments",
+    });
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    const expected = {
+      first: { step: 2 },
+      failure: {
+        className: "AgentcoreJobFailedError",
+        errorType: "AgentcoreJobFailedError",
+        message: expect.stringMatching(
+          /^AgentCore "second": the job failed \(ReviewFailed\): .*3 comments/,
+        ),
+      },
+    };
+    expect(execution.getResult()).toEqual(expected);
+    expect(views).toEqual([expected, expected]);
+    expect(client.invokeInputs).toHaveLength(2);
+    expect(client.document(1).input).toEqual({ step: 2 });
+    expect(client.stopInputs).toHaveLength(1);
   });
 });
