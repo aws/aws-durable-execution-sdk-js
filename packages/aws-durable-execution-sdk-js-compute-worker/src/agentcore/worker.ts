@@ -161,7 +161,7 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    * `callbackId` and `runtimeSessionId`, but no `jobCount`. Heartbeat
    * lines, warnings of the callback reporter, and the handler's
    * `context.logger` calls do not get these fields. The handler can add
-   * them from its context.
+   * `callbackId` and `runtimeSessionId` from its context.
    */
   logger?: AgentcoreWorkerLogger;
 }
