@@ -7,7 +7,6 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
-  type TestResult,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import {
@@ -34,6 +33,7 @@ import {
   answer,
   baseConfig,
   FakeAgentcoreClient,
+  history,
   type Handler,
   metadata,
   RUNTIME_ARN,
@@ -46,16 +46,6 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 type Runner = LocalDurableTestRunner<unknown>;
-
-/** Lists every operation as [name, type, subtype], in history order. */
-const history = (result: TestResult): [string?, string?, string?][] =>
-  result
-    .getOperations()
-    .map((operation) => [
-      operation.getName(),
-      operation.getType(),
-      operation.getSubType(),
-    ]);
 
 function runnerFor(
   operation: (context: DurableContext) => Promise<unknown>,
