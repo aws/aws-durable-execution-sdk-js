@@ -72,7 +72,8 @@ const defaultClients = new Map<string | undefined, BedrockAgentCoreClient>();
  * microVM, and the memory and files of the old one are lost. One job per
  * session keeps that safe: no later job can reach the new microVM. The idle
  * timeout matters only while the job runs. The worker then reports
- * `HealthyBusy`, and the service keeps such a session alive.
+ * `HealthyBusy`, and the service keeps the instance of such a session
+ * alive.
  *
  * The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime`
  * and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN
@@ -181,7 +182,7 @@ export function validateConfig(
   >,
 ): void {
   validateTarget(name, config);
-  // The agent runtime's maxLifetime limits the session: 8 hours for a
+  // The agent runtime's maxLifetime limits the instance: 8 hours for a
   // microVM runtime, up to 14 days for a runtime on Instances. The ARN does
   // not say which one the runtime uses. So only the lower limit is checked.
   const seconds = exactSeconds(config.timeout);
