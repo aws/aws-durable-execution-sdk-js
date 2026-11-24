@@ -179,7 +179,8 @@ export interface DeciderConfig {
  * - `question` must be a non-empty string.
  * - `input` must be a string or a value that `JSON.stringify` can encode.
  * - The decision model reads the input and each question, with its choices,
- *   in one context window: 4,096 tokens for Strands Decider 2B. A request
+ *   in one context window. The window depends on the model: 4,096 tokens
+ *   for the v1 models, and 32,768 for the v2 (Gemma 4) models. A request
  *   that does not fit fails with `DeciderError` and HTTP 422, which is not
  *   retried. Shorten the input before the call.
  * - An invalid argument creates no durable operation. The returned promise
