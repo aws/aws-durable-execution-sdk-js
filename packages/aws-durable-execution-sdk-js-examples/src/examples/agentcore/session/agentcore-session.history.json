@@ -1,0 +1,315 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "9b236e30-7b1b-4896-8817-dfcab36c5f99",
+    "EventTimestamp": "2026-11-24T23:26:06.743Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"draft\":\"the quick brown fox\",\"final\":\"the quick brown fox jumps over the lazy dog\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "AgentcoreSession",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "word-counts",
+    "EventTimestamp": "2026-11-24T23:26:06.857Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreSessionId",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "word-counts.session",
+    "EventTimestamp": "2026-11-24T23:26:06.857Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreSessionId",
+    "EventId": 4,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "word-counts.session",
+    "EventTimestamp": "2026-11-24T23:26:06.858Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"053ad8fb-eedf-464f-86b6-95679aed9819\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "AgentcoreSessionJob",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-draft",
+    "EventTimestamp": "2026-11-24T23:26:06.861Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "AgentcoreCallback",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "count-draft.callback",
+    "EventTimestamp": "2026-11-24T23:26:06.862Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6Ijk0NGU5OTJmLTM2OGItNDgyOS1iOTI4LWZhOGNlMTdhOTI5OSIsIm9wZXJhdGlvbklkIjoiNjE1MWY1YWIyODJkOTBlNCIsInRva2VuIjoiOWZhNTU0YjMtYWE3Mi00MjNhLTg1ZmUtOTBjZTJhMjNlYjI5In0=",
+      "Timeout": 300,
+      "HeartbeatTimeout": 60,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreRequest",
+    "EventId": 7,
+    "Id": "e61730e6717b1787",
+    "Name": "count-draft.request",
+    "EventTimestamp": "2026-11-24T23:26:06.865Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreRequest",
+    "EventId": 8,
+    "Id": "e61730e6717b1787",
+    "Name": "count-draft.request",
+    "EventTimestamp": "2026-11-24T23:26:06.865Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-11-24T23:26:06.869Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-24T23:26:06.742Z",
+      "EndTimestamp": "2026-11-24T23:26:06.869Z",
+      "Error": {},
+      "RequestId": "7d098f6c-b5b6-43ac-ada9-a64b36ee77e1"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "AgentcoreCallback",
+    "EventId": 10,
+    "Id": "6151f5ab282d90e4",
+    "Name": "count-draft.callback",
+    "EventTimestamp": "2026-11-24T23:26:08.365Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":4,\"sha256\":\"9ecb36561341d18eb65484e833efea61edc74b84cf5e6ae1b81c63533e25fc8f\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "AgentcoreSessionJob",
+    "EventId": 11,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-draft",
+    "EventTimestamp": "2026-11-24T23:26:08.370Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":4,\"sha256\":\"9ecb36561341d18eb65484e833efea61edc74b84cf5e6ae1b81c63533e25fc8f\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 12,
+    "Id": "13cee27a2bd93915",
+    "Name": "pause",
+    "EventTimestamp": "2026-11-24T23:26:08.370Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 10,
+      "ScheduledEndTimestamp": "2026-11-24T23:26:18.370Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-11-24T23:26:08.373Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-24T23:26:08.366Z",
+      "EndTimestamp": "2026-11-24T23:26:08.373Z",
+      "Error": {},
+      "RequestId": "b64436ee-44c3-425e-8b61-81558ddd27dc"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "13cee27a2bd93915",
+    "Name": "pause",
+    "EventTimestamp": "2026-11-24T23:26:18.374Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 10
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "AgentcoreSessionJob",
+    "EventId": 15,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "count-final",
+    "EventTimestamp": "2026-11-24T23:26:18.377Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "AgentcoreCallback",
+    "EventId": 16,
+    "Id": "a4e1cd317d54f087",
+    "Name": "count-final.callback",
+    "EventTimestamp": "2026-11-24T23:26:18.377Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6Ijk0NGU5OTJmLTM2OGItNDgyOS1iOTI4LWZhOGNlMTdhOTI5OSIsIm9wZXJhdGlvbklkIjoiYTRlMWNkMzE3ZDU0ZjA4NyIsInRva2VuIjoiM2VmY2YzMzMtODhlZC00ZWFmLTk0MjctMDliOWY4ZDZkZGI2In0=",
+      "Timeout": 300,
+      "HeartbeatTimeout": 60,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreRequest",
+    "EventId": 17,
+    "Id": "6b735339cb51138b",
+    "Name": "count-final.request",
+    "EventTimestamp": "2026-11-24T23:26:18.379Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreRequest",
+    "EventId": 18,
+    "Id": "6b735339cb51138b",
+    "Name": "count-final.request",
+    "EventTimestamp": "2026-11-24T23:26:18.379Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2026-11-24T23:26:18.382Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-24T23:26:18.374Z",
+      "EndTimestamp": "2026-11-24T23:26:18.382Z",
+      "Error": {},
+      "RequestId": "5ade7d2c-6e58-4a7c-b001-f6f29a93008e"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "AgentcoreCallback",
+    "EventId": 20,
+    "Id": "a4e1cd317d54f087",
+    "Name": "count-final.callback",
+    "EventTimestamp": "2026-11-24T23:26:19.879Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "AgentcoreSessionJob",
+    "EventId": 21,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "count-final",
+    "EventTimestamp": "2026-11-24T23:26:19.884Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "AgentcoreStop",
+    "EventId": 22,
+    "Id": "12426c956d1bc501",
+    "Name": "word-counts.stop",
+    "EventTimestamp": "2026-11-24T23:26:19.884Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "AgentcoreStop",
+    "EventId": 23,
+    "Id": "12426c956d1bc501",
+    "Name": "word-counts.stop",
+    "EventTimestamp": "2026-11-24T23:26:19.884Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "AgentcoreSession",
+    "EventId": 24,
+    "Id": "c4ca4238a0b92382",
+    "Name": "word-counts",
+    "EventTimestamp": "2026-11-24T23:26:19.886Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"draft\":{\"wordCount\":4,\"sha256\":\"9ecb36561341d18eb65484e833efea61edc74b84cf5e6ae1b81c63533e25fc8f\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"},\"final\":{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"},\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 25,
+    "EventTimestamp": "2026-11-24T23:26:19.886Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-24T23:26:19.881Z",
+      "EndTimestamp": "2026-11-24T23:26:19.886Z",
+      "Error": {},
+      "RequestId": "972ab9e6-af36-4f44-a41f-3c01b45682f3"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 26,
+    "Id": "9b236e30-7b1b-4896-8817-dfcab36c5f99",
+    "EventTimestamp": "2026-11-24T23:26:19.887Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"draft\":{\"wordCount\":4,\"sha256\":\"9ecb36561341d18eb65484e833efea61edc74b84cf5e6ae1b81c63533e25fc8f\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"},\"final\":{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"},\"sessionId\":\"053ad8fb-eedf-464f-86b6-95679aed9819\"}"
+      }
+    }
+  }
+]
