@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { Server, ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
@@ -246,6 +249,44 @@ describe("startAgentcoreWorker", () => {
       '{"approved":true}',
     );
     expect(client.named(FAILURE)).toEqual([]);
+  });
+
+  it("runs three jobs in a row in one process, and job 2 reads the file that job 1 wrote", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agentcore-worker-"));
+    const file = join(dir, "notes.txt");
+    try {
+      const { client } = await start(async (input) => {
+        const step = (input as { step: number }).step;
+        if (step === 1) {
+          await writeFile(file, "from job 1");
+          return "wrote";
+        }
+        if (step === 2) {
+          return readFile(file, "utf8");
+        }
+        return "done";
+      });
+
+      // Each job ends before the next one arrives.
+      for (const step of [1, 2, 3]) {
+        await invoke(job(`cb-${step}`, { input: { step } }));
+        await worker?.idle();
+      }
+
+      expect(
+        client.named(SUCCESS).map((success) => ({
+          callbackId: success.CallbackId,
+          result: Buffer.from(success.Result as Uint8Array).toString("utf8"),
+        })),
+      ).toEqual([
+        { callbackId: "cb-1", result: '"wrote"' },
+        { callbackId: "cb-2", result: '"from job 1"' },
+        { callbackId: "cb-3", result: '"done"' },
+      ]);
+      expect(client.named(FAILURE)).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("reports the handler's error as a callback failure", async () => {
