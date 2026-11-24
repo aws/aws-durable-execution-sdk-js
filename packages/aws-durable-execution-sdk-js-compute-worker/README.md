@@ -136,6 +136,12 @@ A session with `autoSuspendOnIdle: true` also needs `lambda:SuspendMicrovm` on t
 
 The `@aws/durable-execution-sdk-js-compute-worker/agentcore` subpath runs the jobs of the [`agentcore` operation](../aws-durable-execution-sdk-js-extensions#run-a-job-in-agentcore-runtime) inside an Amazon Bedrock AgentCore Runtime agent. It implements the AgentCore HTTP contract itself and adds no dependency.
 
+This section uses three AgentCore terms:
+
+- **Agent runtime:** the agent you deploy. Its settings include the idle timeout (`idleRuntimeSessionTimeout`) and `maxLifetime`.
+- **Session:** the work under one runtime session ID. The session stays valid until the durable function stops it or the agent runtime is deleted.
+- **Instance:** the microVM that runs a session at a given time. The idle timeout and `maxLifetime` end the instance, not the session. The next request with the same session ID gets a new instance, without the memory and files of the old one.
+
 The durable function:
 
 ```typescript
@@ -174,7 +180,7 @@ The worker sends heartbeats while the job runs, when the job has a `heartbeatTim
 
 The handler runs on the event loop that also answers `/ping` and sends heartbeats. Synchronous CPU work blocks both while it runs. So run CPU-bound work in a worker thread or a child process.
 
-After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new microVM, and the memory and files of the old one are lost. The `agentcore` operation sends one job per session. So a new microVM cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session's instance alive.
+After the agent runtime's idle timeout (`idleRuntimeSessionTimeout`), the same session ID silently gets a new instance, and the memory and files of the old one are lost. The `agentcore` operation sends one job per session. So a new instance cannot receive a later job of the same operation. The idle timeout matters only while the job runs, and the worker then reports `HealthyBusy`, which keeps the session's instance alive.
 
 Permissions:
 
