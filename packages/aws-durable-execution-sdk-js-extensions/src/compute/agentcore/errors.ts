@@ -61,7 +61,7 @@ export class AgentcoreJobFailedError extends AgentcoreError {
 
 /**
  * No result arrived within the job's `timeout`, or no heartbeat arrived
- * within its `heartbeatTimeout`. An agent whose session ended during the
+ * within its `heartbeatTimeout`. A job whose instance stopped during the
  * job ends this way. The message keeps the service's reason.
  *
  * @public
