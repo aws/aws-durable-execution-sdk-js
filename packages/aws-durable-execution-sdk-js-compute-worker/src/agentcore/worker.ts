@@ -153,9 +153,15 @@ export interface AgentcoreWorkerOptions<TInput = unknown, TOutput = unknown> {
    * error that a logger method throws, and a rejection of a promise that it
    * returns.
    *
-   * Each log line of a job has the fields `callbackId`, `runtimeSessionId`
-   * and `jobCount`. `jobCount` is the number of jobs this worker has
-   * started, this job included.
+   * The worker's own job lines have the fields `callbackId`,
+   * `runtimeSessionId` and `jobCount`: "job started", "job succeeded",
+   * "job failed", and the worker's errors and warnings for the job.
+   * `jobCount` is the number of jobs this worker has started, this job
+   * included. The "job already accepted" line of a repeated delivery has
+   * `callbackId` and `runtimeSessionId`, but no `jobCount`. Heartbeat
+   * lines, warnings of the callback reporter, and the handler's
+   * `context.logger` calls do not get these fields. The handler can add
+   * them from its context.
    */
   logger?: AgentcoreWorkerLogger;
 }
