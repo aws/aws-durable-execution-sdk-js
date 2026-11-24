@@ -174,7 +174,7 @@ The worker listens on port 8080. AgentCore Runtime requires the agent to listen 
 
 The worker remembers the last 1,000 callback IDs in memory. So a retried delivery runs a job once, unless at least 1,000 other jobs arrived in between, or the worker process restarted.
 
-The handler's context has `sessionId`: the AgentCore runtime session ID from the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` request header. It is `undefined` when the request has no such header. The worker's log lines for a job carry it as `runtimeSessionId`, next to `callbackId`.
+The handler's context has `sessionId`: the AgentCore runtime session ID from the `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` request header. It is `undefined` when the request has no such header. The worker's own job lines carry it as `runtimeSessionId`, next to `callbackId` and `jobCount`. These are "job started", "job succeeded", "job failed", and the worker's errors and warnings for the job. Heartbeat lines, warnings of the callback reporter, and the handler's `context.logger` calls do not get these fields. The handler can add `callbackId` and `runtimeSessionId` from its context.
 
 The worker sends heartbeats while the job runs, when the job has a `heartbeatTimeout`. It then completes the callback with the handler's result or error.
 
