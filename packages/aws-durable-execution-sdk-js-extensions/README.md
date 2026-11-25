@@ -317,7 +317,7 @@ The operation records these durable operations. Each has a subtype from `Agentco
 - For each job, the child context `<job name>`, subtype `AgentcoreSessionJob`. It holds the callback `<job name>.callback` (`AgentcoreCallback`) and the step `<job name>.request` (`AgentcoreRequest`), which calls InvokeAgentRuntime.
 - The step `<name>.stop`, subtype `AgentcoreStop`. It calls StopRuntimeSession. A stop failure is logged and does not fail the operation.
 
-A failed `session.invoke` rejects with `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. All three extend `AgentcoreError`. The handler can catch the error and send more jobs to the same session. An AgentCore error that leaves the handler keeps its class. Any other error keeps its SDK error type, or is wrapped in `ChildContextError`.
+A failed `session.invoke` rejects with `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. All three extend `AgentcoreError`. The handler can catch the error and send more jobs to the same session. An AgentCore error that the handler raises itself, such as from `session.invoke` called with the handler's context, reaches the caller with its own class. An AgentCore error that crosses a child context that the handler created, such as a `map` item, reaches the caller as `ChildContextError`. It keeps its message but not its class. Any other error keeps its SDK error type, or is wrapped in `ChildContextError`.
 
 ### Rules for AgentCore jobs
 
