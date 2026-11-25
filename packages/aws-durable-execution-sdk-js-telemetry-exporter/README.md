@@ -540,6 +540,15 @@ Drop order, until the record fits (one pass):
 4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
+Steps 2 and 3 binary search how many operations to cut. Each probe renders and
+measures one candidate record, so a record with _n_ operations is rendered about
+2 × log2(_n_ + 1) times, for any exporter. The search assumes that cutting more
+never makes the record larger. The `operationsByName` map can break this:
+cutting one of two operations with the same name makes the other one's
+`result` and `error` appear in the map. In such a record the search can cut
+more old operations than the fewest that fit. The emitted record always comes
+from a real measurement, so it never goes over the limit.
+
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
 only after all operations are gone — so prefer `content.input` /
 `content.output` transforms to bound them earlier (those run before truncation).

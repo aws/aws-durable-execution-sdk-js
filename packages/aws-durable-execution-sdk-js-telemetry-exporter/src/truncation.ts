@@ -49,6 +49,15 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *   3. whole operations, oldest first;
  *   4. last resort — execution `input`, then `output`.
  *
+ * Steps 2 and 3 binary search how many operations to cut. Each probe renders
+ * and measures one candidate record. So a record with n operations is rendered
+ * about 2 * log2(n + 1) times, for any `render`. The search assumes that cutting
+ * more never makes the rendering larger. The `operationsByName` map can break
+ * this: cutting one of two same-name operations makes the other one's
+ * `result` and `error` appear in the map. Then the search can cut more old
+ * operations than the fewest that fit. The chosen record always comes from a
+ * real measurement, so it never goes over `maxBytes`.
+ *
  * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
  * `name`/`message` are never dropped.
  * `input`/`output` are dropped only after every operation is gone, so prefer
@@ -93,18 +102,25 @@ export function truncateRecord(
       ? record.error
       : withoutCause(record.error);
   if (executionError !== record.error) droppedCauses = true;
-  const kept = new Array<boolean>(ops.length).fill(true);
-  const order = oldestFirstOrder(ops);
+  // rank[i] is the position of operation i in the oldest-first order.
+  const rank = new Array<number>(ops.length);
+  oldestFirstOrder(ops).forEach((idx, r) => {
+    rank[idx] = r;
+  });
 
-  let anyResultDropped = false;
-  let droppedOperations = 0;
+  let resultsDropped = 0; // the oldest `resultsDropped` operations lose `result`
+  let droppedOperations = 0; // the oldest `droppedOperations` operations are cut
   let droppedInput = false;
   let droppedOutput = false;
 
   const candidate = (): DurableExecutionTelemetryRecord => {
     const out: DurableExecutionTelemetryRecord = {
       ...record,
-      operations: ops.filter((_, i) => kept[i]),
+      operations: ops.flatMap((op, i) => {
+        if (rank[i] < droppedOperations) return [];
+        if (rank[i] >= resultsDropped || op.result === undefined) return [op];
+        return [{ ...op, result: undefined, truncated: true }];
+      }),
       truncated: true,
     };
     if (droppedCauses) {
@@ -128,23 +144,31 @@ export function truncateRecord(
     return size !== undefined && size <= maxBytes;
   };
 
+  // Sets the smallest count in lo..hi that fits, or hi if none fits. Returns
+  // whether it fits. Binary search; see the doc comment for the assumption.
+  const firstFit = (
+    lo: number,
+    hi: number,
+    set: (n: number) => void,
+  ): boolean => {
+    let bad = lo - 1; // the largest count measured not to fit
+    let good = hi + 1; // the smallest count measured to fit
+    while (good - bad > 1) {
+      const mid = (bad + good) >>> 1;
+      set(mid);
+      if (fits()) good = mid;
+      else bad = mid;
+    }
+    set(Math.min(good, hi));
+    return good <= hi;
+  };
+
   // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx] && ops[idx].result !== undefined) {
-      ops[idx] = { ...ops[idx], result: undefined, truncated: true };
-      anyResultDropped = true;
-    }
-  }
-
-  // Phase 3: drop whole operations, oldest first.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx]) {
-      kept[idx] = false;
-      droppedOperations++;
-    }
+  const n = ops.length;
+  if (!firstFit(0, n, (c) => (resultsDropped = c))) {
+    // Phase 3: drop whole operations, oldest first.
+    firstFit(1, n, (c) => (droppedOperations = c));
   }
 
   // Phase 4 (last resort): drop execution input, then output. Only reached once
@@ -155,7 +179,7 @@ export function truncateRecord(
   // If nothing was actually dropped, return the original untouched — not cut.
   if (
     !droppedCauses &&
-    !anyResultDropped &&
+    !ops.some((op, i) => rank[i] < resultsDropped && op.result !== undefined) &&
     droppedOperations === 0 &&
     !droppedInput &&
     !droppedOutput
