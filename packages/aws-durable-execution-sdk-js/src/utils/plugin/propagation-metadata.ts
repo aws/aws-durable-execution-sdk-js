@@ -3,26 +3,7 @@ import type {
   PropagationInput,
   PropagationMetadata,
 } from "../../types/plugin";
-
-function pluginIdentity(
-  plugin: DurableInstrumentationPlugin,
-  index: number,
-): string {
-  try {
-    return `${plugin.constructor.name || "Plugin"} (plugins[${index}])`;
-  } catch {
-    return `plugins[${index}]`;
-  }
-}
-
-function warn(message: string, details: Record<string, string | number>): void {
-  try {
-    // biome-ignore lint/suspicious/noConsole: this diagnostic is for the developer and has no logger here.
-    console.warn(message, details);
-  } catch {
-    // A diagnostic failure must not change the invocation outcome.
-  }
-}
+import { pluginIdentity, warn } from "./plugin-diagnostic";
 
 /** Collects synchronous SDK-owned metadata without altering an invoke request. */
 export function collectPropagationMetadata(
