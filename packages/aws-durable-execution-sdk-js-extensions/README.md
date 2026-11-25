@@ -265,6 +265,60 @@ Permissions:
 - The function's execution role needs `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:StopRuntimeSession` on both the agent runtime ARN and `<runtime ARN>/runtime-endpoint/*`. Without the endpoint resource, the service denies the call on `<runtime ARN>/runtime-endpoint/DEFAULT`.
 - The agent runtime's execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the function ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`).
 
+### Run several jobs in one AgentCore session
+
+This section uses three AgentCore terms:
+
+- **Agent runtime:** the agent you deploy. Its settings include the idle timeout (`idleRuntimeSessionTimeout`) and `maxLifetime`.
+- **Session:** the work under one runtime session ID. The session stays valid until the durable function stops it or the agent runtime is deleted.
+- **Instance:** the microVM that runs a session at a given time. The idle timeout and `maxLifetime` end the instance, not the session. The next request with the same session ID gets a new instance, without the memory and files of the old one.
+
+`agentcoreSession` creates one runtime session ID and calls your handler. The handler sends jobs with `session.invoke`. Every job goes to the same session. The operation stops the session when the handler returns or throws, and returns the handler's value.
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { agentcoreSession } from "@aws/durable-execution-sdk-js-extensions/compute/agentcore";
+
+export const handler = withDurableExecution(
+  async (event: { repo: string }, context) =>
+    agentcoreSession(
+      context,
+      "pipeline",
+      { agentRuntimeArn: process.env.AGENT_RUNTIME_ARN!, qualifier: "DEFAULT" },
+      async (session, ctx) => {
+        const build = await session.invoke(ctx, "build", { repo: event.repo }, {
+          timeout: { minutes: 15 },
+          heartbeatTimeout: { seconds: 30 },
+        });
+        await ctx.wait({ minutes: 5 });
+        const tests = await session.invoke(ctx, "test", { build }, {
+          timeout: { minutes: 10 },
+          heartbeatTimeout: { seconds: 30 },
+        });
+        return { build, tests };
+      },
+    ),
+);
+```
+
+The session has no timeout of its own. Each job has its own `timeout` and `heartbeatTimeout`.
+
+- Pass `session.invoke` the context it runs in: the handler's `ctx`, or a nested context such as a `map` item's context.
+- Set the runtime's idle timeout longer than any wait between two jobs, such as a durable wait or a callback. Otherwise the next job gets a new instance.
+- The idle timeout and `maxLifetime` end the instance, not the session. The next job then gets a new instance, without the memory and files of the old one.
+- A job that runs when its instance stops fails at its `heartbeatTimeout` or its `timeout`.
+- Parallel `session.invoke` calls reach the same instance. The agent must handle them, so keep its shared state safe for parallel jobs, or send the jobs one at a time.
+- The session's return value is checkpointed. So it must be JSON-serializable.
+
+The operation records these durable operations. Each has a subtype from `AgentcoreOperationSubType`:
+
+- The child context `<name>`, subtype `AgentcoreSession`.
+- The step `<name>.session`, subtype `AgentcoreSessionId`. It creates and checkpoints the runtime session ID.
+- For each job, the child context `<job name>`, subtype `AgentcoreSessionJob`. It holds the callback `<job name>.callback` (`AgentcoreCallback`) and the step `<job name>.request` (`AgentcoreRequest`), which calls InvokeAgentRuntime.
+- The step `<name>.stop`, subtype `AgentcoreStop`. It calls StopRuntimeSession. A stop failure is logged and does not fail the operation.
+
+A failed `session.invoke` rejects with `AgentcoreDeliveryError`, `AgentcoreJobFailedError`, or `AgentcoreTimeoutError`. All three extend `AgentcoreError`. The handler can catch the error and send more jobs to the same session. An AgentCore error that leaves the handler keeps its class. Any other error keeps its SDK error type, or is wrapped in `ChildContextError`.
+
 ### Rules for AgentCore jobs
 
 - Set `heartbeatTimeout`. It ends the job when the worker crashes or stops reporting. The first heartbeat period starts before the job is delivered. So it must cover the request retries and a cold session start, which took 1.4 to 3.1 seconds in a live test. Use 30 seconds or more.
@@ -272,7 +326,7 @@ Permissions:
 - `timeout` must fit the agent runtime's configured `maxLifetime`.
 - A job can run more than once when AgentCore replaces the worker process. Make handler side effects safe to repeat.
 - Your logger must not throw.
-- The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs.
+- The runtime's idle timeout applies only while no job is running. One `agentcore()` call runs one job, so it does not lose state between jobs. To run several jobs in one session, use `agentcoreSession`.
 
 ## Ask a model in a step
 
