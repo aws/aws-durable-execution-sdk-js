@@ -59,9 +59,16 @@ import type {
  *
  * A failed `session.invoke` rejects inside the handler. The handler can
  * catch the error and continue with the same session. An error that leaves
- * the handler ends the session and reaches the caller. An AgentCore error
- * keeps its class. Any other error keeps its SDK error type, or is wrapped
- * in `ChildContextError`.
+ * the handler ends the session and reaches the caller:
+ *
+ * 1. An AgentCore error that the handler raises itself, such as from
+ *    `session.invoke` called with the handler's context, reaches the caller
+ *    with its own class.
+ * 2. An AgentCore error that crosses a child context that the handler
+ *    created, such as a `map` item, reaches the caller as
+ *    `ChildContextError`. It keeps its message but not its class.
+ * 3. Any other error keeps its SDK error type, or is wrapped in
+ *    `ChildContextError`.
  *
  * @param context - The context to create the durable operations in.
  * @param name - The child context name. It also prefixes the inner
