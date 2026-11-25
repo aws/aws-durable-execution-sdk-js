@@ -47,6 +47,17 @@ vi.mock("fs", () => {
           },
           usesMicrovm: true,
         },
+        {
+          // Same settings as hello-world, so the two can share a function.
+          name: "hello-again",
+          description: "A second example with the default settings",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-again.ts",
+          handler: "hello-again.handler",
+          durableConfig: {
+            ExecutionTimeout: 60,
+            RetentionPeriodInDays: 7,
+          },
+        },
       ]),
     ),
   };
@@ -220,10 +231,14 @@ describe("generate-sam-template", () => {
       });
     });
 
-    test("gives a grouped example the group's function and the dispatcher", () => {
+    test("gives the examples of a group one function and the dispatcher", () => {
       const template = generateTemplate({
         functionNameMap: {
           "hello-world": {
+            functionName: "HelloGroup-24x-NodeJS",
+            group: "hello-group",
+          },
+          "hello-again": {
             functionName: "HelloGroup-24x-NodeJS",
             group: "hello-group",
           },
@@ -234,6 +249,7 @@ describe("generate-sam-template", () => {
       });
 
       expect(template.Resources.HelloWorld).toBeUndefined();
+      expect(template.Resources.HelloAgain).toBeUndefined();
       expect(template.Resources.HelloGroup.Properties).toMatchObject({
         FunctionName: "HelloGroup-24x-NodeJS",
         Handler: "integration-dispatch.handler",
@@ -241,7 +257,7 @@ describe("generate-sam-template", () => {
       expect(
         template.Resources.HelloGroup.Properties.Environment.Variables
           .GROUP_EXAMPLES,
-      ).toBe("hello-world");
+      ).toBe("hello-again,hello-world");
       expect(template.Resources.HelloGroup.DependsOn).toBe(
         "HelloGroupLogGroup",
       );

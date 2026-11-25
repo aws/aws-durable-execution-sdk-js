@@ -1,9 +1,49 @@
+import {
+  copyFileSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import { createRequire } from "module";
+import { tmpdir } from "os";
+import path from "path";
 
 const require = createRequire(import.meta.url);
 const { unwrapEvent } = require("../integration-dispatch.cjs") as {
   unwrapEvent: (event: unknown) => { example: string; event: any };
 };
+
+describe("integration-dispatch module load", () => {
+  test("loads the GROUP_EXAMPLES examples when the module loads", () => {
+    const dir = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "integration-dispatch-")),
+    );
+    try {
+      const dispatcher = path.join(dir, "integration-dispatch.js");
+      copyFileSync(
+        path.join(__dirname, "../integration-dispatch.cjs"),
+        dispatcher,
+      );
+      for (const name of ["example-a", "example-b", "example-c"]) {
+        writeFileSync(
+          path.join(dir, `${name}.js`),
+          "exports.handler = () => {};",
+        );
+      }
+      vi.stubEnv("GROUP_EXAMPLES", "example-a,example-b");
+
+      require(dispatcher);
+
+      expect(require.cache[path.join(dir, "example-a.js")]).toBeDefined();
+      expect(require.cache[path.join(dir, "example-b.js")]).toBeDefined();
+      expect(require.cache[path.join(dir, "example-c.js")]).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 const durableEvent = (inputPayload?: string) => ({
   DurableExecutionArn: "arn",
