@@ -43,14 +43,14 @@ describe("groupExamples", () => {
     const groups = groupExamples(
       [
         example("hello-world", "hello-world"),
-        example("large-payload", "large-payload"),
+        example("multiple-waits", "multiple-waits"),
         example("non-durable", "non-durable", { durableConfig: null }),
       ],
       new Set(),
     );
     assert.deepEqual(Object.fromEntries(groups), {
       "hello-world": "misc-group",
-      "large-payload": "misc-group",
+      "multiple-waits": "misc-group",
     });
   });
 

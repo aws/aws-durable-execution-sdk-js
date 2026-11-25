@@ -53,11 +53,17 @@ function exampleFolder(example) {
 }
 
 /**
- * Examples with their own entry in EXAMPLE_CONFIGS in generate-sam-template.ts.
- * generate-sam-template.ts fails if a grouped example has other settings, so
- * this list cannot fall behind without a failed deploy.
+ * Examples that keep their own function, and why.
  */
-const CUSTOM_SETTINGS = new Set(["steps-with-retry"]);
+const OWN_FUNCTION = new Map([
+  // Has its own entry in EXAMPLE_CONFIGS in generate-sam-template.ts.
+  // generate-sam-template.ts fails if a grouped example has other settings,
+  // so this entry cannot fall behind without a failed deploy.
+  ["steps-with-retry", "custom settings"],
+  // Sends a 6 MB input. Lambda then does not put the input in the
+  // invocation event, so the dispatcher cannot read the example name.
+  ["large-payload", "input not in the invocation event"],
+]);
 
 /**
  * @param {CatalogExample[]} examples
@@ -70,7 +76,7 @@ export function groupExamples(examples, ownFunction) {
   const members = new Map();
   for (const example of examples) {
     const handlerFile = example.handler.replace(/\.handler$/, "");
-    if (ownFunction.has(handlerFile) || CUSTOM_SETTINGS.has(handlerFile)) {
+    if (ownFunction.has(handlerFile) || OWN_FUNCTION.has(handlerFile)) {
       continue;
     }
     const key = `${exampleFolder(example)}\n${settingsKey(example)}`;

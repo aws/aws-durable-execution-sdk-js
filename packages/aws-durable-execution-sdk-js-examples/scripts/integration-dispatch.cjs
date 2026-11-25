@@ -8,6 +8,10 @@
  * A durable function receives the payload inside the EXECUTION operation of
  * InitialExecutionState, and it receives it again on every replay. A function
  * with no durable config receives the payload as the event.
+ *
+ * A very large input (such as 6 MB) is not in InitialExecutionState. Then
+ * this handler cannot find the example, so such an example keeps its own
+ * function (see OWN_FUNCTION in example-groups.mjs).
  */
 
 const EXAMPLE_NAME = /^[a-z0-9-]+$/;
