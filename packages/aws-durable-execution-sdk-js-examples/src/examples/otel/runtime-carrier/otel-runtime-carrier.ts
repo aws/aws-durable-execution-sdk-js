@@ -13,6 +13,8 @@ import type { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "OTel Runtime Carrier",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description:
     "Verify the invocation-local X-Ray carrier through a durable wait and resume",
   capacityProviderConfig: {},

@@ -6,7 +6,6 @@ import {
   appendFileSync,
   copyFileSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -32,11 +31,7 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import dotenv from "dotenv";
-import {
-  findOwnFunctionExamples,
-  groupExamples,
-  groupFunctionName,
-} from "./example-groups.mjs";
+import { groupExamples, groupFunctionName } from "./example-groups.mjs";
 import { baseFunctionName, samStackName } from "./integration-test-names.mjs";
 import { deployWithRollbackRecovery, retry } from "./sam-deploy.mjs";
 const __filename = fileURLToPath(import.meta.url);
@@ -389,7 +384,7 @@ class IntegrationTestRunner {
     const functionNameMap = {};
     const groups = options.capacityProviderOnly
       ? new Map()
-      : groupExamples(examples, this.getOwnFunctionExamples());
+      : groupExamples(examples);
 
     for (const example of examples) {
       const exampleHandler = example.handler;
@@ -429,23 +424,6 @@ class IntegrationTestRunner {
     }
 
     return functionNameMap;
-  }
-
-  /**
-   * The examples that keep their own function. See findOwnFunctionExamples.
-   * @returns {Set<string>}
-   */
-  getOwnFunctionExamples() {
-    const examplesSrc = join(CONFIG.EXAMPLES_PACKAGE_PATH, "src", "examples");
-    const testFiles = readdirSync(examplesSrc, { recursive: true })
-      .map(String)
-      .filter((file) => file.endsWith(".test.ts"));
-    return findOwnFunctionExamples(
-      testFiles.map((file) => ({
-        path: file,
-        source: readFileSync(join(examplesSrc, file), "utf8"),
-      })),
-    );
   }
 
   /**
