@@ -49,14 +49,23 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *   3. whole operations, oldest first;
  *   4. last resort — execution `input`, then `output`.
  *
- * Steps 2 and 3 binary search how many operations to cut. Each probe renders
- * and measures one candidate record. So a record with n operations is rendered
- * about 2 * log2(n + 1) times, for any `render`. The search assumes that cutting
- * more never makes the rendering larger. The `operationsByName` map can break
- * this: cutting one of two same-name operations makes the other one's
- * `result` and `error` appear in the map. Then the search can cut more old
- * operations than the fewest that fit. The chosen record always comes from a
- * real measurement, so it never goes over `maxBytes`.
+ * Step 2 clears only a result whose JSON is longer than 7 bytes. Clearing
+ * replaces `"result":<json>` with `"truncated":true`, which is 16 bytes. So
+ * clearing a shorter result (such as `true`, `1` or `"ok"`) makes the record
+ * bigger and cannot help it fit. Such results stay in the record, unmarked.
+ *
+ * Step 2 first measures the record with no result cleared. If it fits, it is
+ * returned. Then steps 2 and 3 binary search how many results or operations to
+ * cut. Each probe renders and measures one candidate record. So a record with
+ * n operations is rendered about 2 * log2(n + 1) + 1 times, for any `render`.
+ *
+ * The search assumes that cutting more never makes the rendering larger. In the
+ * array form this holds, so the search cuts the fewest results and operations
+ * that fit. The `operationsByName` map can break it: cutting one of two
+ * same-name operations makes the other one's `result` and `error` appear in the
+ * map. So in the by-name form, and the by-name part of `both`, the search can
+ * cut more old operations than the fewest that fit. The chosen record always
+ * comes from a real measurement, so it never goes over `maxBytes`.
  *
  * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
  * `name`/`message` are never dropped.
@@ -103,12 +112,25 @@ export function truncateRecord(
       : withoutCause(record.error);
   if (executionError !== record.error) droppedCauses = true;
   // rank[i] is the position of operation i in the oldest-first order.
+  // resultRank[i] is the position of operation i among the operations whose
+  // result can be cleared, in the same order, or Infinity if it cannot.
+  // A result can be cleared only when its JSON is longer than 7 bytes. A
+  // shorter result is smaller than the `"truncated":true` marker that replaces
+  // it. So clearing it makes the record bigger, and it is never cleared.
   const rank = new Array<number>(ops.length);
+  const resultRank = new Array<number>(ops.length).fill(
+    Number.POSITIVE_INFINITY,
+  );
+  let clearable = 0; // the number of results that can be cleared
   oldestFirstOrder(ops).forEach((idx, r) => {
     rank[idx] = r;
+    const result = ops[idx].result;
+    if (result === undefined) return;
+    const size = jsonByteSize(result);
+    if (size !== undefined && size > 7) resultRank[idx] = clearable++;
   });
 
-  let resultsDropped = 0; // the oldest `resultsDropped` operations lose `result`
+  let resultsDropped = 0; // the oldest `resultsDropped` clearable results are cut
   let droppedOperations = 0; // the oldest `droppedOperations` operations are cut
   let droppedInput = false;
   let droppedOutput = false;
@@ -118,7 +140,7 @@ export function truncateRecord(
       ...record,
       operations: ops.flatMap((op, i) => {
         if (rank[i] < droppedOperations) return [];
-        if (rank[i] >= resultsDropped || op.result === undefined) return [op];
+        if (resultRank[i] >= resultsDropped) return [op];
         return [{ ...op, result: undefined, truncated: true }];
       }),
       truncated: true,
@@ -165,8 +187,10 @@ export function truncateRecord(
 
   // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
+  // Dropping the causes alone can make the record fit. The search below does
+  // not always measure that case, so it is measured first.
   const n = ops.length;
-  if (!firstFit(0, n, (c) => (resultsDropped = c))) {
+  if (!fits() && !firstFit(1, clearable, (c) => (resultsDropped = c))) {
     // Phase 3: drop whole operations, oldest first.
     firstFit(1, n, (c) => (droppedOperations = c));
   }
@@ -179,7 +203,7 @@ export function truncateRecord(
   // If nothing was actually dropped, return the original untouched — not cut.
   if (
     !droppedCauses &&
-    !ops.some((op, i) => rank[i] < resultsDropped && op.result !== undefined) &&
+    resultsDropped === 0 &&
     droppedOperations === 0 &&
     !droppedInput &&
     !droppedOutput

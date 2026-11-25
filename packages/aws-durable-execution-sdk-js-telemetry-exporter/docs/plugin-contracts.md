@@ -35,9 +35,15 @@ interface TelemetryExporter {
    * record fits:
    *   1. every error `cause` (execution `error` and every operation error),
    *      with `droppedCauses: true`;
-   *   2. operation `result` fields, oldest operation first;
+   *   2. operation `result` fields, oldest operation first. Only a result
+   *      whose JSON is longer than 7 bytes is cleared, because clearing a
+   *      shorter one makes the record bigger;
    *   3. whole operations, oldest first;
    *   4. last resort — execution `input`, then `output`.
+   * Steps 2 and 3 binary search the count to cut. In the array form this cuts
+   * the fewest that fit. In the `operationsByName` form, and its part of
+   * `both`, a drop can make another same-name operation appear in the map. So
+   * there the search can cut more old operations than the fewest that fit.
    * Identity/timeline fields are never dropped; prefer `content.input`/
    * `content.output` transforms to bound `input`/`output` before it comes to
    * that. When anything is dropped, `truncated: true` is set on the record, each

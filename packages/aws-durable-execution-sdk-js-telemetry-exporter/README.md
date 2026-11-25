@@ -535,19 +535,29 @@ Drop order, until the record fits (one pass):
    (and so in `operationsByName`, which is derived from the operations). Each
    error keeps its `name` and `message`, and the record gets
    `droppedCauses: true`. No step cuts individual cause levels;
-2. operation `result` fields, **oldest operation first**;
+2. operation `result` fields, **oldest operation first**. Only a result whose
+   JSON is longer than 7 bytes is cleared. Clearing a result replaces
+   `"result":<json>` with `"truncated":true`, which is 16 bytes. So clearing a
+   shorter result (such as `true`, `1`, `null` or `"ok"`) makes the record
+   bigger. Such results stay in the record;
 3. whole operations, **oldest first**;
 4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
-Steps 2 and 3 binary search how many operations to cut. Each probe renders and
-measures one candidate record, so a record with _n_ operations is rendered about
-2 × log2(_n_ + 1) times, for any exporter. The search assumes that cutting more
-never makes the record larger. The `operationsByName` map can break this:
-cutting one of two operations with the same name makes the other one's
-`result` and `error` appear in the map. In such a record the search can cut
-more old operations than the fewest that fit. The emitted record always comes
-from a real measurement, so it never goes over the limit.
+Step 2 first measures the record with only the causes dropped. If it fits, no
+result is cleared. Then steps 2 and 3 binary search how many results or
+operations to cut. Each probe renders and measures one candidate record. So a
+record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 1 times, for
+any exporter.
+
+The search assumes that cutting more never makes the record larger. In the
+array form (`operations`) this holds. So the array form cuts the fewest results
+and operations that fit. The `operationsByName` map can break this: cutting one
+of two operations with the same name makes the other one's `result` and `error`
+appear in the map. So only in the by-name form, and in the by-name part of
+`both`, the search can cut more old operations than the fewest that fit. The
+emitted record always comes from a real measurement, so it never goes over the
+limit.
 
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
 only after all operations are gone — so prefer `content.input` /
