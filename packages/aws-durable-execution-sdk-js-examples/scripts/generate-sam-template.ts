@@ -296,6 +296,13 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
       );
       if (group) {
         functionResource.Properties.Handler = "integration-dispatch.handler";
+        // integration-dispatch.cjs loads these examples in the init phase.
+        functionResource.Properties.Environment.Variables.GROUP_EXAMPLES =
+          Object.entries(normalizedOptions.functionNameMap ?? {})
+            .filter(([, entry]) => entry.group === group)
+            .map(([exampleHandlerFile]) => exampleHandlerFile)
+            .sort()
+            .join(",");
       }
 
       const existing = template.Resources[functionResourceName];

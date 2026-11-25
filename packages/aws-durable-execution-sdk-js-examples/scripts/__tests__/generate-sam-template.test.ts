@@ -238,6 +238,10 @@ describe("generate-sam-template", () => {
         FunctionName: "HelloGroup-24x-NodeJS",
         Handler: "integration-dispatch.handler",
       });
+      expect(
+        template.Resources.HelloGroup.Properties.Environment.Variables
+          .GROUP_EXAMPLES,
+      ).toBe("hello-world");
       expect(template.Resources.HelloGroup.DependsOn).toBe(
         "HelloGroupLogGroup",
       );

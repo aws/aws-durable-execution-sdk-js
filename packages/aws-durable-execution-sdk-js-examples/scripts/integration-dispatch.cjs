@@ -12,6 +12,14 @@
 
 const EXAMPLE_NAME = /^[a-z0-9-]+$/;
 
+// Load the group's examples now, in the init phase. Init runs with more CPU
+// than an invocation at 128 MB. Loading the bundle in the first invocation
+// took about 2.4 s there, against about 150 ms in init, and made the tests
+// time out. generate-sam-template.ts sets GROUP_EXAMPLES.
+for (const example of (process.env.GROUP_EXAMPLES ?? "").split(",")) {
+  if (EXAMPLE_NAME.test(example)) require(`./${example}.js`);
+}
+
 /**
  * @param {any} wrapped
  * @returns {{ example: string, payload: unknown }}
