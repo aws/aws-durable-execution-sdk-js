@@ -64,5 +64,8 @@ exports.handler = async (
   /** @type {any} */ context,
 ) => {
   const unwrapped = unwrapEvent(event);
+  // The examples of a group share one log group. This line names the example
+  // of each invocation, so its logs can be found by that name.
+  console.log(`integration-dispatch example=${unwrapped.example}`);
   return require(`./${unwrapped.example}.js`).handler(unwrapped.event, context);
 };
