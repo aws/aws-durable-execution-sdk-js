@@ -49,15 +49,21 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *   3. whole operations, oldest first;
  *   4. last resort — execution `input`, then `output`.
  *
- * Step 2 clears only a result whose JSON is longer than 7 bytes. Clearing
- * replaces `"result":<json>` with `"truncated":true`, which is 16 bytes. So
- * clearing a shorter result (such as `true`, `1` or `"ok"`) makes the record
- * bigger and cannot help it fit. Such results stay in the record, unmarked.
+ * A small result is one whose JSON is 7 bytes or shorter (such as `true`, `1`
+ * or `"ok"`). Clearing a result replaces `"result":<json>` with
+ * `"truncated":true`, which is 16 bytes. So in a rendering that shows this
+ * per-operation marker, such as the array form, clearing a small result makes
+ * the record bigger. A rendering that hides the marker, such as the
+ * `operationsByName` map, gets smaller when any result is cleared.
  *
  * Step 2 first measures the record with no result cleared. If it fits, it is
- * returned. Then steps 2 and 3 binary search how many results or operations to
- * cut. Each probe renders and measures one candidate record. So a record with
- * n operations is rendered about 2 * log2(n + 1) + 1 times, for any `render`.
+ * returned. If there are small results, step 2 then measures the record with
+ * every small result cleared. If that record is smaller, the rendering hides
+ * the marker, so small results are cleared like large ones. Otherwise small
+ * results stay in the record, unmarked, and only large results are cleared.
+ * Then steps 2 and 3 binary search how many results or operations to cut.
+ * Each probe renders and measures one candidate record. So a record with n
+ * operations is rendered about 2 * log2(n + 1) + 2 times, for any `render`.
  *
  * The search assumes that cutting more never makes the rendering larger. In the
  * array form this holds, so the search cuts the fewest results and operations
@@ -112,23 +118,36 @@ export function truncateRecord(
       : withoutCause(record.error);
   if (executionError !== record.error) droppedCauses = true;
   // rank[i] is the position of operation i in the oldest-first order.
-  // resultRank[i] is the position of operation i among the operations whose
-  // result can be cleared, in the same order, or Infinity if it cannot.
-  // A result can be cleared only when its JSON is longer than 7 bytes. A
-  // shorter result is smaller than the `"truncated":true` marker that replaces
-  // it. So clearing it makes the record bigger, and it is never cleared.
+  // small[i] is whether operation i has a result whose JSON is 7 bytes or
+  // shorter. Such a result is smaller than the `"truncated":true` marker that
+  // replaces it, so clearing it can make the record bigger.
+  const order = oldestFirstOrder(ops);
   const rank = new Array<number>(ops.length);
-  const resultRank = new Array<number>(ops.length).fill(
-    Number.POSITIVE_INFINITY,
-  );
-  let clearable = 0; // the number of results that can be cleared
-  oldestFirstOrder(ops).forEach((idx, r) => {
+  const small = new Array<boolean>(ops.length).fill(false);
+  order.forEach((idx, r) => {
     rank[idx] = r;
     const result = ops[idx].result;
     if (result === undefined) return;
     const size = jsonByteSize(result);
-    if (size !== undefined && size > 7) resultRank[idx] = clearable++;
+    small[idx] = size !== undefined && size <= 7;
   });
+
+  // resultRank[i] is the position of operation i among the operations whose
+  // result can be cleared, in the oldest-first order, or Infinity if it cannot.
+  // Small results are included only when `withSmall` is true.
+  const resultRank = new Array<number>(ops.length);
+  let clearable = 0; // the number of results that can be cleared
+  const rankResults = (withSmall: boolean): void => {
+    resultRank.fill(Number.POSITIVE_INFINITY);
+    clearable = 0;
+    for (const idx of order) {
+      if (ops[idx].result === undefined) continue;
+      if (small[idx] && !withSmall) continue;
+      resultRank[idx] = clearable++;
+    }
+  };
+  rankResults(false);
+  let clearSmall = false; // set only to measure the record with small results cleared
 
   let resultsDropped = 0; // the oldest `resultsDropped` clearable results are cut
   let droppedOperations = 0; // the oldest `droppedOperations` operations are cut
@@ -140,7 +159,9 @@ export function truncateRecord(
       ...record,
       operations: ops.flatMap((op, i) => {
         if (rank[i] < droppedOperations) return [];
-        if (resultRank[i] >= resultsDropped) return [op];
+        if (resultRank[i] >= resultsDropped && !(clearSmall && small[i])) {
+          return [op];
+        }
         return [{ ...op, result: undefined, truncated: true }];
       }),
       truncated: true,
@@ -161,8 +182,9 @@ export function truncateRecord(
     return out;
   };
 
+  const measure = (): number | undefined => jsonByteSize(render(candidate()));
   const fits = (): boolean => {
-    const size = jsonByteSize(render(candidate()));
+    const size = measure();
     return size !== undefined && size <= maxBytes;
   };
 
@@ -190,7 +212,28 @@ export function truncateRecord(
   // Dropping the causes alone can make the record fit. The search below does
   // not always measure that case, so it is measured first.
   const n = ops.length;
-  if (!fits() && !firstFit(1, clearable, (c) => (resultsDropped = c))) {
+  const noneCleared = measure();
+  const noneClearedFits = noneCleared !== undefined && noneCleared <= maxBytes;
+  if (!noneClearedFits && small.includes(true)) {
+    // A rendering that hides the per-operation `truncated` marker gets smaller
+    // when a small result is cleared. Then skipping small results would drop
+    // operations that clearing them saves. So measure once with every small
+    // result cleared, and clear small results too if that record is smaller.
+    clearSmall = true;
+    const smallCleared = measure();
+    clearSmall = false;
+    if (
+      noneCleared !== undefined &&
+      smallCleared !== undefined &&
+      smallCleared < noneCleared
+    ) {
+      rankResults(true);
+    }
+  }
+  if (
+    !noneClearedFits &&
+    !firstFit(1, clearable, (c) => (resultsDropped = c))
+  ) {
     // Phase 3: drop whole operations, oldest first.
     firstFit(1, n, (c) => (droppedOperations = c));
   }

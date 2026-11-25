@@ -308,7 +308,8 @@ describe("truncateRecord search over the drop count", () => {
     if (x < 0.5) return pick(smallResults);
     return undefined;
   };
-  // A result is cleared only when its JSON is longer than 7 bytes.
+  // A result longer than 7 bytes can always be cleared. A shorter result is
+  // cleared only when the rendering hides the per-operation marker.
   const clearable = (result: unknown): boolean =>
     result !== undefined && bytes(result) > 7;
 
@@ -350,7 +351,7 @@ describe("truncateRecord search over the drop count", () => {
 
   it.each(renders)(
     "never goes over the limit and drops oldest first (%s)",
-    (_, render) => {
+    (format, render) => {
       for (let c = 0; c < 200; c++) {
         const r = randomRecord(1 + Math.floor(rnd() * 30));
         const limit = Math.floor(bytes(render(r)) * (0.1 + rnd()));
@@ -365,12 +366,21 @@ describe("truncateRecord search over the drop count", () => {
         expect(out.operations.map((o) => o.id)).toEqual(
           r.operations.slice(cut).map((o) => o.id),
         );
-        // Results are cut from the oldest kept operations only, and only
-        // when they are longer than 7 bytes.
+        // Results are cut from the oldest kept operations only. Small results
+        // are either all kept or cut like the others. The array form shows
+        // the marker, so there they are all kept.
         const lastCut = lastTruncated(out.operations);
+        const smallCut = out.operations.some(
+          (o, i) =>
+            o.truncated === true && !clearable(r.operations[cut + i].result),
+        );
+        if (format === "array") expect(smallCut).toBe(false);
         for (const [i, o] of out.operations.entries()) {
           const orig = r.operations[cut + i];
-          const isCut = i <= lastCut && clearable(orig.result);
+          const isCut =
+            i <= lastCut &&
+            orig.result !== undefined &&
+            (smallCut || clearable(orig.result));
           expect(o.result).toEqual(isCut ? undefined : orig.result);
           expect(o.truncated).toBe(isCut ? true : undefined);
         }
@@ -484,6 +494,67 @@ describe("truncateRecord edge cases of the drop-count search", () => {
       }),
     );
     expect(bytes(out)).toBeLessThanOrEqual(limit);
+  });
+
+  it("clears small results too in the by-name form", () => {
+    // The by-name form writes no per-operation `truncated` marker. So clearing
+    // even a result of `true` makes it smaller. So small results are cleared
+    // like large ones, and no extra operation is dropped. A check after each
+    // single drop gives the same result.
+    const small = [true, 1, "ok", null];
+    const operations = [
+      op({
+        id: "big",
+        name: "load",
+        startTime: at(0),
+        result: "x".repeat(500),
+      }),
+      ...Array.from({ length: 199 }, (_, i) =>
+        op({
+          id: `o${i}`,
+          name: `step-${i}`,
+          startTime: at(i + 1),
+          result: small[i % 4],
+        }),
+      ),
+    ];
+    const r = record({ operations });
+    // The limit fits with the large result and the oldest 100 small results
+    // cleared, and no fewer.
+    const expected = {
+      ...r,
+      operations: operations.map((o, i) => (i <= 100 ? cleared(o) : o)),
+      truncated: true,
+    };
+    const limit = bytes(withOperationsByName(expected));
+    const out = truncateRecord(r, limit, withOperationsByName);
+    expect(json(out)).toEqual(json(expected));
+  });
+
+  it("keeps small results when clearing them does not shrink the rendering", () => {
+    // The small results belong to a repeated name. So the by-name form does
+    // not show them, and clearing them does not change its size. So they stay,
+    // and only the newer large result is cleared.
+    const operations = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        op({ id: `o${i}`, name: "poll", startTime: at(i), result: true }),
+      ),
+      op({
+        id: "big",
+        name: "load",
+        startTime: at(5),
+        result: "x".repeat(500),
+      }),
+    ];
+    const r = record({ operations });
+    const expected = {
+      ...r,
+      operations: [...operations.slice(0, 5), cleared(operations[5])],
+      truncated: true,
+    };
+    const limit = bytes(withOperationsByName(expected));
+    const out = truncateRecord(r, limit, withOperationsByName);
+    expect(json(out)).toEqual(json(expected));
   });
 
   it("clears every large result without dropping an operation", () => {

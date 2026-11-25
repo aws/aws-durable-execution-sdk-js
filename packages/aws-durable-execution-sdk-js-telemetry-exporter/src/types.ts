@@ -121,8 +121,8 @@ export interface TelemetryExporter {
    * record's JSON exceeds this, the plugin truncates a per-exporter copy before
    * calling {@link TelemetryExporter.export | export} (best-effort): it first
    * removes every error `cause` (setting `droppedCauses: true`), then drops
-   * operation `result` fields oldest-first (only results whose JSON is longer
-   * than 7 bytes, because clearing a shorter one makes the record bigger), then
+   * operation `result` fields oldest-first (a result of 7 bytes or less only
+   * when clearing it makes the rendered record smaller), then
    * whole operations oldest-first,
    * then — only as a last resort — execution `input` and `output`. It sets
    * `truncated: true` on the emitted record, marks each operation whose result

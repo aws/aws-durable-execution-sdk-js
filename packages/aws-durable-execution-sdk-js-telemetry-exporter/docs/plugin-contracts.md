@@ -35,9 +35,10 @@ interface TelemetryExporter {
    * record fits:
    *   1. every error `cause` (execution `error` and every operation error),
    *      with `droppedCauses: true`;
-   *   2. operation `result` fields, oldest operation first. Only a result
-   *      whose JSON is longer than 7 bytes is cleared, because clearing a
-   *      shorter one makes the record bigger;
+   *   2. operation `result` fields, oldest operation first. A result whose
+   *      JSON is 7 bytes or shorter is cleared only when that makes the
+   *      rendered record smaller. In the array form the `truncated` marker is
+   *      bigger than such a result, so it stays;
    *   3. whole operations, oldest first;
    *   4. last resort — execution `input`, then `output`.
    * Steps 2 and 3 binary search the count to cut. In the array form this cuts

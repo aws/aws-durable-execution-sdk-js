@@ -535,19 +535,24 @@ Drop order, until the record fits (one pass):
    (and so in `operationsByName`, which is derived from the operations). Each
    error keeps its `name` and `message`, and the record gets
    `droppedCauses: true`. No step cuts individual cause levels;
-2. operation `result` fields, **oldest operation first**. Only a result whose
-   JSON is longer than 7 bytes is cleared. Clearing a result replaces
-   `"result":<json>` with `"truncated":true`, which is 16 bytes. So clearing a
-   shorter result (such as `true`, `1`, `null` or `"ok"`) makes the record
-   bigger. Such results stay in the record;
+2. operation `result` fields, **oldest operation first**. A small result is
+   one whose JSON is 7 bytes or shorter (such as `true`, `1`, `null` or
+   `"ok"`). Clearing a result replaces `"result":<json>` with
+   `"truncated":true`, which is 16 bytes. So in the array form, clearing a small
+   result makes the record bigger, and small results stay in the record. The
+   by-name form shows no per-operation `truncated` marker, so clearing any
+   result makes it smaller. So there small results are cleared like the others.
+   The plugin measures the rendered record to tell the two cases apart;
 3. whole operations, **oldest first**;
 4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
 Step 2 first measures the record with only the causes dropped. If it fits, no
-result is cleared. Then steps 2 and 3 binary search how many results or
+result is cleared. If there are small results, step 2 then measures the record
+with every small result cleared. If that record is smaller, small results are
+cleared like the others. Then steps 2 and 3 binary search how many results or
 operations to cut. Each probe renders and measures one candidate record. So a
-record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 1 times, for
+record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 2 times, for
 any exporter.
 
 The search assumes that cutting more never makes the record larger. In the
