@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
-  findInvokeTargets,
+  findOwnFunctionExamples,
   groupExamples,
   groupFunctionName,
 } from "./example-groups.mjs";
@@ -86,11 +86,29 @@ describe("groupFunctionName", () => {
   });
 });
 
-describe("findInvokeTargets", () => {
+describe("findOwnFunctionExamples", () => {
   test("finds the names passed to getFunctionName", () => {
-    const targets = findInvokeTargets([
-      `functionNameMap.getFunctionName("wait"),\n getFunctionName(\n  'step-basic')`,
+    const examples = findOwnFunctionExamples([
+      {
+        path: "invoke/simple/invoke-simple.test.ts",
+        source: `functionNameMap.getFunctionName("wait"),\n getFunctionName(\n  'step-basic')`,
+      },
     ]);
-    assert.deepEqual([...targets], ["wait", "step-basic"]);
+    assert.deepEqual([...examples], ["wait", "step-basic"]);
+  });
+
+  test("finds an example whose test builds its own cloud runner", () => {
+    const examples = findOwnFunctionExamples([
+      {
+        path: "step/interrupted-no-retry/step-interrupted-no-retry.test.ts",
+        source: "const runner = new CloudDurableTestRunner({ functionName });",
+      },
+      {
+        path: "map/basic/map-basic.test.ts",
+        source:
+          "// Not the shared `createTests` helper: new LocalDurableTestRunner",
+      },
+    ]);
+    assert.deepEqual([...examples], ["step-interrupted-no-retry"]);
   });
 });

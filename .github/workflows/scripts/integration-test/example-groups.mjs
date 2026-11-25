@@ -9,10 +9,14 @@
  * Some examples stay in their own function:
  * - Examples that another example invokes by function name. The caller builds
  *   the payload, so it carries no example name.
+ * - Examples whose test builds its own CloudDurableTestRunner, which does not
+ *   wrap the payload.
  * - Examples whose function settings differ from the rest of their folder.
  *   A function has one timeout, one durable config and one environment.
  * - Examples that are alone in their group.
  */
+
+import { basename } from "node:path";
 
 /**
  * @typedef {object} CatalogExample
@@ -33,8 +37,6 @@ function settingsKey(example) {
     example.durableConfig ?? null,
     example.lambdaTimeoutSeconds ?? null,
     !!example.usesMicrovm,
-    // generate-sam-template.ts gives tenant-target its own TenancyConfig.
-    example.handler.includes("tenant-target"),
   ]);
 }
 
@@ -57,16 +59,16 @@ const CUSTOM_SETTINGS = new Set(["steps-with-retry"]);
 
 /**
  * @param {CatalogExample[]} examples
- * @param {Set<string>} invokeTargets handler files invoked by function name
+ * @param {Set<string>} ownFunction handler files that keep their own function
  * @returns {Map<string, string>} handler file to group id, for grouped
  *   examples only. Examples not in the map keep their own function.
  */
-export function groupExamples(examples, invokeTargets) {
+export function groupExamples(examples, ownFunction) {
   /** @type {Map<string, string[]>} */
   const members = new Map();
   for (const example of examples) {
     const handlerFile = example.handler.replace(/\.handler$/, "");
-    if (invokeTargets.has(handlerFile) || CUSTOM_SETTINGS.has(handlerFile)) {
+    if (ownFunction.has(handlerFile) || CUSTOM_SETTINGS.has(handlerFile)) {
       continue;
     }
     const key = `${exampleFolder(example)}\n${settingsKey(example)}`;
@@ -101,20 +103,27 @@ export function groupFunctionName(groupId) {
 }
 
 /**
- * The examples that tests invoke by function name, from
- * functionNameMap.getFunctionName("...") calls in the test files.
- * @param {string[]} testSources the text of each test file
- * @returns {Set<string>}
+ * The examples that need their own function, found in the test files:
+ * - names passed to functionNameMap.getFunctionName("..."), since another
+ *   example invokes them by function name
+ * - examples whose test builds its own CloudDurableTestRunner, since that
+ *   runner does not wrap the payload. The test file is named
+ *   <example>.test.ts.
+ * @param {{ path: string, source: string }[]} testFiles
+ * @returns {Set<string>} handler files
  */
-export function findInvokeTargets(testSources) {
+export function findOwnFunctionExamples(testFiles) {
   /** @type {Set<string>} */
-  const targets = new Set();
-  for (const source of testSources) {
+  const examples = new Set();
+  for (const { path, source } of testFiles) {
     for (const match of source.matchAll(
       /getFunctionName\(\s*["'`]([^"'`]+)["'`]/g,
     )) {
-      targets.add(match[1]);
+      examples.add(match[1]);
+    }
+    if (/new CloudDurableTestRunner\b/.test(source)) {
+      examples.add(basename(path, ".test.ts"));
     }
   }
-  return targets;
+  return examples;
 }

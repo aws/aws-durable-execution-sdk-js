@@ -33,7 +33,7 @@ import {
 
 import dotenv from "dotenv";
 import {
-  findInvokeTargets,
+  findOwnFunctionExamples,
   groupExamples,
   groupFunctionName,
 } from "./example-groups.mjs";
@@ -389,7 +389,7 @@ class IntegrationTestRunner {
     const functionNameMap = {};
     const groups = options.capacityProviderOnly
       ? new Map()
-      : groupExamples(examples, this.getInvokeTargets());
+      : groupExamples(examples, this.getOwnFunctionExamples());
 
     for (const example of examples) {
       const exampleHandler = example.handler;
@@ -432,17 +432,19 @@ class IntegrationTestRunner {
   }
 
   /**
-   * The examples that tests invoke by function name. These keep their own
-   * function, since the caller's payload names no example.
+   * The examples that keep their own function. See findOwnFunctionExamples.
    * @returns {Set<string>}
    */
-  getInvokeTargets() {
+  getOwnFunctionExamples() {
     const examplesSrc = join(CONFIG.EXAMPLES_PACKAGE_PATH, "src", "examples");
     const testFiles = readdirSync(examplesSrc, { recursive: true })
       .map(String)
       .filter((file) => file.endsWith(".test.ts"));
-    return findInvokeTargets(
-      testFiles.map((file) => readFileSync(join(examplesSrc, file), "utf8")),
+    return findOwnFunctionExamples(
+      testFiles.map((file) => ({
+        path: file,
+        source: readFileSync(join(examplesSrc, file), "utf8"),
+      })),
     );
   }
 
