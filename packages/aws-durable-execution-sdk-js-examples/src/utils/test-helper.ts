@@ -22,7 +22,7 @@ export interface FunctionNameMap {
  * Runs one example of a grouped integration function. The payload is wrapped
  * as { __example, __payload } for scripts/integration-dispatch.cjs.
  */
-class GroupedCloudDurableTestRunner<
+export class GroupedCloudDurableTestRunner<
   ResultType,
 > extends CloudDurableTestRunner<ResultType> {
   constructor(
