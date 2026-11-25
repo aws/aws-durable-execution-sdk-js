@@ -476,7 +476,8 @@ const decideHttp = decider({
 - Each AWS SDK client is an optional peer dependency. Install only the one you use. Without it, a call through that transport fails with an `AiError` that names the package.
 - On SageMaker and AgentCore Runtime, the call reaches the server's `POST /invocations` route, which the Strands Decider server answers like `/v1/systemone`. The 0.2.0 release on PyPI has no `/invocations` route, so deploy a later version. `agentCoreTransport`'s `qualifier` names a runtime endpoint.
 - On SageMaker, an HTTP error from the server becomes a `DeciderError` with the server's status.
-- On Lambda, the function fails the invocation when it refuses a request, for example an input that does not fit the window. That becomes a `DeciderError` with status 422, which is not retried. Any other function error is retried. `lambdaTransport` does not use the function's Function URL. A new execution environment loads the model first, which can take 30 seconds without SnapStart.
+- On Lambda, the function fails the invocation when it refuses a request, for example an input that does not fit the window. That becomes a `DeciderError` with status 422, which is not retried. Any other function error is retried. `lambdaTransport` does not use the function's Function URL. The deploy guide's Function URL accepts only SigV4-signed requests, so `endpoint` gets HTTP 403 from it. Use `lambdaTransport` instead. A new execution environment loads the model first, which can take 30 seconds without SnapStart.
+- Which models each host serves, as tested on 2026-11-25: Lambda (arm64 CPU) serves only the v1 Qwen3.5 2B model. SageMaker serves v1 and v2. For v2 on SageMaker, deploy with `-c image=build`, because the published `serve-sagemaker-cuda-v1` image fails to load a v2 checkpoint.
 - `decider()` throws a `TypeError` when the endpoint is not an absolute `http:` or `https:` URL.
 - An endpoint with a user name or password is refused: pass credentials in `headers`. Redirects are not followed, so your headers never reach another server. Errors name the endpoint without its query, because errors are checkpointed.
 - `check` and `label` answer yes when the model's probability of yes is at least `threshold`, 0.5 by default.
@@ -500,7 +501,7 @@ const model = llm({
 | Operation | Limits |
 |---|---|
 | All | `question` is a non-empty string. `input` is a string or a value that `JSON.stringify` can encode. |
-| `decider()` operations | The model reads the input and each question, with its choices, in one context window: 4,096 tokens for Strands Decider 2B. A request that does not fit fails with `DeciderError` and HTTP 422, which is not retried. Shorten the input before the call. |
+| `decider()` operations | The model reads the input and each question, with its choices, in one context window. The window depends on the model: 4,096 tokens for the v1 models, and 32,768 for the v2 (Gemma 4) models. A request that does not fit fails with `DeciderError` and HTTP 422, which is not retried. Shorten the input before the call. |
 | `classify` | 2 to 255 choices (`MAX_CLASSIFY_OPTIONS`). Choices are non-empty and differ after trimming and ignoring case. The model always picks one, so add a choice such as `"other"` when none may fit. |
 | `label` | At least 2 choices, with the same rules. Each choice is one yes-or-no question, so each adds time. |
 | `score` | 2 to 10 entries (`MAX_SCORE_LEVELS`), from lowest to highest. |
