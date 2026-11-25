@@ -87,6 +87,7 @@ export const config: ExampleConfig = {
   - An example that sets `suspendAfter` on a job, as in `src/examples/microvm/session-suspend-after/`, also sets `idlePolicy.autoResumeEnabled` in the session config. The durable function suspends the MicroVM, and the service resumes it on the next request. The SDK never calls `ResumeMicrovm`.
   - A MicroVM test that acts while the execution runs, such as one that completes a callback, sets `invocationType: InvocationType.Event` in `createTests`. A `RequestResponse` Invoke returns only when the execution ends, and the cloud runner reads the history only after that.
   - A missing `lambda:TerminateMicrovm` does not fail the operation. So the MicroVM tests check with `GetMicrovm` that the MicroVM terminated. The test credentials need `lambda:GetMicrovm`.
+- `ownFunction`: (Default: false) Deploy the example in its own Lambda function for the integration tests. See [Shared integration functions](#shared-integration-functions) for when to set it.
 
 ### 3. Create the Test File
 
@@ -154,6 +155,22 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
 
 3. **Reuse**:
    - SAM-managed integration test functions remain deployed for reuse by later PRs
+
+### Shared integration functions
+
+The integration tests do not deploy one function per example. One Lambda function serves the examples of one folder under `src/examples/`. The examples that are alone in their folder share one `misc` function. The shared function runs `scripts/integration-dispatch.cjs`. `createTests` wraps each payload as `{ __example, __payload }`, and the dispatcher calls the named example with the original payload. The dispatcher logs `integration-dispatch example=<name>` on each invocation, so you can find one example's logs in the shared log group.
+
+Set `ownFunction: true` in the example's config when one of these is true:
+
+- Another example invokes this one by function name, with `functionNameMap.getFunctionName(...)`. The caller builds the payload, so the payload names no example.
+- The test does not use `createTests`. For example, it builds its own `CloudDurableTestRunner`, which does not wrap the payload.
+- The function settings differ from the other examples of the folder, such as `durableConfig`, `lambdaTimeoutSeconds`, or an entry in `EXAMPLE_CONFIGS` in `scripts/generate-sam-template.ts`.
+- The input is very large, as in `large-payload` (6 MB). Lambda then does not put the input in the invocation event, so the dispatcher cannot read the example name.
+
+A missing flag fails in CI with one of these messages:
+
+- `needs other function settings than the rest of group`: the deploy found different settings in one group.
+- `The payload has no __example`: a caller or a test sent a payload without the wrapper.
 
 ### Run Integration Tests Locally
 
@@ -334,6 +351,7 @@ tests: (runner, { assertEventSignatures, isCloud, isTimeSkipping }) => {
 - [ ] Added `assertEventSignatures` parameter to test callback
 - [ ] Called `assertEventSignatures(execution)` in every test
 - [ ] Generated history files with `GENERATE_HISTORY=true npm test`
+- [ ] Set `ownFunction: true` if the example needs its own integration function (see [Shared integration functions](#shared-integration-functions))
 - [ ] Local tests pass (`npm test`)
 - [ ] Integration tests pass in CI/CD
 
