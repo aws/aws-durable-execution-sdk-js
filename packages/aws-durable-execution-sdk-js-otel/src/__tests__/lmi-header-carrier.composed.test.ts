@@ -8,6 +8,7 @@ import {
 import { context, trace } from "@opentelemetry/api";
 import {
   AlwaysOnSampler,
+  ParentBasedSampler,
   InMemorySpanExporter,
   NodeTracerProvider,
   SimpleSpanProcessor,
@@ -30,7 +31,7 @@ it.each([createExecutionOtelPluginFactory, createInvocationOtelPluginFactory])(
           tracerProviderFactory: (ids) => {
             const provider = new NodeTracerProvider({
               idGenerator: ids(),
-              sampler: new AlwaysOnSampler(),
+              sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
               spanProcessors: [new SimpleSpanProcessor(exporter)],
             });
             providers.push(provider);
@@ -170,7 +171,7 @@ describe.each([
           tracerProviderFactory: (ids) => {
             provider = new NodeTracerProvider({
               idGenerator: ids(),
-              sampler: new AlwaysOnSampler(),
+              sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
               spanProcessors: [new SimpleSpanProcessor(exporter)],
             });
             return provider;
