@@ -662,6 +662,32 @@ function validateDurableExecutionEvent(event: unknown): void {
 }
 
 /**
+ * Writes an ERROR diagnostic for a plugin loading failure. The invocation returns FAILED
+ * with the same error, so this only makes the failure visible in the function's logs. The
+ * context logger does not exist yet at this point, hence console.error. Building or writing
+ * the diagnostic never changes the invocation result.
+ */
+function logPluginLoadFailure(
+  error: unknown,
+  event: DurableExecutionInvocationInput,
+  context: Context,
+): void {
+  try {
+    // biome-ignore lint/suspicious/noConsole: the context logger is not initialized before plugins load.
+    console.error("Plugin loading failed; failing the invocation.", {
+      error:
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      requestId: context?.awsRequestId,
+      durableExecutionArn: event.DurableExecutionArn,
+    });
+  } catch {
+    // A diagnostic failure must not replace the original durable failure.
+  }
+}
+
+/**
  * Wraps a durable handler function to create a handler with automatic state persistence,
  * retry logic, and workflow orchestration capabilities.
  *
@@ -777,6 +803,7 @@ export const withDurableExecution = <
       // the invocation is described.
       pluginFactories = await pluginFactoriesPromise;
     } catch (error) {
+      logPluginLoadFailure(error, event, context);
       return {
         Status: InvocationStatus.FAILED,
         Error: createErrorObjectFromError(error),
