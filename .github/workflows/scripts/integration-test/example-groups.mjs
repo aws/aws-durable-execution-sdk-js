@@ -13,7 +13,9 @@
  *   wrap the payload.
  * - Examples whose function settings differ from the rest of their folder.
  *   A function has one timeout, one durable config and one environment.
- * - Examples that are alone in their group.
+ *
+ * Examples with no other example of the same folder and settings share one
+ * "misc" function, when their settings are equal.
  */
 
 import { basename } from "node:path";
@@ -79,15 +81,35 @@ export function groupExamples(examples, ownFunction) {
   const groups = new Map();
   /** @type {Map<string, number>} */
   const groupsPerFolder = new Map();
+  /** @type {Map<string, string[]>} */
+  const alone = new Map();
   for (const [key, handlerFiles] of members) {
+    const [folder, settings] = key.split("\n");
+    if (handlerFiles.length < 2) {
+      // Examples alone in their folder and settings share a "misc" function.
+      alone.set(settings, [...(alone.get(settings) ?? []), ...handlerFiles]);
+      continue;
+    }
+    addGroup(groups, groupsPerFolder, folder, handlerFiles);
+  }
+  for (const handlerFiles of alone.values()) {
     if (handlerFiles.length < 2) continue;
-    const folder = key.slice(0, key.indexOf("\n"));
-    const count = (groupsPerFolder.get(folder) ?? 0) + 1;
-    groupsPerFolder.set(folder, count);
-    const groupId = `${folder}${count > 1 ? `-${count}` : ""}-group`;
-    for (const handlerFile of handlerFiles) groups.set(handlerFile, groupId);
+    addGroup(groups, groupsPerFolder, "misc", handlerFiles);
   }
   return groups;
+}
+
+/**
+ * @param {Map<string, string>} groups handler file to group id
+ * @param {Map<string, number>} groupsPerFolder
+ * @param {string} folder
+ * @param {string[]} handlerFiles
+ */
+function addGroup(groups, groupsPerFolder, folder, handlerFiles) {
+  const count = (groupsPerFolder.get(folder) ?? 0) + 1;
+  groupsPerFolder.set(folder, count);
+  const groupId = `${folder}${count > 1 ? `-${count}` : ""}-group`;
+  for (const handlerFile of handlerFiles) groups.set(handlerFile, groupId);
 }
 
 /**

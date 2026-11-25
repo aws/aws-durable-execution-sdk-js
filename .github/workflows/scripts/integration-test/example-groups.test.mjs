@@ -31,12 +31,27 @@ describe("groupExamples", () => {
     });
   });
 
-  test("leaves an example that is alone in its folder ungrouped", () => {
+  test("leaves an example ungrouped when no other example shares its settings", () => {
     const groups = groupExamples(
       [example("hello-world", "hello-world")],
       new Set(),
     );
     assert.equal(groups.size, 0);
+  });
+
+  test("puts examples that are alone in their folder in one misc group", () => {
+    const groups = groupExamples(
+      [
+        example("hello-world", "hello-world"),
+        example("large-payload", "large-payload"),
+        example("non-durable", "non-durable", { durableConfig: null }),
+      ],
+      new Set(),
+    );
+    assert.deepEqual(Object.fromEntries(groups), {
+      "hello-world": "misc-group",
+      "large-payload": "misc-group",
+    });
   });
 
   test("leaves invoke targets ungrouped", () => {
