@@ -220,6 +220,51 @@ describe("generate-sam-template", () => {
       });
     });
 
+    test("gives a grouped example the group's function and the dispatcher", () => {
+      const template = generateTemplate({
+        functionNameMap: {
+          "hello-world": {
+            functionName: "HelloGroup-24x-NodeJS",
+            group: "hello-group",
+          },
+        },
+        lambdaExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/test-lambda-role",
+        runtime: "24.x",
+      });
+
+      expect(template.Resources.HelloWorld).toBeUndefined();
+      expect(template.Resources.HelloGroup.Properties).toMatchObject({
+        FunctionName: "HelloGroup-24x-NodeJS",
+        Handler: "integration-dispatch.handler",
+      });
+      expect(template.Resources.HelloGroup.DependsOn).toBe(
+        "HelloGroupLogGroup",
+      );
+    });
+
+    test("fails when the examples of a group need other settings", () => {
+      expect(() =>
+        generateTemplate({
+          functionNameMap: {
+            "hello-world": {
+              functionName: "MixedGroup-24x-NodeJS",
+              group: "mixed-group",
+            },
+            "steps-with-retry": {
+              functionName: "MixedGroup-24x-NodeJS",
+              group: "mixed-group",
+            },
+          },
+          lambdaExecutionRoleArn:
+            "arn:aws:iam::123456789012:role/test-lambda-role",
+          runtime: "24.x",
+        }),
+      ).toThrow(
+        /needs other function settings than the rest of group "mixed-group"/,
+      );
+    });
+
     test("leaves out a MicroVM example when no image is given", () => {
       const template = generateTemplate();
 

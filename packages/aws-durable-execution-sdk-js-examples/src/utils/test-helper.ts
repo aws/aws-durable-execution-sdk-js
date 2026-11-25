@@ -7,6 +7,7 @@ import {
   DurableTestRunner,
   DurableOperation,
   InvocationType,
+  InvokeRequest,
   LocalDurableTestRunnerSetupParameters,
   TestResult,
 } from "@aws/durable-execution-sdk-js-testing";
@@ -15,6 +16,31 @@ import path from "path";
 
 export interface FunctionNameMap {
   getFunctionName(functionName: string): string;
+}
+
+/**
+ * Runs one example of a grouped integration function. The payload is wrapped
+ * as { __example, __payload } for scripts/integration-dispatch.cjs.
+ */
+class GroupedCloudDurableTestRunner<
+  ResultType,
+> extends CloudDurableTestRunner<ResultType> {
+  constructor(
+    params: ConstructorParameters<typeof CloudDurableTestRunner>[0],
+    private readonly example: string,
+  ) {
+    super(params);
+  }
+
+  override run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
+    return super.run({
+      payload: {
+        __example: this.example,
+        // CloudDurableTestRunner sends no payload when it is falsy.
+        __payload: params?.payload || undefined,
+      },
+    });
+  }
 }
 
 class CloudFunctionNameMap implements FunctionNameMap {
@@ -287,10 +313,20 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     };
 
     describe(`${parsedFunctionName} (cloud)`, () => {
-      const runner = new CloudDurableTestRunner<ResultType>({
-        ...runnerParams,
-        functionName,
-      });
+      // A grouped example shares its function with the rest of its folder.
+      // integration-dispatch.cjs reads the example name from the payload.
+      const groupedExamples = JSON.parse(
+        process.env.GROUPED_EXAMPLES ?? "{}",
+      ) as Record<string, string>;
+      const runner = groupedExamples[parsedFunctionName]
+        ? new GroupedCloudDurableTestRunner<ResultType>(
+            { ...runnerParams, functionName },
+            parsedFunctionName,
+          )
+        : new CloudDurableTestRunner<ResultType>({
+            ...runnerParams,
+            functionName,
+          });
       const capacityProviderRunner = functionNameCapacityProvider
         ? new CloudDurableTestRunner<ResultType>({
             ...runnerParams,

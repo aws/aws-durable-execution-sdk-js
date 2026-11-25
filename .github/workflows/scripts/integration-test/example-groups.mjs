@@ -1,0 +1,120 @@
+// @ts-check
+/**
+ * Groups integration examples so that one Lambda function serves each example
+ * folder. Creating and updating ~125 functions took most of the deploy time.
+ *
+ * The group function runs integration-dispatch.cjs. The test runner wraps each
+ * payload with the example name, and the dispatcher calls that example.
+ *
+ * Some examples stay in their own function:
+ * - Examples that another example invokes by function name. The caller builds
+ *   the payload, so it carries no example name.
+ * - Examples whose function settings differ from the rest of their folder.
+ *   A function has one timeout, one durable config and one environment.
+ * - Examples that are alone in their group.
+ */
+
+/**
+ * @typedef {object} CatalogExample
+ * @property {string} handler such as "wait.handler"
+ * @property {string} path the absolute source path
+ * @property {unknown} [durableConfig]
+ * @property {number} [lambdaTimeoutSeconds]
+ * @property {boolean} [usesMicrovm]
+ */
+
+/**
+ * The function settings that the template takes from an example. Examples
+ * share a function only when these are equal.
+ * @param {CatalogExample} example
+ */
+function settingsKey(example) {
+  return JSON.stringify([
+    example.durableConfig ?? null,
+    example.lambdaTimeoutSeconds ?? null,
+    !!example.usesMicrovm,
+    // generate-sam-template.ts gives tenant-target its own TenancyConfig.
+    example.handler.includes("tenant-target"),
+  ]);
+}
+
+/**
+ * The folder under src/examples that holds the example.
+ * @param {CatalogExample} example
+ */
+function exampleFolder(example) {
+  const parts = example.path.split(/[\\/]/);
+  const index = parts.lastIndexOf("examples");
+  return parts[index + 1];
+}
+
+/**
+ * Examples with their own entry in EXAMPLE_CONFIGS in generate-sam-template.ts.
+ * generate-sam-template.ts fails if a grouped example has other settings, so
+ * this list cannot fall behind without a failed deploy.
+ */
+const CUSTOM_SETTINGS = new Set(["steps-with-retry"]);
+
+/**
+ * @param {CatalogExample[]} examples
+ * @param {Set<string>} invokeTargets handler files invoked by function name
+ * @returns {Map<string, string>} handler file to group id, for grouped
+ *   examples only. Examples not in the map keep their own function.
+ */
+export function groupExamples(examples, invokeTargets) {
+  /** @type {Map<string, string[]>} */
+  const members = new Map();
+  for (const example of examples) {
+    const handlerFile = example.handler.replace(/\.handler$/, "");
+    if (invokeTargets.has(handlerFile) || CUSTOM_SETTINGS.has(handlerFile)) {
+      continue;
+    }
+    const key = `${exampleFolder(example)}\n${settingsKey(example)}`;
+    members.set(key, [...(members.get(key) ?? []), handlerFile]);
+  }
+
+  /** @type {Map<string, string>} */
+  const groups = new Map();
+  /** @type {Map<string, number>} */
+  const groupsPerFolder = new Map();
+  for (const [key, handlerFiles] of members) {
+    if (handlerFiles.length < 2) continue;
+    const folder = key.slice(0, key.indexOf("\n"));
+    const count = (groupsPerFolder.get(folder) ?? 0) + 1;
+    groupsPerFolder.set(folder, count);
+    const groupId = `${folder}${count > 1 ? `-${count}` : ""}-group`;
+    for (const handlerFile of handlerFiles) groups.set(handlerFile, groupId);
+  }
+  return groups;
+}
+
+/**
+ * The name part of a group's function, such as "WaitForCallbackGroup" for
+ * "wait-for-callback-group".
+ * @param {string} groupId
+ */
+export function groupFunctionName(groupId) {
+  return groupId
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
+
+/**
+ * The examples that tests invoke by function name, from
+ * functionNameMap.getFunctionName("...") calls in the test files.
+ * @param {string[]} testSources the text of each test file
+ * @returns {Set<string>}
+ */
+export function findInvokeTargets(testSources) {
+  /** @type {Set<string>} */
+  const targets = new Set();
+  for (const source of testSources) {
+    for (const match of source.matchAll(
+      /getFunctionName\(\s*["'`]([^"'`]+)["'`]/g,
+    )) {
+      targets.add(match[1]);
+    }
+  }
+  return targets;
+}

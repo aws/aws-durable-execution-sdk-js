@@ -3,6 +3,7 @@
 import fs from "fs";
 import path from "path";
 import * as yaml from "js-yaml";
+import { isDeepStrictEqual } from "util";
 
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
@@ -29,6 +30,11 @@ const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
 interface FunctionNameConfig {
   functionName: string;
+  /**
+   * Set when the example shares one function with the other examples of its
+   * folder. That function runs scripts/integration-dispatch.cjs.
+   */
+  group?: string;
 }
 
 interface TemplateOptions {
@@ -276,17 +282,35 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
     )
     .forEach((catalog: { name: string; handler: string }) => {
       const handlerFile = catalog.handler.replace(/\.handler$/, "");
+      const group = normalizedOptions.functionNameMap?.[handlerFile]?.group;
       const functionName =
         normalizedOptions.functionNameMap?.[handlerFile]?.functionName ??
         getDefaultFunctionName(catalog, normalizedOptions.runtime);
       assertValidFunctionName(functionName, catalog.name);
-      const functionResourceName = toPascalCase(handlerFile);
+      const functionResourceName = toPascalCase(group ?? handlerFile);
       const logGroupResourceName = `${functionResourceName}LogGroup`;
       const functionResource = createFunctionResource(
         catalog,
         functionName,
         normalizedOptions,
       );
+      if (group) {
+        functionResource.Properties.Handler = "integration-dispatch.handler";
+      }
+
+      const existing = template.Resources[functionResourceName];
+      if (existing) {
+        // Another example of the group already added the function. One
+        // function has one set of settings, so the examples must agree.
+        const { DependsOn: _, ...existingResource } = existing;
+        if (!isDeepStrictEqual(existingResource, functionResource)) {
+          throw new Error(
+            `Example "${catalog.name}" needs other function settings than ` +
+              `the rest of group "${group}"`,
+          );
+        }
+        return;
+      }
 
       if (manageLogGroups) {
         template.Resources[logGroupResourceName] = {
