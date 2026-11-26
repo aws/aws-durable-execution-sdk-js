@@ -591,6 +591,16 @@ async function runHandler<
             isUnrecoverableInvocationError(lateTermination.error)
           ) {
             log("🛑", "Checkpoint failed after the handler threw");
+            // As on the invocation-error path above, plugins hear RETRYING once before the
+            // rethrow, so they drain their work and flush telemetry.
+            await plugin.onInvocationEnd?.({
+              ...invocationBaseInfo,
+              status: PluginInvocationStatus.RETRYING,
+              executionInput: customerHandlerEvent,
+              executionError: lateTermination.error,
+              executionResult: undefined,
+              operations: toOperationInfoMap(executionContext._stepData),
+            });
             throw lateTermination.error;
           }
         }

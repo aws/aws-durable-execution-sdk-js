@@ -11,6 +11,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import {
   type DurableContext,
   type DurableExecutionClient,
+  type DurableExecutionConfig,
   StepSemantics,
 } from "../../types";
 import {
@@ -75,9 +76,11 @@ function slowRecordingClient(options: { failOnStepSucceed?: boolean } = {}): {
 const invoke = (
   client: DurableExecutionClient,
   handler: (event: unknown, context: DurableContext) => Promise<unknown>,
+  config: DurableExecutionConfig = {},
 ): Promise<unknown> =>
   withDurableExecution(handler, {
     defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+    ...config,
   })(
     new DurableExecutionInvocationInputWithClient(
       {
@@ -136,14 +139,33 @@ describe("AtLeastOnceAsync through withDurableExecution", () => {
 
   it("rethrows a failed SUCCEED checkpoint when the handler throws first", async () => {
     const { client } = slowRecordingClient({ failOnStepSucceed: true });
+    const events: string[] = [];
 
-    const invocation = invoke(client, async (_event, context) => {
-      await context.step("a", async () => "done");
-      throw new Error("handler failed after the step");
-    });
+    const invocation = invoke(
+      client,
+      async (_event, context) => {
+        await context.step("a", async () => "done");
+        throw new Error("handler failed after the step");
+      },
+      {
+        plugins: [
+          {
+            createPlugin: () => ({
+              onInvocationEnd: async (info) => {
+                // Async, so the test also checks that the SDK waits for it.
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                events.push(`end:${info.status}`);
+              },
+            }),
+          },
+        ],
+      },
+    );
 
     // FAILED would end the execution without the step's result. The checkpoint error makes
     // Lambda retry the invocation instead.
     await expect(invocation).rejects.toThrow(/Checkpoint failed/);
+    // Plugins hear RETRYING once, and before the invocation rejects.
+    expect(events).toEqual(["end:RETRYING"]);
   });
 });
