@@ -10,10 +10,11 @@
  * - An example with `ownFunction: true` in its config keeps its own function.
  *   ADDING_EXAMPLES.md says when to set it.
  * - The other examples of one folder share a function.
- * - The examples that are alone in their folder share one "misc" function.
+ * - The examples that are then alone in their folder share one "misc"
+ *   function.
  *
- * generate-sam-template.ts fails the deploy when the examples of a group need
- * other function settings, so a missing flag cannot go unnoticed.
+ * generate-sam-template.ts fails the deploy when a group's settings differ.
+ * The other missing flags fail in the tests.
  */
 
 /**
@@ -35,8 +36,8 @@ function exampleFolder(example) {
 
 /**
  * @param {CatalogExample[]} examples
- * @returns {Map<string, string>} handler file to group id, for grouped
- *   examples only. Examples not in the map keep their own function.
+ * @returns {Map<string, string>} handler file to group id. Examples with
+ *   ownFunction are not in the map.
  */
 export function groupExamples(examples) {
   /** @type {Map<string, string[]>} */
@@ -50,19 +51,9 @@ export function groupExamples(examples) {
 
   /** @type {Map<string, string>} */
   const groups = new Map();
-  /** @type {string[]} */
-  const alone = [];
   for (const [folder, handlerFiles] of byFolder) {
-    if (handlerFiles.length < 2) {
-      alone.push(...handlerFiles);
-      continue;
-    }
-    for (const handlerFile of handlerFiles) {
-      groups.set(handlerFile, `${folder}-group`);
-    }
-  }
-  if (alone.length > 1) {
-    for (const handlerFile of alone) groups.set(handlerFile, "misc-group");
+    const groupId = handlerFiles.length < 2 ? "misc-group" : `${folder}-group`;
+    for (const handlerFile of handlerFiles) groups.set(handlerFile, groupId);
   }
   return groups;
 }

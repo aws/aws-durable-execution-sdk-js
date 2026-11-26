@@ -50,13 +50,13 @@ describe("groupExamples", () => {
     });
   });
 
-  test("leaves the only example that is alone in its folder ungrouped", () => {
+  test("puts the examples that are alone in their folder in misc", () => {
     const groups = groupExamples([
       example("hello-world", "hello-world"),
       example("map", "map-basic"),
       example("map", "map-large"),
     ]);
-    assert.equal(groups.has("hello-world"), false);
+    assert.equal(groups.get("hello-world"), "misc-group");
   });
 });
 
