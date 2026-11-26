@@ -63,7 +63,7 @@ const durableEvent = (inputPayload?: string) => ({
 });
 
 describe("integration-dispatch", () => {
-  const group = ["hello-world", "map-basic", "non-durable"];
+  const group = ["hello-world", "map-basic"];
 
   test("puts the original payload back into a durable event", () => {
     const { example, event } = unwrapEvent(
@@ -90,14 +90,13 @@ describe("integration-dispatch", () => {
     ).toBeUndefined();
   });
 
-  test("returns the payload as the event of a non-durable function", () => {
-    const { example, event } = unwrapEvent(
-      { __example: "non-durable", __payload: { failure: false } },
-      group,
-    );
-
-    expect(example).toBe("non-durable");
-    expect(event).toEqual({ failure: false });
+  test("fails with the ownFunction hint when the event has no EXECUTION operation", () => {
+    expect(() =>
+      unwrapEvent(
+        { InitialExecutionState: { Operations: [], NextMarker: "next" } },
+        group,
+      ),
+    ).toThrow(/no EXECUTION operation.*Set ownFunction: true/);
   });
 
   test("fails with the ownFunction hint when the payload names no example", () => {
@@ -110,7 +109,7 @@ describe("integration-dispatch", () => {
     expect(() =>
       unwrapEvent(durableEvent(JSON.stringify({ __example: "../x" })), group),
     ).toThrow(
-      'Example "../x" is not in this function. Its examples are: hello-world, map-basic, non-durable.',
+      'Example "../x" is not in this function. Its examples are: hello-world, map-basic.',
     );
   });
 });

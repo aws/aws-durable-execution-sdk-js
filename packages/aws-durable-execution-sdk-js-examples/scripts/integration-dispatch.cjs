@@ -6,8 +6,7 @@
  * The test runner sends { __example, __payload } in place of the payload.
  * This handler puts the original payload back and calls the named example.
  * A durable function receives the payload inside the EXECUTION operation of
- * InitialExecutionState, and it receives it again on every replay. A function
- * with no durable config receives the payload as the event.
+ * InitialExecutionState, and it receives it again on every replay.
  *
  * A very large input (such as 6 MB) is not in InitialExecutionState. Then
  * this handler cannot find the example, so such an example sets
@@ -60,8 +59,11 @@ function unwrapEvent(event, groupExamples) {
     (/** @type {any} */ operation) => operation.Type === "EXECUTION",
   );
   if (!execution) {
-    const { example, payload } = unwrap(event, groupExamples);
-    return { example, event: payload ?? {} };
+    throw new Error(
+      "The event has no EXECUTION operation, so this grouped function cannot " +
+        "read the example name. A very large input is not in the invocation " +
+        "event. Set ownFunction: true in the example's config.",
+    );
   }
 
   const { example, payload } = unwrap(
