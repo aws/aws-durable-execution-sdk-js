@@ -356,7 +356,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             context.durableExecutionArn,
           );
 
-          const succeedCheckpoint = checkpoint.checkpoint(stepId, {
+          const isAsync = semantics === StepSemantics.AtLeastOnceAsync;
+          const succeedUpdate = {
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.SUCCEED,
@@ -364,8 +365,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Type: OperationType.STEP,
             Payload: serializedResult,
             Name: name,
-          });
-          const isAsync = semantics === StepSemantics.AtLeastOnceAsync;
+          };
+          // An async step keeps running after a dropped SUCCEED, so it stays EXECUTING
+          // until completeAfter marks it COMPLETED (ADR 0002).
+          const succeedCheckpoint = isAsync
+            ? checkpoint.checkpoint(stepId, succeedUpdate, { awaited: false })
+            : checkpoint.checkpoint(stepId, succeedUpdate);
           if (isAsync) {
             // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the
             // invocation. Every exit drains the queue, so the result is saved before the

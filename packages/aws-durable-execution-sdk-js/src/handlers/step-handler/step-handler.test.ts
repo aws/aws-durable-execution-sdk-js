@@ -273,6 +273,7 @@ describe("Step Handler", () => {
           Action: "SUCCEED",
           Payload: JSON.stringify("step-result"),
         }),
+        { awaited: false },
       );
     });
 
