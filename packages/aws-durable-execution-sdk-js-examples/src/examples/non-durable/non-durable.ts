@@ -2,6 +2,8 @@ import { ExampleConfig } from "../../types";
 
 export const config: ExampleConfig = {
   name: "Non-Durable",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description: "A simple non-durable function used for testing.",
   durableConfig: null,
 };

@@ -7,6 +7,8 @@ import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Named Wait",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description: "Using context.wait() with a custom name",
 };
 

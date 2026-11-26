@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../types";
 
 export const config: ExampleConfig = {
   name: "Large Payload",
+  // The 6 MB test input does not fit in the invocation event.
+  ownFunction: true,
   description:
     "Demonstrates handling of large payloads (>6MB) in durable functions",
 };

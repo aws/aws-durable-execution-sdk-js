@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Basic Step",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description: "Basic usage of context.step() to checkpoint a simple operation",
   capacityProviderConfig: {},
 };

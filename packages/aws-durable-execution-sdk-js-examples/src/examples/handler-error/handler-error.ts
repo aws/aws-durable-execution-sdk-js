@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../types";
 
 export const config: ExampleConfig = {
   name: "Handler Error",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description:
     "Demonstrates how handler-level errors are captured and structured in results",
 };
