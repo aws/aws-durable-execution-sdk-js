@@ -18,7 +18,7 @@ const { unwrapEvent } = require("../integration-dispatch.cjs") as {
 };
 
 describe("integration-dispatch module load", () => {
-  test("loads the GROUP_EXAMPLES examples when the module loads", () => {
+  test("loads the GROUP_EXAMPLES examples when the module loads", async () => {
     const dir = realpathSync(
       mkdtempSync(path.join(tmpdir(), "integration-dispatch-")),
     );
@@ -31,17 +31,29 @@ describe("integration-dispatch module load", () => {
       for (const name of ["example-a", "example-b", "example-c"]) {
         writeFileSync(
           path.join(dir, `${name}.js`),
-          "exports.handler = () => {};",
+          `exports.handler = async (event) => ["${name}", event];`,
         );
       }
       vi.stubEnv("GROUP_EXAMPLES", "example-a,example-b");
 
-      require(dispatcher);
+      const { handler } = require(dispatcher);
 
       expect(require.cache[path.join(dir, "example-a.js")]).toBeDefined();
       expect(require.cache[path.join(dir, "example-b.js")]).toBeDefined();
       expect(require.cache[path.join(dir, "example-c.js")]).toBeUndefined();
+
+      // The handler logs the example name and calls that example.
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const [example] = await handler(
+        durableEvent(JSON.stringify({ __example: "example-b" })),
+        {},
+      );
+      expect(example).toBe("example-b");
+      expect(log).toHaveBeenCalledWith(
+        "integration-dispatch example=example-b",
+      );
     } finally {
+      vi.restoreAllMocks();
       vi.unstubAllEnvs();
       rmSync(dir, { recursive: true, force: true });
     }

@@ -242,6 +242,12 @@ describe("generate-sam-template", () => {
             functionName: "HelloGroup-24x-NodeJS",
             group: "hello-group",
           },
+          // A second group, so the test fails if GROUP_EXAMPLES lists the
+          // examples of every group.
+          "steps-with-retry": {
+            functionName: "RetryGroup-24x-NodeJS",
+            group: "retry-group",
+          },
         },
         lambdaExecutionRoleArn:
           "arn:aws:iam::123456789012:role/test-lambda-role",
@@ -258,6 +264,10 @@ describe("generate-sam-template", () => {
         template.Resources.HelloGroup.Properties.Environment.Variables
           .GROUP_EXAMPLES,
       ).toBe("hello-again,hello-world");
+      expect(
+        template.Resources.RetryGroup.Properties.Environment.Variables
+          .GROUP_EXAMPLES,
+      ).toBe("steps-with-retry");
       expect(template.Resources.HelloGroup.DependsOn).toBe(
         "HelloGroupLogGroup",
       );
