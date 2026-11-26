@@ -54,6 +54,21 @@ export interface ExampleConfig {
    * without an image leaves the example out.
    */
   usesMicrovm?: boolean;
+  /**
+   * If true, the integration tests deploy this example in its own Lambda
+   * function. Otherwise the examples of one folder share a function, and the
+   * examples that are alone in their folder share a "misc" function.
+   * Set it when one of these is true:
+   * - Another example invokes this one by function name.
+   * - A cloud test does not use `createTests`, for example because it builds
+   *   its own `CloudDurableTestRunner`.
+   * - The function settings differ from the rest of the group (the folder,
+   *   or misc), such as `durableConfig` or `lambdaTimeoutSeconds`. The deploy
+   *   fails with "need different function settings" in that case.
+   * - The input is too large for the invocation event, as in large-payload.
+   * See "Shared integration functions" in ADDING_EXAMPLES.md.
+   */
+  ownFunction?: boolean;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {

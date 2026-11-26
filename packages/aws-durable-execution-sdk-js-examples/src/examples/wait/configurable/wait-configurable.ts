@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Configurable Wait",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description: "Wait with a configurable duration passed via the event payload",
 };
 

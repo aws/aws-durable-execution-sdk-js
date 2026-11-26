@@ -4,6 +4,7 @@ import { execSync, spawn } from "child_process";
 import { createHash } from "crypto";
 import {
   appendFileSync,
+  copyFileSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -30,6 +31,7 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import dotenv from "dotenv";
+import { groupExamples, groupFunctionName } from "./example-groups.mjs";
 import { baseFunctionName, samStackName } from "./integration-test-names.mjs";
 import { deployWithRollbackRecovery, retry } from "./sam-deploy.mjs";
 const __filename = fileURLToPath(import.meta.url);
@@ -378,8 +380,11 @@ class IntegrationTestRunner {
    */
   async getFunctionNameMap(options) {
     const examples = await this.getIntegrationExamples();
-    /** @type {Record<string, {functionName: string, qualifier: string}>} */
+    /** @type {Record<string, {functionName: string, qualifier: string, group?: string}>} */
     const functionNameMap = {};
+    const groups = options.capacityProviderOnly
+      ? new Map()
+      : groupExamples(examples);
 
     for (const example of examples) {
       const exampleHandler = example.handler;
@@ -402,10 +407,19 @@ class IntegrationTestRunner {
           };
         }
       } else {
-        functionNameMap[handlerFile] = {
-          functionName: name,
-          qualifier: "$LATEST",
-        };
+        const group = groups.get(handlerFile);
+        functionNameMap[handlerFile] = group
+          ? {
+              functionName: baseFunctionName({
+                exampleName: groupFunctionName(group),
+                runtime: this.runtime,
+                capacityProviderOnly: false,
+                env: process.env,
+              }),
+              qualifier: "$LATEST",
+              group,
+            }
+          : { functionName: name, qualifier: "$LATEST" };
       }
     }
 
@@ -552,8 +566,15 @@ class IntegrationTestRunner {
 
     // The template names each function after this map, so these are the
     // stack's functions. Listing them from CloudFormation took ~12s.
-    const functionNames = Object.values(functionNameMap).map(
-      ({ functionName }) => functionName,
+    // Grouped examples share one function name.
+    const functionNames = [
+      ...new Set(
+        Object.values(functionNameMap).map(({ functionName }) => functionName),
+      ),
+    ];
+    copyFileSync(
+      join(examplesDir, "scripts", "integration-dispatch.cjs"),
+      join(examplesDir, "dist", "integration-dispatch.js"),
     );
     const codeZipPath = join(samDir, `code-${this.getRuntimeId()}.zip`);
     const codeSha256 = await timed("zip function code", () =>
@@ -937,6 +958,8 @@ class IntegrationTestRunner {
 
     /** @type {Record<string, string>} */
     let functionsWithQualifier;
+    /** @type {Record<string, string>} */
+    const groupedExamples = {};
 
     if (capacityProviderOnly) {
       // The capacity provider workflow only deploys the -CapacityProvider
@@ -960,18 +983,27 @@ class IntegrationTestRunner {
         }),
       );
     } else {
+      const functionNameMap = await this.getFunctionNameMap({
+        capacityProviderOnly: false,
+      });
       functionsWithQualifier = Object.fromEntries(
-        Object.entries(
-          await this.getFunctionNameMap({ capacityProviderOnly: false }),
-        ).map(([key, { functionName, qualifier }]) => {
-          return [key, `${functionName}:${qualifier}`];
-        }),
+        Object.entries(functionNameMap).map(
+          ([key, { functionName, qualifier }]) => {
+            return [key, `${functionName}:${qualifier}`];
+          },
+        ),
       );
+      for (const [key, { group }] of Object.entries(functionNameMap)) {
+        if (group) groupedExamples[key] = group;
+      }
     }
 
     // Set additional environment variables
     const env = {
       FUNCTION_NAME_MAP: JSON.stringify(functionsWithQualifier),
+      // Examples that share a function. test-helper.ts wraps their payloads
+      // for integration-dispatch.cjs.
+      GROUPED_EXAMPLES: JSON.stringify(groupedExamples),
       LAMBDA_ENDPOINT: CONFIG.LAMBDA_ENDPOINT,
     };
 
@@ -1055,7 +1087,10 @@ class IntegrationTestRunner {
       retryMode: "adaptive",
     });
 
-    for (const { functionName } of Object.values(functionNameMap)) {
+    const functionNames = new Set(
+      Object.values(functionNameMap).map(({ functionName }) => functionName),
+    );
+    for (const functionName of functionNames) {
       log.info(`Deleting function: ${functionName}`);
 
       const deleteCommand = new DeleteFunctionCommand({

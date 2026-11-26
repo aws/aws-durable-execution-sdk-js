@@ -47,6 +47,17 @@ vi.mock("fs", () => {
           },
           usesMicrovm: true,
         },
+        {
+          // Same settings as hello-world, so the two can share a function.
+          name: "hello-again",
+          description: "A second example with the default settings",
+          path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-again.ts",
+          handler: "hello-again.handler",
+          durableConfig: {
+            ExecutionTimeout: 60,
+            RetentionPeriodInDays: 7,
+          },
+        },
       ]),
     ),
   };
@@ -218,6 +229,70 @@ describe("generate-sam-template", () => {
         LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",
         RetentionInDays: 7,
       });
+    });
+
+    test("gives the examples of a group one function and the dispatcher", () => {
+      const template = generateTemplate({
+        functionNameMap: {
+          "hello-world": {
+            functionName: "HelloGroup-24x-NodeJS",
+            group: "hello-group",
+          },
+          "hello-again": {
+            functionName: "HelloGroup-24x-NodeJS",
+            group: "hello-group",
+          },
+          // A second group, so the test fails if GROUP_EXAMPLES lists the
+          // examples of every group.
+          "steps-with-retry": {
+            functionName: "RetryGroup-24x-NodeJS",
+            group: "retry-group",
+          },
+        },
+        lambdaExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/test-lambda-role",
+        runtime: "24.x",
+      });
+
+      expect(template.Resources.HelloWorld).toBeUndefined();
+      expect(template.Resources.HelloAgain).toBeUndefined();
+      expect(template.Resources.HelloGroup.Properties).toMatchObject({
+        FunctionName: "HelloGroup-24x-NodeJS",
+        Handler: "integration-dispatch.handler",
+      });
+      expect(
+        template.Resources.HelloGroup.Properties.Environment.Variables
+          .GROUP_EXAMPLES,
+      ).toBe("hello-again,hello-world");
+      expect(
+        template.Resources.RetryGroup.Properties.Environment.Variables
+          .GROUP_EXAMPLES,
+      ).toBe("steps-with-retry");
+      expect(template.Resources.HelloGroup.DependsOn).toBe(
+        "HelloGroupLogGroup",
+      );
+    });
+
+    test("fails when the examples of a group need other settings", () => {
+      expect(() =>
+        generateTemplate({
+          functionNameMap: {
+            "hello-world": {
+              functionName: "MixedGroup-24x-NodeJS",
+              group: "mixed-group",
+            },
+            "steps-with-retry": {
+              functionName: "MixedGroup-24x-NodeJS",
+              group: "mixed-group",
+            },
+          },
+          lambdaExecutionRoleArn:
+            "arn:aws:iam::123456789012:role/test-lambda-role",
+          runtime: "24.x",
+        }),
+      ).toThrow(
+        'Examples "hello-world" and "steps-with-retry" of group "mixed-group" need different function settings. Set ownFunction: true in the config of the one that differs.',
+      );
     });
 
     test("leaves out a MicroVM example when no image is given", () => {

@@ -7,6 +7,8 @@ import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Wait State",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description: "Basic usage of context.wait() to pause execution",
 };
 
