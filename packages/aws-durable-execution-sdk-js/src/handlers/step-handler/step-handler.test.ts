@@ -153,13 +153,18 @@ describe("Step Handler", () => {
     const stepFn = vi.fn().mockResolvedValue("step-result");
 
     await stepHandler("test-step", stepFn, {
-      semantics: StepSemantics.AtMostOncePerRetry,
+      semantics: StepSemantics.AtMostOnce,
     });
 
     expect(mockCheckpoint.checkpoint).toHaveBeenCalledTimes(2);
   });
 
-  describe("AT_LEAST_ONCE_PER_RETRY_ASYNC semantics", () => {
+  it("keeps the deprecated names equal to the new ones", () => {
+    expect(StepSemantics.AtLeastOncePerRetry).toBe(StepSemantics.AtLeastOnce);
+    expect(StepSemantics.AtMostOncePerRetry).toBe(StepSemantics.AtMostOnce);
+  });
+
+  describe("AT_LEAST_ONCE_ASYNC semantics", () => {
     // A checkpoint that the service never answers.
     const neverAnswered = (): Promise<void> => new Promise<void>(() => {});
     const pending = Symbol("pending");
@@ -185,7 +190,7 @@ describe("Step Handler", () => {
 
       const result = await settleOrPending(
         stepHandler("test-step", async () => "step-result", {
-          semantics: StepSemantics.AtLeastOncePerRetryAsync,
+          semantics: StepSemantics.AtLeastOnceAsync,
         }),
       );
 
@@ -220,7 +225,7 @@ describe("Step Handler", () => {
 
       const result = await settleOrPending(
         stepHandler("test-step", async () => "step-result", {
-          semantics: StepSemantics.AtLeastOncePerRetry,
+          semantics: StepSemantics.AtLeastOnce,
         }),
       );
 
@@ -246,7 +251,7 @@ describe("Step Handler", () => {
           throw new Error("boom");
         },
         {
-          semantics: StepSemantics.AtLeastOncePerRetryAsync,
+          semantics: StepSemantics.AtLeastOnceAsync,
           retryStrategy: () => ({ shouldRetry: false }),
         },
       );
@@ -276,7 +281,7 @@ describe("Step Handler", () => {
       const stepFn = vi.fn().mockResolvedValue("step-result");
 
       const result = await stepHandler("test-step", stepFn, {
-        semantics: StepSemantics.AtLeastOncePerRetryAsync,
+        semantics: StepSemantics.AtLeastOnceAsync,
       });
 
       expect(result).toBe("step-result");
@@ -299,7 +304,7 @@ describe("Step Handler", () => {
 
       await settleOrPending(
         stepHandler("test-step", async () => "step-result", {
-          semantics: StepSemantics.AtLeastOncePerRetryAsync,
+          semantics: StepSemantics.AtLeastOnceAsync,
         }),
       );
 
@@ -515,7 +520,7 @@ describe("Step Handler", () => {
 
       await expect(
         stepHandler("test-step", stepFn, {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         }),
       ).rejects.toBeDefined();
@@ -567,7 +572,7 @@ describe("Step Handler", () => {
       let caught: unknown;
       try {
         await stepHandler("test-step", stepFn, {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         });
       } catch (err) {
@@ -601,7 +606,7 @@ describe("Step Handler", () => {
 
       await expect(
         stepHandler("test-step", vi.fn(), {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy,
         }),
       ).rejects.toBeDefined();

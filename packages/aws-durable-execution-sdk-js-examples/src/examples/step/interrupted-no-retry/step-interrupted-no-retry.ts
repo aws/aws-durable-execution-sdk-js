@@ -42,7 +42,7 @@ export const handler = withDurableExecution(
           return "step-completed";
         },
         {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         },
       );

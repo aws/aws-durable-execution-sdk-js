@@ -56,7 +56,7 @@ export interface RetryDecision {
    *
    * The pause ends the invocation at once. A step that is still running in another `parallel`
    * or `map` branch is stopped. After the resume, an at-least-once step runs again, and an
-   * `AtMostOncePerRetry` step counts it as an interrupted attempt.
+   * `AtMostOnce` step counts it as an interrupted attempt.
    *
    * @defaultValue false
    * @experimental This option is experimental and may be changed or removed in future releases.
@@ -72,19 +72,19 @@ export interface RetryDecision {
  * retry attempt*, not per overall workflow execution.
  *
  * With retries enabled (the default), a step could execute multiple times across different retry attempts even when
- * using `AtMostOncePerRetry`. To achieve step-level at-most-once execution, combine `AtMostOncePerRetry` with a retry
+ * using `AtMostOnce`. To achieve step-level at-most-once execution, combine `AtMostOnce` with a retry
  * strategy that disables retries (`shouldRetry: false`).
  *
  * @example
  * ```typescript
  * // At-least-once per retry (default) - safe for idempotent operations
  * await context.step("send-notification", async () => sendEmail(), {
- *   semantics: StepSemantics.AtLeastOncePerRetry,
+ *   semantics: StepSemantics.AtLeastOnce,
  * });
  *
  * // At-most-once per retry - for non-idempotent operations
  * await context.step("charge-payment", async () => processPayment(), {
- *   semantics: StepSemantics.AtMostOncePerRetry,
+ *   semantics: StepSemantics.AtMostOnce,
  *   retryStrategy: () => ({ shouldRetry: false }),
  * });
  * ```
@@ -104,7 +104,7 @@ export enum StepSemantics {
    * executes at most once, disable retries by returning
    * `{ shouldRetry: false }` from your retry strategy.
    */
-  AtMostOncePerRetry = "AT_MOST_ONCE_PER_RETRY",
+  AtMostOnce = "AT_MOST_ONCE_PER_RETRY",
 
   /**
    * At-least-once execution per retry attempt (default).
@@ -115,24 +115,34 @@ export enum StepSemantics {
    * on replay. This is the safer default for operations that are idempotent or can
    * tolerate duplicate execution.
    */
-  AtLeastOncePerRetry = "AT_LEAST_ONCE_PER_RETRY",
+  AtLeastOnce = "AT_LEAST_ONCE_PER_RETRY",
 
   /**
    * At-least-once execution per retry attempt, without waiting for the result checkpoint.
    *
    * @remarks
-   * Works like `AtLeastOncePerRetry`, with one change. The step returns its result as soon as
+   * Works like `AtLeastOnce`, with one change. The step returns its result as soon as
    * the result is queued for checkpointing. It does not wait for the service to save it. So the
    * step has lower latency.
    *
    * The handler code after the step can run before the result is saved. If the invocation ends
-   * before the save, the step runs again on replay, like `AtLeastOncePerRetry`. Checkpoints are
+   * before the save, the step runs again on replay, like `AtLeastOnce`. Checkpoints are
    * sent in order. So any later checkpoint that the service accepts also saves this result.
    *
    * Only the success checkpoint is not awaited. A failed attempt waits for its `RETRY` or
-   * `FAIL` checkpoint, like `AtLeastOncePerRetry`.
+   * `FAIL` checkpoint, like `AtLeastOnce`.
    */
-  AtLeastOncePerRetryAsync = "AT_LEAST_ONCE_PER_RETRY_ASYNC",
+  AtLeastOnceAsync = "AT_LEAST_ONCE_ASYNC",
+
+  /**
+   * @deprecated Use `StepSemantics.AtMostOnce` instead. It has the same value and behavior.
+   */
+  AtMostOncePerRetry = AtMostOnce,
+
+  /**
+   * @deprecated Use `StepSemantics.AtLeastOnce` instead. It has the same value and behavior.
+   */
+  AtLeastOncePerRetry = AtLeastOnce,
 }
 
 /**

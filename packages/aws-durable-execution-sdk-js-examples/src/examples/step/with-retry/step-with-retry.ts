@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
           }
           return { shouldRetry: true, delay: { seconds: attemptCount } };
         },
-        semantics: StepSemantics.AtMostOncePerRetry,
+        semantics: StepSemantics.AtMostOnce,
       },
     );
     return result;

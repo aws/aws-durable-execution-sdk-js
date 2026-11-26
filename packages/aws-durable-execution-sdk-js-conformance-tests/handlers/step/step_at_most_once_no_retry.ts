@@ -1,4 +1,4 @@
-// 1-17: Step with AtMostOncePerRetry semantics (interrupted, no retry)
+// 1-17: Step with AtMostOnce semantics (interrupted, no retry)
 import {
   DurableContext,
   withDurableExecution,
@@ -20,7 +20,7 @@ export const handler = withDurableExecution(
         return "unreachable";
       },
       {
-        semantics: StepSemantics.AtMostOncePerRetry,
+        semantics: StepSemantics.AtMostOnce,
         retryStrategy: retryPresets.noRetry,
       },
     );

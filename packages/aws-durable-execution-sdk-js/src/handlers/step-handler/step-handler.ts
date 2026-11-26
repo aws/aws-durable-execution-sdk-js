@@ -85,7 +85,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
     }
 
     const stepId = createStepId();
-    const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
+    const semantics = options?.semantics || StepSemantics.AtLeastOnce;
     // A custom subtype labels steps of a custom operation. It is typed as
     // OperationSubType, like ChildConfig.subType in the child context handler.
     const subType =
@@ -183,7 +183,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
       // Check for interrupted step with AT_MOST_ONCE_PER_RETRY
       if (
         stepData?.Status === OperationStatus.STARTED &&
-        semantics === StepSemantics.AtMostOncePerRetry
+        semantics === StepSemantics.AtMostOnce
       ) {
         const error = new StepInterruptedError(stepId, name);
         const currentAttempt = (stepData.StepDetails?.Attempt || 0) + 1;
@@ -262,7 +262,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
       async function executeStepLogic(): Promise<T> {
         stepData = context.getStepData(stepId);
         if (stepData?.Status !== OperationStatus.STARTED) {
-          if (semantics === StepSemantics.AtMostOncePerRetry) {
+          if (semantics === StepSemantics.AtMostOnce) {
             await checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
@@ -363,7 +363,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Payload: serializedResult,
             Name: name,
           });
-          const isAsync = semantics === StepSemantics.AtLeastOncePerRetryAsync;
+          const isAsync = semantics === StepSemantics.AtLeastOnceAsync;
           if (isAsync) {
             // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the
             // invocation. Every exit drains the queue, so the result is saved before the
