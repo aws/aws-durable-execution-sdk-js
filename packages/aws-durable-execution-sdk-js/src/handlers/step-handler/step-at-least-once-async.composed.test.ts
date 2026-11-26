@@ -39,7 +39,9 @@ const freshExecutionState = (): WireOperation[] => [
 ];
 
 /** Records each update as TYPE:ACTION:NAME and answers after a delay. */
-function slowRecordingClient(options: { failOnStepSucceed?: boolean } = {}): {
+function slowRecordingClient(
+  options: { failOnStepSucceed?: boolean; permanentFailure?: boolean } = {},
+): {
   client: DurableExecutionClient;
   sent: string[];
 } {
@@ -58,10 +60,15 @@ function slowRecordingClient(options: { failOnStepSucceed?: boolean } = {}): {
         options.failOnStepSucceed &&
         updates.some((u) => u.startsWith("STEP:SUCCEED"))
       ) {
-        throw Object.assign(new Error("Service Unavailable"), {
-          name: "ServiceException",
-          $metadata: { httpStatusCode: 503 },
-        });
+        throw options.permanentFailure
+          ? Object.assign(new Error("Value failed to satisfy constraint"), {
+              name: "ValidationException",
+              $metadata: { httpStatusCode: 400 },
+            })
+          : Object.assign(new Error("Service Unavailable"), {
+              name: "ServiceException",
+              $metadata: { httpStatusCode: 503 },
+            });
       }
       sent.push(...updates);
       return {
@@ -167,5 +174,36 @@ describe("AtLeastOnceAsync through withDurableExecution", () => {
     await expect(invocation).rejects.toThrow(/Checkpoint failed/);
     // Plugins hear RETRYING once, and before the invocation rejects.
     expect(events).toEqual(["end:RETRYING"]);
+  });
+
+  it("answers FAILED when the SUCCEED checkpoint fails for good after the handler throws", async () => {
+    const { client } = slowRecordingClient({
+      failOnStepSucceed: true,
+      permanentFailure: true,
+    });
+    const events: string[] = [];
+
+    const response = await invoke(
+      client,
+      async (_event, context) => {
+        await context.step("a", async () => "done");
+        throw new Error("handler failed after the step");
+      },
+      {
+        plugins: [
+          {
+            createPlugin: () => ({
+              onInvocationEnd: async (info) => {
+                events.push(`end:${info.status}`);
+              },
+            }),
+          },
+        ],
+      },
+    );
+
+    // A failure that ends the execution is not retried, so the invocation answers FAILED.
+    expect(response).toMatchObject({ Status: "FAILED" });
+    expect(events).toEqual(["end:FAILED"]);
   });
 });
