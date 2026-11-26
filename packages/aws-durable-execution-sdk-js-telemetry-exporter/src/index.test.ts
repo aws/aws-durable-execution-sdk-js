@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, afterEach } from "vitest";
-import { durableExecutionTelemetry } from "./index";
+import { durableExecutionTelemetry, LambdaLogExporter } from "./index";
 import type {
   TelemetryExporter,
   OperationResult,
@@ -811,6 +811,48 @@ describe("per-exporter truncation", () => {
     // record alone would have been measured smaller and mis-sized.
     expect(got.truncated).toBe(true);
     expect(sizeOf(exporter.render(got))).toBeLessThanOrEqual(900);
+  });
+
+  it("renders a large record a few times, not once per dropped operation", async () => {
+    // Issue #1174: 2,000 simple named steps are over the default 256,000-byte
+    // limit of LambdaLogExporter. A size check before each dropped operation
+    // renders the record 2,434 times. Each render serializes the whole record.
+    // A search over the drop count needs about 2 * log2(2,001) renders.
+    const exporter = new LambdaLogExporter();
+    const render = exporter.render;
+    let renders = 0;
+    exporter.render = (record) => {
+      renders++;
+      return render(record);
+    };
+    const exported: DurableExecutionTelemetryRecord[] = [];
+    exporter.export = async (record) => {
+      exported.push(record);
+    };
+
+    const start = Date.UTC(2026, 9, 28);
+    const operations: Record<string, OperationInfo> = {};
+    for (let i = 0; i < 2_000; i++) {
+      operations[`op-${i}`] = op({
+        id: `op-${i}`,
+        name: `step-${i}`,
+        subType: "Step",
+        status: "SUCCEEDED",
+        startTimestamp: new Date(start + i * 10),
+        endTimestamp: new Date(start + i * 10 + 3),
+        attempt: 1,
+      } as Partial<OperationInfo> & { id: string });
+    }
+    await endAndDrain(
+      durableExecutionTelemetry({ exporters: [exporter] }),
+      endInfo({ operations }),
+    );
+
+    expect(exported[0].droppedOperations).toBeGreaterThan(0);
+    expect(
+      new TextEncoder().encode(JSON.stringify(render(exported[0]))).length,
+    ).toBeLessThanOrEqual(256_000);
+    expect(renders).toBeLessThan(40);
   });
 });
 

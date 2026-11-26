@@ -49,6 +49,21 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *   3. whole operations, oldest first;
  *   4. last resort — execution `input`, then `output`.
  *
+ * Step 2 binary searches how many results to cut, and step 3 how many
+ * operations. Each probe renders and measures one candidate record. So a record
+ * with n operations is rendered about 2 * log2(n + 1) times, for any `render`.
+ * The chosen record always comes from a real measurement. So it never goes
+ * over `maxBytes`, as long as dropping everything droppable makes it fit.
+ *
+ * The search assumes that cutting more never makes the rendering larger. When
+ * the size is not monotonic, the search can cut more results and operations
+ * than cutting one at a time would. Known causes:
+ *   - in the `operationsByName` map, cutting one of two same-name operations
+ *     makes the other one's `result` and `error` appear in the map;
+ *   - the `"truncated":true` marker is longer than a short result such as
+ *     `true`, so clearing that result makes the record larger;
+ *   - a custom `render` that escapes or reshapes values can grow after a cut.
+ *
  * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
  * `name`/`message` are never dropped.
  * `input`/`output` are dropped only after every operation is gone, so prefer
@@ -93,18 +108,31 @@ export function truncateRecord(
       ? record.error
       : withoutCause(record.error);
   if (executionError !== record.error) droppedCauses = true;
-  const kept = new Array<boolean>(ops.length).fill(true);
-  const order = oldestFirstOrder(ops);
+  // rank[i] is the position of operation i in the oldest-first order.
+  // resultRank[i] is its position among the operations with a result, in the
+  // same order, or Infinity if it has no result.
+  const rank = new Array<number>(ops.length);
+  const resultRank = new Array<number>(ops.length);
+  let m = 0; // the number of operations with a result
+  oldestFirstOrder(ops).forEach((idx, r) => {
+    rank[idx] = r;
+    resultRank[idx] =
+      ops[idx].result === undefined ? Number.POSITIVE_INFINITY : m++;
+  });
 
-  let anyResultDropped = false;
-  let droppedOperations = 0;
+  let resultsDropped = 0; // the oldest `resultsDropped` results are cut
+  let droppedOperations = 0; // the oldest `droppedOperations` operations are cut
   let droppedInput = false;
   let droppedOutput = false;
 
   const candidate = (): DurableExecutionTelemetryRecord => {
     const out: DurableExecutionTelemetryRecord = {
       ...record,
-      operations: ops.filter((_, i) => kept[i]),
+      operations: ops.flatMap((op, i) => {
+        if (rank[i] < droppedOperations) return [];
+        if (resultRank[i] >= resultsDropped) return [op];
+        return [{ ...op, result: undefined, truncated: true }];
+      }),
       truncated: true,
     };
     if (droppedCauses) {
@@ -128,34 +156,41 @@ export function truncateRecord(
     return size !== undefined && size <= maxBytes;
   };
 
+  // Sets the smallest count in lo..hi that fits, or hi if none fits. Returns
+  // whether it fits. Binary search; see the doc comment for the assumption.
+  const firstFit = (
+    lo: number,
+    hi: number,
+    set: (n: number) => void,
+  ): boolean => {
+    let bad = lo - 1; // the largest count measured not to fit
+    let good = hi + 1; // the smallest count measured to fit
+    while (good - bad > 1) {
+      const mid = (bad + good) >>> 1;
+      set(mid);
+      if (fits()) good = mid;
+      else bad = mid;
+    }
+    set(Math.min(good, hi));
+    return good <= hi;
+  };
+
   // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx] && ops[idx].result !== undefined) {
-      ops[idx] = { ...ops[idx], result: undefined, truncated: true };
-      anyResultDropped = true;
-    }
-  }
-
-  // Phase 3: drop whole operations, oldest first.
-  for (const idx of order) {
-    if (fits()) break;
-    if (kept[idx]) {
-      kept[idx] = false;
-      droppedOperations++;
-    }
-  }
+  // Phase 3 (if no result count fits): drop whole operations, oldest first.
+  const fit =
+    firstFit(0, m, (c) => (resultsDropped = c)) ||
+    firstFit(1, ops.length, (c) => (droppedOperations = c));
 
   // Phase 4 (last resort): drop execution input, then output. Only reached once
   // every operation is gone and the record is still over the limit.
-  if (!fits() && record.input !== undefined) droppedInput = true;
+  if (!fit && record.input !== undefined) droppedInput = true;
   if (!fits() && record.output !== undefined) droppedOutput = true;
 
   // If nothing was actually dropped, return the original untouched — not cut.
   if (
     !droppedCauses &&
-    !anyResultDropped &&
+    resultsDropped === 0 &&
     droppedOperations === 0 &&
     !droppedInput &&
     !droppedOutput
