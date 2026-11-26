@@ -576,16 +576,20 @@ async function runHandler<
         }
 
         // The handler threw, but a checkpoint queued before the throw can fail while the
-        // queue drains, for example the SUCCEED of an AtLeastOnceAsync step. FAILED would then
-        // end the execution without that update. Rethrowing the classified checkpoint error
-        // lets Lambda retry the invocation, as on the success path.
+        // queue drains, for example the SUCCEED of an AtLeastOnceAsync step. If the failure
+        // ends only this invocation, FAILED would end the execution without that update.
+        // Rethrowing the classified checkpoint error lets Lambda retry the invocation. A
+        // failure that ends the execution, such as a validation error, still answers FAILED.
         if (
           executionContext.terminationManager.isTerminationRequested() &&
           !durableExecution.checkpointManager.isCheckpointTokenRevoked()
         ) {
           const lateTermination =
             await executionContext.terminationManager.getTerminationPromise();
-          if (lateTermination.reason === TerminationReason.CHECKPOINT_FAILED) {
+          if (
+            lateTermination.reason === TerminationReason.CHECKPOINT_FAILED &&
+            isUnrecoverableInvocationError(lateTermination.error)
+          ) {
             log("🛑", "Checkpoint failed after the handler threw");
             throw lateTermination.error;
           }
