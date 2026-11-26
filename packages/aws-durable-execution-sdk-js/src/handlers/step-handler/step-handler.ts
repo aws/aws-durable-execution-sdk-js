@@ -386,6 +386,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             // The service has not answered yet, so stepData still shows the attempt as STARTED.
             attemptEndInfo.status = PluginOperationStatus.SUCCEEDED;
             attemptEndInfo.result = serializedResult;
+            attemptEndInfo.startTimestamp ??= attemptInfo.startTimestamp;
             attemptEndInfo.endTimestamp = new Date();
           }
           backfillOperationInfo(attemptEndInfo, opInfo);

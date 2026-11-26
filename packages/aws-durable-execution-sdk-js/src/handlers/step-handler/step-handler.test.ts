@@ -378,6 +378,7 @@ describe("Step Handler", () => {
         expect.objectContaining({
           status: "SUCCEEDED",
           result: JSON.stringify("step-result"),
+          startTimestamp: expect.any(Date),
           endTimestamp: expect.any(Date),
         }),
       );
