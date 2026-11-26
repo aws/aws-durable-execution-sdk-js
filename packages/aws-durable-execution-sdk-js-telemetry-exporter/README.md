@@ -552,17 +552,25 @@ result is cleared. If there are small results, step 2 then measures the record
 with every small result cleared. If that record is smaller, small results are
 cleared like the others. Then steps 2 and 3 binary search how many results or
 operations to cut. Each probe renders and measures one candidate record. So a
-record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 2 times, for
+record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 5 times, for
 any exporter.
 
-The search assumes that cutting more never makes the record larger. In the
-array form (`operations`) this holds. So the array form cuts the fewest results
-and operations that fit. The `operationsByName` map can break this: cutting one
-of two operations with the same name makes the other one's `result` and `error`
-appear in the map. So only in the by-name form, and in the by-name part of
-`both`, the search can cut more old operations than the fewest that fit. The
-emitted record always comes from a real measurement, so it never goes over the
-limit.
+The search can cut more results or operations than cutting one at a time
+would. Two cases are known:
+
+- In the by-name form, and in the by-name part of `both`, cutting one of two
+  operations with the same name makes the other one's `result` and `error`
+  appear in the map. So the record can grow after a cut. Then the search can
+  cut extra old operations.
+- Step 2 measures once whether clearing every small result makes the record
+  smaller. It applies that answer to all small results. In `both` and in a
+  custom render, clearing some small results can shrink the record while
+  clearing others makes it bigger. Then the search can cut extra operations.
+
+The emitted record always comes from a real measurement. So the output never
+goes over the limit, as long as dropping everything droppable makes it fit. If
+the record is still over the limit after every droppable field is gone, the
+output is over the limit, as before.
 
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
 only after all operations are gone — so prefer `content.input` /

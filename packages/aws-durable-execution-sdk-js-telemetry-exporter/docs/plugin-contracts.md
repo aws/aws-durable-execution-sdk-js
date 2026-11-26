@@ -41,10 +41,13 @@ interface TelemetryExporter {
    *      bigger than such a result, so it stays;
    *   3. whole operations, oldest first;
    *   4. last resort — execution `input`, then `output`.
-   * Steps 2 and 3 binary search the count to cut. In the array form this cuts
-   * the fewest that fit. In the `operationsByName` form, and its part of
-   * `both`, a drop can make another same-name operation appear in the map. So
-   * there the search can cut more old operations than the fewest that fit.
+   * Steps 2 and 3 binary search the count to cut. The search can cut more
+   * than cutting one at a time would. In the `operationsByName` form, and its
+   * part of `both`, a drop can make another same-name operation appear in the
+   * map. In `both` and in a custom render, one measurement decides whether all
+   * small results are cleared, and that answer can be wrong for some of them.
+   * The output never goes over the limit, as long as dropping everything
+   * droppable makes it fit.
    * Identity/timeline fields are never dropped; prefer `content.input`/
    * `content.output` transforms to bound `input`/`output` before it comes to
    * that. When anything is dropped, `truncated: true` is set on the record, each

@@ -63,15 +63,21 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  * results stay in the record, unmarked, and only large results are cleared.
  * Then steps 2 and 3 binary search how many results or operations to cut.
  * Each probe renders and measures one candidate record. So a record with n
- * operations is rendered about 2 * log2(n + 1) + 2 times, for any `render`.
+ * operations is rendered about 2 * log2(n + 1) + 5 times, for any `render`.
  *
- * The search assumes that cutting more never makes the rendering larger. In the
- * array form this holds, so the search cuts the fewest results and operations
- * that fit. The `operationsByName` map can break it: cutting one of two
- * same-name operations makes the other one's `result` and `error` appear in the
- * map. So in the by-name form, and the by-name part of `both`, the search can
- * cut more old operations than the fewest that fit. The chosen record always
- * comes from a real measurement, so it never goes over `maxBytes`.
+ * The search can cut more results or operations than cutting one at a time
+ * would. Two cases are known:
+ *   - In the `operationsByName` map, cutting one of two same-name operations
+ *     makes the other one's `result` and `error` appear in the map. So the
+ *     record can grow after a cut, in the by-name form and the by-name part of
+ *     `both`. Then the search can cut extra old operations.
+ *   - Step 2 decides with one measurement whether all small results are
+ *     cleared. In `both` and in a custom `render`, clearing some small results
+ *     can shrink the record while clearing others makes it bigger. Then the
+ *     search can cut extra operations.
+ * The chosen record always comes from a real measurement. So it never goes over
+ * `maxBytes`, as long as dropping everything droppable makes it fit. Otherwise
+ * the returned record is over `maxBytes`, as before.
  *
  * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
  * `name`/`message` are never dropped.
