@@ -59,6 +59,8 @@ export enum BatchItemStatus {
    * StepSemantics.AtLeastOnce does not await its first checkpoint. So
    * such a step that the item starts after that point still runs its
    * function, and the history has no record of it. A step with
+   * StepSemantics.AtLeastOnceAsync awaits neither checkpoint, so the item
+   * keeps running new steps until it awaits some other checkpoint. A step with
    * StepSemantics.AtMostOnce awaits its first checkpoint, so its
    * function does not run. The handler receives only the BatchResult.
    */

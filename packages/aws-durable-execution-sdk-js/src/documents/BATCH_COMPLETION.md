@@ -15,6 +15,7 @@ The batch checks its rule each time an item's result reaches it. Once the rule i
   Until the item stops, its code can keep running while the invocation is active, and its side effects can happen. Nothing waits for it, so the invocation can end first:
   - A step whose function is running keeps running while the invocation is active. It is not guaranteed to finish. If it finishes after the batch's context, its result is not recorded.
   - A new `step` with the default `StepSemantics.AtLeastOnce` runs its function once, and the history has no record of it. A new `waitForCondition` runs its check function once. The item then stops.
+  - A new `step` with `StepSemantics.AtLeastOnceAsync` runs its function and does not stop the item. So the item keeps running new steps, with no record in the history, until it reaches an operation that stops it.
   - `runInChildContext` does not await its own checkpoints. So its function runs, and the operations inside it follow these rules.
   - A new `wait`, `invoke`, `createCallback`, `waitForCallback`, or step with `StepSemantics.AtMostOnce` stops the item before it takes effect. "New" means the item starts it after the batch's context finished. An operation started earlier may already have recorded its start and taken effect.
 

@@ -129,6 +129,14 @@ export enum StepSemantics {
    * before the save, the step runs again on replay, like `AtLeastOnce`. Checkpoints are
    * sent in order. So any later checkpoint that the service accepts also saves this result.
    *
+   * On that replay the step can return a different value. Later steps then run again with the
+   * new value, and their earlier side effects used the old one. So do not use this mode for a
+   * step whose result becomes an idempotency key or a client token for a later step.
+   *
+   * In a `map` or `parallel` item that keeps running after the batch completes, a step in this
+   * mode does not stop the item. The item keeps running new steps, with no record in the
+   * history, until it reaches an operation that waits for a checkpoint.
+   *
    * Only the success checkpoint is not awaited. A failed attempt waits for its `RETRY` or
    * `FAIL` checkpoint, like `AtLeastOnce`.
    */

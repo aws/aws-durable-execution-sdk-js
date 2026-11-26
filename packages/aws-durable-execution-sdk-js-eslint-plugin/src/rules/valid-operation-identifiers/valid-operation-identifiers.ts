@@ -8,7 +8,7 @@ import {
 /**
  * The service's limits for an operation's name and subtype. The checkpoint API
  * rejects a value outside them with a ValidationException, and the SDK sends
- * the value as given. A step with the default AT_LEAST_ONCE_PER_RETRY
+ * the value as given. A step with the default StepSemantics.AtLeastOnce
  * semantics does not wait for its START checkpoint, so its function runs
  * before the rejection arrives. This rule reports the value before deploy.
  *

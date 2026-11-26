@@ -269,7 +269,11 @@ export interface DurableExecutionConfig {
    *
    * @remarks
    * Applies to the steps of every context in the execution, including child contexts,
-   * `map` items and `parallel` branches. A step's own `semantics` wins over this value.
+   * `map` items and `parallel` branches. It also applies to steps that SDK extensions create,
+   * unless the extension sets `semantics` itself. A step's own `semantics` wins over this value.
+   *
+   * Before you set `StepSemantics.AtLeastOnceAsync` here, read its remarks. A step whose
+   * result becomes an idempotency key for a later step needs its own `AtLeastOnce`.
    *
    * ```typescript
    * export const handler = withDurableExecution(myHandler, {

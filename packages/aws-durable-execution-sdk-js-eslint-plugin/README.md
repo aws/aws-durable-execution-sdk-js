@@ -356,7 +356,7 @@ execution if a value breaks its limits:
 | Name      | 1 to 256   | printable ASCII (0x20 to 0x7E)   |
 | `subType` | at most 32 | `a-z`, `A-Z`, `0-9`, `-` and `_` |
 
-A step with the default `AT_LEAST_ONCE_PER_RETRY` semantics does not wait for its
+A step with the default `StepSemantics.AtLeastOnce` semantics does not wait for its
 first checkpoint, so its function runs once before the execution fails. This rule
 reports the value before you deploy.
 
