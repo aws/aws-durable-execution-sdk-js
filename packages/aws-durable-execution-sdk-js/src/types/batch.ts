@@ -56,10 +56,12 @@ export enum BatchItemStatus {
    * until it awaits a checkpoint after the batch's context finishes. That
    * checkpoint is dropped and never resolves. Nothing waits for the item, so
    * the invocation can end before its code finishes. A step with the default
-   * StepSemantics.AtLeastOncePerRetry does not await its first checkpoint. So
+   * StepSemantics.AtLeastOnce does not await its first checkpoint. So
    * such a step that the item starts after that point still runs its
    * function, and the history has no record of it. A step with
-   * StepSemantics.AtMostOncePerRetry awaits its first checkpoint, so its
+   * StepSemantics.AtLeastOnceAsync awaits neither checkpoint, so the item
+   * keeps running new steps until it awaits some other checkpoint. A step with
+   * StepSemantics.AtMostOnce awaits its first checkpoint, so its
    * function does not run. The handler receives only the BatchResult.
    */
   STARTED = "STARTED",

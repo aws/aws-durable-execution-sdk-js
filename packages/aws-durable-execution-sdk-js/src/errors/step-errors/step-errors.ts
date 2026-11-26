@@ -1,5 +1,5 @@
 /**
- * Error thrown when a step with AT_MOST_ONCE_PER_RETRY semantics was started but interrupted
+ * Error thrown when a step with StepSemantics.AtMostOnce semantics was started but interrupted
  * before completion.
  * @public
  */

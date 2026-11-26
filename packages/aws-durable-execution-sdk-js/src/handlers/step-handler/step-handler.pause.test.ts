@@ -420,7 +420,7 @@ describe("Step Handler pause from the retry decision", () => {
     expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
   });
 
-  it("does not pause for an interrupted AtMostOncePerRetry step on replay", async () => {
+  it("does not pause for an interrupted AtMostOnce step on replay", async () => {
     // The step function did not throw in this invocation. The previous invocation stopped
     // while the step was STARTED.
     givenPriorAttempts(4, OperationStatus.STARTED);
@@ -429,7 +429,7 @@ describe("Step Handler pause from the retry decision", () => {
 
     void runFailingStep({
       retryStrategy,
-      semantics: StepSemantics.AtMostOncePerRetry,
+      semantics: StepSemantics.AtMostOnce,
     });
     await waitForRetryOrPause();
 

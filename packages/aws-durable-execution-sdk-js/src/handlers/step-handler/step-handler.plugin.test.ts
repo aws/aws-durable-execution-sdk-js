@@ -277,7 +277,7 @@ describe("Step Handler - plugin hooks", () => {
 
     // Track getStepData calls to return appropriate state at each point
     // in the retry lifecycle.
-    // The default semantics is AtLeastOncePerRetry:
+    // The default semantics is AtLeastOnce:
     //   executeStepLogic call 1:
     //     1. top of executeStepLogic: null (not started yet)
     //     2. try block (computing currentAttempt): null (Attempt 0 → currentAttempt=1)

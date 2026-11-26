@@ -18,7 +18,7 @@ export const handler = createScenarioHandler(
       "otel-retry-serialization",
       async (step) => step.attempt,
       {
-        semantics: StepSemantics.AtMostOncePerRetry,
+        semantics: StepSemantics.AtMostOnce,
         retryStrategy: (_error, attempt) => ({
           shouldRetry: attempt < 2,
           delay: { seconds: 1 },

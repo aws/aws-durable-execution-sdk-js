@@ -19,7 +19,11 @@ import {
 import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
 import { log } from "./utils/logger/logger";
-import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
+import {
+  DurableExecutionInvocationInput,
+  InvocationStatus,
+  StepSemantics,
+} from "./types";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
@@ -57,6 +61,7 @@ describe("withDurableExecution", () => {
     getTerminationPromise: vi.fn(),
     terminate: vi.fn(),
     setCheckpointTerminatingCallback: vi.fn(),
+    isTerminationRequested: vi.fn().mockReturnValue(false),
   };
 
   const mockCustomerHandlerEvent = {};
@@ -106,6 +111,21 @@ describe("withDurableExecution", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("passes defaultStepSemantics to the root context", async () => {
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(vi.fn().mockResolvedValue({ ok: true }), {
+      defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+    })(mockEvent, mockContext);
+
+    const durableExecution = (createDurableContext as Mock).mock.calls[0][5];
+    expect(durableExecution.defaultStepSemantics).toBe(
+      StepSemantics.AtLeastOnceAsync,
+    );
   });
 
   it("disposes the checkpoint manager on the normal-completion path", async () => {

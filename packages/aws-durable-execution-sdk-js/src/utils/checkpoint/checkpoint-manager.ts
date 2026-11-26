@@ -23,7 +23,7 @@ import {
   isDurableExecutionClientError,
 } from "../../errors/durable-execution-client-error/durable-execution-client-error";
 import type { DurableLogger } from "../../types/durable-logger";
-import type { Checkpoint } from "./checkpoint-helper";
+import type { Checkpoint, CheckpointOptions } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
   MAX_TIMER_DELAY_MS,
@@ -344,6 +344,7 @@ export class CheckpointManager implements Checkpoint {
   async checkpoint(
     stepId: string,
     data: Partial<OperationUpdate>,
+    options?: CheckpointOptions,
   ): Promise<void> {
     if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - manager is terminating or disposed:", {
@@ -355,7 +356,10 @@ export class CheckpointManager implements Checkpoint {
     // Check if any ancestor is finished - if so, don't queue and don't resolve
     if (this.hasFinishedAncestor(stepId)) {
       log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
-      this.releaseAbandonedOperation(stepId, data);
+      // A caller that does not wait keeps running, so it marks the operation itself.
+      if (options?.awaited !== false) {
+        this.releaseAbandonedOperation(stepId, data);
+      }
       return new Promise(() => {}); // Never resolves when ancestor is finished
     }
 

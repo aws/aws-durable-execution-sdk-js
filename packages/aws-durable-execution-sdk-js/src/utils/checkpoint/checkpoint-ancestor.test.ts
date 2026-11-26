@@ -298,6 +298,35 @@ describe("CheckpointManager - Ancestor Functionality", () => {
         );
       },
     );
+
+    it("keeps a step EXECUTING when a not-awaited SUCCEED is dropped", () => {
+      // An AtLeastOnceAsync step queues SUCCEED without waiting, then runs its plugin
+      // hooks and deserializes its result.
+      checkpointManager.markOperationState(
+        "1-2-3",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "1-2-3",
+            name: "async-step",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-2",
+          },
+        },
+      );
+      checkpointManager.markAncestorFinished("1-2");
+
+      void checkpointManager.checkpoint(
+        "1-2-3",
+        { Action: OperationAction.SUCCEED },
+        { awaited: false },
+      );
+
+      expect(checkpointManager.getOperationState("1-2-3")).toBe(
+        OperationLifecycleState.EXECUTING,
+      );
+    });
   });
 
   describe("checkpoint with finished ancestors", () => {

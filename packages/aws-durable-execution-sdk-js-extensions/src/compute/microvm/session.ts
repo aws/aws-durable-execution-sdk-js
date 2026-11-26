@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type DurableContext,
   DurablePromise,
+  StepSemantics,
 } from "@aws/durable-execution-sdk-js";
 import {
   createJobCallback,
@@ -149,7 +150,13 @@ export function microvmSession<TOutput = unknown>(
       const sessionId = await child.step(
         `${name}.session`,
         async () => randomUUID(),
-        { subType: MicrovmOperationSubType.SESSION_ID },
+        {
+          subType: MicrovmOperationSubType.SESSION_ID,
+          // The session ID becomes the launch client token. So it must be saved before the
+          // launch step runs, even when the execution default is AtLeastOnceAsync. The
+          // deprecated name keeps the peer range >=2.6.0, which has no AtLeastOnce.
+          semantics: StepSemantics.AtLeastOncePerRetry,
+        },
       );
 
       const payload: MicrovmRunHookPayload = {

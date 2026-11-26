@@ -153,10 +153,237 @@ describe("Step Handler", () => {
     const stepFn = vi.fn().mockResolvedValue("step-result");
 
     await stepHandler("test-step", stepFn, {
-      semantics: StepSemantics.AtMostOncePerRetry,
+      semantics: StepSemantics.AtMostOnce,
     });
 
     expect(mockCheckpoint.checkpoint).toHaveBeenCalledTimes(2);
+  });
+
+  describe("default semantics", () => {
+    // AtMostOnce awaits START before the step runs, so a START that is never answered
+    // shows which semantics the step used.
+    const startNeverAnswered = (
+      _id: string,
+      data: { Action: string },
+    ): Promise<void> =>
+      data.Action === "START" ? new Promise<void>(() => {}) : Promise.resolve();
+    const tick = (): Promise<void> =>
+      new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const handlerWithDefault = (
+      defaultSemantics?: StepSemantics,
+    ): ReturnType<typeof createStepHandler> =>
+      createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        defaultSemantics,
+      );
+
+    it("uses the given default when the step sets no semantics", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault(StepSemantics.AtMostOnce)("test-step", stepFn);
+      await tick();
+
+      expect(stepFn).not.toHaveBeenCalled();
+    });
+
+    it("uses AtLeastOnce when no default is given", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault()("test-step", stepFn);
+      await tick();
+
+      expect(stepFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets the step's own semantics win over the default", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault(StepSemantics.AtMostOnce)("test-step", stepFn, {
+        semantics: StepSemantics.AtLeastOnce,
+      });
+      await tick();
+
+      expect(stepFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps the deprecated names equal to the new ones", () => {
+    expect(StepSemantics.AtLeastOncePerRetry).toBe(StepSemantics.AtLeastOnce);
+    expect(StepSemantics.AtMostOncePerRetry).toBe(StepSemantics.AtMostOnce);
+  });
+
+  describe("AT_LEAST_ONCE_ASYNC semantics", () => {
+    // A checkpoint that the service never answers.
+    const neverAnswered = (): Promise<void> => new Promise<void>(() => {});
+    const pending = Symbol("pending");
+    const settleOrPending = async <T>(
+      promise: Promise<T>,
+    ): Promise<T | typeof pending> => {
+      // Lets the step run every await that does not wait for the service.
+      const tick = new Promise<typeof pending>((resolve) =>
+        setTimeout(() => resolve(pending), 50),
+      );
+      return Promise.race([promise, tick]);
+    };
+
+    it("returns the result before the SUCCEED checkpoint is answered", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(neverAnswered);
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const result = await settleOrPending(
+        stepHandler("test-step", async () => "step-result", {
+          semantics: StepSemantics.AtLeastOnceAsync,
+        }),
+      );
+
+      expect(result).toBe("step-result");
+      expect(mockCheckpoint.checkpoint).toHaveBeenNthCalledWith(
+        1,
+        "step-1",
+        expect.objectContaining({ Action: "START" }),
+      );
+      expect(mockCheckpoint.checkpoint).toHaveBeenNthCalledWith(
+        2,
+        "step-1",
+        expect.objectContaining({
+          Action: "SUCCEED",
+          Payload: JSON.stringify("step-result"),
+        }),
+        { awaited: false },
+      );
+    });
+
+    it("waits for the SUCCEED checkpoint with AT_LEAST_ONCE_PER_RETRY", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        (_id: string, data: { Action: string }) =>
+          data.Action === "SUCCEED" ? neverAnswered() : Promise.resolve(),
+      );
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const result = await settleOrPending(
+        stepHandler("test-step", async () => "step-result", {
+          semantics: StepSemantics.AtLeastOnce,
+        }),
+      );
+
+      expect(result).toBe(pending);
+    });
+
+    it("still waits for the FAIL checkpoint", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        (_id: string, data: { Action: string }) =>
+          data.Action === "FAIL" ? neverAnswered() : Promise.resolve(),
+      );
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const outcome = stepHandler(
+        "test-step",
+        async () => {
+          throw new Error("boom");
+        },
+        {
+          semantics: StepSemantics.AtLeastOnceAsync,
+          retryStrategy: () => ({ shouldRetry: false }),
+        },
+      );
+      outcome.catch(() => {});
+
+      expect(await settleOrPending(outcome)).toBe(pending);
+      expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith(
+        "step-1",
+        expect.objectContaining({ Action: "FAIL" }),
+      );
+    });
+
+    it("runs the step again on replay when the result was not saved", async () => {
+      const hashedStepId = hashId("step-1");
+      (mockContext.getStepData as Mock).mockReturnValue({
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: { Attempt: 0 },
+      });
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      const result = await stepHandler("test-step", stepFn, {
+        semantics: StepSemantics.AtLeastOnceAsync,
+      });
+
+      expect(result).toBe("step-result");
+      expect(stepFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports SUCCEEDED to plugins before the service answers", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(neverAnswered);
+      const onOperationEnd = vi.fn();
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+        undefined,
+        { onOperationEnd },
+      );
+
+      await settleOrPending(
+        stepHandler("test-step", async () => "step-result", {
+          semantics: StepSemantics.AtLeastOnceAsync,
+        }),
+      );
+
+      expect(onOperationEnd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "SUCCEEDED",
+          result: JSON.stringify("step-result"),
+          startTimestamp: expect.any(Date),
+          endTimestamp: expect.any(Date),
+        }),
+      );
+    });
   });
 
   it("should return cached result for completed step", async () => {
@@ -361,7 +588,7 @@ describe("Step Handler", () => {
 
       await expect(
         stepHandler("test-step", stepFn, {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         }),
       ).rejects.toBeDefined();
@@ -413,7 +640,7 @@ describe("Step Handler", () => {
       let caught: unknown;
       try {
         await stepHandler("test-step", stepFn, {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         });
       } catch (err) {
@@ -447,7 +674,7 @@ describe("Step Handler", () => {
 
       await expect(
         stepHandler("test-step", vi.fn(), {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy,
         }),
       ).rejects.toBeDefined();

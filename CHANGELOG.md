@@ -67,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the MicroVM runs, for example a worker that takes more than 10 seconds to listen. Before,
   such a job logged a warning and succeeded.
 
+### Deprecated
+
+- `StepSemantics.AtLeastOncePerRetry` and `StepSemantics.AtMostOncePerRetry` in
+  `@aws/durable-execution-sdk-js`. Use `StepSemantics.AtLeastOnce` and `StepSemantics.AtMostOnce`.
+  They have the same values, so code that uses the old names keeps working.
+
 ## [3.1.0] - 2026-11-18
 
 ### Deprecated
