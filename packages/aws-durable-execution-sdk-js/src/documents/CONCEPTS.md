@@ -322,7 +322,7 @@ Step semantics control execution guarantees _per retry attempt_:
 
 - **AtLeastOnce** (default): The step executes at least once per retry. If the step succeeds but checkpointing fails, it re-executes on replay.
 - **AtMostOnce**: A checkpoint is created before execution. If failure occurs after checkpoint but before completion, the previous step retry attempt is skipped on replay.
-- **AtLeastOnceAsync**: Like AtLeastOnce, but the step returns its result without waiting for the result checkpoint. So the step has lower latency. The code after the step can run before the result is saved. If the invocation ends before the save, the step re-executes on replay. On replay the step can return a different value, and later steps run again with it. So do not use this mode for a step whose result becomes an idempotency key or a client token for a later step. A failed attempt still waits for its RETRY or FAIL checkpoint.
+- **AtLeastOnceAsync** (experimental): Like AtLeastOnce, but the step returns its result without waiting for the result checkpoint. So the step has lower latency. The code after the step can run before the result is saved. If the invocation ends before the save, the step re-executes on replay. On replay the step can return a different value, and later steps run again with it. So do not use this mode for a step whose result becomes an idempotency key or a client token for a later step. A failed attempt still waits for its RETRY or FAIL checkpoint.
 
 **Important**: These guarantees are per retry, not per workflow execution. With retries enabled, `AtMostOnce` could still result in multiple executions across retry attempts. For step-level at-most-once semantics, use a custom retry policy:
 

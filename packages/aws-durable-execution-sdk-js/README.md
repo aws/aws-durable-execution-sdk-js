@@ -214,7 +214,7 @@ See [Pausing and resuming durable executions](https://docs.aws.amazon.com/lambda
 
 - `StepSemantics.AtLeastOnce` (default): the step runs again on replay. So it can run more than once per attempt.
 - `StepSemantics.AtMostOnce`: the SDK checkpoints the start before the step runs. On replay, the SDK does not run that attempt again.
-- `StepSemantics.AtLeastOnceAsync`: like `AtLeastOnce`, but the step does not wait for the service to save its result. So the step has lower latency. If the invocation ends before the save, the step runs again on replay. Later steps then run again too, and the step can return a different value. So do not use it for a step whose result becomes an idempotency key for a later step.
+- `StepSemantics.AtLeastOnceAsync` (experimental): like `AtLeastOnce`, but the step does not wait for the service to save its result. So the step has lower latency. If the invocation ends before the save, the step runs again on replay. Later steps then run again too, and the step can return a different value. So do not use it for a step whose result becomes an idempotency key for a later step.
 
 To change the default for every step in the execution, set `defaultStepSemantics`. A step's own `semantics` still wins:
 

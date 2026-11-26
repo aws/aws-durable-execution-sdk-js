@@ -139,6 +139,8 @@ export enum StepSemantics {
    *
    * Only the success checkpoint is not awaited. A failed attempt waits for its `RETRY` or
    * `FAIL` checkpoint, like `AtLeastOnce`.
+   *
+   * @experimental This value is experimental and may be changed or removed in future releases.
    */
   AtLeastOnceAsync = "AT_LEAST_ONCE_ASYNC",
 
