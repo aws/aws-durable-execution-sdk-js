@@ -116,6 +116,23 @@ export enum StepSemantics {
    * tolerate duplicate execution.
    */
   AtLeastOncePerRetry = "AT_LEAST_ONCE_PER_RETRY",
+
+  /**
+   * At-least-once execution per retry attempt, without waiting for the result checkpoint.
+   *
+   * @remarks
+   * Works like `AtLeastOncePerRetry`, with one change. The step returns its result as soon as
+   * the result is queued for checkpointing. It does not wait for the service to save it. So the
+   * step has lower latency.
+   *
+   * The handler code after the step can run before the result is saved. If the invocation ends
+   * before the save, the step runs again on replay, like `AtLeastOncePerRetry`. Checkpoints are
+   * sent in order. So any later checkpoint that the service accepts also saves this result.
+   *
+   * Only the success checkpoint is not awaited. A failed attempt waits for its `RETRY` or
+   * `FAIL` checkpoint, like `AtLeastOncePerRetry`.
+   */
+  AtLeastOncePerRetryAsync = "AT_LEAST_ONCE_PER_RETRY_ASYNC",
 }
 
 /**

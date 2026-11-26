@@ -354,7 +354,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             context.durableExecutionArn,
           );
 
-          await checkpoint.checkpoint(stepId, {
+          const succeedCheckpoint = checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.SUCCEED,
@@ -363,6 +363,15 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Payload: serializedResult,
             Name: name,
           });
+          const isAsync = semantics === StepSemantics.AtLeastOncePerRetryAsync;
+          if (isAsync) {
+            // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the
+            // invocation. Every exit drains the queue, so the result is saved before the
+            // invocation ends.
+            void succeedCheckpoint;
+          } else {
+            await succeedCheckpoint;
+          }
           stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
@@ -371,6 +380,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
               attempt: currentAttempt,
             },
           );
+          if (isAsync) {
+            // The service has not answered yet, so stepData still shows the attempt as STARTED.
+            attemptEndInfo.status = PluginOperationStatus.SUCCEEDED;
+            attemptEndInfo.result = serializedResult;
+            attemptEndInfo.endTimestamp = new Date();
+          }
           backfillOperationInfo(attemptEndInfo, opInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
           await plugin.onOperationEnd?.({ ...attemptEndInfo, isReplay: false });

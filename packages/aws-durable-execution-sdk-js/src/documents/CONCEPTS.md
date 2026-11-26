@@ -322,6 +322,7 @@ Step semantics control execution guarantees _per retry attempt_:
 
 - **AtLeastOncePerRetry** (default): The step executes at least once per retry. If the step succeeds but checkpointing fails, it re-executes on replay.
 - **AtMostOncePerRetry**: A checkpoint is created before execution. If failure occurs after checkpoint but before completion, the previous step retry attempt is skipped on replay.
+- **AtLeastOncePerRetryAsync**: Like AtLeastOncePerRetry, but the step returns its result without waiting for the result checkpoint. So the step has lower latency. The code after the step can run before the result is saved. If the invocation ends before the save, the step re-executes on replay. A failed attempt still waits for its RETRY or FAIL checkpoint.
 
 **Important**: These guarantees are per retry, not per workflow execution. With retries enabled, `AtMostOncePerRetry` could still result in multiple executions across retry attempts. For step-level at-most-once semantics, use a custom retry policy:
 
