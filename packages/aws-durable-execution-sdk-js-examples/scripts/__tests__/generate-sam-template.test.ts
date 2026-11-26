@@ -281,7 +281,7 @@ describe("generate-sam-template", () => {
           runtime: "24.x",
         }),
       ).toThrow(
-        /needs other function settings than the rest of group "mixed-group"/,
+        'Examples "hello-world" and "steps-with-retry" of group "mixed-group" need different function settings. Set ownFunction: true in the config of the one that differs.',
       );
     });
 

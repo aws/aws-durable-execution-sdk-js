@@ -31,8 +31,8 @@ const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 interface FunctionNameConfig {
   functionName: string;
   /**
-   * Set when the example shares one function with the other examples of its
-   * folder. That function runs scripts/integration-dispatch.cjs.
+   * Set when the example shares one function with the rest of its group (its
+   * folder, or misc). That function runs scripts/integration-dispatch.cjs.
    */
   group?: string;
 }
@@ -265,6 +265,8 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
   }
 
   // Generate resources for each example file
+  // The first example that added each group function, for the error below.
+  const firstMember = new Map<string, string>();
   examplesCatalog
     .filter(
       (catalog: {
@@ -312,12 +314,15 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
         const { DependsOn: _, ...existingResource } = existing;
         if (!isDeepStrictEqual(existingResource, functionResource)) {
           throw new Error(
-            `Example "${catalog.name}" needs other function settings than ` +
-              `the rest of group "${group}"`,
+            `Examples "${firstMember.get(functionResourceName)}" and ` +
+              `"${catalog.name}" of group "${group}" need different function ` +
+              "settings. Set ownFunction: true in the config of the one that " +
+              "differs.",
           );
         }
         return;
       }
+      firstMember.set(functionResourceName, catalog.name);
 
       if (manageLogGroups) {
         template.Resources[logGroupResourceName] = {
