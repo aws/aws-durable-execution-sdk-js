@@ -209,4 +209,39 @@ describe("truncateRecordWithOperationsFormat matches the full-render reference",
     }
     expect(mismatches).toEqual([]);
   }, 60_000);
+
+  it("matches full rendering when the input already has dropped-operation markers", () => {
+    const record = randomRecord(prng(819), 819);
+    record.operations = Array.from({ length: 4 }, (_, index) => ({
+      id: `existing-drop-${index}`,
+      type: "STEP",
+      status: "SUCCEEDED",
+      startTime: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      name: "repeated-name",
+      durationMs: index + 1,
+      result: "x".repeat(100),
+    })) as OperationRecord[];
+    record.truncated = true;
+    record.droppedOperations = 2;
+
+    for (const { render, format } of cases().filter(({ label }) =>
+      ["array", "both", "otel-array", "otel-both"].includes(label),
+    )) {
+      const fullSize = bytes(render(record));
+      for (
+        let maxBytes = fullSize - 100;
+        maxBytes > Math.max(1, fullSize - 900);
+        maxBytes -= 17
+      ) {
+        const incremental = truncateRecordWithOperationsFormat(
+          record,
+          maxBytes,
+          render,
+          format,
+        );
+        const reference = truncateRecord(record, maxBytes, render);
+        expect(incremental).toEqual(reference);
+      }
+    }
+  }, 60_000);
 });

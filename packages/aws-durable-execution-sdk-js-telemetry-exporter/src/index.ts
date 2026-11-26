@@ -844,7 +844,7 @@ class ExportScheduler {
                 ? truncateRecordWithOperationsFormat(
                     record,
                     exporter.maxRecordSizeBytes,
-                    render ?? ((value) => value),
+                    render!,
                     truncationFormat,
                   )
                 : truncateRecord(record, exporter.maxRecordSizeBytes, render);

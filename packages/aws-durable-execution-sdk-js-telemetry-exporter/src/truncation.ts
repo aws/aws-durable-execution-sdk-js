@@ -267,14 +267,7 @@ class IncrementalSizeTracker {
     const initialCandidate = candidate();
     const initialRendered = render(initialCandidate);
     const initialSize = jsonByteSize(initialRendered);
-    if (
-      initialSize === undefined ||
-      initialRendered === null ||
-      typeof initialRendered !== "object" ||
-      Array.isArray(initialRendered)
-    ) {
-      return undefined;
-    }
+    if (initialSize === undefined) return undefined;
 
     let initialMap: Record<string, OperationSummary> | undefined;
     let nestedMetrics: JsonMetrics | undefined;
@@ -345,7 +338,8 @@ class IncrementalSizeTracker {
     const hasMap =
       format.operations === "by-name" || format.operations === "both";
 
-    // Existing drop markers are not part of this call's local operation count.
+    // Existing markers affect the rendered size but not this call's drop count.
+    // Re-render each candidate so their size is not adjusted as if they were new.
     if (initialCandidate.droppedOperations !== undefined) {
       return undefined;
     }
