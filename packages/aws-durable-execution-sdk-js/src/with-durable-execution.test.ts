@@ -61,6 +61,7 @@ describe("withDurableExecution", () => {
     getTerminationPromise: vi.fn(),
     terminate: vi.fn(),
     setCheckpointTerminatingCallback: vi.fn(),
+    isTerminationRequested: vi.fn().mockReturnValue(false),
   };
 
   const mockCustomerHandlerEvent = {};

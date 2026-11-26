@@ -133,4 +133,17 @@ describe("AtLeastOnceAsync through withDurableExecution", () => {
 
     await expect(invocation).rejects.toThrow(/Checkpoint failed/);
   });
+
+  it("rethrows a failed SUCCEED checkpoint when the handler throws first", async () => {
+    const { client } = slowRecordingClient({ failOnStepSucceed: true });
+
+    const invocation = invoke(client, async (_event, context) => {
+      await context.step("a", async () => "done");
+      throw new Error("handler failed after the step");
+    });
+
+    // FAILED would end the execution without the step's result. The checkpoint error makes
+    // Lambda retry the invocation instead.
+    await expect(invocation).rejects.toThrow(/Checkpoint failed/);
+  });
 });
