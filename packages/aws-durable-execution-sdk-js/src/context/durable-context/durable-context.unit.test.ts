@@ -8,7 +8,7 @@ import {
   type Mock,
 } from "vitest";
 import { createDurableContext } from "./durable-context";
-import { DurableExecutionMode, Duration } from "../../types";
+import { DurableExecutionMode, Duration, StepSemantics } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 import { OperationStatus } from "../../types/wire";
@@ -176,6 +176,29 @@ describe("DurableContext", () => {
 
       const brand = Symbol.for("@aws/durable-execution-sdk-js/durable-context");
       expect((context as any)[brand]).toBe(true);
+    });
+  });
+
+  describe("defaultStepSemantics", () => {
+    it("passes the execution's default step semantics to the step handler", async () => {
+      const context = createDurableContext(
+        createMockExecutionContext(),
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+        undefined,
+        {
+          ...mockDurableExecution,
+          defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+        },
+      );
+
+      await context.step(async (): Promise<string> => "result");
+
+      const createStepHandler = mod_step_handler.createStepHandler as Mock;
+      expect(createStepHandler.mock.calls[0][10]).toBe(
+        StepSemantics.AtLeastOnceAsync,
+      );
     });
   });
 

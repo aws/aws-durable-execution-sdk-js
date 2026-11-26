@@ -159,6 +159,72 @@ describe("Step Handler", () => {
     expect(mockCheckpoint.checkpoint).toHaveBeenCalledTimes(2);
   });
 
+  describe("default semantics", () => {
+    // AtMostOnce awaits START before the step runs, so a START that is never answered
+    // shows which semantics the step used.
+    const startNeverAnswered = (
+      _id: string,
+      data: { Action: string },
+    ): Promise<void> =>
+      data.Action === "START" ? new Promise<void>(() => {}) : Promise.resolve();
+    const tick = (): Promise<void> =>
+      new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const handlerWithDefault = (
+      defaultSemantics?: StepSemantics,
+    ): ReturnType<typeof createStepHandler> =>
+      createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        defaultSemantics,
+      );
+
+    it("uses the given default when the step sets no semantics", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault(StepSemantics.AtMostOnce)("test-step", stepFn);
+      await tick();
+
+      expect(stepFn).not.toHaveBeenCalled();
+    });
+
+    it("uses AtLeastOnce when no default is given", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault()("test-step", stepFn);
+      await tick();
+
+      expect(stepFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets the step's own semantics win over the default", async () => {
+      (mockCheckpoint.checkpoint as Mock).mockImplementation(
+        startNeverAnswered,
+      );
+      const stepFn = vi.fn().mockResolvedValue("step-result");
+
+      void handlerWithDefault(StepSemantics.AtMostOnce)("test-step", stepFn, {
+        semantics: StepSemantics.AtLeastOnce,
+      });
+      await tick();
+
+      expect(stepFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("keeps the deprecated names equal to the new ones", () => {
     expect(StepSemantics.AtLeastOncePerRetry).toBe(StepSemantics.AtLeastOnce);
     expect(StepSemantics.AtMostOncePerRetry).toBe(StepSemantics.AtMostOnce);

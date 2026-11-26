@@ -193,6 +193,7 @@ async function runHandler<
     stepDataEmitter,
     plugin,
     setTerminating: (): void => checkpointManager.setTerminating(),
+    defaultStepSemantics: config?.defaultStepSemantics,
   };
 
   // Config was validated above; map childOperationsDepth to the root budget.

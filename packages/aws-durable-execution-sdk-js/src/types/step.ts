@@ -167,7 +167,12 @@ export enum JitterStrategy {
 export interface StepConfig<T> {
   /** Strategy for retrying failed step executions */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
-  /** Execution semantics for the step (at-most-once or at-least-once per retry) */
+  /**
+   * Execution semantics for the step (at-most-once or at-least-once per retry).
+   *
+   * @defaultValue `DurableExecutionConfig.defaultStepSemantics`, or `StepSemantics.AtLeastOnce`
+   * when that is not set.
+   */
   semantics?: StepSemantics;
   /** Serialization/deserialization configuration for step data */
   serdes?: Serdes<T>;

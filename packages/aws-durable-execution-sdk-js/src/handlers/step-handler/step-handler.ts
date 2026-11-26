@@ -65,6 +65,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   pluginOperationName?: string,
   // Passed to the step function as StepContext.signal.
   signal: AbortSignal = new AbortController().signal,
+  // From DurableExecutionConfig.defaultStepSemantics. Used when the step sets no semantics.
+  defaultSemantics: StepSemantics = StepSemantics.AtLeastOnce,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -85,7 +87,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
     }
 
     const stepId = createStepId();
-    const semantics = options?.semantics || StepSemantics.AtLeastOnce;
+    const semantics = options?.semantics || defaultSemantics;
     // A custom subtype labels steps of a custom operation. It is typed as
     // OperationSubType, like ChildConfig.subType in the child context handler.
     const subType =

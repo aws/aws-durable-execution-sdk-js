@@ -216,6 +216,14 @@ See [Pausing and resuming durable executions](https://docs.aws.amazon.com/lambda
 - `StepSemantics.AtMostOnce`: the SDK checkpoints the start before the step runs. On replay, the SDK does not run that attempt again.
 - `StepSemantics.AtLeastOnceAsync`: like `AtLeastOnce`, but the step does not wait for the service to save its result. So the step has lower latency. If the invocation ends before the save, the step runs again on replay.
 
+To change the default for every step in the execution, set `defaultStepSemantics`. A step's own `semantics` still wins:
+
+```typescript
+export const handler = withDurableExecution(myHandler, {
+  defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+});
+```
+
 `StepSemantics.AtLeastOncePerRetry` and `StepSemantics.AtMostOncePerRetry` are deprecated. Use `AtLeastOnce` and `AtMostOnce` instead. They have the same values, so existing code keeps working.
 
 Both apply per retry attempt. So for a step that must run at most once in total, also disable retries:
