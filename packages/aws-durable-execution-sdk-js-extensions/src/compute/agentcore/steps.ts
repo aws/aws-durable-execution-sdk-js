@@ -4,6 +4,7 @@ import {
   type DurableContext,
   type Duration,
   defaultSerdes,
+  StepSemantics,
 } from "@aws/durable-execution-sdk-js";
 import {
   type BedrockAgentCoreClient,
@@ -52,6 +53,10 @@ export async function createSessionId(
 ): Promise<string> {
   return (await child.step(`${name}.session`, async () => randomUUID(), {
     subType: AgentcoreOperationSubType.SESSION_ID,
+    // Later steps use the session ID as the runtime session. So it must be saved before
+    // they run, even when the execution default is AtLeastOnceAsync. The deprecated name
+    // keeps the peer range >=2.6.0, which has no AtLeastOnce.
+    semantics: StepSemantics.AtLeastOncePerRetry,
   })) as string;
 }
 
