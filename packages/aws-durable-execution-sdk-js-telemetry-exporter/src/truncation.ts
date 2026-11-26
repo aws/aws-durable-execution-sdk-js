@@ -49,35 +49,20 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *   3. whole operations, oldest first;
  *   4. last resort — execution `input`, then `output`.
  *
- * A small result is one whose JSON is 7 bytes or shorter (such as `true`, `1`
- * or `"ok"`). Clearing a result replaces `"result":<json>` with
- * `"truncated":true`, which is 16 bytes. So in a rendering that shows this
- * per-operation marker, such as the array form, clearing a small result makes
- * the record bigger. A rendering that hides the marker, such as the
- * `operationsByName` map, gets smaller when any result is cleared.
+ * Step 2 binary searches how many results to cut, and step 3 how many
+ * operations. Each probe renders and measures one candidate record. So a record
+ * with n operations is rendered about 2 * log2(n + 1) times, for any `render`.
+ * The chosen record always comes from a real measurement. So it never goes
+ * over `maxBytes`, as long as dropping everything droppable makes it fit.
  *
- * Step 2 first measures the record with no result cleared. If it fits, it is
- * returned. If there are small results, step 2 then measures the record with
- * every small result cleared. If that record is smaller, the rendering hides
- * the marker, so small results are cleared like large ones. Otherwise small
- * results stay in the record, unmarked, and only large results are cleared.
- * Then steps 2 and 3 binary search how many results or operations to cut.
- * Each probe renders and measures one candidate record. So a record with n
- * operations is rendered about 2 * log2(n + 1) + 5 times, for any `render`.
- *
- * The search can cut more results or operations than cutting one at a time
- * would. Two cases are known:
- *   - In the `operationsByName` map, cutting one of two same-name operations
- *     makes the other one's `result` and `error` appear in the map. So the
- *     record can grow after a cut, in the by-name form and the by-name part of
- *     `both`. Then the search can cut extra old operations.
- *   - Step 2 decides with one measurement whether all small results are
- *     cleared. In `both` and in a custom `render`, clearing some small results
- *     can shrink the record while clearing others makes it bigger. Then the
- *     search can cut extra operations.
- * The chosen record always comes from a real measurement. So it never goes over
- * `maxBytes`, as long as dropping everything droppable makes it fit. Otherwise
- * the returned record is over `maxBytes`, as before.
+ * The search assumes that cutting more never makes the rendering larger. When
+ * the size is not monotonic, the search can cut more results and operations
+ * than cutting one at a time would. Known causes:
+ *   - in the `operationsByName` map, cutting one of two same-name operations
+ *     makes the other one's `result` and `error` appear in the map;
+ *   - the `"truncated":true` marker is longer than a short result such as
+ *     `true`, so clearing that result makes the record larger;
+ *   - a custom `render` that escapes or reshapes values can grow after a cut.
  *
  * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
  * `name`/`message` are never dropped.
@@ -124,38 +109,18 @@ export function truncateRecord(
       : withoutCause(record.error);
   if (executionError !== record.error) droppedCauses = true;
   // rank[i] is the position of operation i in the oldest-first order.
-  // small[i] is whether operation i has a result whose JSON is 7 bytes or
-  // shorter. Such a result is smaller than the `"truncated":true` marker that
-  // replaces it, so clearing it can make the record bigger.
-  const order = oldestFirstOrder(ops);
+  // resultRank[i] is its position among the operations with a result, in the
+  // same order, or Infinity if it has no result.
   const rank = new Array<number>(ops.length);
-  const small = new Array<boolean>(ops.length).fill(false);
-  order.forEach((idx, r) => {
+  const resultRank = new Array<number>(ops.length);
+  let m = 0; // the number of operations with a result
+  oldestFirstOrder(ops).forEach((idx, r) => {
     rank[idx] = r;
-    const result = ops[idx].result;
-    if (result === undefined) return;
-    const size = jsonByteSize(result);
-    small[idx] = size !== undefined && size <= 7;
+    resultRank[idx] =
+      ops[idx].result === undefined ? Number.POSITIVE_INFINITY : m++;
   });
 
-  // resultRank[i] is the position of operation i among the operations whose
-  // result can be cleared, in the oldest-first order, or Infinity if it cannot.
-  // Small results are included only when `withSmall` is true.
-  const resultRank = new Array<number>(ops.length);
-  let clearable = 0; // the number of results that can be cleared
-  const rankResults = (withSmall: boolean): void => {
-    resultRank.fill(Number.POSITIVE_INFINITY);
-    clearable = 0;
-    for (const idx of order) {
-      if (ops[idx].result === undefined) continue;
-      if (small[idx] && !withSmall) continue;
-      resultRank[idx] = clearable++;
-    }
-  };
-  rankResults(false);
-  let clearSmall = false; // set only to measure the record with small results cleared
-
-  let resultsDropped = 0; // the oldest `resultsDropped` clearable results are cut
+  let resultsDropped = 0; // the oldest `resultsDropped` results are cut
   let droppedOperations = 0; // the oldest `droppedOperations` operations are cut
   let droppedInput = false;
   let droppedOutput = false;
@@ -165,9 +130,7 @@ export function truncateRecord(
       ...record,
       operations: ops.flatMap((op, i) => {
         if (rank[i] < droppedOperations) return [];
-        if (resultRank[i] >= resultsDropped && !(clearSmall && small[i])) {
-          return [op];
-        }
+        if (resultRank[i] >= resultsDropped) return [op];
         return [{ ...op, result: undefined, truncated: true }];
       }),
       truncated: true,
@@ -188,9 +151,8 @@ export function truncateRecord(
     return out;
   };
 
-  const measure = (): number | undefined => jsonByteSize(render(candidate()));
   const fits = (): boolean => {
-    const size = measure();
+    const size = jsonByteSize(render(candidate()));
     return size !== undefined && size <= maxBytes;
   };
 
@@ -215,38 +177,14 @@ export function truncateRecord(
 
   // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
-  // Dropping the causes alone can make the record fit. The search below does
-  // not always measure that case, so it is measured first.
-  const n = ops.length;
-  const noneCleared = measure();
-  const noneClearedFits = noneCleared !== undefined && noneCleared <= maxBytes;
-  if (!noneClearedFits && small.includes(true)) {
-    // A rendering that hides the per-operation `truncated` marker gets smaller
-    // when a small result is cleared. Then skipping small results would drop
-    // operations that clearing them saves. So measure once with every small
-    // result cleared, and clear small results too if that record is smaller.
-    clearSmall = true;
-    const smallCleared = measure();
-    clearSmall = false;
-    if (
-      noneCleared !== undefined &&
-      smallCleared !== undefined &&
-      smallCleared < noneCleared
-    ) {
-      rankResults(true);
-    }
-  }
-  if (
-    !noneClearedFits &&
-    !firstFit(1, clearable, (c) => (resultsDropped = c))
-  ) {
-    // Phase 3: drop whole operations, oldest first.
-    firstFit(1, n, (c) => (droppedOperations = c));
-  }
+  // Phase 3 (if no result count fits): drop whole operations, oldest first.
+  const fit =
+    firstFit(0, m, (c) => (resultsDropped = c)) ||
+    firstFit(1, ops.length, (c) => (droppedOperations = c));
 
   // Phase 4 (last resort): drop execution input, then output. Only reached once
   // every operation is gone and the record is still over the limit.
-  if (!fits() && record.input !== undefined) droppedInput = true;
+  if (!fit && record.input !== undefined) droppedInput = true;
   if (!fits() && record.output !== undefined) droppedOutput = true;
 
   // If nothing was actually dropped, return the original untouched — not cut.

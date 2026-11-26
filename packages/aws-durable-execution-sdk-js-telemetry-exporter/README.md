@@ -535,42 +535,29 @@ Drop order, until the record fits (one pass):
    (and so in `operationsByName`, which is derived from the operations). Each
    error keeps its `name` and `message`, and the record gets
    `droppedCauses: true`. No step cuts individual cause levels;
-2. operation `result` fields, **oldest operation first**. A small result is
-   one whose JSON is 7 bytes or shorter (such as `true`, `1`, `null` or
-   `"ok"`). Clearing a result replaces `"result":<json>` with
-   `"truncated":true`, which is 16 bytes. So in the array form, clearing a small
-   result makes the record bigger, and small results stay in the record. The
-   by-name form shows no per-operation `truncated` marker, so clearing any
-   result makes it smaller. So there small results are cleared like the others.
-   The plugin measures the rendered record to tell the two cases apart;
+2. operation `result` fields, **oldest operation first**;
 3. whole operations, **oldest first**;
 4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
-Step 2 first measures the record with only the causes dropped. If it fits, no
-result is cleared. If there are small results, step 2 then measures the record
-with every small result cleared. If that record is smaller, small results are
-cleared like the others. Then steps 2 and 3 binary search how many results or
-operations to cut. Each probe renders and measures one candidate record. So a
-record with _n_ operations is rendered about 2 × log2(_n_ + 1) + 5 times, for
-any exporter.
+Step 2 binary searches how many results to cut, and step 3 how many
+operations. Each probe renders and measures one candidate record. So a record
+with _n_ operations is rendered about 2 × log2(_n_ + 1) times, for any exporter.
+The emitted record always comes from a real measurement. So it never goes over
+the limit, as long as dropping everything droppable makes it fit.
 
-The search can cut more results or operations than cutting one at a time
-would. Two cases are known:
+The search assumes that cutting more never makes the record larger. When that
+is not true, the search can cut more results and operations than cutting one
+at a time would. For example, take one 5,000-byte old result and 1,999 results
+of `true`, with the limit 4,000 bytes under the full size. Cutting one at a time
+clears 1 result. The search clears 1,943 results and drops 57 operations.
+Known causes:
 
-- In the by-name form, and in the by-name part of `both`, cutting one of two
-  operations with the same name makes the other one's `result` and `error`
-  appear in the map. So the record can grow after a cut. Then the search can
-  cut extra old operations.
-- Step 2 measures once whether clearing every small result makes the record
-  smaller. It applies that answer to all small results. In `both` and in a
-  custom render, clearing some small results can shrink the record while
-  clearing others makes it bigger. Then the search can cut extra operations.
-
-The emitted record always comes from a real measurement. So the output never
-goes over the limit, as long as dropping everything droppable makes it fit. If
-the record is still over the limit after every droppable field is gone, the
-output is over the limit, as before.
+- in `operationsByName`, cutting one of two operations with the same name makes
+  the other one's `result` and `error` appear in the map;
+- the `"truncated":true` marker is longer than a short result such as `true`,
+  so clearing that result makes the record larger;
+- a custom render that escapes or reshapes values can grow after a cut.
 
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
 only after all operations are gone — so prefer `content.input` /
