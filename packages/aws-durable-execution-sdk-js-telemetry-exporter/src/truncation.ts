@@ -338,8 +338,9 @@ class IncrementalSizeTracker {
     const hasMap =
       format.operations === "by-name" || format.operations === "both";
 
-    // Existing markers affect the rendered size but not this call's drop count.
-    // Re-render each candidate so their size is not adjusted as if they were new.
+    // `truncateRecord` can receive a record already truncated by an earlier
+    // exporter. Its existing count is part of the rendered size, but this call
+    // tracks only its own drops, so use full renders for those candidates.
     if (initialCandidate.droppedOperations !== undefined) {
       return undefined;
     }
