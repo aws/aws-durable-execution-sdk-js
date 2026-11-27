@@ -364,3 +364,135 @@ describe("createInvocationPluginRunner", () => {
     });
   });
 });
+
+describe.each(["sync-hook", "async-hook", "factory"] as const)(
+  "failure diagnostic: %s",
+  (mode) => {
+    it.each(["x", new Error("x")])(
+      "warns and keeps running healthy plugins: %p",
+      async (reason) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const healthyStart = vi.fn().mockResolvedValue(undefined);
+
+        class FailingPlugin {
+          onInvocationStart(): Promise<void> {
+            if (mode === "async-hook") return Promise.reject(reason);
+            throw reason;
+          }
+        }
+        class FailingFactory {
+          createPlugin(): FailingPlugin {
+            if (mode === "factory") throw reason;
+            return new FailingPlugin();
+          }
+        }
+
+        try {
+          const runner = createInvocationPluginRunner(
+            [
+              new FailingFactory(),
+              { createPlugin: () => ({ onInvocationStart: healthyStart }) },
+            ],
+            invocationInfo,
+          );
+          await expect(
+            runner.onInvocationStart!(invocationInfo),
+          ).resolves.toBeUndefined();
+
+          expect(healthyStart).toHaveBeenCalledTimes(1);
+          expect(warn).toHaveBeenCalledTimes(1);
+          expect(warn).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+              error: String(reason),
+              ...(mode === "factory"
+                ? { factory: "FailingFactory (factories[0])" }
+                : {
+                    plugin: "FailingPlugin (plugins[0])",
+                    hook: "onInvocationStart",
+                  }),
+            }),
+          );
+        } finally {
+          warn.mockRestore();
+        }
+      },
+    );
+  },
+);
+
+describe("failure diagnostic: other cases", () => {
+  it("warns for an operation hook that rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const runner = createInvocationPluginRunner(
+        [
+          {
+            createPlugin: () => ({
+              onOperationStart: () => Promise.reject("x"),
+            }),
+          },
+        ],
+        invocationInfo,
+      );
+      await runner.onOperationStart!({} as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ hook: "onOperationStart", error: "x" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("describes a thrown value that cannot be converted to a string", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const runner = createInvocationPluginRunner(
+        [
+          {
+            createPlugin: () => {
+              throw Object.create(null);
+            },
+          },
+        ],
+        invocationInfo,
+      );
+
+      expect(runner).toEqual({});
+      expect(warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ error: "unprintable value" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not let a failing console.warn change the outcome", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {
+      throw new Error("console broken");
+    });
+    try {
+      const runner = createInvocationPluginRunner(
+        [
+          {
+            createPlugin: () => ({
+              onInvocationStart: () => Promise.reject(new Error("x")),
+            }),
+          },
+        ],
+        invocationInfo,
+      );
+
+      await expect(
+        runner.onInvocationStart!(invocationInfo),
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

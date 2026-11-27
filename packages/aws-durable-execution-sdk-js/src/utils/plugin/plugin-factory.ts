@@ -3,6 +3,7 @@ import type {
   DurableInstrumentationPluginFactory,
   InvocationInfo,
 } from "../../types/plugin";
+import { describeThrown, pluginIdentity, warn } from "./plugin-diagnostic";
 import { createPluginRunner, type PluginRunnerOptions } from "./plugin-runner";
 
 /**
@@ -36,7 +37,7 @@ export function createInvocationPluginRunner(
 ): DurableInstrumentationPlugin {
   const plugins: DurableInstrumentationPlugin[] = [];
 
-  for (const factory of factories) {
+  for (const [index, factory] of factories.entries()) {
     let plugin: DurableInstrumentationPlugin | null | undefined;
     try {
       plugin = factory.createPlugin(info);
@@ -49,9 +50,14 @@ export function createInvocationPluginRunner(
         void Promise.resolve(plugin).catch(() => undefined);
         continue;
       }
-    } catch {
-      // Swallowed for the same reason hook errors are: instrumentation must not
-      // decide whether an execution runs.
+    } catch (error) {
+      // Contained for the same reason hook errors are: instrumentation must not
+      // decide whether an execution runs. It is reported, so the customer can
+      // tell that instrumentation failed.
+      warn("Ignoring failure creating plugin.", {
+        factory: pluginIdentity(factory, index, "factories"),
+        error: describeThrown(error),
+      });
       continue;
     }
 

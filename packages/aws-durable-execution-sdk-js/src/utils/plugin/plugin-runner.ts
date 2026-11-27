@@ -13,6 +13,7 @@ import type {
 } from "../../types/plugin";
 import type { DurableExecutionInvocationOutput } from "../../types/core";
 import { MAX_TIMER_DELAY_MS } from "../constants/constants";
+import { describeThrown, pluginIdentity, warn } from "./plugin-diagnostic";
 import { collectPropagationMetadata } from "./propagation-metadata";
 
 type CallbackResult = unknown;
@@ -142,7 +143,15 @@ export function createPluginRunner(
           await result;
         }
       })
-      .map((promise) => promise.catch(() => undefined));
+      .map((promise, index) =>
+        promise.catch((error: unknown) =>
+          warn("Ignoring failure in plugin hook.", {
+            plugin: pluginIdentity(plugins[index], index),
+            hook: method,
+            error: describeThrown(error),
+          }),
+        ),
+      );
 
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
