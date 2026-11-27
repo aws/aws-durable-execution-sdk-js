@@ -5,9 +5,23 @@ import type {
   OperationInfo,
 } from "../../types/operation-lifecycle";
 
+export interface CheckpointOptions {
+  /** False when the caller does not wait for the checkpoint. Defaults to true. */
+  awaited?: boolean;
+}
+
 export interface Checkpoint {
   // ===== Existing Methods (Persistence) =====
-  checkpoint(stepId: string, data: Partial<OperationUpdate>): Promise<void>;
+  /**
+   * Queues an update. Pass `{ awaited: false }` when the caller does not wait for the returned
+   * promise and keeps running. Then a dropped checkpoint does not mark the operation
+   * COMPLETED. See ADR 0002.
+   */
+  checkpoint(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+    options?: CheckpointOptions,
+  ): Promise<void>;
   forceCheckpoint?(): Promise<void>;
   force?(): Promise<void>;
   setTerminating?(): void;

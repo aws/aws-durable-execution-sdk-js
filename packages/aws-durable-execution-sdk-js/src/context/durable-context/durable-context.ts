@@ -65,12 +65,15 @@ import {
   type AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
 import type { DurableInstrumentationPlugin } from "../../types/plugin";
+import type { StepSemantics } from "../../types/step";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
   stepDataEmitter: EventEmitter;
   plugin: DurableInstrumentationPlugin;
   setTerminating(): void;
+  /** From `DurableExecutionConfig.defaultStepSemantics`. */
+  defaultStepSemantics?: StepSemantics | undefined;
 }
 
 export const DURABLE_CONTEXT_BRAND = Symbol.for(
@@ -439,6 +442,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.durableExecution.plugin,
         pluginOperationName,
         this._signal,
+        this.durableExecution.defaultStepSemantics,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);

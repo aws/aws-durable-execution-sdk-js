@@ -309,7 +309,7 @@ Resources:
     Properties:
       CodeUri: ./dist
       Handler: step_at_most_once_no_retry.handler
-      Description: Step with AtMostOncePerRetry semantics (interrupted, no retry)
+      Description: Step with AtMostOnce semantics (interrupted, no retry)
       Role:
         Fn::GetAtt:
         - DurableFunctionRole

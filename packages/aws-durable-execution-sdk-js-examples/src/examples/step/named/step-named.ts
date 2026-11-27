@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Named Step",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description:
     "Using context.step() with a custom name for better observability",
 };

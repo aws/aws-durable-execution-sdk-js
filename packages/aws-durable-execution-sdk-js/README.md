@@ -198,7 +198,7 @@ await context.step("call-api", async () => callApi(), {
 });
 ```
 
-The pause ends the invocation at once. A step that is still running in another `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs again, and an `AtMostOncePerRetry` step counts it as an interrupted attempt.
+The pause ends the invocation at once. A step that is still running in another `parallel` or `map` branch is stopped. After the resume, an at-least-once step runs again, and an `AtMostOnce` step counts it as an interrupted attempt.
 
 - `pause` does not change how many attempts run. When `shouldRetry` is false, the SDK ignores `pause` and the step fails as usual.
 - The function's execution role needs `lambda:PauseDurableExecution` on the function's durable executions. You add that permission. If the function uses a customer managed AWS KMS key, the role also needs `kms:Decrypt` on the key. Without these permissions, the SDK logs a warning and the step retries as usual.
@@ -212,8 +212,19 @@ See [Pausing and resuming durable executions](https://docs.aws.amazon.com/lambda
 
 `semantics` sets what happens when an invocation ends while the step runs:
 
-- `StepSemantics.AtLeastOncePerRetry` (default): the step runs again on replay. So it can run more than once per attempt.
-- `StepSemantics.AtMostOncePerRetry`: the SDK checkpoints the start before the step runs. On replay, the SDK does not run that attempt again.
+- `StepSemantics.AtLeastOnce` (default): the step runs again on replay. So it can run more than once per attempt.
+- `StepSemantics.AtMostOnce`: the SDK checkpoints the start before the step runs. On replay, the SDK does not run that attempt again.
+- `StepSemantics.AtLeastOnceAsync` (experimental): like `AtLeastOnce`, but the step does not wait for the service to save its result. So the step has lower latency. If the invocation ends before the save, the step runs again on replay. Later steps then run again too, and the step can return a different value. So do not use it for a step whose result becomes an idempotency key for a later step.
+
+To change the default for every step in the execution, set `defaultStepSemantics`. A step's own `semantics` still wins:
+
+```typescript
+export const handler = withDurableExecution(myHandler, {
+  defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+});
+```
+
+`StepSemantics.AtLeastOncePerRetry` and `StepSemantics.AtMostOncePerRetry` are deprecated. Use `AtLeastOnce` and `AtMostOnce` instead. They have the same values, so existing code keeps working.
 
 Both apply per retry attempt. So for a step that must run at most once in total, also disable retries:
 
@@ -221,7 +232,7 @@ Both apply per retry attempt. So for a step that must run at most once in total,
 import { StepSemantics } from "@aws/durable-execution-sdk-js";
 
 await context.step("charge-once", async () => chargeCard(order), {
-  semantics: StepSemantics.AtMostOncePerRetry,
+  semantics: StepSemantics.AtMostOnce,
   retryStrategy: () => ({ shouldRetry: false }),
 });
 ```

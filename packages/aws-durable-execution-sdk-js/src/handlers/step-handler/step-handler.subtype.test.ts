@@ -133,7 +133,7 @@ describe("Step Handler subType", () => {
 
     const promise = handler()("terminate", async () => "ok", {
       subType: "OrderTerminate",
-      semantics: StepSemantics.AtMostOncePerRetry,
+      semantics: StepSemantics.AtMostOnce,
       retryStrategy: () => ({ shouldRetry: false }),
     });
 

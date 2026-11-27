@@ -24,7 +24,7 @@ export const handler = withDurableExecution(
         return "succeeded on second attempt";
       },
       {
-        semantics: StepSemantics.AtMostOncePerRetry,
+        semantics: StepSemantics.AtMostOnce,
         retryStrategy: (error: Error, attempts: number) => {
           if (attempts >= 3) {
             return { shouldRetry: false };

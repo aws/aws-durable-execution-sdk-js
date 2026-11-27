@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "With Retry - Invoke Target",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description:
     "Target function for with-retry-invoke example. Fails when the provided attempt is below failUntilAttempt.",
 };

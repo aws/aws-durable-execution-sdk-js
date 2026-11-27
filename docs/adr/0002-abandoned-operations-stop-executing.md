@@ -40,8 +40,9 @@ if all of these hold:
 - The operation is `EXECUTING`.
 - The operation is not a `CONTEXT`.
 - The action is `SUCCEED`, `FAIL` or `RETRY`.
+- The caller did not pass `{ awaited: false }` to `checkpoint()`.
 
-Every call site that sends these actions for a non-context operation awaits the checkpoint. So
+Every other call site that sends these actions for a non-context operation awaits the checkpoint. So
 the caller is parked, and no SDK work for the operation runs after the mark. So Rule 1's purpose
 holds: no SDK work runs while the operation is not `EXECUTING`.
 
@@ -51,6 +52,9 @@ them unchanged:
 - A child context queues `SUCCEED` and `FAIL` without waiting. It then runs plugin hooks and
   deserializes its result. Its own code marks it `COMPLETED` when it settles.
 - A step or waitForCondition queues `START` without waiting and then runs its function.
+- A step with `StepSemantics.AtLeastOnceAsync` queues `SUCCEED` without waiting. It then runs
+  plugin hooks and deserializes its result. It passes `{ awaited: false }`, so the manager does
+  not mark it `COMPLETED`. Its own code does that when it settles.
 
 The operation stays in the checkpoint manager's operation map, so a later state change for it
 still finds its metadata.
@@ -65,14 +69,14 @@ or until it is abandoned as defined above.
   item, because its finished ancestor returns its recorded result on replay.
 - A new handler that awaits `SUCCEED`, `FAIL` or `RETRY` gets this behavior. A new handler
   that sends one of these actions without waiting, while it is `EXECUTING`, and keeps working
-  must not be released this way. The release rule would then need the caller to state whether
-  it waits, instead of inferring it from the operation type and the action.
+  must not be released this way. It passes `{ awaited: false }` to `checkpoint()` to say so.
 
 ## Enforcement
 
 - `src/utils/checkpoint/checkpoint-ancestor.test.ts` covers the release of a step `SUCCEED`,
   `FAIL` and `RETRY`, and of a waitForCondition `SUCCEED` and `RETRY`. It also covers that a
   context `SUCCEED`, a context `FAIL` and a `START` stay `EXECUTING`. `AGENTS.md` lists these
-  cases among the tests that guard the invariants.
+  cases among the tests that guard the invariants. It also covers that a step `SUCCEED` sent
+  with `{ awaited: false }` stays `EXECUTING`.
 - `map/early-completion-suspends` in the examples package checks that the wait suspends, locally
   and in cloud integration.

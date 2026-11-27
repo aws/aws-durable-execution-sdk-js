@@ -17,6 +17,7 @@ import type {
   DurableExecutionInvocationOutput,
 } from "./core";
 import type { DurableInstrumentationPluginFactory } from "./plugin";
+import type { StepSemantics } from "./step";
 
 /**
  * A handler function type for a durable execution that provides automatic state persistence,
@@ -262,6 +263,27 @@ export interface DurableExecutionConfig {
      */
     childOperationsDepth?: number;
   };
+
+  /**
+   * The semantics for every step that does not set `StepConfig.semantics`.
+   *
+   * @remarks
+   * Applies to the steps of every context in the execution, including child contexts,
+   * `map` items and `parallel` branches. It also applies to steps that SDK extensions create,
+   * unless the extension sets `semantics` itself. A step's own `semantics` wins over this value.
+   *
+   * Before you set `StepSemantics.AtLeastOnceAsync` here, read its remarks. A step whose
+   * result becomes an idempotency key for a later step needs its own `AtLeastOnce`.
+   *
+   * ```typescript
+   * export const handler = withDurableExecution(myHandler, {
+   *   defaultStepSemantics: StepSemantics.AtLeastOnceAsync,
+   * });
+   * ```
+   *
+   * @defaultValue `StepSemantics.AtLeastOnce`
+   */
+  defaultStepSemantics?: StepSemantics;
 }
 
 /**

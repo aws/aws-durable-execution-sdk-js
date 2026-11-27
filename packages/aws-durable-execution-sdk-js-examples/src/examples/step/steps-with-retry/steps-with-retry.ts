@@ -8,6 +8,8 @@ import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Steps With Retry",
+  // generate-sam-template.ts gives it other function settings.
+  ownFunction: true,
   description: "An example demonstrating retry functionality with steps",
 };
 

@@ -6,6 +6,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Tenant Target",
+  // Another example invokes this one by function name.
+  ownFunction: true,
   description:
     "Target function for tenant isolation testing - supports tenant ID invocation",
   durableConfig: {

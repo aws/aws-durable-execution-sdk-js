@@ -1,0 +1,138 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "b26c0aee-161d-46d4-a503-c525863ff1b3",
+    "EventTimestamp": "2026-11-26T22:14:44.360Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-items",
+    "EventTimestamp": "2026-11-26T22:14:44.475Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-items",
+    "EventTimestamp": "2026-11-26T22:14:44.475Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "3"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "create-order-id",
+    "EventTimestamp": "2026-11-26T22:14:44.476Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "create-order-id",
+    "EventTimestamp": "2026-11-26T22:14:44.476Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"order-3\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-for-warehouse",
+    "EventTimestamp": "2026-11-26T22:14:44.478Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-11-26T22:14:45.478Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-11-26T22:14:44.483Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-26T22:14:44.360Z",
+      "EndTimestamp": "2026-11-26T22:14:44.483Z",
+      "Error": {},
+      "RequestId": "54c5904b-4ccc-4084-9681-ae3485cdfe22"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-for-warehouse",
+    "EventTimestamp": "2026-11-26T22:14:45.480Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "confirm-order",
+    "EventTimestamp": "2026-11-26T22:14:45.482Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "confirm-order",
+    "EventTimestamp": "2026-11-26T22:14:45.482Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"order-3 confirmed\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-11-26T22:14:45.483Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-11-26T22:14:45.480Z",
+      "EndTimestamp": "2026-11-26T22:14:45.483Z",
+      "Error": {},
+      "RequestId": "fc09e232-4e09-4680-8fdc-7bac93532731"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "b26c0aee-161d-46d4-a503-c525863ff1b3",
+    "EventTimestamp": "2026-11-26T22:14:45.483Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"order-3 confirmed\""
+      }
+    }
+  }
+]

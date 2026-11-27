@@ -193,6 +193,7 @@ async function runHandler<
     stepDataEmitter,
     plugin,
     setTerminating: (): void => checkpointManager.setTerminating(),
+    defaultStepSemantics: config?.defaultStepSemantics,
   };
 
   // Config was validated above; map childOperationsDepth to the root budget.
@@ -572,6 +573,36 @@ async function runHandler<
         } catch (waitError) {
           log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
+        }
+
+        // The handler threw, but a checkpoint queued before the throw can fail while the
+        // queue drains, for example the SUCCEED of an AtLeastOnceAsync step. If the failure
+        // ends only this invocation, FAILED would end the execution without that update.
+        // Rethrowing the classified checkpoint error lets Lambda retry the invocation. A
+        // failure that ends the execution, such as a validation error, still answers FAILED.
+        if (
+          executionContext.terminationManager.isTerminationRequested() &&
+          !durableExecution.checkpointManager.isCheckpointTokenRevoked()
+        ) {
+          const lateTermination =
+            await executionContext.terminationManager.getTerminationPromise();
+          if (
+            lateTermination.reason === TerminationReason.CHECKPOINT_FAILED &&
+            isUnrecoverableInvocationError(lateTermination.error)
+          ) {
+            log("🛑", "Checkpoint failed after the handler threw");
+            // As on the invocation-error path above, plugins hear RETRYING once before the
+            // rethrow, so they drain their work and flush telemetry.
+            await plugin.onInvocationEnd?.({
+              ...invocationBaseInfo,
+              status: PluginInvocationStatus.RETRYING,
+              executionInput: customerHandlerEvent,
+              executionError: lateTermination.error,
+              executionResult: undefined,
+              operations: toOperationInfoMap(executionContext._stepData),
+            });
+            throw lateTermination.error;
+          }
         }
 
         // The handler threw. A withdrawn token means the service records neither that error

@@ -8,6 +8,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Step Interrupted No Retry",
+  // The test builds its own CloudDurableTestRunner.
+  ownFunction: true,
   description:
     "Reproduces step interruption (Lambda timeout) with AT_MOST_ONCE_PER_RETRY semantics + shouldRetry: false. Cloud-only because real Lambda timeout is required to leave a step in STARTED state.",
   durableConfig: {
@@ -40,7 +42,7 @@ export const handler = withDurableExecution(
           return "step-completed";
         },
         {
-          semantics: StepSemantics.AtMostOncePerRetry,
+          semantics: StepSemantics.AtMostOnce,
           retryStrategy: () => ({ shouldRetry: false }),
         },
       );

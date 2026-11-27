@@ -65,6 +65,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   pluginOperationName?: string,
   // Passed to the step function as StepContext.signal.
   signal: AbortSignal = new AbortController().signal,
+  // From DurableExecutionConfig.defaultStepSemantics. Used when the step sets no semantics.
+  defaultSemantics: StepSemantics = StepSemantics.AtLeastOnce,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -85,7 +87,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
     }
 
     const stepId = createStepId();
-    const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
+    const semantics = options?.semantics || defaultSemantics;
     // A custom subtype labels steps of a custom operation. It is typed as
     // OperationSubType, like ChildConfig.subType in the child context handler.
     const subType =
@@ -183,7 +185,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
       // Check for interrupted step with AT_MOST_ONCE_PER_RETRY
       if (
         stepData?.Status === OperationStatus.STARTED &&
-        semantics === StepSemantics.AtMostOncePerRetry
+        semantics === StepSemantics.AtMostOnce
       ) {
         const error = new StepInterruptedError(stepId, name);
         const currentAttempt = (stepData.StepDetails?.Attempt || 0) + 1;
@@ -262,7 +264,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
       async function executeStepLogic(): Promise<T> {
         stepData = context.getStepData(stepId);
         if (stepData?.Status !== OperationStatus.STARTED) {
-          if (semantics === StepSemantics.AtMostOncePerRetry) {
+          if (semantics === StepSemantics.AtMostOnce) {
             await checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
@@ -354,7 +356,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             context.durableExecutionArn,
           );
 
-          await checkpoint.checkpoint(stepId, {
+          const isAsync = semantics === StepSemantics.AtLeastOnceAsync;
+          const succeedUpdate = {
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.SUCCEED,
@@ -362,7 +365,20 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Type: OperationType.STEP,
             Payload: serializedResult,
             Name: name,
-          });
+          };
+          // An async step keeps running after a dropped SUCCEED, so it stays EXECUTING
+          // until completeAfter marks it COMPLETED (ADR 0002).
+          const succeedCheckpoint = isAsync
+            ? checkpoint.checkpoint(stepId, succeedUpdate, { awaited: false })
+            : checkpoint.checkpoint(stepId, succeedUpdate);
+          if (isAsync) {
+            // Not awaited on purpose. checkpoint() does not reject: a failed batch terminates the
+            // invocation. Every exit drains the queue, so the result is saved before the
+            // invocation ends.
+            void succeedCheckpoint;
+          } else {
+            await succeedCheckpoint;
+          }
           stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
@@ -371,6 +387,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
               attempt: currentAttempt,
             },
           );
+          if (isAsync) {
+            // The service has not answered yet, so stepData still shows the attempt as STARTED.
+            attemptEndInfo.status = PluginOperationStatus.SUCCEEDED;
+            attemptEndInfo.result = serializedResult;
+            attemptEndInfo.startTimestamp ??= attemptInfo.startTimestamp;
+            attemptEndInfo.endTimestamp = new Date();
+          }
           backfillOperationInfo(attemptEndInfo, opInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
           await plugin.onOperationEnd?.({ ...attemptEndInfo, isReplay: false });

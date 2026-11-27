@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { truncateRecord } from "./truncation";
-import type { OperationRecord, DurableExecutionTelemetryRecord } from "./types";
+import {
+  applyOperationsFormat,
+  withOperationsByName,
+} from "./operations-index";
+import type {
+  OperationRecord,
+  OperationResult,
+  DurableExecutionTelemetryRecord,
+} from "./types";
 
 function op(
   partial: Partial<OperationRecord> & { id: string },
@@ -264,6 +272,250 @@ describe("truncateRecord render-aware sizing", () => {
     expect(() => truncateRecord(r, limit, undefined)).not.toThrow();
     expect(truncateRecord(r, limit, undefined)).toEqual(
       truncateRecord(r, limit),
+    );
+  });
+});
+
+describe("truncateRecord search over the drop count", () => {
+  // A seeded generator, so a failure reproduces.
+  let seed = 1;
+  const rnd = (): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const pick = <T>(items: T[]): T => items[Math.floor(rnd() * items.length)];
+  const pieces = ["x", '"', "\\", "\n", "é", "中文", "😀", "\u2028", "  "];
+  const text = (max: number): string =>
+    Array.from({ length: Math.floor(rnd() * max) }, () => pick(pieces)).join(
+      "",
+    );
+  const names = ["a", "b", "a", "", "名前", 'q"uote', "back\\slash"];
+  // Short results are common in real records. Clearing one of them makes the
+  // record bigger, so the size is not monotonic in the drop count.
+  const smallResults: OperationResult[] = [true, 0, null, "", "ok"];
+  const randomResult = (): OperationResult | undefined => {
+    const x = rnd();
+    if (x < 0.25) return text(60);
+    if (x < 0.5) return pick(smallResults);
+    return undefined;
+  };
+
+  // Operations are in start-time order, so position i is rank i.
+  function randomRecord(n: number): DurableExecutionTelemetryRecord {
+    const ops = Array.from({ length: n }, (_, i) =>
+      op({
+        id: `o${i}`,
+        name: rnd() < 0.9 ? pick(names) : undefined,
+        status: pick(["SUCCEEDED", "FAILED"]),
+        startTime: new Date(Date.UTC(2026, 6, 2) + i * 1000).toISOString(),
+        result: randomResult(),
+        error:
+          rnd() < 0.3
+            ? {
+                name: "Err",
+                message: text(40),
+                cause:
+                  rnd() < 0.5 ? { name: "C", message: text(40) } : undefined,
+              }
+            : undefined,
+      }),
+    );
+    return record({
+      operations: ops,
+      input: rnd() < 0.5 ? { v: text(200) } : undefined,
+      output: rnd() < 0.5 ? { v: text(200) } : undefined,
+    });
+  }
+
+  const lastTruncated = (ops: OperationRecord[]): number =>
+    ops.map((o) => o.truncated === true).lastIndexOf(true);
+
+  const renders: [string, (r: DurableExecutionTelemetryRecord) => unknown][] = [
+    ["array", (r) => r],
+    ["by-name", withOperationsByName],
+    ["both", (r) => applyOperationsFormat(r, "both")],
+  ];
+
+  it.each(renders)(
+    "never goes over the limit and drops oldest first (%s)",
+    (_, render) => {
+      for (let c = 0; c < 200; c++) {
+        const r = randomRecord(1 + Math.floor(rnd() * 30));
+        const limit = Math.floor(bytes(render(r)) * (0.1 + rnd()));
+        const out = truncateRecord(r, limit, render);
+        const allGone =
+          out.operations.length === 0 &&
+          (r.input === undefined || out.droppedInput === true) &&
+          (r.output === undefined || out.droppedOutput === true);
+        if (!allGone) expect(bytes(render(out))).toBeLessThanOrEqual(limit);
+        // The kept operations are the newest ones, in their original order.
+        const cut = out.droppedOperations ?? 0;
+        expect(out.operations.map((o) => o.id)).toEqual(
+          r.operations.slice(cut).map((o) => o.id),
+        );
+        // Results are cut from the oldest kept operations only.
+        const lastCut = lastTruncated(out.operations);
+        for (const [i, o] of out.operations.entries()) {
+          const orig = r.operations[cut + i];
+          const isCut = i <= lastCut && orig.result !== undefined;
+          expect(o.result).toEqual(isCut ? undefined : orig.result);
+          expect(o.truncated).toBe(isCut ? true : undefined);
+        }
+      }
+    },
+  );
+
+  it("drops the fewest operations when each drop shrinks the record", () => {
+    // In the array format, cutting a result longer than 20 bytes or a whole
+    // operation always shrinks the record. So one fewer drop must not fit.
+    for (let c = 0; c < 200; c++) {
+      const n = 1 + Math.floor(rnd() * 30);
+      const r = record({
+        operations: Array.from({ length: n }, (_, i) =>
+          op({
+            id: `o${i}`,
+            name: pick(names),
+            startTime: new Date(Date.UTC(2026, 6, 2) + i * 1000).toISOString(),
+            result: rnd() < 0.5 ? `r${"x".repeat(40 + rnd() * 40)}` : undefined,
+          }),
+        ),
+      });
+      const floor = bytes(record()) + 100;
+      const limit = floor + Math.floor((bytes(r) - floor) * rnd());
+      const out = truncateRecord(r, limit);
+      expect(bytes(out)).toBeLessThanOrEqual(limit);
+      const cut = out.droppedOperations ?? 0;
+      const ops = out.operations.slice();
+      if (cut > 0) {
+        // Put back the newest cut operation (its result is cut too).
+        const back = r.operations[cut - 1];
+        ops.unshift(
+          back.result === undefined
+            ? back
+            : { ...back, result: undefined, truncated: true },
+        );
+      } else {
+        // Put back the newest cut result.
+        const i = lastTruncated(ops);
+        if (i < 0) continue;
+        ops[i] = r.operations[i];
+      }
+      const oneFewer = {
+        ...out,
+        operations: ops,
+        droppedOperations: cut > 1 ? cut - 1 : undefined,
+        truncated: ops.some((o) => o.truncated) || cut > 1 ? true : undefined,
+      };
+      expect(bytes(oneFewer)).toBeGreaterThan(limit);
+    }
+  });
+
+  it("renders a few times for a custom render", () => {
+    // A render the package does not know: the record as a JSON string body.
+    let count = 0;
+    const render = (r: DurableExecutionTelemetryRecord): unknown => {
+      count++;
+      return { body: JSON.stringify(withOperationsByName(r)) };
+    };
+    const r = record({
+      operations: Array.from({ length: 2_000 }, (_, i) =>
+        op({
+          id: `o${i}`,
+          name: `step-${i}`,
+          subType: "Step",
+          startTime: new Date(Date.UTC(2026, 6, 2) + i).toISOString(),
+          endTime: new Date(Date.UTC(2026, 6, 2) + i + 3).toISOString(),
+          durationMs: 3,
+          attempt: 1,
+        }),
+      ),
+    });
+    const out = truncateRecord(r, 256_000, render);
+    expect(out.droppedOperations).toBeGreaterThan(0);
+    expect(bytes(render(out))).toBeLessThanOrEqual(256_000);
+    expect(count).toBeLessThan(40);
+  });
+});
+
+describe("truncateRecord bounds of the drop-count search", () => {
+  const t0 = Date.UTC(2026, 6, 2);
+  const at = (s: number): string => new Date(t0 + s * 1000).toISOString();
+  // The record as JSON, so `undefined` fields compare as absent.
+  const json = (r: unknown): unknown => JSON.parse(JSON.stringify(r));
+  const cleared = (o: OperationRecord): OperationRecord => ({
+    ...o,
+    result: undefined,
+    truncated: true,
+  });
+
+  it("clears every result without dropping an operation", () => {
+    // Only clearing every result makes the record fit.
+    const operations = [
+      op({ id: "o0", startTime: at(0), result: "a".repeat(100) }),
+      op({ id: "o1", startTime: at(1) }),
+      op({ id: "o2", startTime: at(2), result: "b".repeat(100) }),
+      op({ id: "o3", startTime: at(3), result: { k: "c".repeat(100) } }),
+    ];
+    const r = record({ operations });
+    const expected = {
+      ...r,
+      operations: [
+        cleared(operations[0]),
+        operations[1],
+        cleared(operations[2]),
+        cleared(operations[3]),
+      ],
+      truncated: true,
+    };
+    const out = truncateRecord(r, bytes(expected));
+    expect(json(out)).toEqual(json(expected));
+  });
+
+  it("drops every operation and keeps the input", () => {
+    // Only dropping every operation makes the record fit. So the input stays.
+    const operations = Array.from({ length: 5 }, (_, i) =>
+      op({ id: `o${i}`, startTime: at(i), result: "r".repeat(50) }),
+    );
+    const r = record({ operations, input: { v: "i".repeat(100) } });
+    const expected = {
+      ...r,
+      operations: [],
+      truncated: true,
+      droppedOperations: 5,
+    };
+    const out = truncateRecord(r, bytes(expected));
+    expect(json(out)).toEqual(json(expected));
+    expect(out.droppedInput).toBeUndefined();
+  });
+
+  it("orders by start time when start times are out of order or missing", () => {
+    // The oldest-first order is o2, o3, o0, then o1, which has no start time.
+    const operations = [
+      op({ id: "o0", startTime: at(3), result: "a".repeat(50) }),
+      op({ id: "o1", result: "b".repeat(50) }),
+      op({ id: "o2", startTime: at(1), result: "c".repeat(50) }),
+      op({ id: "o3", startTime: at(2), result: "d".repeat(50) }),
+    ];
+    const r = record({ operations });
+    const [o0, o1, o2, o3] = operations;
+
+    const twoCleared = {
+      ...r,
+      operations: [o0, o1, cleared(o2), cleared(o3)],
+      truncated: true,
+    };
+    expect(json(truncateRecord(r, bytes(twoCleared)))).toEqual(
+      json(twoCleared),
+    );
+
+    const twoDropped = {
+      ...r,
+      operations: [cleared(o0), cleared(o1)],
+      truncated: true,
+      droppedOperations: 2,
+    };
+    expect(json(truncateRecord(r, bytes(twoDropped)))).toEqual(
+      json(twoDropped),
     );
   });
 });

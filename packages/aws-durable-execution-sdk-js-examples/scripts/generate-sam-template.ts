@@ -3,6 +3,7 @@
 import fs from "fs";
 import path from "path";
 import * as yaml from "js-yaml";
+import { isDeepStrictEqual } from "util";
 
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
@@ -29,6 +30,11 @@ const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
 interface FunctionNameConfig {
   functionName: string;
+  /**
+   * Set when the example shares one function with the rest of its group (its
+   * folder, or misc). That function runs scripts/integration-dispatch.cjs.
+   */
+  group?: string;
 }
 
 interface TemplateOptions {
@@ -259,6 +265,8 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
   }
 
   // Generate resources for each example file
+  // The first example that added each group function, for the error below.
+  const firstMember = new Map<string, string>();
   examplesCatalog
     .filter(
       (catalog: {
@@ -276,17 +284,45 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
     )
     .forEach((catalog: { name: string; handler: string }) => {
       const handlerFile = catalog.handler.replace(/\.handler$/, "");
+      const group = normalizedOptions.functionNameMap?.[handlerFile]?.group;
       const functionName =
         normalizedOptions.functionNameMap?.[handlerFile]?.functionName ??
         getDefaultFunctionName(catalog, normalizedOptions.runtime);
       assertValidFunctionName(functionName, catalog.name);
-      const functionResourceName = toPascalCase(handlerFile);
+      const functionResourceName = toPascalCase(group ?? handlerFile);
       const logGroupResourceName = `${functionResourceName}LogGroup`;
       const functionResource = createFunctionResource(
         catalog,
         functionName,
         normalizedOptions,
       );
+      if (group) {
+        functionResource.Properties.Handler = "integration-dispatch.handler";
+        // integration-dispatch.cjs loads these examples in the init phase.
+        functionResource.Properties.Environment.Variables.GROUP_EXAMPLES =
+          Object.entries(normalizedOptions.functionNameMap ?? {})
+            .filter(([, entry]) => entry.group === group)
+            .map(([exampleHandlerFile]) => exampleHandlerFile)
+            .sort()
+            .join(",");
+      }
+
+      const existing = template.Resources[functionResourceName];
+      if (existing) {
+        // Another example of the group already added the function. One
+        // function has one set of settings, so the examples must agree.
+        const { DependsOn: _, ...existingResource } = existing;
+        if (!isDeepStrictEqual(existingResource, functionResource)) {
+          throw new Error(
+            `Examples "${firstMember.get(functionResourceName)}" and ` +
+              `"${catalog.name}" of group "${group}" need different function ` +
+              "settings. Set ownFunction: true in the config of the one that " +
+              "differs.",
+          );
+        }
+        return;
+      }
+      firstMember.set(functionResourceName, catalog.name);
 
       if (manageLogGroups) {
         template.Resources[logGroupResourceName] = {
