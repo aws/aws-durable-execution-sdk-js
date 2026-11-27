@@ -408,6 +408,71 @@ describe("plugin hooks", () => {
     expect(initializeExecutionContext).not.toHaveBeenCalled();
   });
 
+  describe("plugin loading failure diagnostic", () => {
+    const loadFailure = (reason: unknown): void => {
+      (
+        loadConfiguredPlugins as MockedFunction<typeof loadConfiguredPlugins>
+      ).mockRejectedValue(reason);
+    };
+
+    it("logs an ERROR with the error, request id and execution ARN on every call", async () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const pluginLoadError = new PluginLoadError(
+        "Plugins 'A' and 'B' are mutually exclusive in group 'g'. Configure only one.",
+      );
+      loadFailure(pluginLoadError);
+      const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
+      const context = { awsRequestId: "request-1" } as Context;
+
+      await handler(mockEvent, context);
+      await handler(mockEvent, context);
+
+      expect(consoleError).toHaveBeenCalledTimes(2);
+      expect(consoleError).toHaveBeenLastCalledWith(expect.any(String), {
+        error: `${pluginLoadError.name}: ${pluginLoadError.message}`,
+        requestId: "request-1",
+        durableExecutionArn: "arn:test",
+      });
+      consoleError.mockRestore();
+    });
+
+    it("logs a rejection that is not an Error", async () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      loadFailure("import failed");
+      const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
+
+      await handler(mockEvent, mockContext);
+
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ error: "import failed" }),
+      );
+      consoleError.mockRestore();
+    });
+
+    it("keeps the FAILED result when writing the diagnostic throws", async () => {
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
+        throw new Error("log sink closed");
+      });
+      const pluginLoadError = new PluginLoadError("bad plugin configuration");
+      loadFailure(pluginLoadError);
+      const handler = withDurableExecution(vi.fn().mockResolvedValue({}));
+
+      await expect(handler(mockEvent, mockContext)).resolves.toEqual({
+        Status: InvocationStatus.FAILED,
+        Error: expect.objectContaining({
+          ErrorMessage: pluginLoadError.message,
+          ErrorType: pluginLoadError.name,
+        }),
+      });
+      consoleError.mockRestore();
+    });
+  });
+
   it("plugin errors do not affect SDK execution", async () => {
     const throwingPlugin: DurableInstrumentationPlugin = {
       onInvocationStart: () => {
