@@ -86,6 +86,12 @@ describe("package entry point", () => {
     expect(typeof sdk.PowertoolsDurableLogger).toBe("function");
   });
 
+  it("exports the distributed map helpers", () => {
+    expect(typeof sdk.processDistributedMapItems).toBe("function");
+    expect(typeof sdk.processDistributedMapBatch).toBe("function");
+    expect(typeof sdk.readDistributedMapPage).toBe("function");
+  });
+
   it("exports the batch completion helpers", () => {
     expect(typeof sdk.completeBatch).toBe("function");
     expect(typeof sdk.continueBatch).toBe("function");
