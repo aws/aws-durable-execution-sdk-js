@@ -232,6 +232,11 @@ export enum OperationSubType {
    * and waiting for its completion. Used for function composition and workflows.
    */
   CHAINED_INVOKE = "ChainedInvoke",
+
+  /**
+   * A distributed map operation (`context.distributedMap`).
+   */
+  DISTRIBUTED_MAP = "DistributedMap",
 }
 
 /**

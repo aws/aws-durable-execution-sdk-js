@@ -8,6 +8,8 @@ import { BatchItem, BatchItemStatus } from "../../types";
 import {
   ChildContextError,
   CallbackError,
+  DistributedMapError,
+  DistributedMapItemError,
 } from "../../errors/durable-error/durable-error";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 
@@ -384,5 +386,43 @@ describe("BatchResult", () => {
       expect(failedItem.error.errorType).toBe("ChildContextError");
       expect(failedItem.error.cause).toBe(customError);
     });
+
+    it.each([
+      ["DistributedMapError", DistributedMapError],
+      ["DistributedMapItemError", DistributedMapItemError],
+    ])(
+      "should keep a %s cause's class through serialization round-trip",
+      async (_label, ErrorClass) => {
+        const cause = new ErrorClass("run failed", undefined, '{"id":1}');
+        const childContextError = new ChildContextError(cause.message, cause);
+        const items: BatchItem<string>[] = [
+          {
+            index: 0,
+            error: childContextError,
+            status: BatchItemStatus.FAILED,
+          },
+        ];
+        const serdes = createBatchResultSerdes<string>();
+        const serdesContext = {
+          entityId: "test",
+          durableExecutionArn: "arn:test",
+        };
+
+        const restored = await serdes.deserialize(
+          await serdes.serialize(
+            new BatchResultImpl(items, "ALL_COMPLETED"),
+            serdesContext,
+          ),
+          serdesContext,
+        );
+
+        const restoredCause = restored!.failed()[0].error.cause;
+        expect(restoredCause).toBeInstanceOf(ErrorClass);
+        expect(restoredCause?.message).toBe("run failed");
+        expect((restoredCause as DistributedMapError).errorData).toBe(
+          '{"id":1}',
+        );
+      },
+    );
   });
 });

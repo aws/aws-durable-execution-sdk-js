@@ -29,6 +29,7 @@ describe("package entry point", () => {
       CALLBACK: "CALLBACK",
       CHAINED_INVOKE: "CHAINED_INVOKE",
       CONTEXT: "CONTEXT",
+      DISTRIBUTED_MAP: "DISTRIBUTED_MAP",
       EXECUTION: "EXECUTION",
       STEP: "STEP",
       WAIT: "WAIT",
@@ -84,6 +85,12 @@ describe("package entry point", () => {
   it("exports the Powertools logger adapter", () => {
     expect(typeof sdk.createPowertoolsLogger).toBe("function");
     expect(typeof sdk.PowertoolsDurableLogger).toBe("function");
+  });
+
+  it("exports the distributed map helpers", () => {
+    expect(typeof sdk.processDistributedMapItems).toBe("function");
+    expect(typeof sdk.processDistributedMapBatch).toBe("function");
+    expect(typeof sdk.readDistributedMapPage).toBe("function");
   });
 
   it("exports the batch completion helpers", () => {
