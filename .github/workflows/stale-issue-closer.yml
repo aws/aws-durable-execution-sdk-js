@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@e04e810d6d7e452377bbefc04f007ad7373d19e2
+    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@c28fdc7df300996309e282ee6bfe54658ba53351
     with:
       # CodeBuild-hosted runner in the JavaScript testing account; the label must
       # match the CodeBuild project name.
